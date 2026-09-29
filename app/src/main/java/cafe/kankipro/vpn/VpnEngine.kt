@@ -15,6 +15,8 @@ object VpnEngine {
     private class KankiTunnel : Tunnel {
         override fun getName(): String = "kanki"
         override fun onStateChange(newState: Tunnel.State) {}
+        override fun isIpv4ResolutionPreferred(): Boolean = true
+        override fun isMetered(): Boolean = false
     }
 
     private val tunnel = KankiTunnel()
