@@ -104,3 +104,70 @@ object SubscriptionApi {
         )
     }
 }
+
+/** اطلاعات قابل نمایش یک کانفیگ (بدون کلیدها) */
+data class ConfigInfo(
+    val endpoint: String,
+    val address: String,
+    val dns: String,
+    val mtu: String,
+    val obfuscation: String?,
+) {
+    companion object {
+        fun parse(text: String): ConfigInfo {
+            val m = mutableMapOf<String, String>()
+            text.lines().forEach { line ->
+                val p = line.split("=", limit = 2)
+                if (p.size == 2) m.putIfAbsent(p[0].trim().lowercase(), p[1].trim())
+            }
+            val jc = m["jc"]
+            return ConfigInfo(
+                endpoint = m["endpoint"] ?: "—",
+                address = m["address"] ?: "—",
+                dns = m["dns"] ?: "—",
+                mtu = m["mtu"] ?: "خودکار",
+                obfuscation = if (jc != null) "فعال · Jc $jc" else null,
+            )
+        }
+    }
+}
+
+/** گزینه‌های DNS و اعمال آن روی متن کانفیگ */
+object DnsOptions {
+    val list = listOf(
+        "" to "پیش‌فرض سرور",
+        "1.1.1.1, 1.0.0.1" to "Cloudflare",
+        "8.8.8.8, 8.8.4.4" to "Google",
+        "94.140.14.14, 94.140.15.15" to "AdGuard · ضد تبلیغ",
+        "9.9.9.9, 149.112.112.112" to "Quad9 · امن",
+    )
+
+    fun apply(cfg: String, dns: String): String {
+        if (dns.isBlank()) return cfg
+        val lines = cfg.lines().toMutableList()
+        val i = lines.indexOfFirst { it.trim().startsWith("DNS", ignoreCase = true) && it.contains("=") }
+        if (i >= 0) {
+            lines[i] = "DNS = $dns"
+        } else {
+            val j = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
+            if (j >= 0) lines.add(j + 1, "DNS = $dns")
+        }
+        return lines.joinToString("\n")
+    }
+}
+
+fun formatBytes(b: Long): String = when {
+    b >= 1L shl 30 -> String.format(java.util.Locale.US, "%.2f GB", b / 1073741824.0)
+    b >= 1L shl 20 -> String.format(java.util.Locale.US, "%.2f MB", b / 1048576.0)
+    b >= 1L shl 10 -> String.format(java.util.Locale.US, "%.1f KB", b / 1024.0)
+    else -> "$b B"
+}
+
+/** «99.62 GB» را به بایت تبدیل می‌کند؛ اگر نشد null */
+fun parseSize(s: String): Double? {
+    val m = Regex("""([\d.]+)\s*(TB|GB|MB|KB|B)""", RegexOption.IGNORE_CASE).find(s) ?: return null
+    val v = m.groupValues[1].toDoubleOrNull() ?: return null
+    return v * when (m.groupValues[2].uppercase()) {
+        "TB" -> 1099511627776.0; "GB" -> 1073741824.0; "MB" -> 1048576.0; "KB" -> 1024.0; else -> 1.0
+    }
+}

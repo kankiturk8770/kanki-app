@@ -7,15 +7,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: دریافت فونت‌ها
+        run: |
+          mkdir -p app/src/main/res/font
+          dl() { curl -fsSL --retry 3 -o "app/src/main/res/font/$1" "$2" || curl -fsSL --retry 3 -o "app/src/main/res/font/$1" "$3"; }
+          V1=https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf
+          V2=https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf
+          dl vazir_regular.ttf $V1/Vazirmatn-Regular.ttf $V2/Vazirmatn-Regular.ttf
+          dl vazir_bold.ttf    $V1/Vazirmatn-Bold.ttf    $V2/Vazirmatn-Bold.ttf
+          dl vazir_black.ttf   $V1/Vazirmatn-Black.ttf   $V2/Vazirmatn-Black.ttf
+          G1=https://raw.githubusercontent.com/google/fonts/main/ofl
+          G2=https://github.com/google/fonts/raw/main/ofl
+          dl poppins_semibold.ttf $G1/poppins/Poppins-SemiBold.ttf $G2/poppins/Poppins-SemiBold.ttf
+          dl poppins_bold.ttf     $G1/poppins/Poppins-Bold.ttf     $G2/poppins/Poppins-Bold.ttf
+          dl orbitron.ttf "$G1/orbitron/Orbitron%5Bwght%5D.ttf" "$G2/orbitron/Orbitron%5Bwght%5D.ttf"
+          ls -la app/src/main/res/font
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+
       - name: ساخت فایل نصبی
         run: gradle assembleDebug --stacktrace
+
       - uses: actions/upload-artifact@v4
         with:
           name: KankiVPN-apk
