@@ -20,6 +20,7 @@ data class Account(
     val used: String,
     val connections: String,
     val timeRemaining: String,
+    val expiry: String,
     val configs: List<ConfigLink>,
 )
 
@@ -67,9 +68,9 @@ object SubscriptionApi {
         val lines = decode(clean.replace(Regex("<[^>]+>"), "\n"))
             .lines().map { it.trim() }.filter { it.isNotEmpty() }
 
-        fun after(label: String): String {
+        fun after(label: String, skip: Int = 1): String {
             val i = lines.indexOfFirst { it.equals(label, ignoreCase = true) }
-            return if (i >= 0 && i + 1 < lines.size) lines[i + 1] else "—"
+            return if (i >= 0 && i + skip < lines.size) lines[i + skip] else "—"
         }
 
         val username = Regex("(?is)<h1[^>]*>(.*?)</h1>").find(clean)
@@ -99,7 +100,8 @@ object SubscriptionApi {
             dataRemaining = after("Data remaining"),
             used = after("Used traffic"),
             connections = after("Connections"),
-            timeRemaining = after("Time remaining"),
+            timeRemaining = after("Time remaining").let { if (it == "—" || it == "-") "نامحدود" else it },
+            expiry = after("Time remaining", 2).let { if (it.length > 40 || it.contains("کانفیگ") || it.contains("configurations")) "—" else it },
             configs = configs,
         )
     }

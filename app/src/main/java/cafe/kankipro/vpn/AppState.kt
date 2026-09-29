@@ -64,12 +64,17 @@ class AppState(context: Context) {
         val c = code ?: return
         loading = true; error = null
         try {
-            val a = withContext(Dispatchers.IO) { SubscriptionApi.load(b, c) }
+            val a = withContext(Dispatchers.IO) {
+                runCatching { SubscriptionApi.load(b, c) }.getOrElse {
+                    Thread.sleep(1500)
+                    SubscriptionApi.load(b, c)
+                }
+            }
             account = a
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
             loadInfos(a)
         } catch (e: Exception) {
-            error = "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید."
+            error = "دریافت اطلاعات اشتراک ناموفق بود (${e.message ?: "خطای شبکه"}). اینترنت را بررسی کنید."
         }
         loading = false
     }
@@ -97,6 +102,7 @@ class AppState(context: Context) {
             vstate = VState.ON
             measurePing()
         } catch (e: Exception) {
+            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             error = "اتصال برقرار نشد: " + (e.message ?: e.javaClass.simpleName)
         }

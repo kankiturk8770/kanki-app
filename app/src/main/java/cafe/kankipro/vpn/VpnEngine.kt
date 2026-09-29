@@ -29,13 +29,33 @@ object VpnEngine {
     var connectedAt: Long = 0L
         private set
 
+    /** برای پارامترهای اضافه‌ی موتور (مثل TunnelActionHandler) یک پیاده‌سازی خالی می‌سازد */
+    private fun stub(type: Class<*>): Any? = when {
+        type.isInterface -> java.lang.reflect.Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { proxy, m, a ->
+            when (m.name) {
+                "hashCode" -> System.identityHashCode(proxy)
+                "equals" -> proxy === a?.getOrNull(0)
+                "toString" -> "KankiStub"
+                else -> when (m.returnType) {
+                    java.lang.Boolean.TYPE -> false
+                    java.lang.Integer.TYPE -> 0
+                    java.lang.Long.TYPE -> 0L
+                    else -> null
+                }
+            }
+        }
+        type == java.lang.Boolean.TYPE -> false
+        type == java.lang.Integer.TYPE -> 0
+        type == java.lang.Long.TYPE -> 0L
+        else -> null
+    }
+
     private fun create(ctx: Context): Backend {
-        val cls = GoBackend::class.java
-        // حالت معمول: GoBackend(Context)
-        runCatching { return cls.getConstructor(Context::class.java).newInstance(ctx) as Backend }
-        // نسخه‌های جدیدتر ممکن است پارامتر اضافه داشته باشند
-        val c = cls.constructors.first { it.parameterTypes.firstOrNull() == Context::class.java }
-        val args = c.parameterTypes.mapIndexed { i, _ -> if (i == 0) ctx else null }.toTypedArray()
+        // سازنده‌ای که Context اول دارد و بیشترین پارامتر را؛ پارامترهای دیگر با پیاده‌سازی خالی پر می‌شوند
+        val c = GoBackend::class.java.constructors
+            .filter { it.parameterTypes.firstOrNull() == Context::class.java }
+            .maxBy { it.parameterTypes.size }
+        val args = c.parameterTypes.mapIndexed { i, t -> if (i == 0) ctx else stub(t) }.toTypedArray()
         return c.newInstance(*args) as Backend
     }
 

@@ -453,6 +453,7 @@ fun SettingsTab(state: AppState) {
                 InfoRow("حجم باقی‌مانده", a.dataRemaining)
                 InfoRow("مصرف‌شده", a.used)
                 InfoRow("زمان باقی‌مانده", a.timeRemaining)
+                InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
                 InfoRow("اتصال همزمان", a.connections)
                 Spacer(Modifier.height(12.dp))
             }
@@ -470,7 +471,7 @@ fun SettingsTab(state: AppState) {
         }
 
         Spacer(Modifier.height(18.dp))
-        T("Kanki VPN · v0.2", size = 12.sp, color = K.Sub, font = Poppins, modifier = Modifier.align(Alignment.CenterHorizontally))
+        T("Kanki VPN · v0.2.1", size = 12.sp, color = K.Sub, font = Poppins, modifier = Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(20.dp))
     }
 }
