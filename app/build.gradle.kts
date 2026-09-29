@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "cafe.kankipro.vpn"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "cafe.kankipro.vpn"
