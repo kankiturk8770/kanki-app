@@ -30,6 +30,11 @@ jobs:
           curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson || curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/physical/ne_110m_land.json || echo '{"features":[]}' > app/src/main/assets/land.geojson
           ls -la app/src/main/assets
 
+      - name: آماده‌سازی کلید امضا
+        run: |
+          base64 -d app/kanki-release.jks.b64 > app/kanki-release.jks
+          keytool -list -keystore app/kanki-release.jks -storepass KankiVpn2026Store | head -5
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
