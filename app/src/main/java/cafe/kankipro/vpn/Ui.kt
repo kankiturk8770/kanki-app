@@ -17,11 +17,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.*
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -72,10 +75,14 @@ fun T(
     font: FontFamily = Vazir,
     shadow: Shadow? = null,
     modifier: Modifier = Modifier,
+    ltr: Boolean = false,
 ) {
     Text(
         text, modifier = modifier,
-        style = TextStyle(fontFamily = font, fontWeight = weight, fontSize = size, color = color, shadow = shadow),
+        style = TextStyle(
+            fontFamily = font, fontWeight = weight, fontSize = size, color = color, shadow = shadow,
+            textDirection = if (ltr) TextDirection.Ltr else TextDirection.Content,
+        ),
     )
 }
 
@@ -122,40 +129,91 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
     }
 }
 
-// ------------------------------------------------------------------ لوگو
+// ------------------------------------------------------------------ لوگوی سه‌بعدی
 
+private fun shieldPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().apply {
+    moveTo(w * .50f + dx, h * .05f + dy)
+    lineTo(w * .88f + dx, h * .18f + dy)
+    quadraticBezierTo(w * .88f + dx, h * .68f + dy, w * .50f + dx, h * .93f + dy)
+    quadraticBezierTo(w * .12f + dx, h * .68f + dy, w * .12f + dx, h * .18f + dy)
+    close()
+}
+
+private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().apply {
+    moveTo(w * .36f + dx, h * .28f + dy); lineTo(w * .45f + dx, h * .28f + dy); lineTo(w * .45f + dx, h * .45f + dy)
+    lineTo(w * .59f + dx, h * .28f + dy); lineTo(w * .70f + dx, h * .28f + dy); lineTo(w * .53f + dx, h * .48f + dy)
+    lineTo(w * .71f + dx, h * .70f + dy); lineTo(w * .60f + dx, h * .70f + dy); lineTo(w * .45f + dx, h * .52f + dy)
+    lineTo(w * .45f + dx, h * .70f + dy); lineTo(w * .36f + dx, h * .70f + dy); close()
+}
+
+/** سپر طلایی سه‌بعدی که آرام دور خودش می‌چرخد */
 @Composable
-fun ShieldLogo(size: Dp) {
-    Canvas(Modifier.size(size)) {
+fun Logo3D(size: Dp, animate: Boolean = true) {
+    val t = rememberInfiniteTransition(label = "logo")
+    val rot by t.animateFloat(-24f, 24f, infiniteRepeatable(tween(3400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "r")
+    Canvas(
+        Modifier.size(size).graphicsLayer {
+            rotationY = if (animate) rot else 0f
+            cameraDistance = 14f * density
+        }
+    ) {
         val w = this.size.width
         val h = this.size.height
-        val shield = Path().apply {
-            moveTo(w * .5f, h * .04f)
-            lineTo(w * .92f, h * .18f)
-            quadraticBezierTo(w * .92f, h * .70f, w * .5f, h * .97f)
-            quadraticBezierTo(w * .08f, h * .70f, w * .08f, h * .18f)
-            close()
+        // عمق (لایه‌های پشتی)
+        for (i in 9 downTo 1) {
+            val shade = 0.35f + i * 0.02f
+            drawPath(shieldPath(w, h, i * w * .005f, i * h * .006f), Color(0xFF8A6418).copy(alpha = 1f).let {
+                Color(it.red * (1.1f - shade), it.green * (1.1f - shade), it.blue * (1.1f - shade), 1f)
+            })
         }
-        drawPath(shield, Brush.verticalGradient(listOf(Color(0xFF2A2110), Color(0xFF0D0A05))))
-        drawPath(
-            shield,
-            Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight)),
-            style = Stroke(w * .065f, join = StrokeJoin.Round),
-        )
-        // حرف K
-        val k = Path().apply {
-            moveTo(w * .36f, h * .28f); lineTo(w * .45f, h * .28f); lineTo(w * .45f, h * .46f)
-            lineTo(w * .60f, h * .28f); lineTo(w * .71f, h * .28f); lineTo(w * .53f, h * .49f)
-            lineTo(w * .72f, h * .72f); lineTo(w * .61f, h * .72f); lineTo(w * .45f, h * .53f)
-            lineTo(w * .45f, h * .72f); lineTo(w * .36f, h * .72f); close()
+        val face = shieldPath(w, h)
+        drawPath(face, Brush.verticalGradient(listOf(Color(0xFF3A2C12), Color(0xFF120D06))))
+        drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight)), style = Stroke(w * .06f, join = StrokeJoin.Round))
+        // حرف K برجسته
+        drawPath(kPath(w, h, w * .012f, h * .014f), Color(0xFF5A3F0E))
+        drawPath(kPath(w, h), Brush.verticalGradient(listOf(Color(0xFFFFF4C8), K.Gold, K.GoldDeep)))
+        // براقی شیشه‌ای
+        clipPath(face) {
+            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.Transparent)), size = Size(w, h * .42f))
         }
-        drawPath(k, Brush.verticalGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep)))
     }
 }
 
+/** لوگوی ساده (بدون چرخش) برای جاهای کوچک */
+@Composable
+fun ShieldLogo(size: Dp) = Logo3D(size, animate = false)
+
 @Composable
 fun BrandTitle(size: TextUnit = 26.sp) {
-    T("KANKI VPN", size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f))
+    T("KANKI VPN", size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
+}
+
+// ------------------------------------------------------------------ نور نئونی
+
+private val neonLayers = listOf(4.5f to .07f, 3.0f to .15f, 1.9f to .32f, 1.0f to 1f)
+
+/** قوس نئونی با دنباله‌ی محوشونده (مثل ستاره‌ی دنباله‌دار) */
+fun DrawScope.neonComet(color: Color, head: Float, length: Float, c: Offset, r: Float, w: Float) {
+    val tl = Offset(c.x - r, c.y - r)
+    val sz = Size(r * 2, r * 2)
+    val seg = 16
+    for (i in 0 until seg) {
+        val f = (i + 1f) / seg
+        val start = head - length + length * i / seg
+        for ((m, a) in neonLayers) {
+            drawArc(color.copy(alpha = a * f), start, length / seg + .6f, false, tl, sz, style = Stroke(w * m, cap = StrokeCap.Butt))
+        }
+    }
+    val rad = Math.toRadians(head.toDouble())
+    val p = Offset(c.x + r * cos(rad).toFloat(), c.y + r * sin(rad).toFloat())
+    for ((m, a) in neonLayers) drawCircle(color.copy(alpha = a), w * m * .7f, p)
+    drawCircle(Color.White, w * .5f, p)
+}
+
+/** دایره‌ی نئونی کامل */
+fun DrawScope.neonRing(color: Color, c: Offset, r: Float, w: Float, strength: Float = 1f) {
+    for ((m, a) in neonLayers) drawCircle(color.copy(alpha = a * strength), r, c, style = Stroke(w * m))
+    drawCircle(Color.White.copy(alpha = .55f * strength), r, c, style = Stroke(w * .35f))
 }
 
 // ------------------------------------------------------------------ دکمه‌ی اتصال
@@ -165,13 +223,14 @@ enum class VState { OFF, CONNECTING, ON }
 @Composable
 fun ConnectButton(state: VState, onClick: () -> Unit) {
     val t = rememberInfiniteTransition(label = "cb")
-    val angle by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "a")
-    val pulse by t.animateFloat(.95f, 1.04f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "p")
+    val angle by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "a")
+    val pulse by t.animateFloat(.94f, 1.03f, infiniteRepeatable(tween(750), RepeatMode.Reverse), label = "p")
+    val breathe by t.animateFloat(.55f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "b")
     val accent = if (state == VState.ON) K.Green else K.Gold
     val scale = if (state == VState.CONNECTING) pulse else 1f
 
     Box(
-        Modifier.size(250.dp).clickable(
+        Modifier.size(230.dp).clickable(
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
         ),
         contentAlignment = Alignment.Center,
@@ -179,44 +238,34 @@ fun ConnectButton(state: VState, onClick: () -> Unit) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val r = this.size.minDimension / 2 * scale
-            // هاله
-            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .38f), Color.Transparent), c, r), r, c)
-            // حلقه‌ی طلایی ثابت
+            val w = 3.dp.toPx()
+            // هاله‌ی پشت دکمه
+            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .40f * breathe), Color.Transparent), c, r * 1.05f), r * 1.05f, c)
+            // حلقه‌ی نئونی ثابت (فقط وقتی وصل است)
+            if (state == VState.ON) neonRing(accent, c, r * .86f, w * .8f, breathe)
+            // حلقه‌ی طلایی
             drawCircle(
                 Brush.sweepGradient(listOf(K.GoldDeep, K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight, K.GoldDeep), c),
-                r * .76f, c, style = Stroke(11.dp.toPx()),
+                r * .72f, c, style = Stroke(10.dp.toPx()),
             )
-            // حلقه‌ی چرخان (هنگام اتصال و وصل بودن)
+            // دو نور نئونی چرخان
             if (state != VState.OFF) {
-                val ar = r * .90f
-                for (off in listOf(0f, 180f)) {
-                    rotate(angle + off, c) {
-                        drawArc(
-                            Brush.sweepGradient(
-                                0f to Color.Transparent, 0.30f to accent, 0.31f to Color.Transparent, 1f to Color.Transparent,
-                                center = c,
-                            ),
-                            0f, 110f, false,
-                            topLeft = Offset(c.x - ar, c.y - ar), size = Size(ar * 2, ar * 2),
-                            style = Stroke(5.dp.toPx(), cap = StrokeCap.Round),
-                        )
-                        val rad = Math.toRadians(110.0)
-                        drawCircle(accent, 5.dp.toPx(), Offset(c.x + ar * cos(rad).toFloat(), c.y + ar * sin(rad).toFloat()))
-                    }
-                }
+                neonComet(accent, angle, 120f, c, r * .95f, w)
+                neonComet(accent, angle + 180f, 120f, c, r * .95f, w)
             }
             // دیسک داخلی
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF2A241A), Color(0xFF0B0A08)), c, r * .70f), r * .70f, c)
-            drawCircle(Color.White.copy(alpha = .07f), r * .70f, c, style = Stroke(1.5.dp.toPx()))
-            // آیکون پاور
-            val pr = r * .22f
-            val sw = 9.dp.toPx()
-            drawArc(
-                accent, -60f, 300f, false,
-                topLeft = Offset(c.x - pr, c.y - pr), size = Size(pr * 2, pr * 2),
-                style = Stroke(sw, cap = StrokeCap.Round),
-            )
-            drawLine(accent, Offset(c.x, c.y - pr * 1.3f), Offset(c.x, c.y - pr * .15f), sw, cap = StrokeCap.Round)
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF2A241A), Color(0xFF0B0A08)), c, r * .66f), r * .66f, c)
+            drawCircle(Color.White.copy(alpha = .07f), r * .66f, c, style = Stroke(1.5.dp.toPx()))
+            // آیکون پاور نئونی
+            val pr = r * .21f
+            val sw = 7.dp.toPx()
+            val tl = Offset(c.x - pr, c.y - pr)
+            val sz = Size(pr * 2, pr * 2)
+            val glowOn = if (state == VState.OFF) .5f else 1f
+            for ((m, a) in neonLayers) {
+                drawArc(accent.copy(alpha = a * glowOn), -60f, 300f, false, tl, sz, style = Stroke(sw * m, cap = StrokeCap.Round))
+                drawLine(accent.copy(alpha = a * glowOn), Offset(c.x, c.y - pr * 1.3f), Offset(c.x, c.y - pr * .15f), sw * m, cap = StrokeCap.Round)
+            }
         }
     }
 }
@@ -279,7 +328,8 @@ fun InfoRow(label: String, value: String, valueColor: Color = K.Text) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         T(label, size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
         Spacer(Modifier.weight(1f))
-        T(value, size = 14.sp, color = valueColor, font = if (value.any { it in 'a'..'z' || it in '0'..'9' }) Poppins else Vazir, weight = FontWeight.SemiBold)
+        val latin = value.any { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' } && value.none { it in '\u0600'..'\u06FF' }
+        T(value, size = 14.sp, color = valueColor, font = if (latin) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = latin)
     }
 }
 

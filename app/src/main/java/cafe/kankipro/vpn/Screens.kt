@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,9 +29,13 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+const val APP_VERSION = "0.3.0"
+
 fun openBot(ctx: Context) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BOT_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
+
+fun toast(ctx: Context, msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
 
 fun faStatus(s: String) = when (s.lowercase()) {
     "active" -> "فعال"
@@ -41,21 +46,29 @@ fun faStatus(s: String) = when (s.lowercase()) {
     else -> s
 }
 
+fun isActive(s: String) = s.equals("Active", true)
+
 fun flagOf(name: String): String {
     val n = name.uppercase()
     return when {
-        "GERMAN" in n || "DE-" in n -> "🇩🇪"
-        "TURK" in n || "TR-" in n -> "🇹🇷"
-        "NETHER" in n || "NL" in n -> "🇳🇱"
-        "FINLAND" in n || "FI-" in n -> "🇫🇮"
+        "GERMAN" in n || n.startsWith("DE") -> "🇩🇪"
+        "TURK" in n || n.startsWith("TR") -> "🇹🇷"
+        "NETHER" in n || n.startsWith("NL") -> "🇳🇱"
+        "FINLAND" in n || n.startsWith("FI") -> "🇫🇮"
         "FRANCE" in n -> "🇫🇷"
-        "UK" in n || "LONDON" in n -> "🇬🇧"
-        "US" in n || "AMERICA" in n -> "🇺🇸"
+        "LONDON" in n || n.startsWith("UK") -> "🇬🇧"
+        "AMERICA" in n || n.startsWith("US") -> "🇺🇸"
         else -> "🌐"
     }
 }
 
-fun protoTitle(p: String) = if (p == "amneziawg") "AmneziaWG" else "WireGuard"
+fun protoTitle(p: String) = when (p) {
+    "amneziawg" -> "AmneziaWG"
+    "wireguard" -> "WireGuard"
+    else -> "OpenVPN"
+}
+
+fun dnsTitle(dns: String) = DnsOptions.list.firstOrNull { it.first == dns }?.second ?: "دلخواه · $dns"
 
 // ================================================================== ورود
 
@@ -67,15 +80,15 @@ fun LoginScreen(state: AppState) {
     var text by remember { mutableStateOf("") }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 30.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(30.dp))
-        ShieldLogo(120.dp)
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(24.dp))
+        Logo3D(130.dp)
+        Spacer(Modifier.height(16.dp))
         BrandTitle(34.sp)
-        T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold)
-        Spacer(Modifier.height(40.dp))
+        T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+        Spacer(Modifier.height(36.dp))
 
         Glass(Modifier.fillMaxWidth()) {
             T("ورود به حساب", size = 22.sp, weight = FontWeight.Black)
@@ -90,7 +103,7 @@ fun LoginScreen(state: AppState) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = K.Text),
-                    placeholder = { T("bub-1-xxxxxxxx", size = 14.sp, color = K.Sub.copy(alpha = .5f), font = Poppins, weight = FontWeight.SemiBold) },
+                    placeholder = { T("bub-1-xxxxxxxx", size = 14.sp, color = K.Sub.copy(alpha = .5f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
                     shape = RoundedCornerShape(20.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -111,20 +124,20 @@ fun LoginScreen(state: AppState) {
                 GoldButton("ورود", Modifier.weight(1f), loading = state.loading) {
                     scope.launch { state.login(text) }
                 }
-                LineButton("جای‌گذاری 📋", Modifier.weight(1f)) {
+                LineButton("جای‌گذاری", Modifier.weight(1f)) {
                     clip.getText()?.text?.let { text = it.trim() }
                 }
             }
         }
 
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(24.dp))
         T("اشتراک ندارید؟", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
         Spacer(Modifier.height(8.dp))
         Pill("🤖  خرید اشتراک و تست رایگان از ربات", onClick = { openBot(ctx) })
     }
 }
 
-// ================================================================== صفحه‌ی اصلی
+// ================================================================== قاب اصلی
 
 enum class KTab(val title: String, val icon: String) { HOME("خانه", "⌂"), SERVERS("سرورها", "☰"), SETTINGS("تنظیمات", "⚙") }
 
@@ -134,11 +147,10 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     var tab by remember { mutableStateOf(KTab.HOME) }
 
     Column(Modifier.fillMaxSize()) {
-        // سربرگ
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            ShieldLogo(36.dp)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Logo3D(40.dp)
             Spacer(Modifier.width(10.dp))
-            BrandTitle(22.sp)
+            BrandTitle(21.sp)
             Spacer(Modifier.weight(1f))
             Pill("🤖 ربات", onClick = { openBot(ctx) })
         }
@@ -157,28 +169,28 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
 @Composable
 fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
-    val shape = RoundedCornerShape(30.dp)
+    val shape = RoundedCornerShape(28.dp)
     Row(
-        Modifier.fillMaxWidth().padding(16.dp).clip(shape)
-            .background(Color(0xF00E0B07)).border(1.dp, K.Line, shape).padding(6.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(shape)
+            .background(Color(0xF00E0B07)).border(1.dp, K.Line, shape).padding(5.dp),
     ) {
         KTab.entries.forEach { t ->
             val sel = t == current
-            val s = RoundedCornerShape(24.dp)
+            val s = RoundedCornerShape(22.dp)
             Column(
                 Modifier.weight(1f).clip(s)
-                    .background(if (sel) Brush.verticalGradient(listOf(Color(0x66F5C451), Color(0x22F5C451))) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
-                    .clickable { onSelect(t) }.padding(vertical = 10.dp),
+                    .background(if (sel) Color(0x55F5C451) else Color.Transparent)
+                    .clickable { onSelect(t) }.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                T(t.icon, size = 20.sp, color = if (sel) K.Gold else K.Sub)
-                T(t.title, size = 13.sp, color = if (sel) K.Gold else K.Sub)
+                T(t.icon, size = 19.sp, color = if (sel) K.Gold else K.Sub)
+                T(t.title, size = 12.sp, color = if (sel) K.Gold else K.Sub)
             }
         }
     }
 }
 
-// ------------------------------------------------------------------ تب خانه
+// ================================================================== تب خانه
 
 @Composable
 fun HomeTab(state: AppState, onToggle: () -> Unit) {
@@ -186,7 +198,6 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
     val scope = rememberCoroutineScope()
     val a = state.account
 
-    // زمان‌سنج و سرعت
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var rxSpeed by remember { mutableLongStateOf(0L) }
     var txSpeed by remember { mutableLongStateOf(0L) }
@@ -198,21 +209,25 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             now = System.currentTimeMillis()
             val s = VpnEngine.stats(ctx)
             if (s != null) {
-                if (last != null) { rxSpeed = s.first - last.first; txSpeed = s.second - last.second }
+                val prev = last
+                if (prev != null) {
+                    rxSpeed = (s.first - prev.first).coerceAtLeast(0)
+                    txSpeed = (s.second - prev.second).coerceAtLeast(0)
+                }
                 session = s.first + s.second
                 last = s
             }
-            if (++tick % 15 == 0) state.measurePing()
+            tick++
+            if (tick % 15 == 0) state.measurePing()
             delay(1000)
         }
         rxSpeed = 0; txSpeed = 0
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(4.dp))
         ConnectButton(state.vstate) { if (a != null) onToggle() }
 
         val (label, color) = when (state.vstate) {
@@ -220,175 +235,247 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             VState.CONNECTING -> "در حال اتصال…" to K.Gold
             VState.OFF -> "آماده‌ی اتصال" to K.Text
         }
-        T(label, size = 30.sp, color = color, weight = FontWeight.Black, shadow = glow(color))
+        T(label, size = 28.sp, color = color, weight = FontWeight.Black, shadow = glow(color, 30f))
 
         if (state.vstate == VState.ON && VpnEngine.connectedAt > 0) {
             val sec = ((now - VpnEngine.connectedAt) / 1000).coerceAtLeast(0)
             T(
-                String.format(java.util.Locale.US, "%02d : %02d : %02d", sec / 3600, sec / 60 % 60, sec % 60),
-                size = 40.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(K.Gold, 16f),
+                String.format(java.util.Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60),
+                size = 34.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(K.Green, 20f), ltr = true,
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(protoTitle(state.proto))
             state.ping?.let { Pill("پینگ ${it}ms", color = K.Green) }
         }
 
         state.error?.let {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             T(it, size = 13.sp, color = K.Red)
         }
 
+        Spacer(Modifier.height(14.dp))
         if (a == null) {
-            Spacer(Modifier.height(24.dp))
             if (state.loading) CircularProgressIndicator(color = K.Gold)
             else GoldButton("تلاش دوباره", Modifier.fillMaxWidth()) { scope.launch { state.refresh() } }
         } else {
-            AccountCards(state, a, rxSpeed, txSpeed, session)
+            HomeCard(state, a, rxSpeed, txSpeed, session)
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+/** یک کارت جمع‌وجور: سرور + اشتراک + ترافیک */
+@Composable
+fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session: Long) {
+    val nodeName = a.configs.firstOrNull { it.node == state.node }?.nodeName ?: "—"
+    val info = state.infos["${state.node}/${state.proto}"]
+    Glass(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T(flagOf(nodeName), size = 26.sp)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                T(nodeName, size = 16.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
+                T(info?.endpoint ?: "…", size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+            }
+            Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MiniStat("حجم باقی‌مانده", a.dataRemaining, Modifier.weight(1f))
+            MiniStat("زمان باقی‌مانده", a.timeRemaining, Modifier.weight(1f))
+        }
+
+        val used = parseSize(a.used)
+        val left = parseSize(a.dataRemaining)
+        if (used != null && left != null && used + left > 0) {
+            Spacer(Modifier.height(10.dp))
+            val f = (used / (used + left)).toFloat().coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF))) {
+                Box(
+                    Modifier.fillMaxWidth(f.coerceAtLeast(0.02f)).fillMaxHeight().clip(RoundedCornerShape(6.dp))
+                        .background(Brush.horizontalGradient(listOf(K.GoldDeep, K.Gold, K.GoldLight))),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row {
+                T("مصرف‌شده", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                Spacer(Modifier.weight(1f))
+                T(a.used, size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(K.Line))
+        Spacer(Modifier.height(12.dp))
+        Row {
+            Stat("↓ دانلود", "${formatBytes(rxSpeed)}/s", Modifier.weight(1f))
+            Stat("↑ آپلود", "${formatBytes(txSpeed)}/s", Modifier.weight(1f))
+            Stat("این نشست", formatBytes(session), Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
-fun AccountCards(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session: Long) {
-        // کارت سرور و اشتراک
-        Spacer(Modifier.height(18.dp))
-        val nodeName = a.configs.firstOrNull { it.node == state.node }?.nodeName ?: "—"
-        val info = state.infos["${state.node}/${state.proto}"]
-        Glass(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                T(flagOf(nodeName), size = 30.sp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    T(nodeName, size = 18.sp, font = Poppins, weight = FontWeight.Bold)
-                    T("${protoTitle(state.proto)} · ${info?.endpoint ?: "…"}", size = 12.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold)
-                }
-                Pill(faStatus(a.status), color = if (a.status.equals("Active", true)) K.Green else K.Red)
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("⏳ ${a.timeRemaining}")
-                Pill("📦 ${a.dataRemaining} مانده")
-            }
-            val used = parseSize(a.used)
-            val left = parseSize(a.dataRemaining)
-            if (used != null && left != null && used + left > 0) {
-                Spacer(Modifier.height(14.dp))
-                val f = (used / (used + left)).toFloat().coerceIn(0f, 1f)
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF))) {
-                    Box(
-                        Modifier.fillMaxWidth(f.coerceAtLeast(0.02f)).fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                            .background(Brush.horizontalGradient(listOf(K.GoldDeep, K.Gold, K.GoldLight))),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                T("مصرف‌شده: ${a.used}", size = 13.sp, color = K.Sub)
-            }
-        }
-
-        // کارت ترافیک
-        Spacer(Modifier.height(14.dp))
-        Glass(Modifier.fillMaxWidth()) {
-            Row {
-                Stat("↓ دانلود", "${formatBytes(rxSpeed)}/s", Modifier.weight(1f))
-                Stat("↑ آپلود", "${formatBytes(txSpeed)}/s", Modifier.weight(1f))
-                Stat("این نشست", formatBytes(session), Modifier.weight(1f))
-            }
-        }
+fun MiniStat(label: String, value: String, modifier: Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(modifier.clip(shape).background(Color(0x22F5C451)).border(1.dp, K.Line, shape).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        T(label, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        val latin = value.any { it.isDigit() || it == '∞' } && value.none { it in '\u0600'..'\u06FF' }
+        T(value, size = 16.sp, font = if (latin) Poppins else Vazir, weight = FontWeight.Bold, ltr = latin)
+    }
 }
 
 @Composable
 fun Stat(label: String, value: String, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        T(label, size = 12.sp, color = K.Sub)
-        Spacer(Modifier.height(4.dp))
-        T(value, size = 15.sp, font = Poppins, weight = FontWeight.Bold)
+        T(label, size = 11.sp, color = K.Sub)
+        Spacer(Modifier.height(3.dp))
+        T(value, size = 14.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
     }
 }
 
-// ------------------------------------------------------------------ تب سرورها
+// ================================================================== تب سرورها
 
 @Composable
 fun ServersTab(state: AppState) {
     val ctx = LocalContext.current
     val a = state.account
     val locked = state.vstate != VState.OFF
-    fun blocked() = Toast.makeText(ctx, "برای تغییر، اول اتصال را قطع کنید", Toast.LENGTH_SHORT).show()
+    val groups = a?.configs?.groupBy { it.node } ?: emptyMap()
+    var open by remember { mutableStateOf(state.node) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        SectionTitle("انتخاب سرور")
-        val nodes = a?.configs?.distinctBy { it.node } ?: emptyList()
-        if (nodes.isEmpty()) T("سروری پیدا نشد", color = K.Sub)
-        nodes.forEach { n ->
-            val sel = n.node == state.node
-            SelectCard(sel, onClick = { if (locked) blocked() else { state.node = n.node; state.save() } }) {
-                T(flagOf(n.nodeName), size = 28.sp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    T(n.nodeName, size = 17.sp, font = Poppins, weight = FontWeight.Bold)
-                    T(if (n.node == "local") "سرور اصلی" else n.node, size = 12.sp, color = K.Sub)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+        SectionTitle("سرورها")
+        if (locked) {
+            T("برای تغییر سرور یا پروتکل، اول اتصال را قطع کنید", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            Spacer(Modifier.height(8.dp))
+        }
+        if (groups.isEmpty()) T("سروری پیدا نشد", color = K.Sub)
+
+        groups.forEach { (nodeId, links) ->
+            val name = links.first().nodeName
+            ServerGroup(
+                flag = flagOf(name), name = name,
+                sub = if (nodeId == "local") "سرور اصلی" else nodeId,
+                selected = state.node == nodeId,
+                expanded = open == nodeId,
+                onHeader = { open = if (open == nodeId) null else nodeId },
+            ) {
+                listOf("amneziawg", "wireguard").forEach { p ->
+                    if (links.any { it.protocol == p }) {
+                        ProtoCard(state, nodeId, p) {
+                            if (locked) toast(ctx, "برای تغییر، اول اتصال را قطع کنید")
+                            else { state.node = nodeId; state.proto = p; state.save() }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
-                if (sel) Pill("انتخاب شده", color = K.Green)
+                if (links.any { it.protocol.startsWith("openvpn") }) SoonRow("OpenVPN", "در نسخه‌ی بعدی")
             }
             Spacer(Modifier.height(10.dp))
         }
-        Spacer(Modifier.height(4.dp))
-        Pill("🇹🇷 سرور ترکیه · به‌زودی", color = K.Sub)
 
-        SectionTitle("پروتکل و اطلاعات کانفیگ")
-        listOf("amneziawg", "wireguard").forEach { p ->
-            val sel = state.proto == p
-            val info = state.infos["${state.node}/$p"]
-            SelectCard(sel, onClick = { if (locked) blocked() else { state.proto = p; state.save() } }) {
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        T(protoTitle(p), size = 19.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text)
-                        Spacer(Modifier.weight(1f))
-                        if (sel) Pill("فعال", color = K.Green)
-                    }
-                    T(
-                        if (p == "amneziawg") "مخفی‌سازی ترافیک · مناسب برای عبور از فیلتر" else "سریع و سبک · مناسب برای گیم",
-                        size = 12.sp, color = K.Sub, weight = FontWeight.Normal,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    if (info == null) T("در حال دریافت اطلاعات…", size = 13.sp, color = K.Sub)
-                    else {
-                        InfoRow("سرور", info.endpoint)
-                        InfoRow("آدرس داخلی", info.address)
-                        InfoRow("DNS کانفیگ", info.dns)
-                        InfoRow("MTU", info.mtu)
-                        info.obfuscation?.let { InfoRow("مبهم‌سازی", it, K.Green) }
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
+        if (groups.values.none { flagOf(it.first().nodeName) == "🇹🇷" }) {
+            ServerGroup(
+                flag = "🇹🇷", name = "TURKEY", sub = "به‌زودی اضافه می‌شود",
+                selected = false, expanded = false, soon = true,
+                onHeader = { toast(ctx, "سرور ترکیه به‌زودی اضافه می‌شود") },
+            ) {}
         }
-        SelectCard(false, onClick = { Toast.makeText(ctx, "OpenVPN در نسخه‌ی بعدی اضافه می‌شود", Toast.LENGTH_SHORT).show() }) {
-            T("OpenVPN", size = 19.sp, font = Poppins, weight = FontWeight.Bold, color = K.Sub)
-            Spacer(Modifier.weight(1f))
-            Pill("به‌زودی", color = K.Sub)
-        }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun SelectCard(selected: Boolean, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+fun ServerGroup(
+    flag: String, name: String, sub: String, selected: Boolean, expanded: Boolean,
+    soon: Boolean = false, onHeader: () -> Unit, content: @Composable ColumnScope.() -> Unit,
+) {
     val shape = RoundedCornerShape(24.dp)
-    Row(
+    Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(if (selected) Color(0x33F5C451) else Color(0xCC0E0B07))
-            .border(if (selected) 2.dp else 1.dp, if (selected) K.Gold else K.Line, shape)
-            .clickable(onClick = onClick).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        content = content,
-    )
+            .background(Color(0xE60E0B07))
+            .border(if (selected) 2.dp else 1.dp, if (selected) K.Gold else K.Line, shape),
+    ) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onHeader).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(flag, size = 28.sp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                T(name, size = 17.sp, font = Poppins, weight = FontWeight.Bold, color = if (soon) K.Sub else K.Text, ltr = true)
+                T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            when {
+                soon -> Pill("به‌زودی", color = K.Sub)
+                selected -> Pill("انتخاب شده", color = K.Green)
+            }
+            if (!soon) {
+                Spacer(Modifier.width(8.dp))
+                T(if (expanded) "▲" else "▼", size = 14.sp, color = K.Gold)
+            }
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp), content = content)
+        }
+    }
 }
 
-// ------------------------------------------------------------------ تب تنظیمات
+@Composable
+fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit) {
+    val sel = state.node == nodeId && state.proto == p
+    val info = state.infos["$nodeId/$p"]
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(if (sel) Color(0x33F5C451) else Color(0x14FFFFFF))
+            .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
+            .clickable(onClick = onSelect).padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T(protoTitle(p), size = 17.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
+            Spacer(Modifier.weight(1f))
+            if (sel) Pill("فعال", color = K.Green) else Pill("انتخاب", color = K.Sub)
+        }
+        T(
+            if (p == "amneziawg") "مخفی‌سازی ترافیک · مناسب برای عبور از فیلتر" else "سریع و سبک · مناسب برای گیم",
+            size = 12.sp, color = K.Sub, weight = FontWeight.Normal,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (info == null) {
+            T("در حال دریافت اطلاعات…", size = 12.sp, color = K.Sub)
+        } else {
+            val host = info.endpoint.substringBeforeLast(":")
+            val port = info.endpoint.substringAfterLast(":", "—")
+            InfoRow("سرور", host)
+            InfoRow("پورت", port)
+            InfoRow("پروتکل انتقال", "UDP")
+            InfoRow("آدرس داخلی", info.address)
+            InfoRow("DNS کانفیگ", info.dns)
+            InfoRow("MTU", info.mtu)
+            info.obfuscation?.let { InfoRow("مبهم‌سازی", it, K.Green) }
+        }
+    }
+}
+
+@Composable
+fun SoonRow(title: String, sub: String) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        Modifier.fillMaxWidth().clip(shape).background(Color(0x0FFFFFFF)).border(1.dp, K.Line, shape).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            T(title, size = 17.sp, font = Poppins, weight = FontWeight.Bold, color = K.Sub, ltr = true)
+            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+        Pill("به‌زودی", color = K.Sub)
+    }
+}
+
+// ================================================================== تب تنظیمات
 
 @Composable
 fun SettingsTab(state: AppState) {
@@ -396,42 +483,61 @@ fun SettingsTab(state: AppState) {
     val clip = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val a = state.account
-    val keys = DnsOptions.list.map { it.first }
-    var custom by remember { mutableStateOf(if (state.dns !in keys) state.dns else "") }
-    var customMode by remember { mutableStateOf(state.dns !in keys) }
+    var open by remember { mutableStateOf<String?>(null) }
+    fun flip(k: String) { open = if (open == k) null else k }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        SectionTitle("تنظیم DNS")
-        Glass(Modifier.fillMaxWidth()) {
-            DnsOptions.list.forEach { (value, title) ->
-                DnsRow(title, value.ifBlank { "از کانفیگ سرور" }, !customMode && state.dns == value) {
-                    customMode = false; state.dns = value; state.save()
-                }
-            }
-            DnsRow("DNS دلخواه", "آدرس را خودتان وارد کنید", customMode) { customMode = true }
-            if (customMode) {
-                Spacer(Modifier.height(8.dp))
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    OutlinedTextField(
-                        value = custom,
-                        onValueChange = { custom = it; state.dns = it.trim(); state.save() },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        placeholder = { T("1.1.1.1, 8.8.8.8", size = 14.sp, color = K.Sub, font = Poppins) },
-                        textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            T("تغییر DNS از اتصال بعدی اعمال می‌شود", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
-        }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+        Spacer(Modifier.height(6.dp))
 
-        SectionTitle("اتصال")
+        // خلاصه‌ی حساب
         Glass(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    T("اتصال خودکار", size = 16.sp)
+                    T(a?.username ?: "—", size = 18.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
+                    T("حساب کاربری", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
+                if (a != null) Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
+            }
+            if (a != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MiniStat("حجم باقی‌مانده", a.dataRemaining, Modifier.weight(1f))
+                    MiniStat("زمان باقی‌مانده", a.timeRemaining, Modifier.weight(1f))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Glass(Modifier.fillMaxWidth()) {
+            MenuRow("👤", "جزئیات حساب", "مصرف، انقضا، اتصال همزمان", open == "acc") { flip("acc") }
+            AnimatedVisibility(visible = open == "acc") {
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                    if (a != null) {
+                        InfoRow("مصرف‌شده", a.used)
+                        InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
+                        InfoRow("اتصال همزمان", a.connections)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LineButton("بروزرسانی", Modifier.weight(1f)) { scope.launch { state.refresh(); toast(ctx, "اطلاعات بروز شد") } }
+                        LineButton("کپی لینک", Modifier.weight(1f)) {
+                            clip.setText(AnnotatedString(state.subLink))
+                            toast(ctx, "لینک اشتراک کپی شد")
+                        }
+                    }
+                }
+            }
+            GoldDivider()
+
+            MenuRow("🌐", "DNS", dnsTitle(state.dns), open == "dns") { flip("dns") }
+            AnimatedVisibility(visible = open == "dns") { DnsPicker(state) }
+            GoldDivider()
+
+            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                T("⚡", size = 20.sp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    T("اتصال خودکار", size = 15.sp)
                     T("با باز کردن اپ، خودکار وصل شود", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
                 Switch(
@@ -443,43 +549,80 @@ fun SettingsTab(state: AppState) {
                     ),
                 )
             }
+            GoldDivider()
+
+            MenuRow("🛒", "خرید و تمدید اشتراک", "از طریق ربات تلگرام", false, arrow = "‹") { openBot(ctx) }
+            GoldDivider()
+            MenuRow("💬", "پشتیبانی", "@kankivpn_bot", false, arrow = "‹") { openBot(ctx) }
+            GoldDivider()
+            MenuRow("🚪", "خروج از حساب", "حذف اشتراک از این گوشی", false, arrow = "", danger = true) {
+                scope.launch { state.logout() }
+            }
         }
 
-        SectionTitle("حساب کاربری")
-        Glass(Modifier.fillMaxWidth()) {
-            if (a != null) {
-                InfoRow("نام کاربری", a.username)
-                InfoRow("وضعیت", faStatus(a.status), if (a.status.equals("Active", true)) K.Green else K.Red)
-                InfoRow("حجم باقی‌مانده", a.dataRemaining)
-                InfoRow("مصرف‌شده", a.used)
-                InfoRow("زمان باقی‌مانده", a.timeRemaining)
-                InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
-                InfoRow("اتصال همزمان", a.connections)
-                Spacer(Modifier.height(12.dp))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LineButton("بروزرسانی", Modifier.weight(1f)) { scope.launch { state.refresh() } }
-                LineButton("کپی لینک", Modifier.weight(1f)) {
-                    clip.setText(AnnotatedString(state.subLink))
-                    Toast.makeText(ctx, "لینک اشتراک کپی شد", Toast.LENGTH_SHORT).show()
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            GoldButton("🤖 تمدید و خرید اشتراک از ربات", Modifier.fillMaxWidth()) { openBot(ctx) }
-            Spacer(Modifier.height(10.dp))
-            LineButton("خروج از حساب", Modifier.fillMaxWidth(), color = K.Red) { scope.launch { state.logout() } }
-        }
+        Spacer(Modifier.height(14.dp))
+        T("Kanki VPN · v$APP_VERSION", size = 12.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Spacer(Modifier.height(16.dp))
+    }
+}
 
-        Spacer(Modifier.height(18.dp))
-        T("Kanki VPN · v0.2.1", size = 12.sp, color = K.Sub, font = Poppins, modifier = Modifier.align(Alignment.CenterHorizontally))
-        Spacer(Modifier.height(20.dp))
+@Composable
+fun GoldDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FF5C451)))
+}
+
+@Composable
+fun MenuRow(
+    icon: String, title: String, sub: String, expanded: Boolean,
+    arrow: String? = null, danger: Boolean = false, onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T(icon, size = 20.sp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            T(title, size = 15.sp, color = if (danger) K.Red else K.Text)
+            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+        T(arrow ?: if (expanded) "▲" else "▼", size = 14.sp, color = K.Gold)
+    }
+}
+
+@Composable
+fun DnsPicker(state: AppState) {
+    val keys = DnsOptions.list.map { it.first }
+    var custom by remember { mutableStateOf(if (state.dns !in keys) state.dns else "") }
+    var customMode by remember { mutableStateOf(state.dns !in keys) }
+    Column(Modifier.padding(bottom = 6.dp)) {
+        DnsOptions.list.forEach { (value, title) ->
+            DnsRow(title, value.ifBlank { "از کانفیگ سرور" }, !customMode && state.dns == value) {
+                customMode = false; state.dns = value; state.save()
+            }
+        }
+        DnsRow("DNS دلخواه", "آدرس را خودتان وارد کنید", customMode) { customMode = true }
+        if (customMode) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                OutlinedTextField(
+                    value = custom,
+                    onValueChange = { custom = it; state.dns = it.trim(); state.save() },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    placeholder = { T("1.1.1.1, 8.8.8.8", size = 14.sp, color = K.Sub, font = Poppins, ltr = true) },
+                    textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
+                )
+            }
+        }
+        T("تغییر DNS از اتصال بعدی اعمال می‌شود", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
 @Composable
 fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
@@ -487,8 +630,9 @@ fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () -> Unit) {
             colors = RadioButtonDefaults.colors(selectedColor = K.Gold, unselectedColor = K.Sub),
         )
         Column {
-            T(title, size = 15.sp)
-            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal, font = if (sub.first().isDigit()) Poppins else Vazir)
+            T(title, size = 14.sp)
+            val latin = sub.first().isDigit()
+            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal, font = if (latin) Poppins else Vazir, ltr = latin)
         }
     }
 }
