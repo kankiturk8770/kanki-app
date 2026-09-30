@@ -11,6 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 const val BOT_URL = "https://t.me/kankivpn_bot"
+const val SUPPORT_URL = "https://t.me/KANKI_VPN_ADMIN"
 
 /** همه‌ی وضعیت اپ در یک جا */
 class AppState(context: Context) {
@@ -37,6 +38,18 @@ class AppState(context: Context) {
     /** نتایج تست پینگ: کلید «node/protocol» ؛ مقدار -1 یعنی ناموفق */
     val pings = mutableStateMapOf<String, Long>()
     val pinging = mutableStateMapOf<String, Boolean>()
+    /** نتایج پینگ واقعی UDP (از داخل تونل) و TCP */
+    val udpPings = mutableStateMapOf<String, Long>()
+    val tcpPings = mutableStateMapOf<String, Long>()
+    val busyTests = mutableStateMapOf<String, Boolean>()
+
+    /** انیمیشن باز شدن قفل بعد از ورود */
+    var unlocking by mutableStateOf(false)
+    /** پنل اطلاعات حساب */
+    var accountOpen by mutableStateOf(false)
+    /** درخواست مجوز VPN (توسط MainActivity تنظیم می‌شود) */
+    var requestVpn: ((() -> Unit) -> Unit)? = null
+    private var realTesting = false
 
     fun mtuFor(p: String): String = prefs.getString("mtu_$p", "") ?: ""
     fun setMtu(p: String, v: String) { prefs.edit().putString("mtu_$p", v.trim()).apply() }
@@ -61,6 +74,7 @@ class AppState(context: Context) {
         loading = true; error = null
         return try {
             val a = withContext(Dispatchers.IO) { SubscriptionApi.load(r.first, r.second) }
+            unlocking = true
             base = r.first; code = r.second
             prefs.edit().putString("base", base).putString("code", code).apply()
             account = a
@@ -144,6 +158,63 @@ class AppState(context: Context) {
         proto = p
         save()
         if (wasOn || p == "openvpn") connect()
+    }
+
+    /** بروزرسانی اطلاعات کانفیگ‌های یک سرور */
+    suspend fun refreshNode(nodeId: String) {
+        infos.keys.filter { it.startsWith("$nodeId/") }.forEach { infos.remove(it) }
+        refresh()
+    }
+
+    /** پینگ TCP واقعی: زمان دست‌دادن TCP با خود سرور */
+    suspend fun tcpTest(nodeId: String, p: String) {
+        val key = "tcp:$nodeId/$p"
+        val info = infos["$nodeId/$p"] ?: return
+        busyTests[key] = true
+        val r = withContext(Dispatchers.IO) {
+            val port = if (info.transport == "TCP" && info.port > 0) info.port else 443
+            Pinger.tcp(info.host, port) ?: if (port != 80) Pinger.tcp(info.host, 80) else null
+        }
+        tcpPings["$nodeId/$p"] = r ?: -1L
+        busyTests[key] = false
+    }
+
+    /**
+     * پینگ واقعی UDP مثل v2rayNG: تونل با همین کانفیگ بالا می‌آید،
+     * زمان پاسخ از داخل تونل اندازه گرفته می‌شود و بعد اتصال قبلی برمی‌گردد.
+     */
+    suspend fun realTest(nodeId: String, p: String) {
+        if (realTesting || vstate == VState.CONNECTING) return
+        if (p.startsWith("openvpn")) { tcpTest(nodeId, p); return }
+        val a = account ?: return
+        val link = a.configs.firstOrNull { it.node == nodeId && it.protocol == p } ?: return
+        val key = "udp:$nodeId/$p"
+        realTesting = true
+        busyTests[key] = true
+        val wasOn = vstate == VState.ON
+        val prevLink = if (wasOn) a.configs.firstOrNull { it.node == node && it.protocol == protoKey() } else null
+        val result = withContext(Dispatchers.IO) {
+            try {
+                val cfg = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(link.url), dns), mtuFor(p))
+                VpnEngine.up(ctx, cfg, resetTimer = false)
+                Thread.sleep(700)
+                RealPing.measure()
+            } catch (e: Exception) {
+                null
+            } finally {
+                runCatching {
+                    if (wasOn && prevLink != null) {
+                        val back = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(prevLink.url), dns), mtuFor(proto))
+                        VpnEngine.up(ctx, back, resetTimer = false)
+                    } else if (!wasOn) {
+                        VpnEngine.down(ctx)
+                    }
+                }
+            }
+        }
+        udpPings["$nodeId/$p"] = result ?: -1L
+        busyTests[key] = false
+        realTesting = false
     }
 
     /** تست پینگ یک کانفیگ */

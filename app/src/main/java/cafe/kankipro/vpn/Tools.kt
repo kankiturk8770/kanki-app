@@ -48,7 +48,140 @@ object Pinger {
     }
 }
 
-/** تست سرعت با سرورهای Cloudflare */
+/** پینگ واقعی مثل v2rayNG: زمان پاسخ HTTP از مسیر فعلی (وقتی تونل بالاست، از داخل تونل) */
+object RealPing {
+    private const val URL_204 = "http://www.gstatic.com/generate_204"
+
+    fun once(): Long? = runCatching {
+        val t0 = System.nanoTime()
+        val c = (URL(URL_204).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5000; readTimeout = 5000; useCaches = false
+        }
+        val code = c.responseCode
+        c.inputStream.use { it.readBytes() }
+        if (code != 204 && code != 200) return@runCatching null
+        (System.nanoTime() - t0) / 1_000_000
+    }.getOrNull()
+
+    /** یک بار گرم‌کردن، سپس کمترین زمان از چند تلاش */
+    fun measure(tries: Int = 4): Long? {
+        once()
+        val r = (1..tries).mapNotNull { once() }
+        return r.minOrNull()
+    }
+}
+
+/** تست سرعت با سرورهای Speedtest by Ookla (در صورت خطا Cloudflare) */
+object Ookla {
+    data class Server(val host: String, val name: String, val sponsor: String)
+
+    private fun get(url: String, timeout: Int = 6000): HttpURLConnection =
+        (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = timeout; readTimeout = timeout + 2000
+            setRequestProperty("User-Agent", "Mozilla/5.0 KankiVPN")
+        }
+
+    /** نزدیک‌ترین سرورها را می‌گیرد و کم‌پینگ‌ترین را انتخاب می‌کند */
+    fun pickServer(): Pair<Server, Long>? {
+        val json = runCatching {
+            val c = get("https://www.speedtest.net/api/js/servers?engine=js&limit=6&https_functional=1")
+            c.inputStream.bufferedReader().use { it.readText() }.also { c.disconnect() }
+        }.getOrNull() ?: return null
+        val arr = runCatching { org.json.JSONArray(json) }.getOrNull() ?: return null
+        val list = (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val host = o.optString("host")
+            if (host.isBlank()) null else Server(host, o.optString("name"), o.optString("sponsor"))
+        }
+        return list.mapNotNull { s -> latency(s, 3)?.let { s to it } }.minByOrNull { it.second }
+    }
+
+    fun latency(s: Server, tries: Int = 6): Long? {
+        val r = (1..tries).mapNotNull {
+            runCatching {
+                val t0 = System.nanoTime()
+                val c = get("https://${s.host}/hello?nocache=${System.nanoTime()}", 4000)
+                c.inputStream.use { it.readBytes() }
+                c.disconnect()
+                (System.nanoTime() - t0) / 1_000_000
+            }.getOrNull()
+        }
+        return if (r.size < 2) r.firstOrNull() else r.drop(1).minOrNull()
+    }
+
+    fun jitter(s: Server): Long? {
+        val r = (1..6).mapNotNull {
+            runCatching {
+                val t0 = System.nanoTime()
+                val c = get("https://${s.host}/hello?nocache=${System.nanoTime()}", 4000)
+                c.inputStream.use { it.readBytes() }
+                c.disconnect()
+                (System.nanoTime() - t0) / 1_000_000
+            }.getOrNull()
+        }.drop(1)
+        return if (r.size < 2) null else r.zipWithNext { a, b -> abs(a - b) }.average().toLong()
+    }
+
+    fun download(s: Server, seconds: Double = 8.0, onProgress: (Double) -> Unit): Double {
+        val start = System.nanoTime()
+        var total = 0L
+        var last = start
+        val buf = ByteArray(64 * 1024)
+        fun el() = (System.nanoTime() - start) / 1e9
+        while (el() < seconds) {
+            val c = get("https://${s.host}/download?nocache=${System.nanoTime()}&size=25000000")
+            try {
+                c.inputStream.use { input ->
+                    while (el() < seconds) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        total += n
+                        val now = System.nanoTime()
+                        if (now - last > 200_000_000) { last = now; onProgress(total * 8 / 1e6 / el()) }
+                    }
+                }
+            } catch (e: Exception) {
+                if (total == 0L) throw e
+                break
+            } finally { c.disconnect() }
+        }
+        val mbps = total * 8 / 1e6 / el().coerceAtLeast(0.001)
+        onProgress(mbps)
+        return mbps
+    }
+
+    fun upload(s: Server, seconds: Double = 6.0, onProgress: (Double) -> Unit): Double {
+        val chunk = ByteArray(2 * 1024 * 1024) { (it % 251).toByte() }
+        val start = System.nanoTime()
+        var total = 0L
+        fun el() = (System.nanoTime() - start) / 1e9
+        while (el() < seconds) {
+            val c = get("https://${s.host}/upload?nocache=${System.nanoTime()}")
+            try {
+                c.requestMethod = "POST"; c.doOutput = true
+                c.setFixedLengthStreamingMode(chunk.size)
+                c.setRequestProperty("Content-Type", "application/octet-stream")
+                c.outputStream.use { out ->
+                    var off = 0
+                    while (off < chunk.size) {
+                        val n = minOf(64 * 1024, chunk.size - off)
+                        out.write(chunk, off, n); off += n; total += n
+                        onProgress(total * 8 / 1e6 / el())
+                    }
+                }
+                c.responseCode
+            } catch (e: Exception) {
+                if (total == 0L) throw e
+                break
+            } finally { c.disconnect() }
+        }
+        val mbps = total * 8 / 1e6 / el().coerceAtLeast(0.001)
+        onProgress(mbps)
+        return mbps
+    }
+}
+
+/** تست سرعت با سرورهای Cloudflare (پشتیبان) */
 object SpeedTest {
     private const val BASE = "https://speed.cloudflare.com"
 

@@ -14,6 +14,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -45,9 +46,15 @@ fun App() {
     val state = remember { AppState(ctx) }
     val scope = rememberCoroutineScope()
 
+    var afterGrant by remember { mutableStateOf<(() -> Unit)?>(null) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        if (r.resultCode == Activity.RESULT_OK) scope.launch { state.connect() }
+        if (r.resultCode == Activity.RESULT_OK) afterGrant?.invoke()
         else state.error = "برای اتصال باید اجازه‌ی VPN را تأیید کنید."
+        afterGrant = null
+    }
+    state.requestVpn = { onGranted ->
+        val intent = VpnService.prepare(ctx)
+        if (intent == null) onGranted() else { afterGrant = onGranted; permission.launch(intent) }
     }
 
     fun toggle() {
@@ -55,12 +62,13 @@ fun App() {
             VState.ON -> scope.launch { state.disconnect() }
             VState.OFF -> {
                 if (state.proto == "openvpn") { scope.launch { state.connect() }; return }
-                val intent = VpnService.prepare(ctx)
-                if (intent != null) permission.launch(intent) else scope.launch { state.connect() }
+                state.requestVpn?.invoke { scope.launch { state.connect() } }
             }
             VState.CONNECTING -> {}
         }
     }
+
+    var splash by rememberSaveable { mutableStateOf(true) }
 
     // بارگذاری اطلاعات و اتصال خودکار
     LaunchedEffect(state.loggedIn) {
@@ -70,9 +78,13 @@ fun App() {
         }
     }
 
-    KankiBackground(accent = if (state.vstate == VState.ON) K.Green else K.Gold) {
-        Box(Modifier.systemBarsPadding()) {
-            if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }
+    when {
+        splash -> SplashScreen { splash = false }
+        state.unlocking -> UnlockScreen { state.unlocking = false }
+        else -> KankiBackground(accent = if (state.vstate == VState.ON) K.Green else K.Gold) {
+            Box(Modifier.systemBarsPadding()) {
+                if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }
+            }
         }
     }
 }

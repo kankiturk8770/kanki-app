@@ -64,10 +64,10 @@ object VpnEngine {
             backend ?: create(ctx.applicationContext).also { backend = it }
         }
 
-    fun up(ctx: Context, configText: String) {
+    fun up(ctx: Context, configText: String, resetTimer: Boolean = true) {
         val config = Config.parse(configText.byteInputStream())
         backend(ctx).setState(tunnel, Tunnel.State.UP, config)
-        connectedAt = System.currentTimeMillis()
+        if (resetTimer || connectedAt == 0L) connectedAt = System.currentTimeMillis()
     }
 
     fun down(ctx: Context) {
