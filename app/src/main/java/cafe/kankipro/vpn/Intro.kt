@@ -28,55 +28,49 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** صفحه‌ی ورودی: لوگوی سه‌بعدی با صدا (حدود ۴ ثانیه) */
+/** صفحه‌ی ورودی کوتاه: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۲.۶ ثانیه) */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         val player = runCatching { MediaPlayer.create(ctx, R.raw.kanki_intro)?.apply { start() } }.getOrNull()
-        p.animateTo(1f, tween(4200, easing = LinearEasing))
-        runCatching { player?.release() }
+        p.animateTo(1f, tween(2600, easing = LinearEasing))
         onDone()
+        delay(300)
+        runCatching { player?.release() }
     }
     val v = p.value
-    val appear = ((v - 0.05f) / 0.30f).coerceIn(0f, 1f)
-    val title = ((v - 0.35f) / 0.2f).coerceIn(0f, 1f)
-    val fadeOut = 1f - ((v - 0.88f) / 0.12f).coerceIn(0f, 1f)
-    val spin = (1f - FastOutSlowInEasing.transform(appear)) * 540f
+    val gather = FastOutSlowInEasing.transform((v / 0.32f).coerceIn(0f, 1f))
+    val logo = FastOutSlowInEasing.transform(((v - 0.28f) / 0.2f).coerceIn(0f, 1f))
+    val typed = ((v - 0.45f) / 0.3f).coerceIn(0f, 1f)
+    val fadeOut = 1f - ((v - 0.9f) / 0.1f).coerceIn(0f, 1f)
+    val title = "KANKI VPN"
 
     KankiBackground {
-        Column(
-            Modifier.fillMaxSize().alpha(fadeOut),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                // موج نور پشت لوگو
-                Canvas(Modifier.size(300.dp)) {
-                    val ring = ((v - 0.30f) / 0.4f).coerceIn(0f, 1f)
-                    if (ring > 0f && ring < 1f) {
-                        neonRing(K.Gold, center, size.minDimension / 2 * (0.3f + ring * 0.7f), 3.dp.toPx(), 1f - ring)
-                    }
-                    drawCircle(
-                        Brush.radialGradient(listOf(K.Gold.copy(alpha = .45f * appear), Color.Transparent), center, size.minDimension / 2),
-                        size.minDimension / 2, center,
-                    )
+        Box(Modifier.fillMaxSize().alpha(fadeOut), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = Offset(size.width / 2, size.height / 2 - 60.dp.toPx())
+                for (i in 0 until 60) {
+                    val ang = i * 137.5 * Math.PI / 180
+                    val far = size.maxDimension * (0.35f + (i % 7) * 0.05f)
+                    val r = far * (1f - gather)
+                    val pos = Offset(c.x + r * cos(ang).toFloat(), c.y + r * sin(ang).toFloat())
+                    val col = if (i % 5 == 0) K.Green else K.Gold
+                    drawCircle(col.copy(alpha = .25f * (1f - logo)), 9f, pos)
+                    drawCircle(Color.White.copy(alpha = (1f - logo)), 2.5f, pos)
                 }
-                Box(
-                    Modifier.graphicsLayer {
-                        rotationY = spin
-                        scaleX = 0.4f + 0.6f * appear
-                        scaleY = 0.4f + 0.6f * appear
-                        alpha = appear
-                        cameraDistance = 16f * density
-                    }
-                ) { Logo3D(170.dp, animate = false) }
+                if (logo > 0.01f && logo < 0.99f) neonRing(K.Gold, c, 60.dp.toPx() + logo * 160.dp.toPx(), 3.dp.toPx(), 1f - logo)
+                drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .35f * logo), Color.Transparent), c, 170.dp.toPx()), 170.dp.toPx(), c)
             }
-            Spacer(Modifier.height(22.dp))
-            Box(Modifier.alpha(title).scale(0.85f + 0.15f * title)) { BrandTitle(38.sp) }
-            Spacer(Modifier.height(6.dp))
-            T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(title))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.graphicsLayer { scaleX = .5f + .5f * logo; scaleY = .5f + .5f * logo; alpha = logo }) { Logo3D(150.dp) }
+                Spacer(Modifier.height(20.dp))
+                Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+                    BrandTitle(34.sp, title.take((typed * title.length).toInt().coerceIn(0, title.length)))
+                }
+                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.72f) / 0.12f).coerceIn(0f, 1f)))
+            }
         }
     }
 }

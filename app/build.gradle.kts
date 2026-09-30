@@ -12,11 +12,23 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
+    }
+    signingConfigs {
+        create("release") {
+            storeFile = file("kanki-release.jks")
+            storePassword = "z_JPH6Z_fmRtFn6JlXuV6Pi6"
+            keyAlias = "kanki"
+            keyPassword = "z_JPH6Z_fmRtFn6JlXuV6Pi6"
+        }
     }
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

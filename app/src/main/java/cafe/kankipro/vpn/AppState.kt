@@ -51,6 +51,50 @@ class AppState(context: Context) {
     var requestVpn: ((() -> Unit) -> Unit)? = null
     private var realTesting = false
 
+    /** مکان کاربر (از IP واقعی، قبل از اتصال) و مکان سرورها */
+    var userGeo by mutableStateOf(
+        prefs.getString("ugeo", null)?.split(",")?.let { p -> runCatching { Geo(p[0].toDouble(), p[1].toDouble()) }.getOrNull() }
+    )
+    val nodeGeo = mutableStateMapOf<String, Geo>()
+
+    /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
+    fun available(): List<String> {
+        val ps = account?.configs?.map { it.protocol }?.toSet() ?: return emptyList()
+        return buildList {
+            if ("amneziawg" in ps) add("amneziawg")
+            if ("wireguard" in ps) add("wireguard")
+            if (ps.any { it.startsWith("openvpn") }) add("openvpn")
+        }
+    }
+
+    private fun fixProto() {
+        val av = available()
+        if (av.isNotEmpty() && proto !in av) { proto = av.first(); save() }
+        val a = account ?: return
+        if (proto == "openvpn" && a.configs.none { it.protocol == "openvpn/$ovpnTransport" }) {
+            a.configs.firstOrNull { it.protocol.startsWith("openvpn") }?.let { ovpnTransport = it.protocol.substringAfter("/"); save() }
+        }
+    }
+
+    /** مکان کاربر و سرورها را پیدا می‌کند */
+    suspend fun locate() {
+        if (vstate == VState.OFF) {
+            withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, _) ->
+                userGeo = g
+                prefs.edit().putString("ugeo", "${g.lat},${g.lon}").apply()
+            }
+        }
+        val a = account ?: return
+        for ((nodeId, links) in a.configs.groupBy { it.node }) {
+            if (nodeGeo.containsKey(nodeId)) continue
+            geoOfName(links.first().nodeName)?.let { nodeGeo[nodeId] = it }
+            val host = links.firstNotNullOfOrNull { infos["$nodeId/${it.protocol}"]?.host }
+            if (host != null && host != "—") {
+                withContext(Dispatchers.IO) { lookupGeo(host) }?.let { (g, _) -> nodeGeo[nodeId] = g }
+            }
+        }
+    }
+
     fun mtuFor(p: String): String = prefs.getString("mtu_$p", "") ?: ""
     fun setMtu(p: String, v: String) { prefs.edit().putString("mtu_$p", v.trim()).apply() }
 
@@ -101,7 +145,9 @@ class AppState(context: Context) {
             }
             account = a
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
+            fixProto()
             loadInfos(a)
+            locate()
         } catch (e: Exception) {
             error = "دریافت اطلاعات اشتراک ناموفق بود (${e.message ?: "خطای شبکه"}). اینترنت را بررسی کنید."
         }
@@ -172,8 +218,10 @@ class AppState(context: Context) {
         val info = infos["$nodeId/$p"] ?: return
         busyTests[key] = true
         val r = withContext(Dispatchers.IO) {
-            val port = if (info.transport == "TCP" && info.port > 0) info.port else 443
-            Pinger.tcp(info.host, port) ?: if (port != 80) Pinger.tcp(info.host, 80) else null
+            val ports = if (info.transport == "TCP" && info.port > 0) listOf(info.port) else listOf(443, 80, 22, 8443, 2053)
+            var r: Long? = null
+            for (pt in ports) { r = Pinger.tcp(info.host, pt, 2); if (r != null) break }
+            r
         }
         tcpPings["$nodeId/$p"] = r ?: -1L
         busyTests[key] = false

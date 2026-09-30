@@ -135,6 +135,21 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
                 val y = hy + (h - hy) * p * p
                 drawLine(K.Gold.copy(alpha = .04f + .22f * p), Offset(0f, y), Offset(w, y), 1.3f)
             }
+            // شهاب‌ها
+            for (k in 0 until 2) {
+                val ph = ((twinkle * 2f + k * .5f) % 1f)
+                if (ph < .22f) {
+                    val q = ph / .22f
+                    val sx = w * (.15f + .5f * k) + q * w * .45f
+                    val sy = hy * (.10f + .18f * k) + q * hy * .22f
+                    val tail = Offset(sx - w * .16f, sy - hy * .08f)
+                    drawLine(
+                        Brush.linearGradient(listOf(Color.Transparent, Color(0xFF6FE7FF).copy(alpha = .8f * (1f - q))), start = tail, end = Offset(sx, sy)),
+                        tail, Offset(sx, sy), 2.5f, cap = StrokeCap.Round,
+                    )
+                    drawCircle(Color.White.copy(alpha = 1f - q), 2.6f, Offset(sx, sy))
+                }
+            }
             // ستاره‌های نئونی چشمک‌زن
             stars.forEach { st ->
                 val tw = ((sin((twinkle + st.phase) * 6.2832f) + 1f) / 2f).coerceIn(0f, 1f)
@@ -155,26 +170,31 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
 
 // ------------------------------------------------------------------ لوگوی سه‌بعدی
 
-private fun shieldPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().apply {
-    moveTo(w * .50f + dx, h * .05f + dy)
-    lineTo(w * .88f + dx, h * .18f + dy)
-    quadraticBezierTo(w * .88f + dx, h * .68f + dy, w * .50f + dx, h * .93f + dy)
-    quadraticBezierTo(w * .12f + dx, h * .68f + dy, w * .12f + dx, h * .18f + dy)
+/** سپر مدرن با لبه‌های صاف؛ inset برای لبه‌ی داخلی */
+private fun shieldPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f, inset: Float = 0f) = Path().apply {
+    val l = w * (.13f + inset); val r = w * (.87f - inset); val tp = h * (.05f + inset * 1.1f)
+    moveTo(w * .5f + dx, tp + dy)
+    lineTo(r + dx, h * (.15f + inset * .6f) + dy)
+    lineTo(r + dx, h * .50f + dy)
+    quadraticBezierTo(r + dx, h * (.79f - inset * .4f) + dy, w * .5f + dx, h * (.96f - inset * 1.4f) + dy)
+    quadraticBezierTo(l + dx, h * (.79f - inset * .4f) + dy, l + dx, h * .50f + dy)
+    lineTo(l + dx, h * (.15f + inset * .6f) + dy)
     close()
 }
 
 private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().apply {
-    moveTo(w * .36f + dx, h * .28f + dy); lineTo(w * .45f + dx, h * .28f + dy); lineTo(w * .45f + dx, h * .45f + dy)
-    lineTo(w * .59f + dx, h * .28f + dy); lineTo(w * .70f + dx, h * .28f + dy); lineTo(w * .53f + dx, h * .48f + dy)
-    lineTo(w * .71f + dx, h * .70f + dy); lineTo(w * .60f + dx, h * .70f + dy); lineTo(w * .45f + dx, h * .52f + dy)
-    lineTo(w * .45f + dx, h * .70f + dy); lineTo(w * .36f + dx, h * .70f + dy); close()
+    moveTo(w * .35f + dx, h * .29f + dy); lineTo(w * .45f + dx, h * .29f + dy); lineTo(w * .45f + dx, h * .45f + dy)
+    lineTo(w * .58f + dx, h * .29f + dy); lineTo(w * .70f + dx, h * .29f + dy); lineTo(w * .53f + dx, h * .48f + dy)
+    lineTo(w * .71f + dx, h * .69f + dy); lineTo(w * .59f + dx, h * .69f + dy); lineTo(w * .45f + dx, h * .53f + dy)
+    lineTo(w * .45f + dx, h * .69f + dy); lineTo(w * .35f + dx, h * .69f + dy); close()
 }
 
-/** سپر طلایی سه‌بعدی که آرام دور خودش می‌چرخد */
+/** لوگوی سه‌بعدی کانکی: سپر دو لبه با نیم‌رخ نورخورده، حرف K برجسته و درخشش */
 @Composable
 fun Logo3D(size: Dp, animate: Boolean = true) {
     val t = rememberInfiniteTransition(label = "logo")
-    val rot by t.animateFloat(-24f, 24f, infiniteRepeatable(tween(3400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "r")
+    val rot by t.animateFloat(-22f, 22f, infiniteRepeatable(tween(3600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "r")
+    val shine by t.animateFloat(-0.6f, 1.6f, infiniteRepeatable(tween(3200, easing = LinearEasing)), label = "s")
     Canvas(
         Modifier.size(size).graphicsLayer {
             rotationY = if (animate) rot else 0f
@@ -183,23 +203,38 @@ fun Logo3D(size: Dp, animate: Boolean = true) {
     ) {
         val w = this.size.width
         val h = this.size.height
-        // عمق (لایه‌های پشتی)
-        for (i in 9 downTo 1) {
-            val shade = 0.35f + i * 0.02f
-            drawPath(shieldPath(w, h, i * w * .005f, i * h * .006f), Color(0xFF8A6418).copy(alpha = 1f).let {
-                Color(it.red * (1.1f - shade), it.green * (1.1f - shade), it.blue * (1.1f - shade), 1f)
-            })
+        // عمق
+        for (i in 8 downTo 1) {
+            val k = 1f - i * .06f
+            drawPath(shieldPath(w, h, i * w * .005f, i * h * .006f), Color(0.42f * k, 0.29f * k, 0.07f * k, 1f))
         }
         val face = shieldPath(w, h)
-        drawPath(face, Brush.verticalGradient(listOf(Color(0xFF3A2C12), Color(0xFF120D06))))
-        drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight)), style = Stroke(w * .06f, join = StrokeJoin.Round))
-        // حرف K برجسته
-        drawPath(kPath(w, h, w * .012f, h * .014f), Color(0xFF5A3F0E))
-        drawPath(kPath(w, h), Brush.verticalGradient(listOf(Color(0xFFFFF4C8), K.Gold, K.GoldDeep)))
-        // براقی شیشه‌ای
-        clipPath(face) {
-            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.Transparent)), size = Size(w, h * .42f))
+        drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep, Color(0xFF7A5512)), Offset(0f, 0f), Offset(w, h)))
+        // صفحه‌ی تیره‌ی داخلی با دو نیمه‌ی نورخورده
+        val inner = shieldPath(w, h, inset = .07f)
+        clipPath(inner) {
+            drawRect(Color(0xFF2B2010), size = Size(w / 2, h))
+            drawRect(Color(0xFF140E06), topLeft = Offset(w / 2, 0f), size = Size(w / 2, h))
+            // نوار درخشش در حال حرکت
+            val x = shine * w
+            drawRect(
+                Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .16f), Color.Transparent), Offset(x - w * .25f, 0f), Offset(x + w * .25f, h)),
+                size = Size(w, h),
+            )
         }
+        drawPath(inner, K.Gold.copy(alpha = .9f), style = Stroke(w * .018f, join = StrokeJoin.Round))
+        // حرف K
+        drawPath(kPath(w, h, w * .014f, h * .016f), Color(0xFF4A330B))
+        drawPath(kPath(w, h), Brush.verticalGradient(listOf(Color(0xFFFFF6D2), K.Gold, K.GoldDeep)))
+        // براقی بالای سپر
+        clipPath(face) {
+            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent)), size = Size(w, h * .30f))
+        }
+        // ستاره‌ی درخشان گوشه
+        val sp = Offset(w * .80f, h * .13f)
+        drawLine(Color.White.copy(alpha = .9f), Offset(sp.x - w * .07f, sp.y), Offset(sp.x + w * .07f, sp.y), w * .012f, cap = StrokeCap.Round)
+        drawLine(Color.White.copy(alpha = .9f), Offset(sp.x, sp.y - w * .07f), Offset(sp.x, sp.y + w * .07f), w * .012f, cap = StrokeCap.Round)
+        drawCircle(Color.White.copy(alpha = .5f), w * .03f, sp)
     }
 }
 
@@ -208,8 +243,8 @@ fun Logo3D(size: Dp, animate: Boolean = true) {
 fun ShieldLogo(size: Dp) = Logo3D(size, animate = false)
 
 @Composable
-fun BrandTitle(size: TextUnit = 26.sp) {
-    T("KANKI VPN", size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
+fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
+    T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
 }
 
 // ------------------------------------------------------------------ نور نئونی
@@ -245,7 +280,7 @@ fun DrawScope.neonRing(color: Color, c: Offset, r: Float, w: Float, strength: Fl
 enum class VState { OFF, CONNECTING, ON }
 
 @Composable
-fun ConnectButton(state: VState, onClick: () -> Unit) {
+fun ConnectButton(state: VState, size: Dp = 230.dp, onClick: () -> Unit) {
     val t = rememberInfiniteTransition(label = "cb")
     val angle by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "a")
     val pulse by t.animateFloat(.94f, 1.03f, infiniteRepeatable(tween(750), RepeatMode.Reverse), label = "p")
@@ -254,7 +289,7 @@ fun ConnectButton(state: VState, onClick: () -> Unit) {
     val scale = if (state == VState.CONNECTING) pulse else 1f
 
     Box(
-        Modifier.size(230.dp).clickable(
+        Modifier.size(size).clickable(
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
         ),
         contentAlignment = Alignment.Center,
@@ -467,14 +502,14 @@ fun ProtoBadge(kind: String, result: Long?, busy: Boolean, onClick: () -> Unit) 
     }
     val shape = RoundedCornerShape(14.dp)
     Column(
-        Modifier.width(62.dp).clip(shape)
+        Modifier.width(52.dp).clip(shape)
             .background(Brush.verticalGradient(listOf(col.copy(alpha = .22f), Color(0x22000000))))
             .border(1.2.dp, col.copy(alpha = .8f), shape)
             .clickable(enabled = !busy, onClick = onClick)
             .padding(vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Canvas(Modifier.size(20.dp)) {
+        Canvas(Modifier.size(16.dp)) {
             val w = size.width
             if (busy) {
                 rotate(spin) { drawArc(col, 0f, 270f, false, style = Stroke(w * .12f, cap = StrokeCap.Round)) }
@@ -505,7 +540,11 @@ private val robotLines = listOf(
     "برای خرید کانفیگ روی من بزن",
     "تست رایگان هم داریم 🎁",
     "تمدید اشتراک؟ من اینجام!",
-    "پشتیبانی ۲۴ ساعته 💬",
+    "امنزیا، وایرگارد و اوپن‌وی‌پی‌ان 🔐",
+    "پینگ پایین برای گیم 🎮",
+    "یه اشتراک، سه کانفیگ ✨",
+    "اینترنت آزاد با کانکی 🚀",
+    "سؤال داری؟ بزن روم 💬",
 )
 
 /** ربات کوچک سه‌بعدی با حباب گفتگو که به ربات تلگرام می‌برد */

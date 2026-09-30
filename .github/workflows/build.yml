@@ -24,6 +24,12 @@ jobs:
           dl orbitron.ttf "$G1/orbitron/Orbitron%5Bwght%5D.ttf" "$G2/orbitron/Orbitron%5Bwght%5D.ttf"
           ls -la app/src/main/res/font
 
+      - name: دریافت نقشه‌ی جهان
+        run: |
+          mkdir -p app/src/main/assets
+          curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson || curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/physical/ne_110m_land.json || echo '{"features":[]}' > app/src/main/assets/land.geojson
+          ls -la app/src/main/assets
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -34,9 +40,9 @@ jobs:
           gradle-version: "8.13"
 
       - name: ساخت فایل نصبی
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleRelease --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: KankiVPN-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/*.apk

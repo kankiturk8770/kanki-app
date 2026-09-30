@@ -63,6 +63,14 @@ object RealPing {
         (System.nanoTime() - t0) / 1_000_000
     }.getOrNull()
 
+    /** پینگ و جیتر برای تست سرعت */
+    fun latency(samples: Int = 6): Pair<Long, Long>? {
+        once()
+        val r = (1..samples).mapNotNull { once() }
+        if (r.size < 2) return r.firstOrNull()?.let { it to 0L }
+        return r.min() to r.zipWithNext { a, b -> abs(a - b) }.average().toLong()
+    }
+
     /** یک بار گرم‌کردن، سپس کمترین زمان از چند تلاش */
     fun measure(tries: Int = 4): Long? {
         once()
@@ -239,6 +247,42 @@ object SpeedTest {
             }
         }
         val mbps = if (elapsed() > 0) total * 8 / 1e6 / elapsed() else 0.0
+        onProgress(mbps)
+        return mbps
+    }
+
+    /** دانلود سریع با چند اتصال همزمان (دقیق‌تر و کوتاه‌تر) */
+    fun downloadParallel(seconds: Double = 5.0, streams: Int = 4, onProgress: (Double) -> Unit): Double {
+        val total = java.util.concurrent.atomic.AtomicLong(0)
+        val start = System.nanoTime()
+        fun el() = (System.nanoTime() - start) / 1e9
+        val errors = java.util.concurrent.atomic.AtomicInteger(0)
+        val threads = (1..streams).map {
+            Thread {
+                val buf = ByteArray(64 * 1024)
+                while (el() < seconds) {
+                    val c = runCatching { open("$BASE/__down?bytes=50000000") }.getOrNull() ?: break
+                    try {
+                        c.inputStream.use { input ->
+                            while (el() < seconds) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                total.addAndGet(n.toLong())
+                            }
+                        }
+                    } catch (e: Exception) {
+                        errors.incrementAndGet(); break
+                    } finally { c.disconnect() }
+                }
+            }.apply { start() }
+        }
+        while (el() < seconds && threads.any { it.isAlive }) {
+            Thread.sleep(200)
+            onProgress(total.get() * 8 / 1e6 / el())
+        }
+        threads.forEach { it.join(1500) }
+        if (total.get() == 0L && errors.get() > 0) throw java.io.IOException("اتصال به سرور تست برقرار نشد")
+        val mbps = total.get() * 8 / 1e6 / el().coerceAtLeast(0.001)
         onProgress(mbps)
         return mbps
     }

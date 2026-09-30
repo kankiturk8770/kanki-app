@@ -31,7 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.5.0"
+const val APP_VERSION = "0.6.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -173,15 +173,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     var tab by remember { mutableStateOf(KTab.HOME) }
 
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp)) {
-            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-                Logo3D(38.dp)
-                Spacer(Modifier.width(8.dp))
-                BrandTitle(20.sp)
-            }
-            Box(Modifier.align(Alignment.CenterEnd)) {
-                IconCircle(40.dp, onClick = { state.accountOpen = true }) { c -> accountIcon(c) }
-            }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Logo3D(42.dp)
+            Spacer(Modifier.width(10.dp))
+            BrandTitle(21.sp)
+            Spacer(Modifier.weight(1f))
+            IconCircle(42.dp, onClick = { state.accountOpen = true }) { c -> accountIcon(c) }
         }
 
         Box(Modifier.weight(1f)) {
@@ -311,7 +308,17 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ConnectButton(state.vstate) { if (a != null) onToggle() }
+        // نقشه‌ی جهان با سرورها و خط اتصال
+        val pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
+            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, flagOf(l.nodeName), l.node == state.node) }
+        } ?: emptyList()
+        Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            WorldMap(pins, state.userGeo, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(2.65f))
+            state.userGeo?.let {
+                T(if (state.vstate == VState.ON) "● شما ← سرور" else "● موقعیت شما", size = 10.sp, color = Color(0xFF6FE7FF), weight = FontWeight.Normal, modifier = Modifier.align(Alignment.BottomStart))
+            }
+        }
+        ConnectButton(state.vstate, 196.dp) { if (a != null) onToggle() }
 
         val (label, color) = when (state.vstate) {
             VState.ON -> "متصل" to K.Green
@@ -336,7 +343,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         // سوییچ سریع پروتکل
         Spacer(Modifier.height(10.dp))
         var ask by remember { mutableStateOf<String?>(null) }
-        ProtocolSwitcher(state.proto) { p ->
+        ProtocolSwitcher(state.proto, state.available()) { p ->
             if (p == state.proto) return@ProtocolSwitcher
             if (state.vstate == VState.CONNECTING) return@ProtocolSwitcher
             if (state.vstate == VState.ON || p == "openvpn") ask = p
@@ -383,19 +390,48 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
 @Composable
 fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session: Long) {
     val nodeName = a.configs.firstOrNull { it.node == state.node }?.nodeName ?: "—"
+    val nodes = a.configs.distinctBy { it.node }
+    var pick by remember { mutableStateOf(false) }
+    val hctx = LocalContext.current
     Glass(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.clip(RoundedCornerShape(14.dp)).clickable {
+                if (state.vstate != VState.OFF) toast(hctx, "برای تغییر لوکیشن، اول اتصال را قطع کنید")
+                else if (nodes.size > 1) pick = !pick
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             T(flagOf(nodeName), size = 26.sp)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 T(nodeName, size = 16.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                T(protoTitle(state.protoKey()), size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+                T(protoTitle(state.protoKey()) + if (nodes.size > 1) "  ▾" else "", size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
             }
             Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
             Spacer(Modifier.width(6.dp))
             val ctx = LocalContext.current
             val scope = rememberCoroutineScope()
             IconCircle(34.dp, onClick = { scope.launch { state.refresh(); toast(ctx, "اطلاعات اشتراک بروز شد") } }) { c -> refreshIcon(c) }
+        }
+        AnimatedVisibility(visible = pick) {
+            Column(Modifier.padding(top = 8.dp)) {
+                nodes.forEach { n ->
+                    val sel = n.node == state.node
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp))
+                            .background(if (sel) Color(0x33F5C451) else Color(0x10FFFFFF))
+                            .border(1.dp, if (sel) K.Gold else K.Line, RoundedCornerShape(14.dp))
+                            .clickable { state.node = n.node; state.save(); pick = false }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        T(flagOf(n.nodeName), size = 20.sp)
+                        Spacer(Modifier.width(10.dp))
+                        T(n.nodeName, size = 14.sp, font = Poppins, weight = FontWeight.Bold, ltr = true, modifier = Modifier.weight(1f))
+                        if (sel) T("✓", size = 16.sp, color = K.Green)
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -456,12 +492,13 @@ fun Stat(label: String, value: String, modifier: Modifier) {
 // ================================================================== سوییچ پروتکل
 
 @Composable
-fun ProtocolSwitcher(current: String, onPick: (String) -> Unit) {
+fun ProtocolSwitcher(current: String, available: List<String>, onPick: (String) -> Unit) {
+    if (available.size <= 1) return
     val shape = RoundedCornerShape(20.dp)
     Row(
         Modifier.fillMaxWidth().clip(shape).background(Color(0xCC0E0B07)).border(1.dp, K.Line, shape).padding(4.dp),
     ) {
-        listOf("amneziawg" to "Amnezia", "wireguard" to "WireGuard", "openvpn" to "OpenVPN").forEach { (p, title) ->
+        listOf("amneziawg" to "Amnezia", "wireguard" to "WireGuard", "openvpn" to "OpenVPN").filter { it.first in available }.forEach { (p, title) ->
             val sel = p == current
             Box(
                 Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
@@ -514,8 +551,6 @@ fun ServersTab(state: AppState) {
                     IconCircle(48.dp, onClick = { scope.launch { state.refreshNode(nodeId); toast(ctx, "کانفیگ‌ها بروز شد") } }) { c -> refreshIcon(c) }
                 }
                 Spacer(Modifier.height(8.dp))
-                T("UDP = پینگ واقعی از داخل تونل (مثل v2rayNG) · TCP = دست‌دادن مستقیم با سرور", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
-                Spacer(Modifier.height(8.dp))
                 cfgs.forEach { p ->
                     if (links.any { it.protocol == p }) {
                         ProtoCard(state, nodeId, p,
@@ -532,7 +567,7 @@ fun ServersTab(state: AppState) {
                             onUdp = { state.requestVpn?.invoke { scope.launch { state.realTest(nodeId, p) } } },
                             onTcp = { scope.launch { state.tcpTest(nodeId, p) } },
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                     }
                 }
             }
@@ -583,18 +618,18 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
     val key = "$nodeId/$p"
     val info = state.infos[key]
     var details by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     val isOvpn = p.startsWith("openvpn")
 
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .background(if (sel) Color(0x33F5C451) else Color(0x14FFFFFF))
             .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
-            .clickable(onClick = onSelect).padding(14.dp),
+            .clickable(onClick = onSelect).padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                T(protoTitle(p), size = 16.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
+                T(protoTitle(p), size = 14.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
                 T(
                     when {
                         p == "amneziawg" -> "مخفی‌سازی ترافیک · عبور از فیلتر"
@@ -602,11 +637,11 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
                         p == "openvpn/tcp" -> "پایدار روی شبکه‌های محدود"
                         else -> "سازگاری بالا · اجرا در اپ OpenVPN"
                     },
-                    size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
+                    size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (!isOvpn) {
                 ProtoBadge("UDP", state.udpPings[key], state.busyTests["udp:$key"] == true, onUdp)
@@ -617,32 +652,20 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
             if (sel) { Pill("✓ فعال", color = K.Green); Spacer(Modifier.width(6.dp)) }
             // دکمه‌ی مداد برای نمایش جزئیات
             Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
+                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (details) K.Gold.copy(alpha = .25f) else Color(0x14FFFFFF))
                     .border(1.dp, K.Line, RoundedCornerShape(12.dp))
                     .clickable { details = !details },
                 contentAlignment = Alignment.Center,
-            ) { T("✎", size = 16.sp, color = K.Gold) }
+            ) { T("✎", size = 14.sp, color = K.Gold) }
         }
         AnimatedVisibility(visible = details) {
-            Column(Modifier.padding(top = 10.dp)) {
-                GoldDivider()
-                Spacer(Modifier.height(6.dp))
-                if (info == null) {
-                    T("در حال دریافت اطلاعات…", size = 12.sp, color = K.Sub)
+            Column(Modifier.padding(top = 8.dp)) {
+                if (isOvpn) {
+                    T("تنظیمات OpenVPN در اپ OpenVPN انجام می‌شود", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 } else {
-                    InfoRow("سرور", info.host)
-                    InfoRow("پورت", if (info.port > 0) info.port.toString() else "—")
-                    InfoRow("پروتکل انتقال", info.transport)
-                    InfoRow("آدرس داخلی", info.address)
-                    InfoRow("DNS", info.dns)
-                    InfoRow("MTU", info.mtu)
-                    info.obfuscation?.let { InfoRow("مبهم‌سازی", it, K.Green) }
-                    info.cipher?.let { InfoRow("رمزنگاری", it) }
-                    if (!isOvpn) {
-                        Spacer(Modifier.height(8.dp))
-                        MtuEditor(state, p)
-                    }
+                    MtuEditor(state, p)
+                    T("DNS از بخش تنظیمات تغییر می‌کند", size = 10.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }
@@ -679,35 +702,21 @@ fun TestTab(state: AppState) {
     var up by remember { mutableStateOf<Double?>(null) }
     var lat by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var err by remember { mutableStateOf<String?>(null) }
-    var provider by remember { mutableStateOf("Speedtest by Ookla") }
+    var provider by remember { mutableStateOf("Cloudflare") }
 
     fun runSpeed() {
         if (running) return
         running = true; err = null; down = null; up = null; lat = null; live = 0.0
         scope.launch {
             try {
-                phase = "یافتن سرور"
-                val picked = withContext(Dispatchers.IO) { Ookla.pickServer() }
-                if (picked != null) {
-                    val srv = picked.first
-                    provider = "Speedtest by Ookla · ${srv.sponsor} (${srv.name})"
-                    phase = "پینگ"
-                    lat = withContext(Dispatchers.IO) { (Ookla.latency(srv) ?: picked.second) to (Ookla.jitter(srv) ?: 0L) }
-                    phase = "دانلود"
-                    down = withContext(Dispatchers.IO) { Ookla.download(srv) { live = it } }
-                    live = 0.0
-                    phase = "آپلود"
-                    up = withContext(Dispatchers.IO) { Ookla.upload(srv) { live = it } }
-                } else {
-                    provider = "Cloudflare (سرور Ookla در دسترس نبود)"
-                    phase = "پینگ"
-                    lat = withContext(Dispatchers.IO) { SpeedTest.latency() }
-                    phase = "دانلود"
-                    down = withContext(Dispatchers.IO) { SpeedTest.download { live = it } }
-                    live = 0.0
-                    phase = "آپلود"
-                    up = withContext(Dispatchers.IO) { SpeedTest.upload { live = it } }
-                }
+                provider = "Cloudflare · ${if (state.vstate == VState.ON) "از داخل تونل کانکی" else "بدون VPN"}"
+                phase = "پینگ"
+                lat = withContext(Dispatchers.IO) { RealPing.latency() }
+                phase = "دانلود"
+                down = withContext(Dispatchers.IO) { SpeedTest.downloadParallel { live = it } }
+                live = 0.0
+                phase = "آپلود"
+                up = withContext(Dispatchers.IO) { SpeedTest.upload(4.0) { live = it } }
                 phase = "تمام شد"
             } catch (e: Exception) {
                 err = "تست ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
@@ -721,7 +730,7 @@ fun TestTab(state: AppState) {
         SectionTitle("تست سرعت واقعی")
         Glass(Modifier.fillMaxWidth()) {
             T(
-                (if (state.vstate == VState.ON) "از مسیر VPN کانکی · " else "بدون VPN · ") + provider,
+                provider,
                 size = 12.sp, color = K.Sub, weight = FontWeight.Normal,
             )
             Box(Modifier.fillMaxWidth().height(230.dp), contentAlignment = Alignment.BottomCenter) {
@@ -744,11 +753,11 @@ fun TestTab(state: AppState) {
             Spacer(Modifier.height(12.dp))
             GoldButton(if (running) "در حال تست…" else "شروع تست سرعت", Modifier.fillMaxWidth(), loading = running) { runSpeed() }
             Spacer(Modifier.height(6.dp))
-            T("حدود ۲۰ تا ۶۰ مگابایت اینترنت مصرف می‌کند", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+            T("این تست حدود ۱۵ تا ۴۰ مگابایت اینترنت مصرف می‌کند", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
         }
 
         Spacer(Modifier.height(12.dp))
-        T("پینگ واقعی هر کانفیگ (UDP و TCP) در تب «سرورها» با باز کردن هر سرور", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+        T("برای دیدن پینگ هر کانفیگ، در تب «سرورها» سرور را باز کنید.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -769,46 +778,8 @@ fun SettingsTab(state: AppState) {
         RobotMascot { openBot(ctx) }
         Spacer(Modifier.height(8.dp))
 
-        // خلاصه‌ی حساب
-        Glass(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    T(a?.username ?: "—", size = 18.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                    T("حساب کاربری", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
-                }
-                if (a != null) Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
-            }
-            if (a != null) {
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MiniStat("حجم باقی‌مانده", a.dataRemaining, Modifier.weight(1f))
-                    MiniStat("زمان باقی‌مانده", a.timeRemaining, Modifier.weight(1f))
-                }
-            }
-        }
-
         Spacer(Modifier.height(12.dp))
         Glass(Modifier.fillMaxWidth()) {
-            MenuRow("👤", "جزئیات حساب", "مصرف، انقضا، اتصال همزمان", open == "acc") { flip("acc") }
-            AnimatedVisibility(visible = open == "acc") {
-                Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                    if (a != null) {
-                        InfoRow("مصرف‌شده", a.used)
-                        InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
-                        InfoRow("اتصال همزمان", a.connections)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LineButton("بروزرسانی", Modifier.weight(1f)) { scope.launch { state.refresh(); toast(ctx, "اطلاعات بروز شد") } }
-                        LineButton("کپی لینک", Modifier.weight(1f)) {
-                            clip.setText(AnnotatedString(state.subLink))
-                            toast(ctx, "لینک اشتراک کپی شد")
-                        }
-                    }
-                }
-            }
-            GoldDivider()
-
             MenuRow("🌐", "DNS", dnsTitle(state.dns), open == "dns") { flip("dns") }
             AnimatedVisibility(visible = open == "dns") { DnsPicker(state) }
             GoldDivider()
@@ -839,6 +810,18 @@ fun SettingsTab(state: AppState) {
             MenuRow("🛒", "خرید و تمدید اشتراک", "از طریق ربات تلگرام", false, arrow = "‹") { openBot(ctx) }
             GoldDivider()
             MenuRow("💬", "پشتیبانی", "@KANKI_VPN_ADMIN", false, arrow = "‹") { openSupport(ctx) }
+            GoldDivider()
+            MenuRow("📤", "معرفی به دوستان", "ارسال لینک ربات کانکی", false, arrow = "‹") {
+                runCatching {
+                    ctx.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(Intent.EXTRA_TEXT, "کانکی وی‌پی‌ان 🔐 امنزیا، وایرگارد و اوپن‌وی‌پی‌ان با یک اشتراک\nتست رایگان: $BOT_URL"),
+                            "معرفی کانکی",
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
             GoldDivider()
             MenuRow("🚪", "خروج از حساب", "حذف اشتراک از این گوشی", false, arrow = "", danger = true) {
                 scope.launch { state.logout() }
