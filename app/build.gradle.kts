@@ -18,9 +18,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("kanki-release.jks")
-            storePassword = "z_JPH6Z_fmRtFn6JlXuV6Pi6"
+            storePassword = "KankiVpn2026Store"
             keyAlias = "kanki"
-            keyPassword = "z_JPH6Z_fmRtFn6JlXuV6Pi6"
+            keyPassword = "KankiVpn2026Store"
         }
     }
     buildTypes {
