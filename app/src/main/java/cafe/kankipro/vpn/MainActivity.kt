@@ -54,6 +54,7 @@ fun App() {
         when (state.vstate) {
             VState.ON -> scope.launch { state.disconnect() }
             VState.OFF -> {
+                if (state.proto == "openvpn") { scope.launch { state.connect() }; return }
                 val intent = VpnService.prepare(ctx)
                 if (intent != null) permission.launch(intent) else scope.launch { state.connect() }
             }

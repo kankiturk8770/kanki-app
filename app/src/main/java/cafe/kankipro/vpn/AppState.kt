@@ -30,6 +30,20 @@ class AppState(context: Context) {
     var ping by mutableStateOf<Long?>(null)
     val infos = mutableStateMapOf<String, ConfigInfo>()
 
+    /** سروری که در تب سرورها باز است (بین تب‌ها حفظ می‌شود) */
+    var openNode by mutableStateOf<String?>(null)
+    /** نوع اتصال OpenVPN: udp یا tcp */
+    var ovpnTransport by mutableStateOf(prefs.getString("ovpn", "udp") ?: "udp")
+    /** نتایج تست پینگ: کلید «node/protocol» ؛ مقدار -1 یعنی ناموفق */
+    val pings = mutableStateMapOf<String, Long>()
+    val pinging = mutableStateMapOf<String, Boolean>()
+
+    fun mtuFor(p: String): String = prefs.getString("mtu_$p", "") ?: ""
+    fun setMtu(p: String, v: String) { prefs.edit().putString("mtu_$p", v.trim()).apply() }
+
+    /** کلید کانفیگ فعال (برای OpenVPN نوع اتصال هم لحاظ می‌شود) */
+    fun protoKey(p: String = proto) = if (p == "openvpn") "openvpn/$ovpnTransport" else p
+
     val loggedIn get() = base != null && code != null
     val subLink get() = if (loggedIn) "$base/sub/$code" else ""
 
@@ -37,6 +51,7 @@ class AppState(context: Context) {
         prefs.edit()
             .putString("proto", proto).putString("node", node)
             .putString("dns", dns).putBoolean("auto", autoConnect)
+            .putString("ovpn", ovpnTransport)
             .apply()
     }
 
@@ -80,7 +95,7 @@ class AppState(context: Context) {
     }
 
     private suspend fun loadInfos(a: Account) {
-        for (l in a.configs.filter { it.protocol == "amneziawg" || it.protocol == "wireguard" }) {
+        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp") }) {
             val key = "${l.node}/${l.protocol}"
             if (infos.containsKey(key)) continue
             runCatching { withContext(Dispatchers.IO) { ConfigInfo.parse(SubscriptionApi.fetch(l.url)) } }
@@ -90,13 +105,27 @@ class AppState(context: Context) {
 
     suspend fun connect() {
         val a = account ?: return
-        val link = a.configs.firstOrNull { it.protocol == proto && it.node == node }
-            ?: a.configs.firstOrNull { it.protocol == proto }
+        val key = protoKey()
+        val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
+            ?: a.configs.firstOrNull { it.protocol == key }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
-        vstate = VState.CONNECTING; error = null
+        error = null
+
+        if (proto == "openvpn") {
+            try {
+                val text = withContext(Dispatchers.IO) { SubscriptionApi.fetch(link.url) }
+                val opened = OpenVpnHandoff.open(ctx, text, "Kanki-${link.nodeName}-${ovpnTransport.uppercase()}")
+                error = if (opened) null else "برای OpenVPN ابتدا اپ «OpenVPN Connect» را نصب کنید، سپس دوباره بزنید."
+            } catch (e: Exception) {
+                error = "دریافت پروفایل OpenVPN ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
+            }
+            return
+        }
+
+        vstate = VState.CONNECTING
         try {
             withContext(Dispatchers.IO) {
-                val cfg = DnsOptions.apply(SubscriptionApi.fetch(link.url), dns)
+                val cfg = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(link.url), dns), mtuFor(proto))
                 VpnEngine.up(ctx, cfg)
             }
             vstate = VState.ON
@@ -106,6 +135,25 @@ class AppState(context: Context) {
             vstate = VState.OFF
             error = "اتصال برقرار نشد: " + (e.message ?: e.javaClass.simpleName)
         }
+    }
+
+    /** سوییچ سریع به پروتکل دیگر (اگر وصل است، قطع و دوباره وصل می‌شود) */
+    suspend fun switchTo(p: String) {
+        val wasOn = vstate == VState.ON
+        if (wasOn) disconnect()
+        proto = p
+        save()
+        if (wasOn || p == "openvpn") connect()
+    }
+
+    /** تست پینگ یک کانفیگ */
+    suspend fun pingTest(nodeId: String, p: String) {
+        val key = "$nodeId/$p"
+        val info = infos[key] ?: return
+        pinging[key] = true
+        val r = withContext(Dispatchers.IO) { Pinger.test(info) }
+        pings[key] = r ?: -1L
+        pinging[key] = false
     }
 
     suspend fun disconnect() {

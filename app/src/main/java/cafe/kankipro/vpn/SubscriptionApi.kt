@@ -114,9 +114,15 @@ data class ConfigInfo(
     val dns: String,
     val mtu: String,
     val obfuscation: String?,
+    val transport: String = "UDP",
+    val cipher: String? = null,
 ) {
+    val host: String get() = endpoint.substringBeforeLast(":").removePrefix("[").removeSuffix("]")
+    val port: Int get() = endpoint.substringAfterLast(":", "").toIntOrNull() ?: 0
+
     companion object {
         fun parse(text: String): ConfigInfo {
+            if (text.lines().any { it.trim().startsWith("remote ") }) return parseOvpn(text)
             val m = mutableMapOf<String, String>()
             text.lines().forEach { line ->
                 val p = line.split("=", limit = 2)
@@ -131,7 +137,40 @@ data class ConfigInfo(
                 obfuscation = if (jc != null) "فعال · Jc $jc" else null,
             )
         }
+
+        /** خواندن اطلاعات فایل OpenVPN */
+        fun parseOvpn(text: String): ConfigInfo {
+            fun first(key: String) = text.lines().map { it.trim() }.firstOrNull { it.startsWith("$key ") }
+                ?.split(Regex("\\s+"))?.drop(1)
+            val remote = first("remote")
+            val proto = first("proto")?.firstOrNull() ?: "udp"
+            val host = remote?.getOrNull(0) ?: "—"
+            val port = remote?.getOrNull(1) ?: "1194"
+            val tcp = proto.startsWith("tcp") || remote?.getOrNull(2)?.startsWith("tcp") == true
+            val cipher = first("data-ciphers")?.firstOrNull() ?: first("cipher")?.firstOrNull()
+            return ConfigInfo(
+                endpoint = "$host:$port",
+                address = "خودکار (از سرور)",
+                dns = "از سرور",
+                mtu = first("tun-mtu")?.firstOrNull() ?: "خودکار",
+                obfuscation = null,
+                transport = if (tcp) "TCP" else "UDP",
+                cipher = cipher,
+            )
+        }
     }
+}
+
+/** اعمال MTU دلخواه روی کانفیگ وایرگارد/امنزیا */
+fun applyMtu(cfg: String, mtu: String): String {
+    val v = mtu.trim().toIntOrNull() ?: return cfg
+    val lines = cfg.lines().toMutableList()
+    val i = lines.indexOfFirst { it.trim().startsWith("MTU", ignoreCase = true) && it.contains("=") }
+    if (i >= 0) lines[i] = "MTU = $v" else {
+        val j = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
+        if (j >= 0) lines.add(j + 1, "MTU = $v")
+    }
+    return lines.joinToString("\n")
 }
 
 /** گزینه‌های DNS و اعمال آن روی متن کانفیگ */
