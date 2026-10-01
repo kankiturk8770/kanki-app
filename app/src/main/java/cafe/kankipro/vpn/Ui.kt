@@ -46,13 +46,13 @@ class Palette(
     val ok: Color,
 )
 
-val Themes = listOf(
+val Themes: List<Palette> = listOf(
     // طلایی کانکی
     Palette(
-        "gold", K.Gold.copy(alpha = 1.00f), Color(0xFFFFE9A6), Color(0xFFB8862B), Color(0xFFFFE08A),
+        "gold", Color(0xFFF5C451), Color(0xFFFFE9A6), Color(0xFFB8862B), Color(0xFFFFE08A),
         Color(0xFF060504), Color(0xFFF7F1E3), Color(0xFFA89C82),
         Color(0xFF0C0A06), Color(0xFF17110A), Color(0xFF050403),
-        Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), K.OnGold, Color(0xFF6FE7FF),
+        Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), Color(0xFF1A1206), Color(0xFF6FE7FF),
         Color(0xFFFFB547),
     ),
     // سیاه و سفید زغالی
@@ -74,26 +74,26 @@ val Themes = listOf(
 )
 
 object ThemeState {
-    var current by androidx.compose.runtime.mutableStateOf(Themes[0])
+    var current: Palette by androidx.compose.runtime.mutableStateOf(Themes[0])
     fun set(id: String) { current = Themes.firstOrNull { it.id == id } ?: Themes[0] }
 }
 
 object K {
-    val Gold get() = ThemeState.current.gold
-    val GoldLight get() = ThemeState.current.goldLight
-    val GoldDeep get() = ThemeState.current.goldDeep
-    val Shine get() = ThemeState.current.shine
-    val Ink get() = ThemeState.current.ink
-    val Text get() = ThemeState.current.text
-    val Sub get() = ThemeState.current.sub
-    val Line get() = ThemeState.current.gold.copy(alpha = .25f)
-    val Surface get() = ThemeState.current.surface
-    val Surface2 get() = ThemeState.current.surface2
-    val Panel get() = ThemeState.current.panel
-    val OnGold get() = ThemeState.current.onGold
-    val Accent get() = ThemeState.current.accent
-    val Ok get() = ThemeState.current.ok
-    val Green get() = ThemeState.current.ok
+    val Gold: Color get() = ThemeState.current.gold
+    val GoldLight: Color get() = ThemeState.current.goldLight
+    val GoldDeep: Color get() = ThemeState.current.goldDeep
+    val Shine: Color get() = ThemeState.current.shine
+    val Ink: Color get() = ThemeState.current.ink
+    val Text: Color get() = ThemeState.current.text
+    val Sub: Color get() = ThemeState.current.sub
+    val Line: Color get() = ThemeState.current.gold.copy(alpha = .25f)
+    val Surface: Color get() = ThemeState.current.surface
+    val Surface2: Color get() = ThemeState.current.surface2
+    val Panel: Color get() = ThemeState.current.panel
+    val OnGold: Color get() = ThemeState.current.onGold
+    val Accent: Color get() = ThemeState.current.accent
+    val Ok: Color get() = ThemeState.current.ok
+    val Green: Color get() = ThemeState.current.ok
     val Red = Color(0xFFFF6B6B)
 }
 
