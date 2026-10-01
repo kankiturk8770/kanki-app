@@ -10,6 +10,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,75 +21,62 @@ import org.json.JSONObject
 /** یک نقطه‌ی جغرافیایی */
 data class Geo(val lat: Double, val lon: Double)
 
-/** داده‌ی نقشه: نقطه‌های خشکی (هر ۲.۵ درجه) از فایل land.geojson */
-object MapData {
-    const val TOP = 78.0
-    const val BOTTOM = -56.0
-    private const val STEP = 2.5
+/** یک کشور: کد ISO و مسیر مرزهایش (در فضای طول/عرض جغرافیایی: x = lon , y = -lat) */
+class Country(val iso: String, val path: Path, val minLon: Float, val maxLon: Float, val minLat: Float, val maxLat: Float)
 
+/** داده‌ی نقشه از فایل countries.geojson (Natural Earth) */
+object MapData {
     @Volatile
-    var dots: List<Geo>? = null
+    var countries: List<Country>? = null
         private set
 
-    fun load(ctx: Context): List<Geo> {
-        dots?.let { return it }
-        val rings = mutableListOf<DoubleArray>() // [lon0,lat0,lon1,lat1,...]
+    fun load(ctx: Context): List<Country> {
+        countries?.let { return it }
+        val out = ArrayList<Country>()
         runCatching {
-            val txt = ctx.assets.open("land.geojson").bufferedReader().use { it.readText() }
+            val txt = ctx.assets.open("countries.geojson").bufferedReader().use { it.readText() }
             val feats = JSONObject(txt).optJSONArray("features") ?: JSONArray()
             for (i in 0 until feats.length()) {
-                val g = feats.optJSONObject(i)?.optJSONObject("geometry") ?: continue
+                val f = feats.optJSONObject(i) ?: continue
+                val pr = f.optJSONObject("properties") ?: JSONObject()
+                var iso = pr.optString("ISO_A2_EH", "")
+                if (iso.length != 2) iso = pr.optString("ISO_A2", "")
+                if (iso.length != 2) iso = pr.optString("iso_a2", "")
+                val g = f.optJSONObject("geometry") ?: continue
                 val coords = g.optJSONArray("coordinates") ?: continue
+                val path = Path()
+                var mnX = 999f; var mxX = -999f; var mnY = 999f; var mxY = -999f
+                fun addRing(r: JSONArray) {
+                    for (k in 0 until r.length()) {
+                        val pt = r.optJSONArray(k) ?: continue
+                        val x = pt.optDouble(0).toFloat(); val y = pt.optDouble(1).toFloat()
+                        if (k == 0) path.moveTo(x, -y) else path.lineTo(x, -y)
+                        mnX = minOf(mnX, x); mxX = maxOf(mxX, x); mnY = minOf(mnY, y); mxY = maxOf(mxY, y)
+                    }
+                    path.close()
+                }
                 when (g.optString("type")) {
-                    "Polygon" -> coords.optJSONArray(0)?.let { rings.add(ring(it)) }
-                    "MultiPolygon" -> for (j in 0 until coords.length()) coords.optJSONArray(j)?.optJSONArray(0)?.let { rings.add(ring(it)) }
+                    "Polygon" -> for (r in 0 until coords.length()) coords.optJSONArray(r)?.let { addRing(it) }
+                    "MultiPolygon" -> for (pIdx in 0 until coords.length()) {
+                        val poly = coords.optJSONArray(pIdx) ?: continue
+                        for (r in 0 until poly.length()) poly.optJSONArray(r)?.let { addRing(it) }
+                    }
                 }
+                out.add(Country(iso.uppercase(), path, mnX, mxX, mnY, mxY))
             }
         }
-        val boxes = rings.map { r ->
-            var minX = 999.0; var maxX = -999.0; var minY = 999.0; var maxY = -999.0
-            var k = 0
-            while (k < r.size) { minX = minOf(minX, r[k]); maxX = maxOf(maxX, r[k]); minY = minOf(minY, r[k + 1]); maxY = maxOf(maxY, r[k + 1]); k += 2 }
-            doubleArrayOf(minX, maxX, minY, maxY)
-        }
-        val out = ArrayList<Geo>()
-        var lat = TOP - STEP / 2
-        while (lat > BOTTOM) {
-            var lon = -180.0 + STEP / 2
-            while (lon < 180.0) {
-                for (idx in rings.indices) {
-                    val b = boxes[idx]
-                    if (lon < b[0] || lon > b[1] || lat < b[2] || lat > b[3]) continue
-                    if (inside(rings[idx], lon, lat)) { out.add(Geo(lat, lon)); break }
-                }
-                lon += STEP
-            }
-            lat -= STEP
-        }
-        dots = out
+        countries = out
         return out
     }
+}
 
-    private fun ring(a: JSONArray): DoubleArray {
-        val r = DoubleArray(a.length() * 2)
-        for (i in 0 until a.length()) {
-            val p = a.optJSONArray(i) ?: continue
-            r[i * 2] = p.optDouble(0); r[i * 2 + 1] = p.optDouble(1)
-        }
-        return r
-    }
-
-    private fun inside(r: DoubleArray, x: Double, y: Double): Boolean {
-        var c = false
-        val n = r.size / 2
-        var j = n - 1
-        for (i in 0 until n) {
-            val xi = r[i * 2]; val yi = r[i * 2 + 1]; val xj = r[j * 2]; val yj = r[j * 2 + 1]
-            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c
-            j = i
-        }
-        return c
-    }
+/** کد ISO دوحرفی از روی پرچم ایموجی (🇩🇪 → DE) */
+fun isoOfFlag(flag: String): String? {
+    val cps = flag.codePoints().toArray()
+    if (cps.size < 2) return null
+    val a = cps[0] - 0x1F1E6; val b = cps[1] - 0x1F1E6
+    if (a !in 0..25 || b !in 0..25) return null
+    return "${'A' + a}${'A' + b}"
 }
 
 /** مختصات تقریبی کشورها (اگر مکان دقیق سرور پیدا نشد) */
@@ -106,7 +95,7 @@ fun geoOfName(name: String): Geo? {
 
 /** موقعیت یک IP یا دامنه با ip-api.com (بدون کلید) */
 fun lookupGeo(target: String = ""): Pair<Geo, String>? = runCatching {
-    val c = java.net.URL("http://ip-api.com/json/$target?fields=status,lat,lon,countryCode")
+    val c = java.net.URL("http://ip-api.com/json/$target?fields=status,lat,lon,countryCode,city")
         .openConnection() as java.net.HttpURLConnection
     c.connectTimeout = 5000; c.readTimeout = 5000
     val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
@@ -115,74 +104,85 @@ fun lookupGeo(target: String = ""): Pair<Geo, String>? = runCatching {
     else Geo(j.optDouble("lat"), j.optDouble("lon")) to j.optString("countryCode")
 }.getOrNull()
 
-data class MapPin(val geo: Geo, val flag: String, val selected: Boolean)
+data class MapPin(val geo: Geo, val iso: String?, val selected: Boolean)
 
-/** محدوده‌ی دید نقشه (طول و عرض جغرافیایی) */
 private data class View(val lon0: Double, val lon1: Double, val lat0: Double, val lat1: Double)
 
 private fun lerp(a: Double, b: Double, t: Float) = a + (b - a) * t
 
-/** محدوده‌ای که هر دو نقطه را با حاشیه و نسبت درست نشان می‌دهد */
-private fun fitView(a: Geo, b: Geo, aspect: Double): View {
-    var lon0 = minOf(a.lon, b.lon); var lon1 = maxOf(a.lon, b.lon)
-    var lat0 = maxOf(a.lat, b.lat); var lat1 = minOf(a.lat, b.lat)
-    var w = (lon1 - lon0).coerceAtLeast(24.0) * 1.7
-    var h = (lat0 - lat1).coerceAtLeast(10.0) * 1.9
+/** محدوده‌ای که نقاط را با حاشیه و نسبت درست نشان می‌دهد */
+private fun fitView(pts: List<Geo>, aspect: Double, minSpan: Double): View {
+    val lon0 = pts.minOf { it.lon }; val lon1 = pts.maxOf { it.lon }
+    val lat0 = pts.maxOf { it.lat }; val lat1 = pts.minOf { it.lat }
+    var w = (lon1 - lon0).coerceAtLeast(minSpan) * 1.5
+    var h = (lat0 - lat1).coerceAtLeast(minSpan / aspect) * 1.7
     if (w / h < aspect) w = h * aspect else h = w / aspect
     val cx = (lon0 + lon1) / 2
-    val cy = (lat0 + lat1) / 2 + h * .08
-    lon0 = cx - w / 2; lon1 = cx + w / 2; lat0 = cy + h / 2; lat1 = cy - h / 2
-    return View(lon0, lon1, lat0, lat1)
+    val cy = (lat0 + lat1) / 2 + h * .06
+    return View(cx - w / 2, cx + w / 2, cy + h / 2, cy - h / 2)
 }
 
-/** نقشه‌ی طلایی جهان با زوم خودکار روی مسیر اتصال و خط نئونی سبز */
+/**
+ * نقشه‌ی واقعی کشورها (مثل پروتون):
+ * کشور شما آبی، کشور سرور طلایی/سبز با هاله، خط منحنی نئونی بین شما و سرور، زوم نرم.
+ */
 @Composable
-fun WorldMap(pins: List<MapPin>, user: Geo?, connected: Boolean, modifier: Modifier = Modifier) {
+fun WorldMap(
+    pins: List<MapPin>, user: Geo?, userIso: String?, connected: Boolean, modifier: Modifier = Modifier,
+) {
     val ctx = LocalContext.current
-    var dots by remember { mutableStateOf(MapData.dots) }
-    LaunchedEffect(Unit) { if (dots == null) dots = withContext(Dispatchers.Default) { MapData.load(ctx) } }
+    var countries by remember { mutableStateOf(MapData.countries) }
+    LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { MapData.load(ctx) } }
 
     val sel = pins.firstOrNull { it.selected }
-    val zoomed = connected && user != null && sel != null
-    val zoom by animateFloatAsState(if (zoomed) 1f else 0f, tween(1400, easing = FastOutSlowInEasing), label = "z")
-    val draw by animateFloatAsState(if (zoomed) 1f else 0f, tween(if (zoomed) 1600 else 200, delayMillis = if (zoomed) 900 else 0), label = "d")
-
+    val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
+    val draw by animateFloatAsState(if (connected) 1f else 0f, tween(if (connected) 1400 else 150, delayMillis = if (connected) 700 else 0), label = "d")
     val t = rememberInfiniteTransition(label = "map")
     val flow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "f")
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1700, easing = LinearEasing)), label = "p")
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "p")
 
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         val aspect = (w / h).toDouble()
-        val world = View(-165.0, 180.0, 80.0, 80.0 - 345.0 / aspect)
-        val target = if (user != null && sel != null) fitView(user, sel.geo, aspect) else world
-        val v = View(
-            lerp(world.lon0, target.lon0, zoom), lerp(world.lon1, target.lon1, zoom),
-            lerp(world.lat0, target.lat0, zoom), lerp(world.lat1, target.lat1, zoom),
-        )
-        val scale = (345.0 / (v.lon1 - v.lon0)).toFloat()
-        fun proj(g: Geo) = Offset(
-            ((g.lon - v.lon0) / (v.lon1 - v.lon0) * w).toFloat(),
-            ((v.lat0 - g.lat) / (v.lat0 - v.lat1) * h).toFloat(),
-        )
+        // نمای عادی: منطقه‌ی اطراف کاربر و سرور انتخابی ؛ نمای اتصال: زوم نزدیک‌تر روی مسیر
+        val pts = listOfNotNull(user, sel?.geo).ifEmpty { listOf(Geo(45.0, 20.0)) }
+        val far = fitView(pts, aspect, 70.0)
+        val near = fitView(pts, aspect, 26.0)
+        val v = View(lerp(far.lon0, near.lon0, zoom), lerp(far.lon1, near.lon1, zoom), lerp(far.lat0, near.lat0, zoom), lerp(far.lat1, near.lat1, zoom))
+        val sx = (w / (v.lon1 - v.lon0)).toFloat()
+        val sy = (h / (v.lat0 - v.lat1)).toFloat()
+        fun proj(g: Geo) = Offset(((g.lon - v.lon0) * sx).toFloat(), ((v.lat0 - g.lat) * sy).toFloat())
 
-        // نقطه‌های خشکی (با زوم درشت‌تر می‌شوند)
-        dots?.let { list ->
-            val pts = ArrayList<Offset>(list.size)
-            for (g in list) {
-                val o = proj(g)
-                if (o.x > -10 && o.x < w + 10 && o.y > -10 && o.y < h + 10) pts.add(o)
+        val selIso = sel?.iso
+        val border = 1.1f / sx
+        clipRect {
+            withTransform({
+                translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
+                scale(sx, sy, pivot = Offset.Zero)
+            }) {
+                countries?.forEach { c ->
+                    if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
+                    val fill = when (c.iso) {
+                        selIso -> (if (connected) K.Green else K.Gold).copy(alpha = .30f)
+                        userIso -> Color(0xFF6FE7FF).copy(alpha = .18f)
+                        else -> Color(0xFF231B0E)
+                    }
+                    drawPath(c.path, fill)
+                    drawPath(
+                        c.path,
+                        if (c.iso == selIso) (if (connected) K.Green else K.Gold).copy(alpha = .9f) else K.Gold.copy(alpha = .22f),
+                        style = Stroke(if (c.iso == selIso) border * 1.8f else border),
+                    )
+                }
             }
-            val dw = (w / 175f) * scale.coerceAtMost(4.5f) * .9f
-            drawPoints(pts, PointMode.Points, K.Gold.copy(alpha = .40f), strokeWidth = dw, cap = StrokeCap.Round)
         }
 
-        // خط نئونی سبز از کاربر تا سرور (با انیمیشن کشیده شدن)
+        // خط منحنی نئونی سبز از شما تا سرور
         if (user != null && sel != null && draw > 0f) {
             val a = proj(user)
             val b = proj(sel.geo)
-            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .35).toFloat()
+            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .30).toFloat()
             val mid = Offset((a.x + b.x) / 2, (a.y + b.y) / 2 - lift)
             fun bez(q: Float) = Offset(
                 (1 - q) * (1 - q) * a.x + 2 * (1 - q) * q * mid.x + q * q * b.x,
@@ -190,37 +190,31 @@ fun WorldMap(pins: List<MapPin>, user: Geo?, connected: Boolean, modifier: Modif
             )
             val path = Path().apply {
                 moveTo(a.x, a.y)
-                val steps = 40
+                val steps = 48
                 for (i in 1..(steps * draw).toInt().coerceAtLeast(1)) { val o = bez(i / steps.toFloat()); lineTo(o.x, o.y) }
             }
-            val sw = w / 210f
-            for ((m, al) in listOf(5f to .08f, 3f to .18f, 1.8f to .38f, 1f to 1f)) {
+            val sw = w / 220f
+            for ((m, al) in listOf(5f to .07f, 3f to .16f, 1.8f to .36f, 1f to 1f)) {
                 drawPath(path, K.Green.copy(alpha = al), style = Stroke(sw * m, cap = StrokeCap.Round))
             }
-            drawPath(path, Color.White.copy(alpha = .85f), style = Stroke(sw * .35f, cap = StrokeCap.Round))
-            if (draw >= 1f) {
-                neonDot(K.Green, bez(flow), sw * 1.6f)
-                drawCircle(K.Green.copy(alpha = (1 - pulse) * .85f), sw * 2f + pulse * w / 16f, b, style = Stroke(sw * .8f))
-            }
+            drawPath(path, Color.White.copy(alpha = .8f), style = Stroke(sw * .35f, cap = StrokeCap.Round))
+            if (draw >= 1f) neonDot(K.Green, bez(flow), sw * 1.5f)
         }
 
-        // سرورها
-        pins.forEach { p ->
-            val o = proj(p.geo)
-            val c = if (p.selected && connected) K.Green else K.Gold
-            val r = (if (p.selected) w / 85f else w / 120f) * (1f + zoom * .4f)
-            drawCircle(c.copy(alpha = .18f), r * 3.2f, o)
-            drawCircle(c.copy(alpha = .35f), r * 1.8f, o)
-            drawCircle(c, r, o)
-            drawCircle(Color.White, r * .4f, o)
+        // هاله و سنجاق سرور
+        sel?.let {
+            val o = proj(it.geo)
+            val c = if (connected) K.Green else K.Gold
+            val r = w / 13f
+            drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .35f), c.copy(alpha = .12f), Color.Transparent), o, r * 1.3f), r * 1.3f, o)
+            drawCircle(c.copy(alpha = .55f), r * .85f, o, style = Stroke(w / 260f))
+            if (connected) drawCircle(c.copy(alpha = (1 - pulse) * .7f), r * (.4f + pulse * .9f), o, style = Stroke(w / 300f))
+            neonDot(c, o, w / 95f)
         }
-        // مکان واقعی کاربر
-        user?.let {
-            val o = proj(it)
-            val cy = Color(0xFF6FE7FF)
-            drawCircle(cy.copy(alpha = (1 - pulse) * .6f), w / 120f + pulse * w / 30f, o, style = Stroke(w / 220f))
-            neonDot(cy, o, w / 125f * (1f + zoom * .3f))
-        }
+        // بقیه‌ی سرورها
+        pins.filter { !it.selected }.forEach { p -> neonDot(K.Gold.copy(alpha = .8f), proj(p.geo), w / 150f) }
+        // شما
+        user?.let { neonDot(Color(0xFF6FE7FF), proj(it), w / 120f) }
     }
 }
 

@@ -25,10 +25,11 @@ jobs:
           dl orbitron.ttf "$G1/orbitron/Orbitron%5Bwght%5D.ttf" "$G2/orbitron/Orbitron%5Bwght%5D.ttf"
           ls -la app/src/main/res/font
 
-      - name: دریافت نقشه‌ی جهان
+      - name: دریافت نقشه‌ی کشورها
         run: |
           mkdir -p app/src/main/assets
-          curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson || curl -fsSL --retry 3 -o app/src/main/assets/land.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/physical/ne_110m_land.json || echo '{"features":[]}' > app/src/main/assets/land.geojson
+          rm -f app/src/main/assets/land.geojson
+          curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
           ls -la app/src/main/assets
 
       - name: آماده‌سازی کلید امضا

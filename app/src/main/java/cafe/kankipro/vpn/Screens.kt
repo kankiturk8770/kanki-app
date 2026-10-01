@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.7.0"
+const val APP_VERSION = "0.8.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -192,7 +192,6 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 KTab.TEST -> TestTab(state)
                 KTab.SETTINGS -> SettingsTab(state)
             }
-            if (tab == KTab.HOME && state.robotOnHome) FloatingRobot { openBot(ctx) }
         }
 
         BottomBar(tab) { tab = it }
@@ -315,9 +314,41 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
     ) {
         // نقشه‌ی جهان با سرورها و خط اتصال
         val pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
-            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, flagOf(l.nodeName), l.node == state.node) }
+            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, state.nodeIso[l.node] ?: isoOfFlag(flagOf(l.nodeName)), l.node == state.node) }
         } ?: emptyList()
-        WorldMap(pins, state.userGeo, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(1.9f).padding(top = 2.dp))
+        val selName = a?.configs?.firstOrNull { it.node == state.node }?.nodeName
+        val mapShape = RoundedCornerShape(26.dp)
+        Box(
+            Modifier.fillMaxWidth().padding(top = 4.dp).clip(mapShape)
+                .background(Color(0xFF0D0A06)).border(1.2.dp, K.Line, mapShape),
+        ) {
+            WorldMap(pins, state.userGeo, state.userIso, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(1.55f))
+            // بالای نقشه: پرچم و اسم سرور (مثل پروتون)
+            if (selName != null) {
+                Row(
+                    Modifier.align(Alignment.TopCenter).padding(top = 10.dp).clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xCC0E0B07)).border(1.dp, K.Line, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    T(flagOf(selName), size = 18.sp)
+                    Spacer(Modifier.width(8.dp))
+                    T(selName, size = 13.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
+                }
+            }
+            // پایین نقشه: وضعیت امنیت
+            val on = state.vstate == VState.ON
+            Row(
+                Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xCC0E0B07)).border(1.dp, (if (on) K.Green else K.Red).copy(alpha = .7f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Dot(if (on) K.Green else K.Red, 7.dp)
+                Spacer(Modifier.width(6.dp))
+                T(if (on) "محافظت‌شده" else "محافظت‌نشده", size = 11.sp, color = if (on) K.Green else K.Red)
+            }
+        }
         ConnectButton(state.vstate, 150.dp) { if (a != null) onToggle() }
 
         val (label, color) = when (state.vstate) {
@@ -391,47 +422,56 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
 fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session: Long) {
     val nodeName = a.configs.firstOrNull { it.node == state.node }?.nodeName ?: "—"
     val nodes = a.configs.distinctBy { it.node }
-    var pick by remember { mutableStateOf(false) }
-    val hctx = LocalContext.current
+    var ask by remember { mutableStateOf<ConfigLink?>(null) }
+    val hscope = rememberCoroutineScope()
     Glass(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.clip(RoundedCornerShape(14.dp)).clickable {
-                if (state.vstate != VState.OFF) toast(hctx, "برای تغییر لوکیشن، اول اتصال را قطع کنید")
-                else if (nodes.size > 1) pick = !pick
-            },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             T(flagOf(nodeName), size = 26.sp)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 T(nodeName, size = 16.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                T(protoTitle(state.protoKey()) + if (nodes.size > 1) "  ▾" else "", size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+                T(protoTitle(state.protoKey()), size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
             }
             Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
             Spacer(Modifier.width(6.dp))
             val ctx = LocalContext.current
-            val scope = rememberCoroutineScope()
-            IconCircle(34.dp, onClick = { scope.launch { state.refresh(); toast(ctx, "اطلاعات اشتراک بروز شد") } }) { c -> refreshIcon(c) }
+            IconCircle(34.dp, onClick = { hscope.launch { state.refresh(); toast(ctx, "اطلاعات اشتراک بروز شد") } }) { c -> refreshIcon(c) }
         }
-        AnimatedVisibility(visible = pick) {
-            Column(Modifier.padding(top = 8.dp)) {
+        // سوییچ سریع لوکیشن با یک لمس
+        if (nodes.size > 1) {
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 nodes.forEach { n ->
                     val sel = n.node == state.node
+                    val shape = RoundedCornerShape(16.dp)
                     Row(
-                        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp))
-                            .background(if (sel) Color(0x33F5C451) else Color(0x10FFFFFF))
-                            .border(1.dp, if (sel) K.Gold else K.Line, RoundedCornerShape(14.dp))
-                            .clickable { state.node = n.node; state.save(); pick = false }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        Modifier.clip(shape)
+                            .background(if (sel) Color(0x38F5C451) else Color(0x12FFFFFF))
+                            .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
+                            .clickable {
+                                if (sel || state.vstate == VState.CONNECTING) return@clickable
+                                if (state.vstate == VState.ON) ask = n
+                                else hscope.launch { state.switchNode(n.node) }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        T(flagOf(n.nodeName), size = 20.sp)
-                        Spacer(Modifier.width(10.dp))
-                        T(n.nodeName, size = 14.sp, font = Poppins, weight = FontWeight.Bold, ltr = true, modifier = Modifier.weight(1f))
-                        if (sel) T("✓", size = 16.sp, color = K.Green)
+                        T(flagOf(n.nodeName), size = 16.sp)
+                        Spacer(Modifier.width(6.dp))
+                        T(n.nodeName, size = 12.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
                     }
                 }
             }
+        }
+        ask?.let { target ->
+            AlertDialog(
+                onDismissRequest = { ask = null },
+                containerColor = Color(0xFF16120B),
+                title = { T("سوییچ به ${target.nodeName}", size = 18.sp, weight = FontWeight.Black) },
+                text = { T("اتصال فعلی قطع و به ${target.nodeName} وصل می‌شود.", size = 14.sp, color = K.Sub, weight = FontWeight.Normal) },
+                confirmButton = { TextButton(onClick = { ask = null; hscope.launch { state.switchNode(target.node) } }) { T("تأیید و اتصال", color = K.Gold) } },
+                dismissButton = { TextButton(onClick = { ask = null }) { T("انصراف", color = K.Sub) } },
+            )
         }
 
         Spacer(Modifier.height(12.dp))
@@ -523,7 +563,13 @@ fun ServersTab(state: AppState) {
     val groups = a?.configs?.groupBy { it.node } ?: emptyMap()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        SectionTitle("سرورها")
+        // ربات بالا سمت راست، عنوان سمت چپ
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            RobotMascot { openBot(ctx) }
+            Spacer(Modifier.weight(1f))
+            T("سرورها", size = 17.sp, color = K.Gold, weight = FontWeight.Black)
+        }
+        Spacer(Modifier.height(8.dp))
         if (locked) {
             T("برای تغییر سرور یا پروتکل، اول اتصال را قطع کنید", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
             Spacer(Modifier.height(8.dp))
@@ -539,7 +585,7 @@ fun ServersTab(state: AppState) {
                 expanded = state.openNode == nodeId,
                 onHeader = { state.openNode = if (state.openNode == nodeId) null else nodeId },
             ) {
-                val cfgs = listOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp").filter { p -> links.any { it.protocol == p } }
+                val cfgs = listOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp").filter { p -> state.hasCfg(nodeId, p) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     LineButton("⚡ تست واقعی همه", Modifier.weight(1f)) {
                         state.requestVpn?.invoke {
@@ -868,8 +914,6 @@ fun SettingsTab(state: AppState) {
                     ),
                 )
             }
-            GoldDivider()
-            ToggleRow("🤖", "ربات شناور", "ربات تلگرام در صفحه‌ی اصلی", state.robotOnHome) { state.robotOnHome = it; state.save() }
             GoldDivider()
             ToggleRow("🔊", "صداهای اپ", "صدای ورود و دکمه‌ها", state.sounds) { state.sounds = it; state.save() }
             GoldDivider()

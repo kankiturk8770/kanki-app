@@ -58,23 +58,42 @@ class AppState(context: Context) {
         prefs.getString("ugeo", null)?.split(",")?.let { p -> runCatching { Geo(p[0].toDouble(), p[1].toDouble()) }.getOrNull() }
     )
     val nodeGeo = mutableStateMapOf<String, Geo>()
+    var userIso by mutableStateOf(prefs.getString("uiso", null))
+    val nodeIso = mutableStateMapOf<String, String>()
+    /** کانفیگ‌هایی که لینکشان هست ولی کانفیگ معتبر ندارند */
+    val badCfg = mutableStateMapOf<String, Boolean>()
 
-    /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
-    fun available(): List<String> {
-        val ps = account?.configs?.map { it.protocol }?.toSet() ?: return emptyList()
-        return buildList {
-            if ("amneziawg" in ps) add("amneziawg")
-            if ("wireguard" in ps) add("wireguard")
-            if (ps.any { it.startsWith("openvpn") }) add("openvpn")
-        }
+    /** این سرور واقعاً این پروتکل را دارد؟ */
+    fun hasCfg(nodeId: String?, protocol: String): Boolean {
+        val a = account ?: return false
+        return a.configs.any { it.node == nodeId && it.protocol == protocol } && badCfg["$nodeId/$protocol"] != true
     }
 
-    private fun fixProto() {
+    /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
+    fun available(nodeId: String? = node): List<String> = buildList {
+        if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
+        if (hasCfg(nodeId, "wireguard")) add("wireguard")
+        if (hasCfg(nodeId, "openvpn/udp") || hasCfg(nodeId, "openvpn/tcp")) add("openvpn")
+    }
+
+    /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
+    suspend fun switchNode(n: String) {
+        if (n == node) return
+        val wasOn = vstate == VState.ON
+        if (wasOn) disconnect()
+        node = n
+        fixProto()
+        save()
+        if (wasOn && proto != "openvpn") connect()
+    }
+
+    fun fixProto() {
         val av = available()
         if (av.isNotEmpty() && proto !in av) { proto = av.first(); save() }
         val a = account ?: return
-        if (proto == "openvpn" && a.configs.none { it.protocol == "openvpn/$ovpnTransport" }) {
-            a.configs.firstOrNull { it.protocol.startsWith("openvpn") }?.let { ovpnTransport = it.protocol.substringAfter("/"); save() }
+        if (proto == "openvpn" && !hasCfg(node, "openvpn/$ovpnTransport")) {
+            a.configs.firstOrNull { it.node == node && it.protocol.startsWith("openvpn") && hasCfg(node, it.protocol) }
+                ?.let { ovpnTransport = it.protocol.substringAfter("/"); save() }
         }
     }
 
@@ -82,22 +101,27 @@ class AppState(context: Context) {
     suspend fun locateExit() {
         val n = node ?: return
         kotlinx.coroutines.delay(800)
-        withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, _) ->
+        withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, iso) ->
             nodeGeo[n] = g
-            prefs.edit().putString("ngeo_$n", "${g.lat},${g.lon}").apply()
+            nodeIso[n] = iso.uppercase()
+            prefs.edit().putString("ngeo_$n", "${g.lat},${g.lon}").putString("niso_$n", iso.uppercase()).apply()
         }
     }
 
     /** مکان کاربر و سرورها را پیدا می‌کند */
     suspend fun locate() {
         if (vstate == VState.OFF) {
-            withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, _) ->
+            withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, iso) ->
                 userGeo = g
-                prefs.edit().putString("ugeo", "${g.lat},${g.lon}").apply()
+                userIso = iso.uppercase()
+                prefs.edit().putString("ugeo", "${g.lat},${g.lon}").putString("uiso", userIso).apply()
             }
         }
         val a = account ?: return
         for ((nodeId, links) in a.configs.groupBy { it.node }) {
+            if (!nodeIso.containsKey(nodeId)) {
+                (prefs.getString("niso_$nodeId", null) ?: isoOfFlag(flagOf(links.first().nodeName)))?.let { nodeIso[nodeId] = it }
+            }
             if (nodeGeo.containsKey(nodeId)) continue
             // ۱) مکان واقعی خروجی که قبلاً بعد از اتصال ذخیره شده
             prefs.getString("ngeo_$nodeId", null)?.split(",")?.let { p ->
@@ -166,8 +190,8 @@ class AppState(context: Context) {
             }
             account = a
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
-            fixProto()
             loadInfos(a)
+            fixProto()
             locate()
         } catch (e: Exception) {
             error = "دریافت اطلاعات اشتراک ناموفق بود (${e.message ?: "خطای شبکه"}). اینترنت را بررسی کنید."
@@ -179,8 +203,9 @@ class AppState(context: Context) {
         for (l in a.configs.filter { it.protocol in setOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp") }) {
             val key = "${l.node}/${l.protocol}"
             if (infos.containsKey(key)) continue
-            runCatching { withContext(Dispatchers.IO) { ConfigInfo.parse(SubscriptionApi.fetch(l.url)) } }
-                .onSuccess { infos[key] = it }
+            val txt = runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetch(l.url) } }.getOrNull()
+            val ok = txt != null && (if (l.protocol.startsWith("openvpn")) txt.contains("remote ") else txt.contains("[Interface]") && txt.contains("[Peer]"))
+            if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) } else badCfg[key] = true
         }
     }
 
