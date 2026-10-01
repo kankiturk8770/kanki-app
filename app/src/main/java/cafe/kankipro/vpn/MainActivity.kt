@@ -62,7 +62,7 @@ fun App() {
         when (state.vstate) {
             VState.ON -> scope.launch { state.disconnect() }
             VState.OFF -> {
-                if (state.proto == "openvpn" || state.proto == "ikev2") { scope.launch { state.connect() }; return }
+                if (state.proto == "openvpn" || state.proto.startsWith("ikev2")) { scope.launch { state.connect() }; return }
                 state.requestVpn?.invoke { scope.launch { state.connect() } }
             }
             VState.CONNECTING -> {}

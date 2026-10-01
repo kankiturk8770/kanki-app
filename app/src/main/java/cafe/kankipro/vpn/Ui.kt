@@ -55,21 +55,37 @@ val Themes: List<Palette> = listOf(
         Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), Color(0xFF1A1206), Color(0xFF6FE7FF),
         Color(0xFFFFB547),
     ),
-    // سیاه و سفید زغالی
+    // گرافیت نئونی (مشکی، نقره‌ای، یخی)
     Palette(
-        "mono", Color(0xFFE4E4E4), Color(0xFFFFFFFF), Color(0xFF7C7C80), Color(0xFFF2F2F2),
-        Color(0xFF050506), Color(0xFFF5F5F5), Color(0xFF9A9AA0),
-        Color(0xFF0E0E10), Color(0xFF1A1A1D), Color(0xFF050506),
-        Color(0xE81E1E21), Color(0xF00D0D0F), Color(0xFF111113), Color(0xFF111113), Color(0xFFBFC7D5),
-        Color(0xFFCFE6FF),
+        "mono", Color(0xFFDADDE3), Color(0xFFFFFFFF), Color(0xFF5E636B), Color(0xFFF4F6FA),
+        Color(0xFF050608), Color(0xFFF2F4F8), Color(0xFF8C93A0),
+        Color(0xFF0A0B0E), Color(0xFF15181E), Color(0xFF040506),
+        Color(0xE8181B22), Color(0xF00B0D11), Color(0xFF0F1116), Color(0xFF0B0C10), Color(0xFF8FE3FF),
+        Color(0xFF9CFFE0),
     ),
-    // زرشکی و آبی مات
+    // زرشکی نئونی با آبی
     Palette(
-        "crimson", Color(0xFFC4505E), Color(0xFFE9A0A9), Color(0xFF7E2433), Color(0xFFD96B78),
-        Color(0xFF07060B), Color(0xFFF3EEF2), Color(0xFF9C93A6),
-        Color(0xFF0E0B14), Color(0xFF1A1022), Color(0xFF06050A),
-        Color(0xE81D1424), Color(0xF00D0A12), Color(0xFF110D17), Color(0xFF1A0B10), Color(0xFF5B8FD6),
-        Color(0xFF6FA8F5),
+        "crimson", Color(0xFFFF3D6E), Color(0xFFFF9DB5), Color(0xFF9E1238), Color(0xFFFF7A98),
+        Color(0xFF07030A), Color(0xFFFBEFF3), Color(0xFFA592A6),
+        Color(0xFF0D0610), Color(0xFF1C0A1C), Color(0xFF07030A),
+        Color(0xE8220C20), Color(0xF00E0610), Color(0xFF150A15), Color(0xFF1A0510), Color(0xFF3FA9FF),
+        Color(0xFF4DD7FF),
+    ),
+    // سایبری (فیروزه‌ای و صورتی نئون)
+    Palette(
+        "cyber", Color(0xFF00E5FF), Color(0xFF9DF6FF), Color(0xFF007C8C), Color(0xFF6FF3FF),
+        Color(0xFF03060A), Color(0xFFEAFBFF), Color(0xFF7FA3AE),
+        Color(0xFF050B10), Color(0xFF0A1822), Color(0xFF03060A),
+        Color(0xE80B1A24), Color(0xF0061016), Color(0xFF08131A), Color(0xFF021014), Color(0xFFFF2BD6),
+        Color(0xFF39FF9A),
+    ),
+    // بنفش نئونی
+    Palette(
+        "violet", Color(0xFFB26BFF), Color(0xFFE0C4FF), Color(0xFF5B2A9E), Color(0xFFCFA2FF),
+        Color(0xFF05030A), Color(0xFFF4EEFF), Color(0xFF9A8FB0),
+        Color(0xFF0A0614), Color(0xFF170C28), Color(0xFF05030A),
+        Color(0xE8190F2A), Color(0xF00C0816), Color(0xFF110A1C), Color(0xFF12081E), Color(0xFF4DE1FF),
+        Color(0xFF7CFFB2),
     ),
 )
 
@@ -612,7 +628,11 @@ private val robotLines = listOf(
     "برای خرید کانفیگ روی من بزن",
     "تست رایگان هم داریم 🎁",
     "اینترنت آزاد حق همه‌ست 🌍",
-    "یک اشتراک، ۳ کانفیگ ⚡",
+    "تانل بسته شد؟ برو روی مستقیم ⚡",
+    "اینترنت بی‌مرز، زندگی بی‌دغدغه 🚀",
+    "پینگت رو از تب سرورها چک کن 📡",
+    "امروز با کدوم سرور حال می‌کنی؟ 🌍",
+    "وصل شو، آزاد باش ✨",
     "پینگ پایین، گیم بدون لگ 🎮",
     "امنزیا فیلتر رو دور می‌زنه 🛡",
     "یوتیوب و اینستا بدون قطعی 📺",
@@ -739,4 +759,53 @@ fun DrawScope.navIcon(kind: Int, c: Color) {
             drawCircle(c, w * .09f, center)
         }
     }
+}
+
+
+// ------------------------------------------------------------------ آیکون‌های کوچک (به‌جای ایموجی)
+
+fun DrawScope.miniIcon(kind: String, c: Color) {
+    val w = size.width
+    val sw = w * .11f
+    when (kind) {
+        "shield" -> {
+            val p = Path().apply {
+                moveTo(w * .5f, w * .08f); lineTo(w * .86f, w * .22f); lineTo(w * .86f, w * .50f)
+                quadraticBezierTo(w * .86f, w * .78f, w * .5f, w * .94f)
+                quadraticBezierTo(w * .14f, w * .78f, w * .14f, w * .50f); lineTo(w * .14f, w * .22f); close()
+            }
+            drawPath(p, c, style = Stroke(sw, join = StrokeJoin.Round))
+            drawLine(c, Offset(w * .36f, w * .52f), Offset(w * .47f, w * .63f), sw, cap = StrokeCap.Round)
+            drawLine(c, Offset(w * .47f, w * .63f), Offset(w * .66f, w * .40f), sw, cap = StrokeCap.Round)
+        }
+        "bolt" -> {
+            val p = Path().apply {
+                moveTo(w * .58f, w * .06f); lineTo(w * .22f, w * .56f); lineTo(w * .48f, w * .56f)
+                lineTo(w * .40f, w * .94f); lineTo(w * .78f, w * .42f); lineTo(w * .52f, w * .42f); close()
+            }
+            drawPath(p, c)
+        }
+        "data" -> {
+            drawOval(c, topLeft = Offset(w * .18f, w * .10f), size = Size(w * .64f, w * .24f), style = Stroke(sw * .9f))
+            drawLine(c, Offset(w * .18f, w * .22f), Offset(w * .18f, w * .78f), sw * .9f)
+            drawLine(c, Offset(w * .82f, w * .22f), Offset(w * .82f, w * .78f), sw * .9f)
+            drawArc(c, 0f, 180f, false, topLeft = Offset(w * .18f, w * .38f), size = Size(w * .64f, w * .24f), style = Stroke(sw * .9f))
+            drawArc(c, 0f, 180f, false, topLeft = Offset(w * .18f, w * .66f), size = Size(w * .64f, w * .24f), style = Stroke(sw * .9f))
+        }
+        "clock" -> {
+            drawCircle(c, w * .38f, center, style = Stroke(sw))
+            drawLine(c, center, Offset(w * .5f, w * .28f), sw, cap = StrokeCap.Round)
+            drawLine(c, center, Offset(w * .68f, w * .58f), sw, cap = StrokeCap.Round)
+        }
+        else -> { // وضعیت: نقطه‌ی درخشان
+            drawCircle(c.copy(alpha = .25f), w * .45f, center)
+            drawCircle(c.copy(alpha = .5f), w * .32f, center)
+            drawCircle(c, w * .20f, center)
+        }
+    }
+}
+
+@Composable
+fun MiniIcon(kind: String, color: Color, size: Dp = 14.dp) {
+    Canvas(Modifier.size(size)) { miniIcon(kind, color) }
 }

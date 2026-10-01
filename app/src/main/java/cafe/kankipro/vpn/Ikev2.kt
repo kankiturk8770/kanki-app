@@ -63,6 +63,10 @@ object Ikev2Engine {
     }
 
     fun start(ctx: Context) = vm(ctx).startProvisionedVpnProfile()
+
+    /** وضعیت واقعی اتصال از خود اندروید (۱۳ به بالا): ۰ قطع، ۱ در حال اتصال، ۲ وصل، ۳ خطا */
+    @RequiresApi(33)
+    fun state(ctx: Context): Int = runCatching { vm(ctx).provisionedVpnProfileState?.state ?: -1 }.getOrDefault(-1)
     fun stop(ctx: Context) { runCatching { vm(ctx).stopProvisionedVpnProfile() } }
 }
 

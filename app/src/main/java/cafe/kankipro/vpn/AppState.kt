@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -23,6 +24,9 @@ class AppState(context: Context) {
     var account by mutableStateOf<Account?>(null)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
+    /** جزئیات فنی آخرین خطا (با زدن «جزئیات» دیده می‌شود) */
+    var errorDetail by mutableStateOf<String?>(null)
+    private val bg = kotlinx.coroutines.MainScope()
     var vstate by mutableStateOf(if (VpnEngine.isUp(ctx)) VState.ON else VState.OFF)
     var proto by mutableStateOf(prefs.getString("proto", "amneziawg") ?: "amneziawg")
     var node by mutableStateOf(prefs.getString("node", null))
@@ -87,17 +91,18 @@ class AppState(context: Context) {
      */
     private fun augment(a: Account): Account {
         val base = a.configs.filter { !it.protocol.startsWith("openvpn") }
-        val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
-            directHost(l.nodeName)?.let { h -> l.copy(protocol = "amneziawg-direct", url = l.url + "#direct=" + h) }
+        val direct = base.filter { it.protocol == "amneziawg" || it.protocol == "ikev2" }.mapNotNull { l ->
+            directHost(l.nodeName)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
         }
         return a.copy(configs = base + direct)
     }
 
     /** آدرس مستقیم هر کشور */
-    private fun directHost(nodeName: String): String? = when (isoOfFlag(flagOf(nodeName))) {
+    private fun directHost(nodeName: String): String? = when (val iso = isoOfFlag(flagOf(nodeName))) {
         "DE" -> "g.kankipro.cafe"
         "TR" -> "tr.kankipro.cafe"
-        else -> null
+        null -> null
+        else -> "${iso.lowercase()}.kankipro.cafe" // نودهای جدید: مثلاً fr.kankipro.cafe یا nl.kankipro.cafe
     }
 
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
@@ -115,16 +120,17 @@ class AppState(context: Context) {
     }
 
     /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
-    fun hasIkev2(nodeId: String?): Boolean =
-        android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == "ikev2" } == true
+    fun hasIkev2(nodeId: String?, p: String = "ikev2"): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == p } == true
 
     /** پروتکل‌های موجود برای یک مسیر (تانل یا مستقیم) */
     fun available(nodeId: String? = node, r: String = route): List<String> = if (r == "direct") buildList {
         if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
-        if (hasIkev2(nodeId)) add("ikev2")
+        if (hasIkev2(nodeId, "ikev2-direct")) add("ikev2-direct")
     } else buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
-        if (hasCfg(nodeId, "wireguard")) add("wireguard")    }
+        if (hasCfg(nodeId, "wireguard")) add("wireguard")
+        if (hasIkev2(nodeId, "ikev2")) add("ikev2")    }
 
     /** تغییر مسیر بین تانل و مستقیم */
     fun changeRoute(r: String) {
@@ -133,35 +139,63 @@ class AppState(context: Context) {
         fixProto()
     }
 
+    /** منتظر جواب واقعی سرور IKEv2 می‌ماند (اندروید ۱۳ به بالا) */
+    private suspend fun awaitIkev2(server: String, hasCa: Boolean) {
+        if (android.os.Build.VERSION.SDK_INT < 33) { VpnEngine.markConnected(); vstate = VState.ON; return }
+        vstate = VState.CONNECTING
+        repeat(40) {
+            when (Ikev2Engine.state(ctx)) {
+                2 -> { VpnEngine.markConnected(); vstate = VState.ON; errorDetail = null; return }
+                3 -> {
+                    vstate = VState.OFF
+                    error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+                    errorDetail = "IKEv2 FAILED · server=$server · CA=${if (hasCa) "ok" else "missing"} · سرور اتصال را رد کرد (رمز/گواهی/تنظیمات)"
+                    Ikev2Engine.stop(ctx); return
+                }
+            }
+            kotlinx.coroutines.delay(500)
+        }
+        vstate = VState.OFF
+        Ikev2Engine.stop(ctx)
+        error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+        errorDetail = "IKEv2 TIMEOUT · server=$server · CA=${if (hasCa) "ok" else "missing"} · جوابی از سرور نیامد (UDP 500/4500 یا DNS)"
+    }
+
     /** اتصال IKEv2 با موتور خود اندروید */
     private suspend fun connectIkev2() {
         if (android.os.Build.VERSION.SDK_INT < 30) { error = "IKEv2 فقط روی اندروید ۱۱ به بالا کار می‌کند."; return }
         val a = account ?: return
-        val guide = a.configs.firstOrNull { it.node == node && it.protocol == "ikev2" }
+        val guide = a.configs.firstOrNull { it.node == node && it.protocol == proto }
         if (guide == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
         val ca = a.configs.firstOrNull { it.node == node && it.protocol == "ikev2/ca" }
-        vstate = VState.CONNECTING; error = null
+        vstate = VState.CONNECTING; error = null; errorDetail = null
         try {
-            val gtxt = withContext(Dispatchers.IO) { SubscriptionApi.fetch(guide.url) }
+            val gtxt = withContext(Dispatchers.IO) { SubscriptionApi.fetch(guide.url.substringBefore("#direct=")) }
             val ctxt = ca?.let { l -> runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetchBytes(l.url) } }.getOrNull() }
-            val info = Ikev2Info.parse(gtxt) ?: throw IllegalStateException("guide")
+            val parsed = Ikev2Info.parse(gtxt) ?: throw IllegalStateException("guide")
+            // نسخه‌ی مستقیم: به‌جای سرور واسط، مستقیم به دامنه‌ی خود سرور
+            val directTo = guide.url.substringAfter("#direct=", "")
+            val info = if (directTo.isNotBlank()) parsed.copy(server = directTo) else parsed
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             val consent = Ikev2Engine.provision(ctx, info, ctxt)
             if (consent != null) {
                 val launcher = launchConsent ?: throw IllegalStateException("consent")
                 vstate = VState.OFF
                 launcher(consent) {
-                    runCatching { Ikev2Engine.start(ctx); VpnEngine.markConnected(); vstate = VState.ON }
-                        .onFailure { error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید." }
+                    bg.launch {
+                        runCatching { Ikev2Engine.start(ctx) }
+                            .onSuccess { awaitIkev2(info.server, ctxt != null) }
+                            .onFailure { e -> vstate = VState.OFF; error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."; errorDetail = "IKEv2 start: ${e.message ?: e.javaClass.simpleName}" }
+                    }
                 }
                 return
             }
             Ikev2Engine.start(ctx)
-            VpnEngine.markConnected()
-            vstate = VState.ON
+            awaitIkev2(info.server, ctxt != null)
         } catch (e: Exception) {
             vstate = VState.OFF
             error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+            errorDetail = "IKEv2: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 
@@ -304,7 +338,7 @@ class AppState(context: Context) {
 
     suspend fun connect() {
         val a = account ?: return
-        if (proto == "ikev2") { connectIkev2(); return }
+        if (proto.startsWith("ikev2")) { connectIkev2(); return }
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
@@ -335,6 +369,7 @@ class AppState(context: Context) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+            errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 

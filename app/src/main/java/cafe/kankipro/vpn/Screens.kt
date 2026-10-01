@@ -40,7 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "1.1.0"
+const val APP_VERSION = "1.2.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -93,6 +93,7 @@ fun protoTitle(p: String) = when (p) {
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
     "ikev2" -> "IKEv2"
+    "ikev2-direct" -> "IKEv2 Direct"
     "openvpn/udp" -> "OpenVPN UDP"
     "openvpn/tcp" -> "OpenVPN TCP"
     else -> "OpenVPN"
@@ -395,6 +396,11 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         state.error?.let {
             Spacer(Modifier.height(6.dp))
             T(it, size = 12.sp, color = K.Red)
+            state.errorDetail?.let { d ->
+                var show by remember { mutableStateOf(false) }
+                T(if (show) "▲ جزئیات" else "▼ جزئیات", size = 11.sp, color = K.Sub, modifier = Modifier.clickable { show = !show }.padding(4.dp))
+                if (show) T(d, size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -435,7 +441,14 @@ fun ConnectPanel(state: AppState, a: Account) {
                         }
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,
-                ) { T(if (r == "direct") "⚡ $title" else "🛡 $title", size = 13.sp, color = if (sel) K.OnGold else if (has) K.Text else K.Sub.copy(alpha = .5f), weight = FontWeight.Black) }
+                ) {
+                    val tc = if (sel) K.OnGold else if (has) K.Text else K.Sub.copy(alpha = .5f)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MiniIcon(if (r == "direct") "bolt" else "shield", tc, 15.dp)
+                        Spacer(Modifier.width(6.dp))
+                        T(title, size = 13.sp, color = tc, weight = FontWeight.Black)
+                    }
+                }
             }
         }
         // پروتکل‌های این مسیر
@@ -486,11 +499,11 @@ fun ConnectPanel(state: AppState, a: Account) {
         // اطلاعات اشتراک با آیکون (جمع‌وجور)
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            InfoChip("📦", a.dataRemaining, Modifier.weight(1f))
+            InfoChip("data", K.Gold, a.dataRemaining, Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
-            InfoChip("⏳", a.timeRemaining, Modifier.weight(1f))
+            InfoChip("clock", K.Gold, a.timeRemaining, Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
-            InfoChip(if (isActive(a.status)) "🟢" else "🔴", faStatus(a.status), Modifier.weight(1f))
+            InfoChip("status", if (isActive(a.status)) K.Ok else K.Red, faStatus(a.status), Modifier.weight(1f))
         }
         val used = parseSize(a.used)
         val left = parseSize(a.dataRemaining)
@@ -529,19 +542,20 @@ fun protoShort(p: String) = when (p) {
     "amneziawg" -> "Amnezia"
     "amneziawg-direct" -> "Amnezia"
     "wireguard" -> "WireGuard"
-    "ikev2" -> "IKEv2"
+    "ikev2", "ikev2-direct" -> "IKEv2"
     else -> p
 }
 
 @Composable
-fun InfoChip(icon: String, value: String, modifier: Modifier) {
+fun InfoChip(icon: String, tint: Color, value: String, modifier: Modifier) {
     val cs = RoundedCornerShape(12.dp)
     Row(
-        modifier.clip(cs).background(Color(0x10FFFFFF)).border(1.dp, K.Line, cs).padding(horizontal = 8.dp, vertical = 6.dp),
+        modifier.clip(cs).background(Brush.verticalGradient(listOf(tint.copy(alpha = .12f), K.Panel.copy(alpha = .6f))))
+            .border(1.dp, tint.copy(alpha = .35f), cs).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        T(icon, size = 12.sp)
+        MiniIcon(icon, tint, 13.dp)
         Spacer(Modifier.width(4.dp))
         val latin = value.any { it.isDigit() } && value.none { it in '\u0600'..'\u06FF' }
         T(value, size = 11.sp, font = if (latin) Poppins else Vazir, weight = FontWeight.Bold, ltr = latin)
@@ -1277,36 +1291,41 @@ fun LangButton(state: AppState) {
     ) { T(if (LangState.en) "FA" else "EN", size = 13.sp, color = K.Gold, font = Poppins, weight = FontWeight.Bold, ltr = true) }
 }
 
-/** انتخاب تم: طلایی، سیاه و سفید، زرشکی و آبی */
+/** انتخاب تم: طلایی + چهار تم نئونی */
 @Composable
 fun ThemePicker(state: AppState) {
+    val items = listOf("gold" to "طلایی", "mono" to "گرافیت", "crimson" to "زرشکی نئون", "cyber" to "سایبری", "violet" to "بنفش نئون")
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            T("🎨", size = 20.sp)
+            MiniIcon("shield", K.Gold, 18.dp)
             Spacer(Modifier.width(12.dp))
             T("تم برنامه", size = 15.sp)
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf("gold" to "طلایی", "mono" to "سیاه و سفید", "crimson" to "زرشکی و آبی").forEach { (id, name) ->
-                val p = Themes.first { it.id == id }
-                val sel = ThemeState.current.id == id
-                val shape = RoundedCornerShape(16.dp)
-                Column(
-                    Modifier.weight(1f).clip(shape)
-                        .background(Brush.verticalGradient(listOf(p.bgMid, p.bgBottom)))
-                        .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else p.gold.copy(alpha = .3f), shape)
-                        .clickable { state.setTheme(id) }
-                        .padding(vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.gold))
-                        Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.accent))
+        items.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (id, name) ->
+                    val p = Themes.first { it.id == id }
+                    val sel = ThemeState.current.id == id
+                    val shape = RoundedCornerShape(16.dp)
+                    Column(
+                        Modifier.weight(1f).clip(shape)
+                            .background(Brush.verticalGradient(listOf(p.bgMid, p.bgBottom)))
+                            .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else p.gold.copy(alpha = .3f), shape)
+                            .clickable { state.setTheme(id) }
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.gold))
+                            Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.accent))
+                            Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.ok))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        T(name, size = 11.sp, color = if (sel) p.gold else p.sub)
                     }
-                    Spacer(Modifier.height(6.dp))
-                    T(name, size = 11.sp, color = if (sel) p.gold else p.sub)
                 }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
