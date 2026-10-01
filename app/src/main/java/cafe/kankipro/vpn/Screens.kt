@@ -431,7 +431,7 @@ fun ConnectPanel(state: AppState, a: Account) {
                         .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
                         .clickable(enabled = has && !busy) {
                             if (sel) return@clickable
-                            if (on) toast(ctx, "برای تغییر، اول اتصال را قطع کنید") else state.setRoute(r)
+                            if (on) toast(ctx, "برای تغییر، اول اتصال را قطع کنید") else state.changeRoute(r)
                         }
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,

@@ -127,7 +127,7 @@ class AppState(context: Context) {
         if (hasCfg(nodeId, "wireguard")) add("wireguard")    }
 
     /** تغییر مسیر بین تانل و مستقیم */
-    fun setRoute(r: String) {
+    fun changeRoute(r: String) {
         route = r
         prefs.edit().putString("route", r).apply()
         fixProto()
