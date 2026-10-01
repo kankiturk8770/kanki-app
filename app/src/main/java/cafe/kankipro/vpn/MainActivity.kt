@@ -52,7 +52,6 @@ fun App() {
         else state.error = "برای اتصال باید اجازه‌ی VPN را تأیید کنید."
         afterGrant = null
     }
-    state.launchConsent = { intent, onOk -> afterGrant = onOk; permission.launch(intent) }
     state.requestVpn = { onGranted ->
         val intent = VpnService.prepare(ctx)
         if (intent == null) onGranted() else { afterGrant = onGranted; permission.launch(intent) }
@@ -62,11 +61,19 @@ fun App() {
         when (state.vstate) {
             VState.ON -> scope.launch { state.disconnect() }
             VState.OFF -> {
-                if (state.proto == "openvpn" || state.proto.startsWith("ikev2")) { scope.launch { state.connect() }; return }
+                if (state.proto == "openvpn") { scope.launch { state.connect() }; return }
                 state.requestVpn?.invoke { scope.launch { state.connect() } }
             }
             VState.CONNECTING -> {}
         }
+    }
+
+    // اجازه‌ی نوتیفیکیشن (اندروید ۱۳ به بالا) برای نمایش سرعت در نوار اعلان
+    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) notifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
     }
 
     var splash by rememberSaveable { mutableStateOf(true) }

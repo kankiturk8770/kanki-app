@@ -797,6 +797,22 @@ fun DrawScope.miniIcon(kind: String, c: Color) {
             drawLine(c, center, Offset(w * .5f, w * .28f), sw, cap = StrokeCap.Round)
             drawLine(c, center, Offset(w * .68f, w * .58f), sw, cap = StrokeCap.Round)
         }
+        "spark" -> { // ستاره‌ی چهارپر (انتخاب هوشمند)
+            val p = Path().apply {
+                moveTo(w * .5f, w * .04f); quadraticBezierTo(w * .56f, w * .44f, w * .96f, w * .5f)
+                quadraticBezierTo(w * .56f, w * .56f, w * .5f, w * .96f); quadraticBezierTo(w * .44f, w * .56f, w * .04f, w * .5f)
+                quadraticBezierTo(w * .44f, w * .44f, w * .5f, w * .04f); close()
+            }
+            drawPath(p, c)
+            drawCircle(c, w * .08f, Offset(w * .84f, w * .16f))
+        }
+        "crown" -> {
+            val p = Path().apply {
+                moveTo(w * .1f, w * .78f); lineTo(w * .1f, w * .3f); lineTo(w * .32f, w * .52f); lineTo(w * .5f, w * .2f)
+                lineTo(w * .68f, w * .52f); lineTo(w * .9f, w * .3f); lineTo(w * .9f, w * .78f); close()
+            }
+            drawPath(p, c)
+        }
         else -> { // وضعیت: نقطه‌ی درخشان
             drawCircle(c.copy(alpha = .25f), w * .45f, center)
             drawCircle(c.copy(alpha = .5f), w * .32f, center)

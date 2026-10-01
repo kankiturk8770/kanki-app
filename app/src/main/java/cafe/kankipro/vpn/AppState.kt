@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -36,10 +38,116 @@ class AppState(context: Context) {
     var sounds by mutableStateOf(prefs.getBoolean("sound", true))
     /** مسیر اتصال: tunnel (از طریق سرور واسط) یا direct (مستقیم به سرور) */
     var route by mutableStateOf(prefs.getString("route", "tunnel") ?: "tunnel")
-    /** اجرای صفحه‌ی تأیید سیستم (برای IKEv2)؛ توسط MainActivity تنظیم می‌شود */
-    var launchConsent: ((android.content.Intent, () -> Unit) -> Unit)? = null
+
+
+    private var lastNet: android.net.Network? = null
+
+    // ---------------- تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند
+    val excluded = androidx.compose.runtime.mutableStateListOf<String>().apply {
+        addAll(prefs.getStringSet("excluded", emptySet()) ?: emptySet())
+    }
+    fun toggleExcluded(pkg: String) {
+        if (pkg in excluded) excluded.remove(pkg) else excluded.add(pkg)
+        prefs.edit().putStringSet("excluded", excluded.toSet()).apply()
+    }
+
+    // ---------------- انتخاب هوشمند بهترین سرور
+    data class SmartRow(val node: String, val proto: String, val title: String, val flag: String, val ping: Long, val jitter: Long)
+    val smartRows = androidx.compose.runtime.mutableStateListOf<SmartRow>()
+    var smartBusy by mutableStateOf(false)
+
+    /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد و بهترین را انتخاب می‌کند */
+    suspend fun smartPick(): SmartRow? {
+        val a = account ?: return null
+        smartBusy = true
+        smartRows.clear()
+        val cands = a.configs.distinctBy { it.node }.flatMap { n ->
+            (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
+                infos["${n.node}/$p"]?.host?.takeIf { it != "—" }?.let { h -> Triple(n, p, h) }
+            }
+        }
+        val measured = kotlinx.coroutines.coroutineScope {
+            cands.map { it.third }.distinct().map { h ->
+                async(Dispatchers.IO) { h to Pinger.stats(h) }
+            }.awaitAll().toMap()
+        }
+        val rows = cands.mapNotNull { (n, p, h) ->
+            measured[h]?.let { (ping, jit) -> SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit) }
+        }.sortedBy { it.ping + 2 * it.jitter }
+        smartRows.addAll(rows.take(4))
+        smartBusy = false
+        val best = rows.firstOrNull() ?: return null
+        node = best.node
+        route = if (best.proto.endsWith("-direct")) "direct" else "tunnel"
+        prefs.edit().putString("route", route).apply()
+        proto = best.proto
+        save()
+        return best
+    }
+
+    // ---------------- نوتیفیکیشن ثابت با سرعت لحظه‌ای
+    private var notifJob: kotlinx.coroutines.Job? = null
+    private fun startNotif() {
+        if (notifJob?.isActive == true) return
+        notifJob = bg.launch {
+            var last: Pair<Long, Long>? = null
+            while (VpnEngine.isUp(ctx)) {
+                val s = VpnEngine.stats(ctx)
+                var rx = 0L; var tx = 0L
+                if (s != null) { last?.let { rx = (s.first - it.first).coerceAtLeast(0); tx = (s.second - it.second).coerceAtLeast(0) }; last = s }
+                val sec = ((System.currentTimeMillis() - VpnEngine.connectedAt) / 1000).coerceAtLeast(0)
+                val time = String.format(java.util.Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
+                KankiNotif.show(ctx, LastConfig.title(ctx), "↓ ${formatBytes(rx)}/s   ↑ ${formatBytes(tx)}/s   ·   $time")
+                kotlinx.coroutines.delay(2000)
+            }
+            KankiNotif.hide(ctx)
+        }
+    }
+
+    /** هماهنگی وضعیت با دکمه‌ی منوی کشویی و نوتیفیکیشن */
+    private fun watchState() {
+        bg.launch {
+            while (true) {
+                kotlinx.coroutines.delay(2000)
+                if (realTesting || vstate == VState.CONNECTING) continue
+                val up = VpnEngine.isUp(ctx)
+                if (vstate == VState.ON && !up) { vstate = VState.OFF; ping = null; KankiNotif.hide(ctx) }
+                else if (vstate == VState.OFF && up) {
+                    if (VpnEngine.connectedAt == 0L) VpnEngine.markConnected()
+                    vstate = VState.ON
+                    startNotif()
+                }
+            }
+        }
+    }
+
+    /** وقتی شبکه عوض شد (وای‌فای ⇄ دیتا) و تونل جواب نداد، خودکار دوباره وصل می‌شود */
+    private fun watchNetwork() {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val req = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        runCatching {
+            cm.registerNetworkCallback(req, object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    val prev = lastNet
+                    lastNet = network
+                    if (prev == null || prev == network) return
+                    bg.launch {
+                        kotlinx.coroutines.delay(2500)
+                        if (vstate != VState.ON) return@launch
+                        val alive = withContext(Dispatchers.IO) { RealPing.once() != null || RealPing.once() != null }
+                        if (!alive) { disconnect(); connect() }
+                    }
+                }
+            })
+        }
+    }
 
     init {
+        watchNetwork()
+        watchState()
         ThemeState.set(prefs.getString("theme", "gold") ?: "gold")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
@@ -90,8 +198,8 @@ class AppState(context: Context) {
      * (همان کانفیگ امنزیا ولی با آدرس مستقیم سرور به‌جای تونل).
      */
     private fun augment(a: Account): Account {
-        val base = a.configs.filter { !it.protocol.startsWith("openvpn") }
-        val direct = base.filter { it.protocol == "amneziawg" || it.protocol == "ikev2" }.mapNotNull { l ->
+        val base = a.configs.filter { !it.protocol.startsWith("openvpn") && !it.protocol.startsWith("ikev2") }
+        val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
             directHost(l.nodeName)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
         }
         return a.copy(configs = base + direct)
@@ -109,7 +217,11 @@ class AppState(context: Context) {
     private fun fetchConfig(l: ConfigLink): String {
         val url = l.url.substringBefore("#direct=")
         val host = l.url.substringAfter("#direct=", "")
-        val txt = SubscriptionApi.fetch(url)
+        val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
+        // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
+        val txt = runCatching { SubscriptionApi.fetch(url) }
+            .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
+            .getOrElse { e -> prefs.getString(cacheKey, null) ?: throw e }
         if (host.isBlank()) return txt
         return txt.lines().joinToString("\n") { line ->
             if (line.trim().startsWith("Endpoint", ignoreCase = true) && line.contains("=")) {
@@ -119,84 +231,27 @@ class AppState(context: Context) {
         }
     }
 
-    /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
-    fun hasIkev2(nodeId: String?, p: String = "ikev2"): Boolean =
-        android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == p } == true
+    /** صفحه‌ی اشتراک؛ اگر در دسترس نبود از نسخه‌ی ذخیره‌شده خوانده می‌شود */
+    private fun loadAccount(b: String, c: String): Account {
+        val html = runCatching { SubscriptionApi.fetch("$b/sub/$c") }
+            .onSuccess { prefs.edit().putString("subhtml_$c", it).apply() }
+            .getOrElse { e -> prefs.getString("subhtml_$c", null) ?: throw e }
+        return SubscriptionApi.parse(html, b)
+    }
 
     /** پروتکل‌های موجود برای یک مسیر (تانل یا مستقیم) */
     fun available(nodeId: String? = node, r: String = route): List<String> = if (r == "direct") buildList {
         if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
-        if (hasIkev2(nodeId, "ikev2-direct")) add("ikev2-direct")
     } else buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
-        if (hasIkev2(nodeId, "ikev2")) add("ikev2")    }
+    }
 
     /** تغییر مسیر بین تانل و مستقیم */
     fun changeRoute(r: String) {
         route = r
         prefs.edit().putString("route", r).apply()
         fixProto()
-    }
-
-    /** منتظر جواب واقعی سرور IKEv2 می‌ماند (اندروید ۱۳ به بالا) */
-    private suspend fun awaitIkev2(server: String, hasCa: Boolean) {
-        if (android.os.Build.VERSION.SDK_INT < 33) { VpnEngine.markConnected(); vstate = VState.ON; return }
-        vstate = VState.CONNECTING
-        repeat(40) {
-            when (Ikev2Engine.state(ctx)) {
-                2 -> { VpnEngine.markConnected(); vstate = VState.ON; errorDetail = null; return }
-                3 -> {
-                    vstate = VState.OFF
-                    error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
-                    errorDetail = "IKEv2 FAILED · server=$server · CA=${if (hasCa) "ok" else "missing"} · سرور اتصال را رد کرد (رمز/گواهی/تنظیمات)"
-                    Ikev2Engine.stop(ctx); return
-                }
-            }
-            kotlinx.coroutines.delay(500)
-        }
-        vstate = VState.OFF
-        Ikev2Engine.stop(ctx)
-        error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
-        errorDetail = "IKEv2 TIMEOUT · server=$server · CA=${if (hasCa) "ok" else "missing"} · جوابی از سرور نیامد (UDP 500/4500 یا DNS)"
-    }
-
-    /** اتصال IKEv2 با موتور خود اندروید */
-    private suspend fun connectIkev2() {
-        if (android.os.Build.VERSION.SDK_INT < 30) { error = "IKEv2 فقط روی اندروید ۱۱ به بالا کار می‌کند."; return }
-        val a = account ?: return
-        val guide = a.configs.firstOrNull { it.node == node && it.protocol == proto }
-        if (guide == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
-        val ca = a.configs.firstOrNull { it.node == node && it.protocol == "ikev2/ca" }
-        vstate = VState.CONNECTING; error = null; errorDetail = null
-        try {
-            val gtxt = withContext(Dispatchers.IO) { SubscriptionApi.fetch(guide.url.substringBefore("#direct=")) }
-            val ctxt = ca?.let { l -> runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetchBytes(l.url) } }.getOrNull() }
-            val parsed = Ikev2Info.parse(gtxt) ?: throw IllegalStateException("guide")
-            // نسخه‌ی مستقیم: به‌جای سرور واسط، مستقیم به دامنه‌ی خود سرور
-            val directTo = guide.url.substringAfter("#direct=", "")
-            val info = if (directTo.isNotBlank()) parsed.copy(server = directTo) else parsed
-            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
-            val consent = Ikev2Engine.provision(ctx, info, ctxt)
-            if (consent != null) {
-                val launcher = launchConsent ?: throw IllegalStateException("consent")
-                vstate = VState.OFF
-                launcher(consent) {
-                    bg.launch {
-                        runCatching { Ikev2Engine.start(ctx) }
-                            .onSuccess { awaitIkev2(info.server, ctxt != null) }
-                            .onFailure { e -> vstate = VState.OFF; error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."; errorDetail = "IKEv2 start: ${e.message ?: e.javaClass.simpleName}" }
-                    }
-                }
-                return
-            }
-            Ikev2Engine.start(ctx)
-            awaitIkev2(info.server, ctxt != null)
-        } catch (e: Exception) {
-            vstate = VState.OFF
-            error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
-            errorDetail = "IKEv2: ${e.message ?: e.javaClass.simpleName}"
-        }
     }
 
     /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
@@ -289,7 +344,7 @@ class AppState(context: Context) {
         if (r == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
         loading = true; error = null
         return try {
-            val a = augment(withContext(Dispatchers.IO) { SubscriptionApi.load(r.first, r.second) })
+            val a = augment(withContext(Dispatchers.IO) { loadAccount(r.first, r.second) })
             unlocking = true
             base = r.first; code = r.second
             prefs.edit().putString("base", base).putString("code", code).apply()
@@ -310,9 +365,9 @@ class AppState(context: Context) {
         loading = true; error = null
         try {
             val a = withContext(Dispatchers.IO) {
-                runCatching { SubscriptionApi.load(b, c) }.getOrElse {
+                runCatching { loadAccount(b, c) }.getOrElse {
                     Thread.sleep(1500)
-                    SubscriptionApi.load(b, c)
+                    loadAccount(b, c)
                 }
             }
             account = augment(a)
@@ -338,7 +393,6 @@ class AppState(context: Context) {
 
     suspend fun connect() {
         val a = account ?: return
-        if (proto.startsWith("ikev2")) { connectIkev2(); return }
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
@@ -357,12 +411,19 @@ class AppState(context: Context) {
 
         vstate = VState.CONNECTING
         try {
-            withContext(Dispatchers.IO) {
+            val finalCfg = withContext(Dispatchers.IO) {
                 var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
                 cfg = applyKeepalive(cfg, 25)
+                cfg = applyExcluded(cfg, excluded.toSet())
                 VpnEngine.up(ctx, cfg)
+                cfg
             }
+            // تا وقتی واقعاً از داخل تونل جواب نیاید، «متصل» نشان داده نمی‌شود
+            val ok = withContext(Dispatchers.IO) { awaitHandshake() }
+            if (!ok) throw IllegalStateException("no handshake: server did not answer (filtered or down)")
             vstate = VState.ON
+            LastConfig.save(ctx, finalCfg, "${flagOf(link.nodeName)} ${link.nodeName} · ${protoTitle(link.protocol)}")
+            startNotif()
             measurePing()
             locateExit()
         } catch (e: Exception) {
@@ -371,6 +432,16 @@ class AppState(context: Context) {
             error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
             errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
         }
+    }
+
+    /** چند بار از داخل تونل درخواست می‌فرستد؛ اگر جواب آمد یعنی هندشیک واقعی انجام شده */
+    private fun awaitHandshake(timeoutMs: Long = 9000): Boolean {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            if (RealPing.once() != null) return true
+            Thread.sleep(700)
+        }
+        return false
     }
 
     /** سوییچ سریع به پروتکل دیگر (اگر وصل است، قطع و دوباره وصل می‌شود) */
@@ -408,7 +479,8 @@ class AppState(context: Context) {
      * زمان پاسخ از داخل تونل اندازه گرفته می‌شود و بعد اتصال قبلی برمی‌گردد.
      */
     suspend fun realTest(nodeId: String, p: String) {
-        if (realTesting || vstate == VState.CONNECTING) return
+        // وقتی وصل هستی، تست واقعی تونل را قطع و وصل می‌کند (وسط بازی مشکل‌ساز است)؛ پس فقط وقتی قطعی
+        if (realTesting || vstate != VState.OFF) return
         if (p.startsWith("openvpn")) { tcpTest(nodeId, p); return }
         val a = account ?: return
         val link = a.configs.firstOrNull { it.node == nodeId && it.protocol == p } ?: return
@@ -419,7 +491,7 @@ class AppState(context: Context) {
         val prevLink = if (wasOn) a.configs.firstOrNull { it.node == node && it.protocol == protoKey() } else null
         val result = withContext(Dispatchers.IO) {
             try {
-                val cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(p))
+                val cfg = applyKeepalive(applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(p)), 25)
                 VpnEngine.up(ctx, cfg, resetTimer = false)
                 Thread.sleep(700)
                 RealPing.measure()
@@ -428,7 +500,7 @@ class AppState(context: Context) {
             } finally {
                 runCatching {
                     if (wasOn && prevLink != null) {
-                        val back = applyMtu(DnsOptions.apply(fetchConfig(prevLink), dns), mtuFor(proto))
+                        val back = applyKeepalive(applyMtu(DnsOptions.apply(fetchConfig(prevLink), dns), mtuFor(proto)), 25)
                         VpnEngine.up(ctx, back, resetTimer = false)
                     } else if (!wasOn) {
                         VpnEngine.down(ctx)
@@ -452,8 +524,8 @@ class AppState(context: Context) {
     }
 
     suspend fun disconnect() {
-        if (android.os.Build.VERSION.SDK_INT >= 30) withContext(Dispatchers.IO) { Ikev2Engine.stop(ctx) }
         withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+        KankiNotif.hide(ctx)
         vstate = VState.OFF
         ping = null
     }

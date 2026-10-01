@@ -12,15 +12,15 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "1.2.0"
+        versionCode = 19
+        versionName = "1.4.0"
     }
     signingConfigs {
         create("release") {
             storeFile = file("kanki-release.jks")
-            storePassword = "KankiVpn2026Store"
+            storePassword = System.getenv("KANKI_KEY_PASS")
             keyAlias = "kanki"
-            keyPassword = "KankiVpn2026Store"
+            keyPassword = System.getenv("KANKI_KEY_PASS")
         }
     }
     buildTypes {

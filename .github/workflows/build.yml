@@ -32,10 +32,15 @@ jobs:
           curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
           ls -la app/src/main/assets
 
-      - name: آماده‌سازی کلید امضا
+      - name: آماده‌سازی کلید امضا (از GitHub Secrets)
+        env:
+          KANKI_KEYSTORE: ${{ secrets.KANKI_KEYSTORE }}
+          KANKI_KEY_PASS: ${{ secrets.KANKI_KEY_PASS }}
         run: |
-          base64 -d app/kanki-release.jks.b64 > app/kanki-release.jks
-          keytool -list -keystore app/kanki-release.jks -storepass KankiVpn2026Store | head -5
+          if [ -z "$KANKI_KEYSTORE" ] || [ -z "$KANKI_KEY_PASS" ]; then echo "::error::GitHub Secrets (KANKI_KEYSTORE / KANKI_KEY_PASS) تنظیم نشده‌اند"; exit 1; fi
+          echo "$KANKI_KEYSTORE" | base64 -d > app/kanki-release.jks
+          rm -f app/kanki-release.jks.b64
+          keytool -list -keystore app/kanki-release.jks -storepass "$KANKI_KEY_PASS" | head -3
 
       - uses: actions/setup-java@v4
         with:
@@ -47,6 +52,8 @@ jobs:
           gradle-version: "8.13"
 
       - name: ساخت فایل نصبی
+        env:
+          KANKI_KEY_PASS: ${{ secrets.KANKI_KEY_PASS }}
         run: gradle assembleRelease --stacktrace
 
       - uses: actions/upload-artifact@v4

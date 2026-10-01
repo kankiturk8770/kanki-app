@@ -25,6 +25,31 @@ object Pinger {
         if (times.isEmpty()) null else times.average().toLong().coerceAtLeast(1)
     }.getOrNull()
 
+    /** پینگ و جیتر (میلی‌ثانیه)؛ اول ICMP، اگر بسته بود TCP */
+    fun stats(host: String, count: Int = 4): Pair<Long, Long>? {
+        val icmp = runCatching {
+            val p = ProcessBuilder("ping", "-c", count.toString(), "-i", "0.3", "-W", "2", host).redirectErrorStream(true).start()
+            if (!p.waitFor(12, TimeUnit.SECONDS)) { p.destroy(); return@runCatching emptyList<Double>() }
+            val out = p.inputStream.bufferedReader().readText()
+            Regex("""time[=<]\s*([\d.]+)""").findAll(out).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
+        }.getOrDefault(emptyList())
+        val times = icmp.ifEmpty {
+            (1..3).mapNotNull {
+                runCatching {
+                    Socket().use { s ->
+                        val t0 = System.nanoTime()
+                        s.connect(InetSocketAddress(host, 443), 2500)
+                        (System.nanoTime() - t0) / 1e6
+                    }
+                }.getOrNull()
+            }
+        }
+        if (times.isEmpty()) return null
+        val avg = times.average().toLong().coerceAtLeast(1)
+        val jitter = if (times.size < 2) 0L else times.zipWithNext { a, b -> kotlin.math.abs(a - b) }.average().toLong()
+        return avg to jitter
+    }
+
     /** پینگ TCP (زمان برقراری اتصال)؛ برای OpenVPN TCP */
     fun tcp(host: String, port: Int, tries: Int = 3): Long? {
         val r = (1..tries).mapNotNull {

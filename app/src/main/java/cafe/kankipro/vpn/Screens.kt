@@ -40,7 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "1.2.0"
+const val APP_VERSION = "1.4.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -426,6 +426,44 @@ fun ConnectPanel(state: AppState, a: Account) {
     val nodes = a.configs.distinctBy { it.node }
 
     Glass(Modifier.fillMaxWidth()) {
+        // انتخاب هوشمند بهترین سرور (پینگ + جیتر)
+        val smShape = RoundedCornerShape(16.dp)
+        Row(
+            Modifier.fillMaxWidth().clip(smShape)
+                .background(Brush.horizontalGradient(listOf(K.Gold.copy(alpha = .22f), K.Accent.copy(alpha = .14f))))
+                .border(1.dp, K.Gold.copy(alpha = .6f), smShape)
+                .clickable(enabled = !state.smartBusy && !busy) {
+                    scope.launch {
+                        if (state.vstate == VState.ON) state.disconnect()
+                        val best = state.smartPick()
+                        if (best == null) toast(ctx, "سروری برای سنجش پیدا نشد")
+                        else state.requestVpn?.invoke { scope.launch { state.connect() } }
+                    }
+                }
+                .padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MiniIcon("spark", K.Gold, 16.dp)
+            Spacer(Modifier.width(8.dp))
+            T(if (state.smartBusy) "در حال سنجش پینگ و جیتر…" else "انتخاب هوشمند بهترین سرور", size = 13.sp, color = K.Gold, weight = FontWeight.Black)
+        }
+        AnimatedVisibility(visible = state.smartRows.isNotEmpty()) {
+            Column(Modifier.padding(top = 8.dp)) {
+                state.smartRows.forEachIndexed { i, r ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        T(r.flag, size = 14.sp)
+                        Spacer(Modifier.width(6.dp))
+                        T(r.title, size = 11.sp, font = Poppins, weight = FontWeight.Bold, color = if (i == 0) K.Ok else K.Text, ltr = true, modifier = Modifier.weight(1f))
+                        T("${r.ping}ms", size = 11.sp, font = Poppins, weight = FontWeight.Bold, color = pingColor(r.ping), ltr = true)
+                        Spacer(Modifier.width(6.dp))
+                        T("±${r.jitter}", size = 10.sp, font = Poppins, color = K.Sub, ltr = true)
+                        if (i == 0) { Spacer(Modifier.width(4.dp)); MiniIcon("crown", K.Ok, 13.dp) }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         // تانل / مستقیم
         val shape = RoundedCornerShape(18.dp)
         Row(Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, shape).padding(3.dp)) {
@@ -840,7 +878,7 @@ fun ServersTab(state: AppState) {
                     LineButton("⚡ تست واقعی همه", Modifier.weight(1f)) {
                         state.requestVpn?.invoke {
                             scope.launch {
-                                cfgs.forEach { p -> if (p.startsWith("openvpn")) state.tcpTest(nodeId, p) else state.realTest(nodeId, p) }
+                                cfgs.forEach { p -> if (p.startsWith("openvpn") || state.vstate != VState.OFF) state.tcpTest(nodeId, p) else state.realTest(nodeId, p) }
                             }
                         }
                     }
@@ -860,7 +898,10 @@ fun ServersTab(state: AppState) {
                                     state.save()
                                 }
                             },
-                            onUdp = { state.requestVpn?.invoke { scope.launch { state.realTest(nodeId, p) } } },
+                            onUdp = {
+                                if (state.vstate != VState.OFF) toast(ctx, "برای تست واقعی UDP، اول اتصال را قطع کنید")
+                                else state.requestVpn?.invoke { scope.launch { state.realTest(nodeId, p) } }
+                            },
                             onTcp = { scope.launch { state.tcpTest(nodeId, p) } },
                         )
                         Spacer(Modifier.height(6.dp))
@@ -1136,6 +1177,7 @@ fun SettingsTab(state: AppState) {
     val scope = rememberCoroutineScope()
     val a = state.account
     var open by remember { mutableStateOf<String?>(null) }
+    var showSplit by remember { mutableStateOf(false) }
     fun flip(k: String) { open = if (open == k) null else k }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
@@ -1171,6 +1213,8 @@ fun SettingsTab(state: AppState) {
             ThemePicker(state)
             GoldDivider()
 
+            MenuRow("🧩", "تونل‌زنی انتخابی", if (state.excluded.isEmpty()) "همه‌ی برنامه‌ها از VPN رد می‌شوند" else "${state.excluded.size} برنامه بدون VPN", false, arrow = "‹") { showSplit = true }
+            GoldDivider()
             MenuRow("🛡", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = "‹") {
                 runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 toast(ctx, "Kanki VPN را انتخاب و «همیشه روشن» را فعال کنید")
@@ -1200,6 +1244,73 @@ fun SettingsTab(state: AppState) {
         Spacer(Modifier.height(14.dp))
         T("Kanki VPN · v$APP_VERSION", size = 12.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(16.dp))
+    }
+    if (showSplit) SplitTunnelPanel(state) { showSplit = false }
+}
+
+/** صفحه‌ی تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند */
+@Composable
+fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    var apps by remember { mutableStateOf<List<AppItem>?>(null) }
+    var q by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { apps = withContext(Dispatchers.IO) { AppsRepo.load(ctx) } }
+    Box(
+        Modifier.fillMaxSize().background(K.Ink.copy(alpha = .97f))
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { },
+    ) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    T("تونل‌زنی انتخابی", size = 18.sp, color = K.Gold, weight = FontWeight.Black)
+                    T("برنامه‌های روشن‌شده مستقیم و بدون VPN وصل می‌شوند (مثل بانک و اسنپ)", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
+                Pill("بستن", onClick = onClose)
+            }
+            Spacer(Modifier.height(10.dp))
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { T("جستجو…", size = 13.sp, color = K.Sub) },
+                    textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, color = K.Text),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            val list = apps
+            if (list == null) {
+                Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = K.Gold) }
+            } else {
+                val shown = list.filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
+                    .sortedByDescending { it.pkg in state.excluded }
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
+                    items(shown.size) { idx ->
+                        val app = shown[idx]
+                        val on = app.pkg in state.excluded
+                        Row(
+                            Modifier.fillMaxWidth().clickable { state.toggleExcluded(app.pkg) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            app.icon?.let { androidx.compose.foundation.Image(it, null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))) }
+                                ?: Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(K.Surface))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                T(app.label, size = 14.sp)
+                                T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
+                            }
+                            Switch(
+                                checked = on, onCheckedChange = { state.toggleExcluded(app.pkg) },
+                                colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold, uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF)),
+                            )
+                        }
+                        GoldDivider()
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            T("تغییرات از اتصال بعدی اعمال می‌شود", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
     }
 }
 
