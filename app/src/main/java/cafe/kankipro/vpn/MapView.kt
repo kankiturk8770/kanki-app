@@ -117,67 +117,109 @@ fun lookupGeo(target: String = ""): Pair<Geo, String>? = runCatching {
 
 data class MapPin(val geo: Geo, val flag: String, val selected: Boolean)
 
-/** نقشه‌ی طلایی جهان با سرورها، مکان کاربر و خط نئونی اتصال */
+/** محدوده‌ی دید نقشه (طول و عرض جغرافیایی) */
+private data class View(val lon0: Double, val lon1: Double, val lat0: Double, val lat1: Double)
+
+private fun lerp(a: Double, b: Double, t: Float) = a + (b - a) * t
+
+/** محدوده‌ای که هر دو نقطه را با حاشیه و نسبت درست نشان می‌دهد */
+private fun fitView(a: Geo, b: Geo, aspect: Double): View {
+    var lon0 = minOf(a.lon, b.lon); var lon1 = maxOf(a.lon, b.lon)
+    var lat0 = maxOf(a.lat, b.lat); var lat1 = minOf(a.lat, b.lat)
+    var w = (lon1 - lon0).coerceAtLeast(24.0) * 1.7
+    var h = (lat0 - lat1).coerceAtLeast(10.0) * 1.9
+    if (w / h < aspect) w = h * aspect else h = w / aspect
+    val cx = (lon0 + lon1) / 2
+    val cy = (lat0 + lat1) / 2 + h * .08
+    lon0 = cx - w / 2; lon1 = cx + w / 2; lat0 = cy + h / 2; lat1 = cy - h / 2
+    return View(lon0, lon1, lat0, lat1)
+}
+
+/** نقشه‌ی طلایی جهان با زوم خودکار روی مسیر اتصال و خط نئونی سبز */
 @Composable
 fun WorldMap(pins: List<MapPin>, user: Geo?, connected: Boolean, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     var dots by remember { mutableStateOf(MapData.dots) }
     LaunchedEffect(Unit) { if (dots == null) dots = withContext(Dispatchers.Default) { MapData.load(ctx) } }
 
+    val sel = pins.firstOrNull { it.selected }
+    val zoomed = connected && user != null && sel != null
+    val zoom by animateFloatAsState(if (zoomed) 1f else 0f, tween(1400, easing = FastOutSlowInEasing), label = "z")
+    val draw by animateFloatAsState(if (zoomed) 1f else 0f, tween(if (zoomed) 1600 else 200, delayMillis = if (zoomed) 900 else 0), label = "d")
+
     val t = rememberInfiniteTransition(label = "map")
-    val flow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "f")
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "p")
+    val flow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "f")
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1700, easing = LinearEasing)), label = "p")
 
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        fun proj(g: Geo) = Offset(((g.lon + 180) / 360 * w).toFloat(), ((MapData.TOP - g.lat) / (MapData.TOP - MapData.BOTTOM) * h).toFloat())
+        val aspect = (w / h).toDouble()
+        val world = View(-165.0, 180.0, 80.0, 80.0 - 345.0 / aspect)
+        val target = if (user != null && sel != null) fitView(user, sel.geo, aspect) else world
+        val v = View(
+            lerp(world.lon0, target.lon0, zoom), lerp(world.lon1, target.lon1, zoom),
+            lerp(world.lat0, target.lat0, zoom), lerp(world.lat1, target.lat1, zoom),
+        )
+        val scale = (345.0 / (v.lon1 - v.lon0)).toFloat()
+        fun proj(g: Geo) = Offset(
+            ((g.lon - v.lon0) / (v.lon1 - v.lon0) * w).toFloat(),
+            ((v.lat0 - g.lat) / (v.lat0 - v.lat1) * h).toFloat(),
+        )
 
-        // نقطه‌های خشکی
+        // نقطه‌های خشکی (با زوم درشت‌تر می‌شوند)
         dots?.let { list ->
-            val pts = list.map { proj(it) }
-            drawPoints(pts, PointMode.Points, K.Gold.copy(alpha = .42f), strokeWidth = w / 170f, cap = StrokeCap.Round)
+            val pts = ArrayList<Offset>(list.size)
+            for (g in list) {
+                val o = proj(g)
+                if (o.x > -10 && o.x < w + 10 && o.y > -10 && o.y < h + 10) pts.add(o)
+            }
+            val dw = (w / 175f) * scale.coerceAtMost(4.5f) * .9f
+            drawPoints(pts, PointMode.Points, K.Gold.copy(alpha = .40f), strokeWidth = dw, cap = StrokeCap.Round)
         }
 
-        val sel = pins.firstOrNull { it.selected }
-        // خط نئونی سبز از کاربر به سرور
-        if (connected && user != null && sel != null) {
+        // خط نئونی سبز از کاربر تا سرور (با انیمیشن کشیده شدن)
+        if (user != null && sel != null && draw > 0f) {
             val a = proj(user)
             val b = proj(sel.geo)
-            val mid = Offset((a.x + b.x) / 2, (a.y + b.y) / 2 - (kotlin.math.abs(b.x - a.x) * .35f + h * .08f))
-            val path = Path().apply { moveTo(a.x, a.y); quadraticBezierTo(mid.x, mid.y, b.x, b.y) }
-            for ((m, al) in listOf(5f to .08f, 3f to .18f, 1.8f to .38f, 1f to 1f)) {
-                drawPath(path, K.Green.copy(alpha = al), style = Stroke(w / 260f * m * 1.6f, cap = StrokeCap.Round))
-            }
-            drawPath(
-                path, Color.White.copy(alpha = .9f),
-                style = Stroke(w / 400f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(w / 60f, w / 40f), -flow * (w / 60f + w / 40f) * 3)),
+            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .35).toFloat()
+            val mid = Offset((a.x + b.x) / 2, (a.y + b.y) / 2 - lift)
+            fun bez(q: Float) = Offset(
+                (1 - q) * (1 - q) * a.x + 2 * (1 - q) * q * mid.x + q * q * b.x,
+                (1 - q) * (1 - q) * a.y + 2 * (1 - q) * q * mid.y + q * q * b.y,
             )
-            // ذره‌ی نورانی در حال حرکت
-            val q = flow
-            val px = (1 - q) * (1 - q) * a.x + 2 * (1 - q) * q * mid.x + q * q * b.x
-            val py = (1 - q) * (1 - q) * a.y + 2 * (1 - q) * q * mid.y + q * q * b.y
-            neonDot(K.Green, Offset(px, py), w / 110f)
-            // موج رسیدن به مقصد
-            drawCircle(K.Green.copy(alpha = (1 - pulse) * .8f), w / 90f + pulse * w / 22f, b, style = Stroke(w / 300f * 2))
+            val path = Path().apply {
+                moveTo(a.x, a.y)
+                val steps = 40
+                for (i in 1..(steps * draw).toInt().coerceAtLeast(1)) { val o = bez(i / steps.toFloat()); lineTo(o.x, o.y) }
+            }
+            val sw = w / 210f
+            for ((m, al) in listOf(5f to .08f, 3f to .18f, 1.8f to .38f, 1f to 1f)) {
+                drawPath(path, K.Green.copy(alpha = al), style = Stroke(sw * m, cap = StrokeCap.Round))
+            }
+            drawPath(path, Color.White.copy(alpha = .85f), style = Stroke(sw * .35f, cap = StrokeCap.Round))
+            if (draw >= 1f) {
+                neonDot(K.Green, bez(flow), sw * 1.6f)
+                drawCircle(K.Green.copy(alpha = (1 - pulse) * .85f), sw * 2f + pulse * w / 16f, b, style = Stroke(sw * .8f))
+            }
         }
 
         // سرورها
         pins.forEach { p ->
             val o = proj(p.geo)
             val c = if (p.selected && connected) K.Green else K.Gold
-            val r = if (p.selected) w / 85f else w / 120f
+            val r = (if (p.selected) w / 85f else w / 120f) * (1f + zoom * .4f)
             drawCircle(c.copy(alpha = .18f), r * 3.2f, o)
             drawCircle(c.copy(alpha = .35f), r * 1.8f, o)
             drawCircle(c, r, o)
             drawCircle(Color.White, r * .4f, o)
         }
-        // مکان کاربر
+        // مکان واقعی کاربر
         user?.let {
             val o = proj(it)
             val cy = Color(0xFF6FE7FF)
-            drawCircle(cy.copy(alpha = (1 - pulse) * .6f), w / 120f + pulse * w / 35f, o, style = Stroke(w / 400f * 2))
-            neonDot(cy, o, w / 130f)
+            drawCircle(cy.copy(alpha = (1 - pulse) * .6f), w / 120f + pulse * w / 30f, o, style = Stroke(w / 220f))
+            neonDot(cy, o, w / 125f * (1f + zoom * .3f))
         }
     }
 }

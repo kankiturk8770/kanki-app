@@ -9,6 +9,10 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.6.0"
+const val APP_VERSION = "0.7.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -188,6 +192,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 KTab.TEST -> TestTab(state)
                 KTab.SETTINGS -> SettingsTab(state)
             }
+            if (tab == KTab.HOME && state.robotOnHome) FloatingRobot { openBot(ctx) }
         }
 
         BottomBar(tab) { tab = it }
@@ -312,13 +317,8 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         val pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
             (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, flagOf(l.nodeName), l.node == state.node) }
         } ?: emptyList()
-        Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            WorldMap(pins, state.userGeo, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(2.65f))
-            state.userGeo?.let {
-                T(if (state.vstate == VState.ON) "● شما ← سرور" else "● موقعیت شما", size = 10.sp, color = Color(0xFF6FE7FF), weight = FontWeight.Normal, modifier = Modifier.align(Alignment.BottomStart))
-            }
-        }
-        ConnectButton(state.vstate, 196.dp) { if (a != null) onToggle() }
+        WorldMap(pins, state.userGeo, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(1.9f).padding(top = 2.dp))
+        ConnectButton(state.vstate, 150.dp) { if (a != null) onToggle() }
 
         val (label, color) = when (state.vstate) {
             VState.ON -> "متصل" to K.Green
@@ -613,54 +613,48 @@ fun ServerGroup(
 
 @Composable
 fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, onUdp: () -> Unit, onTcp: () -> Unit) {
-    val activeKey = state.protoKey()
-    val sel = state.node == nodeId && activeKey == p
+    val sel = state.node == nodeId && state.protoKey() == p
     val key = "$nodeId/$p"
-    val info = state.infos[key]
     var details by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(14.dp)
     val isOvpn = p.startsWith("openvpn")
 
     Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(if (sel) Color(0x33F5C451) else Color(0x14FFFFFF))
+            .background(if (sel) Color(0x2EF5C451) else Color(0x12FFFFFF))
             .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
-            .clickable(onClick = onSelect).padding(horizontal = 12.dp, vertical = 9.dp),
+            .clickable(onClick = onSelect).padding(horizontal = 10.dp, vertical = 7.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (sel) { Dot(K.Green, 7.dp); Spacer(Modifier.width(6.dp)) }
             Column(Modifier.weight(1f)) {
-                T(protoTitle(p), size = 14.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
+                T(protoTitle(p), size = 13.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
                 T(
-                    when {
-                        p == "amneziawg" -> "مخفی‌سازی ترافیک · عبور از فیلتر"
-                        p == "wireguard" -> "سریع و سبک · مناسب گیم"
-                        p == "openvpn/tcp" -> "پایدار روی شبکه‌های محدود"
-                        else -> "سازگاری بالا · اجرا در اپ OpenVPN"
+                    when (p) {
+                        "amneziawg" -> "عبور از فیلتر"
+                        "wireguard" -> "سریع · مناسب گیم"
+                        "openvpn/tcp" -> "پایدار"
+                        else -> "سازگاری بالا"
                     },
-                    size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
+                    size = 9.sp, color = K.Sub, weight = FontWeight.Normal,
                 )
             }
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
             if (!isOvpn) {
                 ProtoBadge("UDP", state.udpPings[key], state.busyTests["udp:$key"] == true, onUdp)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
             }
             ProtoBadge("TCP", state.tcpPings[key], state.busyTests["tcp:$key"] == true, onTcp)
-            Spacer(Modifier.weight(1f))
-            if (sel) { Pill("✓ فعال", color = K.Green); Spacer(Modifier.width(6.dp)) }
-            // دکمه‌ی مداد برای نمایش جزئیات
+            Spacer(Modifier.width(4.dp))
             Box(
-                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.size(30.dp).clip(RoundedCornerShape(10.dp))
                     .background(if (details) K.Gold.copy(alpha = .25f) else Color(0x14FFFFFF))
-                    .border(1.dp, K.Line, RoundedCornerShape(12.dp))
+                    .border(1.dp, K.Line, RoundedCornerShape(10.dp))
                     .clickable { details = !details },
                 contentAlignment = Alignment.Center,
-            ) { T("✎", size = 14.sp, color = K.Gold) }
+            ) { T("✎", size = 13.sp, color = K.Gold) }
         }
         AnimatedVisibility(visible = details) {
-            Column(Modifier.padding(top = 8.dp)) {
+            Column(Modifier.padding(top = 6.dp)) {
                 if (isOvpn) {
                     T("تنظیمات OpenVPN در اپ OpenVPN انجام می‌شود", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 } else {
@@ -669,6 +663,80 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ToggleRow(icon: String, title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        T(icon, size = 20.sp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            T(title, size = 15.sp)
+            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF1A1206), checkedTrackColor = K.Gold,
+                uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF),
+            ),
+        )
+    }
+}
+
+/** ربات شناور: با انگشت جابه‌جا می‌شود و خودش به نزدیک‌ترین گوشه می‌چسبد */
+@Composable
+fun FloatingRobot(onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wPx = with(density) { maxWidth.toPx() }
+        val hPx = with(density) { maxHeight.toPx() }
+        val sz = with(density) { 62.dp.toPx() }
+        val m = with(density) { 8.dp.toPx() }
+        val corners = listOf(
+            androidx.compose.ui.geometry.Offset(m, m),
+            androidx.compose.ui.geometry.Offset(wPx - sz - m, m),
+            androidx.compose.ui.geometry.Offset(m, hPx - sz - m),
+            androidx.compose.ui.geometry.Offset(wPx - sz - m, hPx - sz - m),
+        )
+        var corner by remember { mutableIntStateOf(prefs.getInt("robotCorner", 2).coerceIn(0, 3)) }
+        val pos = remember { androidx.compose.animation.core.Animatable(corners[corner], androidx.compose.ui.geometry.Offset.VectorConverter) }
+        var active by remember { mutableStateOf(false) }
+        val alpha by androidx.compose.animation.core.animateFloatAsState(if (active) 1f else .5f, label = "ra")
+        LaunchedEffect(wPx, hPx) { pos.snapTo(corners[corner]) }
+        fun settle() {
+            active = false
+            val cur = pos.value
+            val i = corners.indices.minBy { (corners[it] - cur).getDistance() }
+            corner = i
+            prefs.edit().putInt("robotCorner", i).apply()
+            scope.launch { pos.animateTo(corners[i], androidx.compose.animation.core.spring(dampingRatio = .6f, stiffness = 300f)) }
+        }
+        Box(
+            Modifier
+                .absoluteOffset { androidx.compose.ui.unit.IntOffset(pos.value.x.toInt(), pos.value.y.toInt()) }
+                .size(62.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { active = true },
+                        onDragEnd = { settle() },
+                        onDragCancel = { settle() },
+                    ) { change, drag ->
+                        change.consume()
+                        scope.launch { pos.snapTo(pos.value + drag) }
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = { active = true; tryAwaitRelease(); active = false },
+                        onTap = { playClick(ctx); onClick() },
+                    )
+                },
+        ) { RobotFace(62.dp, alpha) }
     }
 }
 
@@ -800,6 +868,10 @@ fun SettingsTab(state: AppState) {
                     ),
                 )
             }
+            GoldDivider()
+            ToggleRow("🤖", "ربات شناور", "ربات تلگرام در صفحه‌ی اصلی", state.robotOnHome) { state.robotOnHome = it; state.save() }
+            GoldDivider()
+            ToggleRow("🔊", "صداهای اپ", "صدای ورود و دکمه‌ها", state.sounds) { state.sounds = it; state.save() }
             GoldDivider()
 
             MenuRow("🛡", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = "‹") {

@@ -28,23 +28,24 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** صفحه‌ی ورودی کوتاه: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۲.۶ ثانیه) */
+/** صفحه‌ی ورودی: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۵ ثانیه، با صدای سینمایی) */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        val player = runCatching { MediaPlayer.create(ctx, R.raw.kanki_intro)?.apply { start() } }.getOrNull()
-        p.animateTo(1f, tween(2600, easing = LinearEasing))
+        val soundOn = ctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
+        val player = if (!soundOn) null else runCatching { MediaPlayer.create(ctx, R.raw.kanki_intro)?.apply { start() } }.getOrNull()
+        p.animateTo(1f, tween(5000, easing = LinearEasing))
         onDone()
         delay(300)
         runCatching { player?.release() }
     }
     val v = p.value
-    val gather = FastOutSlowInEasing.transform((v / 0.32f).coerceIn(0f, 1f))
-    val logo = FastOutSlowInEasing.transform(((v - 0.28f) / 0.2f).coerceIn(0f, 1f))
-    val typed = ((v - 0.45f) / 0.3f).coerceIn(0f, 1f)
-    val fadeOut = 1f - ((v - 0.9f) / 0.1f).coerceIn(0f, 1f)
+    val gather = FastOutSlowInEasing.transform((v / 0.24f).coerceIn(0f, 1f))
+    val logo = FastOutSlowInEasing.transform(((v - 0.20f) / 0.14f).coerceIn(0f, 1f))
+    val typed = ((v - 0.36f) / 0.22f).coerceIn(0f, 1f)
+    val fadeOut = 1f - ((v - 0.92f) / 0.08f).coerceIn(0f, 1f)
     val title = "KANKI VPN"
 
     KankiBackground {
@@ -69,7 +70,7 @@ fun SplashScreen(onDone: () -> Unit) {
                 Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
                     BrandTitle(34.sp, title.take((typed * title.length).toInt().coerceIn(0, title.length)))
                 }
-                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.72f) / 0.12f).coerceIn(0f, 1f)))
+                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.58f) / 0.1f).coerceIn(0f, 1f)))
             }
         }
     }

@@ -28,6 +28,8 @@ class AppState(context: Context) {
     var node by mutableStateOf(prefs.getString("node", null))
     var dns by mutableStateOf(prefs.getString("dns", "") ?: "")
     var autoConnect by mutableStateOf(prefs.getBoolean("auto", false))
+    var robotOnHome by mutableStateOf(prefs.getBoolean("robotHome", true))
+    var sounds by mutableStateOf(prefs.getBoolean("sound", true))
     var ping by mutableStateOf<Long?>(null)
     val infos = mutableStateMapOf<String, ConfigInfo>()
 
@@ -76,6 +78,16 @@ class AppState(context: Context) {
         }
     }
 
+    /** بعد از اتصال: IP خروجی از داخل تونل = مکان واقعی سرور */
+    suspend fun locateExit() {
+        val n = node ?: return
+        kotlinx.coroutines.delay(800)
+        withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, _) ->
+            nodeGeo[n] = g
+            prefs.edit().putString("ngeo_$n", "${g.lat},${g.lon}").apply()
+        }
+    }
+
     /** مکان کاربر و سرورها را پیدا می‌کند */
     suspend fun locate() {
         if (vstate == VState.OFF) {
@@ -87,7 +99,15 @@ class AppState(context: Context) {
         val a = account ?: return
         for ((nodeId, links) in a.configs.groupBy { it.node }) {
             if (nodeGeo.containsKey(nodeId)) continue
-            geoOfName(links.first().nodeName)?.let { nodeGeo[nodeId] = it }
+            // ۱) مکان واقعی خروجی که قبلاً بعد از اتصال ذخیره شده
+            prefs.getString("ngeo_$nodeId", null)?.split(",")?.let { p ->
+                runCatching { nodeGeo[nodeId] = Geo(p[0].toDouble(), p[1].toDouble()) }
+            }
+            if (nodeGeo.containsKey(nodeId)) continue
+            // ۲) از روی اسم سرور (مثلاً GERMANY → فرانکفورت)
+            val byName = geoOfName(links.first().nodeName)
+            if (byName != null) { nodeGeo[nodeId] = byName; continue }
+            // ۳) در آخر از IP آدرس سرور
             val host = links.firstNotNullOfOrNull { infos["$nodeId/${it.protocol}"]?.host }
             if (host != null && host != "—") {
                 withContext(Dispatchers.IO) { lookupGeo(host) }?.let { (g, _) -> nodeGeo[nodeId] = g }
@@ -108,6 +128,7 @@ class AppState(context: Context) {
         prefs.edit()
             .putString("proto", proto).putString("node", node)
             .putString("dns", dns).putBoolean("auto", autoConnect)
+            .putBoolean("robotHome", robotOnHome).putBoolean("sound", sounds)
             .putString("ovpn", ovpnTransport)
             .apply()
     }
@@ -190,6 +211,7 @@ class AppState(context: Context) {
             }
             vstate = VState.ON
             measurePing()
+            locateExit()
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
