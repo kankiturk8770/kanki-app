@@ -236,7 +236,7 @@ class AppState(context: Context) {
             fixProto()
             locate()
         } catch (e: Exception) {
-            error = "دریافت اطلاعات اشتراک ناموفق بود (${e.message ?: "خطای شبکه"}). اینترنت را بررسی کنید."
+            error = "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید."
         }
         loading = false
     }
@@ -255,7 +255,6 @@ class AppState(context: Context) {
         val a = account ?: return
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
-            ?: a.configs.firstOrNull { it.protocol == key }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
         error = null
 
@@ -282,7 +281,7 @@ class AppState(context: Context) {
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
-            error = "اتصال برقرار نشد: " + (e.message ?: e.javaClass.simpleName)
+            error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
         }
     }
 

@@ -35,17 +35,19 @@ fun SplashScreen(onDone: () -> Unit) {
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         val soundOn = ctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
-        val player = if (!soundOn) null else runCatching { MediaPlayer.create(ctx, R.raw.kanki_intro)?.apply { start() } }.getOrNull()
-        p.animateTo(1f, tween(5000, easing = LinearEasing))
+        val player = if (!soundOn) null else runCatching { MediaPlayer.create(ctx, R.raw.kanki_logo)?.apply { start() } }.getOrNull()
+        p.animateTo(1f, tween(7000, easing = LinearEasing))
         onDone()
         delay(300)
         runCatching { player?.release() }
     }
     val v = p.value
-    val gather = FastOutSlowInEasing.transform((v / 0.24f).coerceIn(0f, 1f))
-    val logo = FastOutSlowInEasing.transform(((v - 0.20f) / 0.14f).coerceIn(0f, 1f))
-    val typed = ((v - 0.36f) / 0.22f).coerceIn(0f, 1f)
-    val fadeOut = 1f - ((v - 0.92f) / 0.08f).coerceIn(0f, 1f)
+    // هماهنگ با موزیک: اوج‌گرفتن ۰ تا ۱ ثانیه، ضربه‌ی اول ۱.۱ ثانیه، تایپ اسم، موج دوم ۴.۳ ثانیه، محوشدن آخر
+    val gather = FastOutSlowInEasing.transform((v / 0.15f).coerceIn(0f, 1f))
+    val logo = FastOutSlowInEasing.transform(((v - 0.15f) / 0.07f).coerceIn(0f, 1f))
+    val typed = ((v - 0.23f) / 0.28f).coerceIn(0f, 1f)
+    val swell = ((v - 0.61f) / 0.16f).coerceIn(0f, 1f)
+    val fadeOut = 1f - ((v - 0.89f) / 0.11f).coerceIn(0f, 1f)
     val title = "KANKI VPN"
 
     KankiBackground {
@@ -62,6 +64,11 @@ fun SplashScreen(onDone: () -> Unit) {
                     drawCircle(Color.White.copy(alpha = (1f - logo)), 2.5f, pos)
                 }
                 if (logo > 0.01f && logo < 0.99f) neonRing(K.Gold, c, 60.dp.toPx() + logo * 160.dp.toPx(), 3.dp.toPx(), 1f - logo)
+                // موج دوم نور هم‌زمان با اوج دوم موزیک
+                if (swell > 0.01f && swell < 0.99f) {
+                    neonRing(K.Ok, c, 80.dp.toPx() + swell * 220.dp.toPx(), 3.dp.toPx(), 1f - swell)
+                    neonRing(K.Gold, c, 50.dp.toPx() + swell * 150.dp.toPx(), 2.dp.toPx(), (1f - swell) * .8f)
+                }
                 drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .35f * logo), Color.Transparent), c, 170.dp.toPx()), 170.dp.toPx(), c)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -70,7 +77,7 @@ fun SplashScreen(onDone: () -> Unit) {
                 Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
                     BrandTitle(34.sp, title.take((typed * title.length).toInt().coerceIn(0, title.length)))
                 }
-                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.58f) / 0.1f).coerceIn(0f, 1f)))
+                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.62f) / 0.06f).coerceIn(0f, 1f)))
             }
         }
     }
@@ -82,8 +89,10 @@ fun UnlockScreen(onDone: () -> Unit) {
     val uctx = LocalContext.current
     LaunchedEffect(Unit) {
         val on = uctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
-        if (on) runCatching {
-            MediaPlayer.create(uctx, R.raw.kanki_unlock)?.apply { setOnCompletionListener { it.release() }; start() }
+        if (on) {
+            val mp = runCatching { MediaPlayer.create(uctx, R.raw.kanki_switch) }.getOrNull()
+            delay(880) // لحظه‌ی چرخیدن کلید
+            runCatching { mp?.apply { setOnCompletionListener { it.release() }; start() } }
         }
     }
     val p = remember { Animatable(0f) }
@@ -155,14 +164,14 @@ fun UnlockScreen(onDone: () -> Unit) {
                         )
                         // سوراخ کلید
                         val kc = Offset(c.x, top + bh * .45f)
-                        drawCircle(Color(0xFF1A1206).copy(alpha = lockAlpha), 11f * u, kc)
+                        drawCircle(K.OnGold.copy(alpha = lockAlpha), 11f * u, kc)
                         // کلید
                         val kx = c.x + (1f - keyIn) * 150f * u
                         translate(kx - c.x, 0f) {
                             rotate(-90f * keyTurn, kc) {
                                 val ka = lockAlpha
-                                drawCircle(Brush.radialGradient(listOf(Color(0xFFFFF4C8), K.Gold), Offset(kc.x + 58f * u, kc.y), 20f * u), 20f * u, Offset(kc.x + 58f * u, kc.y), alpha = ka)
-                                drawCircle(Color(0xFF1A1206).copy(alpha = ka), 7f * u, Offset(kc.x + 58f * u, kc.y))
+                                drawCircle(Brush.radialGradient(listOf(K.GoldLight, K.Gold), Offset(kc.x + 58f * u, kc.y), 20f * u), 20f * u, Offset(kc.x + 58f * u, kc.y), alpha = ka)
+                                drawCircle(K.OnGold.copy(alpha = ka), 7f * u, Offset(kc.x + 58f * u, kc.y))
                                 drawLine(K.GoldLight.copy(alpha = ka), Offset(kc.x, kc.y), Offset(kc.x + 40f * u, kc.y), 8f * u, cap = StrokeCap.Round)
                                 drawLine(K.GoldLight.copy(alpha = ka), Offset(kc.x + 8f * u, kc.y), Offset(kc.x + 8f * u, kc.y + 12f * u), 6f * u, cap = StrokeCap.Round)
                                 drawLine(K.GoldLight.copy(alpha = ka), Offset(kc.x + 18f * u, kc.y), Offset(kc.x + 18f * u, kc.y + 9f * u), 6f * u, cap = StrokeCap.Round)

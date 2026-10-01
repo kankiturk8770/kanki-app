@@ -135,6 +135,9 @@ private val EN = mapOf(
     "سرورهای پرسرعت آلمان 🇩🇪" to "Fast servers in Germany 🇩🇪",
     "تمدید سریع از ربات 🚀" to "Quick renewal via bot 🚀",
     "پشتیبانی ۲۴ ساعته 💬" to "24/7 support 💬",
+    "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید." to "Connection failed. Try another server or protocol.",
+    "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید." to "Couldn't load subscription. Check your internet.",
+    "تست ناموفق بود. اینترنت را بررسی کنید." to "Test failed. Check your internet.",
 )
 
 /** ترجمه‌ی تکه‌ای برای متن‌هایی که بخش متغیر دارند */

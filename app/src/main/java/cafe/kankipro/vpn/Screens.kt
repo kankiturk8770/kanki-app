@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.9.0"
+const val APP_VERSION = "0.9.1"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -259,14 +259,14 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
     val shape = RoundedCornerShape(28.dp)
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(shape)
-            .background(Color(0xF00E0B07)).border(1.dp, K.Line, shape).padding(5.dp),
+            .background(K.Panel.copy(alpha = .94f)).border(1.dp, K.Line, shape).padding(5.dp),
     ) {
         KTab.entries.forEach { t ->
             val sel = t == current
             val s = RoundedCornerShape(22.dp)
             Column(
                 Modifier.weight(1f).clip(s)
-                    .background(if (sel) Color(0x55F5C451) else Color.Transparent)
+                    .background(if (sel) K.Gold.copy(alpha = 0.33f) else Color.Transparent)
                     .clickable { onSelect(t) }.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -449,7 +449,7 @@ fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session:
                     val shape = RoundedCornerShape(16.dp)
                     Row(
                         Modifier.clip(shape)
-                            .background(if (sel) Color(0x38F5C451) else Color(0x12FFFFFF))
+                            .background(if (sel) K.Gold.copy(alpha = 0.22f) else Color(0x12FFFFFF))
                             .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
                             .clickable {
                                 if (sel || state.vstate == VState.CONNECTING) return@clickable
@@ -516,7 +516,7 @@ fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session:
 @Composable
 fun MiniStat(label: String, value: String, modifier: Modifier) {
     val shape = RoundedCornerShape(16.dp)
-    Column(modifier.clip(shape).background(Color(0x22F5C451)).border(1.dp, K.Line, shape).padding(horizontal = 10.dp, vertical = 6.dp)) {
+    Column(modifier.clip(shape).background(K.Gold.copy(alpha = 0.13f)).border(1.dp, K.Line, shape).padding(horizontal = 10.dp, vertical = 6.dp)) {
         T(label, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
         val latin = value.any { it.isDigit() || it == '∞' } && value.none { it in '\u0600'..'\u06FF' }
         T(value, size = 14.sp, font = if (latin) Poppins else Vazir, weight = FontWeight.Bold, ltr = latin)
@@ -635,7 +635,7 @@ fun ServerGroup(
     val shape = RoundedCornerShape(24.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(Color(0xE60E0B07))
+            .background(K.Panel.copy(alpha = .9f))
             .border(if (selected) 2.dp else 1.dp, if (selected) K.Gold else K.Line, shape),
     ) {
         Row(Modifier.fillMaxWidth().clickable(onClick = onHeader).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -670,7 +670,7 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
 
     Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(if (sel) Color(0x2EF5C451) else Color(0x12FFFFFF))
+            .background(if (sel) K.Gold.copy(alpha = 0.18f) else Color(0x12FFFFFF))
             .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, shape)
             .clickable(onClick = onSelect).padding(horizontal = 10.dp, vertical = 7.dp),
     ) {
@@ -837,7 +837,7 @@ fun TestTab(state: AppState) {
                 up = withContext(Dispatchers.IO) { SpeedTest.upload(4.0) { live = it } }
                 phase = "تمام شد"
             } catch (e: Exception) {
-                err = "تست ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
+                err = "تست ناموفق بود. اینترنت را بررسی کنید."
                 phase = ""
             }
             running = false
@@ -958,7 +958,7 @@ fun SettingsTab(state: AppState) {
 
 @Composable
 fun GoldDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x1FF5C451)))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(K.Gold.copy(alpha = 0.12f)))
 }
 
 @Composable
