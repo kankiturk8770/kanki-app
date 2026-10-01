@@ -70,6 +70,9 @@ object VpnEngine {
         if (resetTimer || connectedAt == 0L) connectedAt = System.currentTimeMillis()
     }
 
+    /** برای اتصال‌هایی که با موتور دیگر (IKEv2) برقرار می‌شوند */
+    fun markConnected() { connectedAt = System.currentTimeMillis() }
+
     fun down(ctx: Context) {
         runCatching { backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
         connectedAt = 0L

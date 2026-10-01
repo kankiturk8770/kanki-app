@@ -30,6 +30,10 @@ class AppState(context: Context) {
     var autoConnect by mutableStateOf(prefs.getBoolean("auto", false))
     var robotOnHome by mutableStateOf(prefs.getBoolean("robotHome", true))
     var sounds by mutableStateOf(prefs.getBoolean("sound", true))
+    /** حالت گیمینگ: فقط WireGuard و IKEv2، با بهینه‌سازی پینگ */
+    var gaming by mutableStateOf(prefs.getBoolean("gaming", false))
+    /** اجرای صفحه‌ی تأیید سیستم (برای IKEv2)؛ توسط MainActivity تنظیم می‌شود */
+    var launchConsent: ((android.content.Intent, () -> Unit) -> Unit)? = null
 
     init {
         ThemeState.set(prefs.getString("theme", "gold") ?: "gold")
@@ -111,11 +115,68 @@ class AppState(context: Context) {
     }
 
     /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
-    fun available(nodeId: String? = node): List<String> = buildList {
+    fun available(nodeId: String? = node): List<String> = if (gaming) buildList {
+        if (hasCfg(nodeId, "wireguard")) add("wireguard")
+        if (android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == "ikev2" } == true) add("ikev2")
+    } else buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "openvpn/udp") || hasCfg(nodeId, "openvpn/tcp")) add("openvpn")
+    }
+
+    /** روشن/خاموش کردن حالت گیمینگ؛ با روشن شدن، کم‌پینگ‌ترین سرور انتخاب می‌شود */
+    suspend fun setGaming(on: Boolean) {
+        gaming = on
+        prefs.edit().putBoolean("gaming", on).apply()
+        if (on && vstate == VState.OFF) pickBestGameServer()
+        fixProto()
+    }
+
+    private suspend fun pickBestGameServer() {
+        val a = account ?: return
+        val nodes = a.configs.filter { it.protocol == "wireguard" }.map { it.node }.distinct()
+        if (nodes.size < 2) return
+        var best: String? = null
+        var bestMs = Long.MAX_VALUE
+        for (n in nodes) {
+            val host = infos["$n/wireguard"]?.host ?: continue
+            val ms = withContext(Dispatchers.IO) { Pinger.icmp(host, 2) ?: Pinger.tcp(host, 443, 1) } ?: continue
+            if (ms < bestMs) { bestMs = ms; best = n }
+        }
+        best?.let { node = it; save() }
+    }
+
+    /** اتصال IKEv2 با موتور خود اندروید */
+    private suspend fun connectIkev2() {
+        if (android.os.Build.VERSION.SDK_INT < 30) { error = "IKEv2 فقط روی اندروید ۱۱ به بالا کار می‌کند."; return }
+        val a = account ?: return
+        val guide = a.configs.firstOrNull { it.node == node && it.protocol == "ikev2" }
+        if (guide == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
+        val ca = a.configs.firstOrNull { it.node == node && it.protocol == "ikev2/ca" }
+        vstate = VState.CONNECTING; error = null
+        try {
+            val gtxt = withContext(Dispatchers.IO) { SubscriptionApi.fetch(guide.url) }
+            val ctxt = ca?.let { l -> runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetch(l.url) } }.getOrNull() }
+            val info = Ikev2Info.parse(gtxt) ?: throw IllegalStateException("guide")
+            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+            val consent = Ikev2Engine.provision(ctx, info, ctxt)
+            if (consent != null) {
+                val launcher = launchConsent ?: throw IllegalStateException("consent")
+                vstate = VState.OFF
+                launcher(consent) {
+                    runCatching { Ikev2Engine.start(ctx); VpnEngine.markConnected(); vstate = VState.ON }
+                        .onFailure { error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید." }
+                }
+                return
+            }
+            Ikev2Engine.start(ctx)
+            VpnEngine.markConnected()
+            vstate = VState.ON
+        } catch (e: Exception) {
+            vstate = VState.OFF
+            error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+        }
     }
 
     /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
@@ -253,6 +314,7 @@ class AppState(context: Context) {
 
     suspend fun connect() {
         val a = account ?: return
+        if (proto == "ikev2") { connectIkev2(); return }
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
@@ -272,7 +334,12 @@ class AppState(context: Context) {
         vstate = VState.CONNECTING
         try {
             withContext(Dispatchers.IO) {
-                val cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
+                var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
+                if (gaming) {
+                    // گیمینگ: MTU کوچک‌تر برای جلوگیری از تکه‌تکه شدن بسته‌ها + نگه‌داشتن مسیر NAT
+                    if (mtuFor(proto).isBlank()) cfg = applyMtu(cfg, "1280")
+                    cfg = applyKeepalive(cfg, 15)
+                }
                 VpnEngine.up(ctx, cfg)
             }
             vstate = VState.ON
@@ -364,6 +431,7 @@ class AppState(context: Context) {
     }
 
     suspend fun disconnect() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) withContext(Dispatchers.IO) { Ikev2Engine.stop(ctx) }
         withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
         vstate = VState.OFF
         ping = null

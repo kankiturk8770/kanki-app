@@ -138,6 +138,9 @@ private val EN = mapOf(
     "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید." to "Connection failed. Try another server or protocol.",
     "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید." to "Couldn't load subscription. Check your internet.",
     "تست ناموفق بود. اینترنت را بررسی کنید." to "Test failed. Check your internet.",
+    "حالت گیمینگ روشن شد 🎮" to "Gaming mode on 🎮",
+    "حالت گیمینگ خاموش شد" to "Gaming mode off",
+    "IKEv2 فقط روی اندروید ۱۱ به بالا کار می‌کند." to "IKEv2 needs Android 11 or newer.",
 )
 
 /** ترجمه‌ی تکه‌ای برای متن‌هایی که بخش متغیر دارند */

@@ -13,6 +13,11 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.9.1"
+const val APP_VERSION = "1.0.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -87,6 +92,7 @@ fun protoTitle(p: String) = when (p) {
     "amneziawg" -> "AmneziaWG"
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
+    "ikev2" -> "IKEv2"
     "openvpn/udp" -> "OpenVPN UDP"
     "openvpn/tcp" -> "OpenVPN TCP"
     else -> "OpenVPN"
@@ -289,6 +295,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
     var rxSpeed by remember { mutableLongStateOf(0L) }
     var txSpeed by remember { mutableLongStateOf(0L) }
     var session by remember { mutableLongStateOf(0L) }
+    val history = remember { mutableStateListOf<Float>() }
     LaunchedEffect(state.vstate) {
         var last: Pair<Long, Long>? = null
         var tick = 0
@@ -304,6 +311,8 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
                 session = s.first + s.second
                 last = s
             }
+            history.add((rxSpeed + txSpeed).toFloat())
+            if (history.size > 32) history.removeAt(0)
             tick++
             if (tick % 15 == 0) state.measurePing()
             delay(1000)
@@ -339,6 +348,36 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
                     T(selName, size = 13.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
                 }
             }
+            // دکمه‌ی حالت گیمینگ (بالا، گوشه)
+            val gShape = RoundedCornerShape(14.dp)
+            Row(
+                Modifier.align(Alignment.TopStart).padding(10.dp).clip(gShape)
+                    .background(if (state.gaming) K.Ok.copy(alpha = .22f) else K.Panel.copy(alpha = .8f))
+                    .border(1.dp, if (state.gaming) K.Ok else K.Line, gShape)
+                    .clickable {
+                        if (state.vstate != VState.OFF) toast(ctx, "برای تغییر، اول اتصال را قطع کنید")
+                        else scope.launch { state.setGaming(!state.gaming); toast(ctx, if (state.gaming) "حالت گیمینگ روشن شد 🎮" else "حالت گیمینگ خاموش شد") }
+                    }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                T("🎮", size = 14.sp)
+                Spacer(Modifier.width(4.dp))
+                T("Gaming", size = 11.sp, font = Poppins, weight = FontWeight.Bold, color = if (state.gaming) K.Ok else K.Sub, ltr = true)
+            }
+            // نمودار ضربان ترافیک + پینگ (پایین، گوشه)
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(10.dp).width(132.dp).clip(RoundedCornerShape(14.dp))
+                    .background(K.Panel.copy(alpha = .75f)).border(1.dp, K.Line, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                PulseGraph(history, state.vstate == VState.ON, Modifier.fillMaxWidth().height(30.dp))
+                val spd = history.lastOrNull()?.toLong() ?: 0L
+                T(
+                    if (state.vstate == VState.ON) "${formatBytes(spd)}/s" + (state.ping?.let { " · ${it}ms" } ?: "") else "— · —",
+                    size = 10.sp, font = Poppins, weight = FontWeight.SemiBold, color = K.Text, ltr = true,
+                )
+            }
             // پایین نقشه: وضعیت امنیت
             val on = state.vstate == VState.ON
             Row(
@@ -369,10 +408,6 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             )
         }
 
-        state.ping?.let {
-            Spacer(Modifier.height(4.dp))
-            Pill("پینگ ${it}ms", color = pingColor(it))
-        }
 
         // سوییچ سریع پروتکل
         Spacer(Modifier.height(10.dp))
@@ -414,7 +449,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             if (state.loading) CircularProgressIndicator(color = K.Gold)
             else GoldButton("تلاش دوباره", Modifier.fillMaxWidth()) { scope.launch { state.refresh() } }
         } else {
-            HomeCard(state, a, rxSpeed, txSpeed, session)
+            UsageLine(a)
         }
         Spacer(Modifier.height(12.dp))
     }
@@ -422,7 +457,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
 
 /** یک کارت جمع‌وجور: سرور + اشتراک + ترافیک */
 @Composable
-fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session: Long) {
+fun ServerInfoCard(state: AppState, a: Account) {
     val nodeName = a.configs.firstOrNull { it.node == state.node }?.nodeName ?: "—"
     val nodes = a.configs.distinctBy { it.node }
     var ask by remember { mutableStateOf<ConfigLink?>(null) }
@@ -501,15 +536,69 @@ fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session:
                 T(a.used, size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(K.Line))
-        Spacer(Modifier.height(12.dp))
-        Row {
-            Stat("↓ دانلود", "${formatBytes(rxSpeed)}/s", Modifier.weight(1f))
-            Stat("↑ آپلود", "${formatBytes(txSpeed)}/s", Modifier.weight(1f))
-            Stat("این نشست", formatBytes(session), Modifier.weight(1f))
+/** صفحه‌ی اتصال: فقط خط حجم مصرفی */
+@Composable
+fun UsageLine(a: Account) {
+    val used = parseSize(a.used)
+    val left = parseSize(a.dataRemaining)
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .7f)).border(1.dp, K.Line, shape).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("حجم باقی‌مانده", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            Spacer(Modifier.weight(1f))
+            T(a.dataRemaining, size = 13.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
         }
+        if (used != null && left != null && used + left > 0) {
+            Spacer(Modifier.height(7.dp))
+            val f = (used / (used + left)).toFloat().coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x33FFFFFF))) {
+                Box(
+                    Modifier.fillMaxWidth(f.coerceAtLeast(0.02f)).fillMaxHeight().clip(RoundedCornerShape(6.dp))
+                        .background(Brush.horizontalGradient(listOf(K.GoldDeep, K.Gold, K.GoldLight))),
+                )
+            }
+        }
+    }
+}
+
+/** نمودار ضربان (مثل دستگاه نوار قلب) برای ترافیک لحظه‌ای */
+@Composable
+fun PulseGraph(samples: List<Float>, active: Boolean, modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "pulse")
+    val scan by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "scan")
+    val col = if (active) K.Ok else K.Sub
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val n = 16
+        val max = (samples.maxOrNull() ?: 1f).coerceAtLeast(1f)
+        val base = h * .62f
+        val path = androidx.compose.ui.graphics.Path().apply { moveTo(0f, base) }
+        val seg = w / n
+        for (i in 0 until n) {
+            val sIdx = samples.size - n + i
+            val v = if (sIdx >= 0) samples[sIdx] / max else 0f
+            val amp = if (active) (.18f + .8f * v) else .10f
+            val x0 = i * seg
+            path.lineTo(x0 + seg * .35f, base)
+            path.lineTo(x0 + seg * .45f, base + h * .10f)
+            path.lineTo(x0 + seg * .55f, base - h * .62f * amp)
+            path.lineTo(x0 + seg * .65f, base + h * .22f * amp)
+            path.lineTo(x0 + seg * .75f, base)
+            path.lineTo(x0 + seg, base)
+        }
+        for ((m, al) in listOf(4f to .10f, 2.2f to .25f, 1f to 1f)) {
+            drawPath(path, col.copy(alpha = al), style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx() * m, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
+        // خط اسکن متحرک
+        val x = scan * w
+        drawRect(
+            Brush.horizontalGradient(listOf(Color.Transparent, col.copy(alpha = .35f), Color.Transparent), startX = x - w * .12f, endX = x + w * .02f),
+            topLeft = androidx.compose.ui.geometry.Offset(x - w * .12f, 0f), size = androidx.compose.ui.geometry.Size(w * .14f, h),
+        )
     }
 }
 
@@ -541,7 +630,7 @@ fun ProtocolSwitcher(current: String, available: List<String>, onPick: (String) 
     Row(
         Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, shape).padding(4.dp),
     ) {
-        listOf("amneziawg" to "Amnezia", "amneziawg-direct" to "Direct ⚡", "wireguard" to "WireGuard").filter { it.first in available }.forEach { (p, title) ->
+        listOf("amneziawg" to "Amnezia", "amneziawg-direct" to "Direct ⚡", "wireguard" to "WireGuard", "ikev2" to "IKEv2").filter { it.first in available }.forEach { (p, title) ->
             val sel = p == current
             Box(
                 Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
@@ -573,6 +662,7 @@ fun ServersTab(state: AppState) {
             T("سرورها", size = 17.sp, color = K.Gold, weight = FontWeight.Black)
         }
         Spacer(Modifier.height(8.dp))
+        a?.let { ServerInfoCard(state, it); Spacer(Modifier.height(12.dp)) }
         if (locked) {
             T("برای تغییر سرور یا پروتکل، اول اتصال را قطع کنید", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
             Spacer(Modifier.height(8.dp))
