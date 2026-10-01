@@ -16,6 +16,7 @@ data class Ikev2Info(val server: String, val username: String?, val password: St
                     val k = l.substring(0, idx).trim().lowercase()
                     val v = l.substring(idx + 1).trim().trim('`', '"', '\'')
                     if (v.isEmpty() || v.startsWith("//")) continue
+                    if (v.lowercase().let { it.startsWith("not used") || it.startsWith("none") || it == "-" || it.startsWith("install") }) continue
                     if (keys.any { k.contains(it) }) return v
                 }
                 return null
@@ -26,7 +27,7 @@ data class Ikev2Info(val server: String, val username: String?, val password: St
                 username = find("username", "user", "login", "نام کاربری", "یوزر"),
                 password = find("password", "pass", "رمز"),
                 psk = find("psk", "pre-shared", "preshared", "secret", "کلید مشترک"),
-                identity = find("identity", "ipsec identifier", "local id"),
+                identity = null, // برای EAP-MSCHAPv2 نام کاربری شناسه است
             )
         }
     }
@@ -38,12 +39,15 @@ object Ikev2Engine {
     private fun vm(ctx: Context) = ctx.getSystemService(android.net.VpnManager::class.java)
 
     /** پروفایل را ثبت می‌کند؛ اگر Intent برگرداند، باید کاربر یک بار تأیید کند */
-    fun provision(ctx: Context, info: Ikev2Info, caPem: String?): Intent? {
+    fun provision(ctx: Context, info: Ikev2Info, caData: ByteArray?): Intent? {
         val identity = info.identity ?: info.username ?: "kanki"
         val b = android.net.Ikev2VpnProfile.Builder(info.server, identity)
-        val cert = caPem?.takeIf { it.contains("BEGIN CERTIFICATE") }?.let {
-            java.security.cert.CertificateFactory.getInstance("X.509")
-                .generateCertificate(it.byteInputStream()) as java.security.cert.X509Certificate
+        // گواهی CA پنل (PEM یا DER)
+        val cert = caData?.let { d ->
+            runCatching {
+                java.security.cert.CertificateFactory.getInstance("X.509")
+                    .generateCertificate(java.io.ByteArrayInputStream(d)) as java.security.cert.X509Certificate
+            }.getOrNull()
         }
         val user = info.username
         val pass = info.password

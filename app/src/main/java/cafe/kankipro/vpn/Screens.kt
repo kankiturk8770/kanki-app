@@ -40,7 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "1.0.0"
+const val APP_VERSION = "1.0.1"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

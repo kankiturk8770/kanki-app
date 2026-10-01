@@ -157,7 +157,7 @@ class AppState(context: Context) {
         vstate = VState.CONNECTING; error = null
         try {
             val gtxt = withContext(Dispatchers.IO) { SubscriptionApi.fetch(guide.url) }
-            val ctxt = ca?.let { l -> runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetch(l.url) } }.getOrNull() }
+            val ctxt = ca?.let { l -> runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetchBytes(l.url) } }.getOrNull() }
             val info = Ikev2Info.parse(gtxt) ?: throw IllegalStateException("guide")
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             val consent = Ikev2Engine.provision(ctx, info, ctxt)
