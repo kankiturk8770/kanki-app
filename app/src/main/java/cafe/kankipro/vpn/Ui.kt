@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -114,22 +115,37 @@ object K {
 }
 
 // ------------------------------------------------------------------ فونت‌ها
-// فایل‌های فونت هنگام ساخت در گیت‌هاب دانلود می‌شوند (فایل build.yml)
+// فایل‌های فونت (پوشه‌ی app/src/main/res/font) هنگام ساخت دانلود می‌شوند:
+//   • روی گیت‌هاب: مرحله‌ی «دریافت فونت‌ها» در build.yml
+//   • روی اندروید استودیو: تسک fetchAssets در app/build.gradle.kts
+// اگر به هر دلیل دانلود نشده باشند، برنامه به‌جای خطای ساخت یا بسته‌شدن،
+// از فونت پیش‌فرض اندروید استفاده می‌کند.
 
-val Vazir = FontFamily(
-    Font(R.font.vazir_regular, FontWeight.Normal),
-    Font(R.font.vazir_bold, FontWeight.Bold),
-    Font(R.font.vazir_black, FontWeight.Black),
+/** شناسه‌ی فونت را با اسمش پیدا می‌کند؛ اگر فایلش نبود صفر برمی‌گرداند */
+private fun fontRes(name: String): Int =
+    runCatching { Class.forName("cafe.kankipro.vpn.R\$font").getField(name).getInt(null) }.getOrDefault(0)
+
+private fun fontFamilyOf(vararg parts: Pair<String, FontWeight>): FontFamily {
+    val fonts = parts.mapNotNull { (name, weight) ->
+        fontRes(name).takeIf { it != 0 }?.let { Font(it, weight) }
+    }
+    return if (fonts.isEmpty()) FontFamily.Default else FontFamily(fonts)
+}
+
+val Vazir: FontFamily = fontFamilyOf(
+    "vazir_regular" to FontWeight.Normal,
+    "vazir_bold" to FontWeight.Bold,
+    "vazir_black" to FontWeight.Black,
 )
 
-val Poppins = FontFamily(
-    Font(R.font.poppins_semibold, FontWeight.SemiBold),
-    Font(R.font.poppins_bold, FontWeight.Bold),
+val Poppins: FontFamily = fontFamilyOf(
+    "poppins_semibold" to FontWeight.SemiBold,
+    "poppins_bold" to FontWeight.Bold,
 )
 
-val Orbitron = FontFamily(
-    Font(R.font.orbitron, FontWeight.Black, variationSettings = FontVariation.Settings(FontVariation.weight(900))),
-)
+val Orbitron: FontFamily = fontRes("orbitron").takeIf { it != 0 }?.let { id ->
+    FontFamily(Font(id, FontWeight.Black, variationSettings = FontVariation.Settings(FontVariation.weight(900))))
+} ?: FontFamily.Default
 
 fun glow(c: Color, r: Float = 22f) = Shadow(color = c.copy(alpha = .75f), offset = Offset.Zero, blurRadius = r)
 
@@ -824,4 +840,116 @@ fun DrawScope.miniIcon(kind: String, c: Color) {
 @Composable
 fun MiniIcon(kind: String, color: Color, size: Dp = 14.dp) {
     Canvas(Modifier.size(size)) { miniIcon(kind, color) }
+}
+
+// ------------------------------------------------------------------ آیکون‌های صفحه‌ی تنظیمات
+
+/** آیکون تنظیمات داخل یک جعبه‌ی گرد با زمینه‌ی ملایم، هم‌رنگ تم برنامه */
+@Composable
+fun SettingIcon(kind: String, tint: Color = K.Gold, size: Dp = 38.dp) {
+    val shape = RoundedCornerShape(13.dp)
+    Box(
+        Modifier.size(size).clip(shape)
+            .background(Brush.verticalGradient(listOf(tint.copy(alpha = .22f), tint.copy(alpha = .07f))))
+            .border(1.dp, tint.copy(alpha = .45f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(size * .58f)) { settingIcon(kind, tint) }
+    }
+}
+
+/** آیکون‌های خطی تنظیمات؛ روی شبکه‌ی ۲۴×۲۴ کشیده و به اندازه‌ی بوم بزرگ/کوچک می‌شوند */
+fun DrawScope.settingIcon(kind: String, c: Color) {
+    val u = size.width / 24f
+    val st = Stroke(width = 1.9f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    fun pt(x: Float, y: Float) = Offset(x * u, y * u)
+    fun poly(vararg v: Float, closed: Boolean = false): Path = Path().apply {
+        moveTo(v[0] * u, v[1] * u)
+        var i = 2
+        while (i + 1 < v.size) { lineTo(v[i] * u, v[i + 1] * u); i += 2 }
+        if (closed) close()
+    }
+    when (kind) {
+        "dns" -> { // دو سرور روی هم (سیستم نام دامنه)
+            for (y in listOf(3.5f, 13.5f)) {
+                drawRoundRect(c, topLeft = pt(3f, y), size = Size(18f * u, 7f * u), cornerRadius = CornerRadius(2.6f * u), style = st)
+                drawCircle(c, 1.2f * u, pt(7.2f, y + 3.5f))
+                drawLine(c, pt(11f, y + 3.5f), pt(16.5f, y + 3.5f), st.width, StrokeCap.Round)
+            }
+        }
+        "auto" -> { // حلقه‌ی خودکار + رعد
+            drawArc(c, 140f, 270f, false, topLeft = pt(2.8f, 2.8f), size = Size(18.4f * u, 18.4f * u), style = st)
+            drawPath(poly(13.4f, 5.6f, 8.2f, 12.8f, 11.7f, 12.8f, 10.7f, 18.4f, 15.9f, 11.2f, 12.4f, 11.2f, closed = true), c)
+        }
+        "sound" -> { // بلندگو با موج صدا
+            drawPath(poly(3.5f, 9.5f, 7.5f, 9.5f, 12f, 5.5f, 12f, 18.5f, 7.5f, 14.5f, 3.5f, 14.5f, closed = true), c, style = st)
+            drawArc(c, -45f, 90f, false, topLeft = pt(7.5f, 7.5f), size = Size(9f * u, 9f * u), style = st)
+            drawArc(c, -50f, 100f, false, topLeft = pt(4.5f, 4.5f), size = Size(15f * u, 15f * u), style = st)
+        }
+        "palette" -> { // پالت رنگ (تم برنامه): بدنه‌ی گرد با گودی انگشت + چهار لکه‌ی رنگ
+            fun rim(deg: Float): Offset {
+                val rad = deg * 0.017453292f
+                return pt(12f + 9.4f * cos(rad), 12f + 9.4f * sin(rad))
+            }
+            val body = Path().apply {
+                for (k in 0..65) {
+                    val p = rim(62f + 5f * k)
+                    if (k == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+                }
+                val end = rim(388f)
+                lineTo(end.x, end.y)
+                val start = rim(62f)
+                quadraticBezierTo(14.6f * u, 14.4f * u, start.x, start.y)
+            }
+            drawPath(body, c, style = st)
+            drawCircle(c, 1.25f * u, pt(7.8f, 10.2f))
+            drawCircle(c, 1.25f * u, pt(10.4f, 6.9f))
+            drawCircle(c, 1.25f * u, pt(14.6f, 6.9f))
+            drawCircle(c, 1.25f * u, pt(17f, 10.2f))
+        }
+        "split" -> { // مسیر دوشاخه (تونل‌زنی انتخابی)
+            drawLine(c, pt(12f, 21f), pt(12f, 12.5f), st.width, StrokeCap.Round)
+            drawPath(poly(12f, 12.5f, 6.5f, 7f), c, style = st)
+            drawPath(poly(12f, 12.5f, 17.5f, 7f), c, style = st)
+            drawPath(poly(6.5f, 11f, 6.5f, 7f, 10.5f, 7f), c, style = st)
+            drawPath(poly(17.5f, 11f, 17.5f, 7f, 13.5f, 7f), c, style = st)
+        }
+        "kill" -> { // سپر با دکمه‌ی پاور (کیل‌سوییچ)
+            val shield = Path().apply {
+                moveTo(12f * u, 2.5f * u); lineTo(20f * u, 5.5f * u); lineTo(20f * u, 11.5f * u)
+                quadraticBezierTo(20f * u, 18f * u, 12f * u, 21.5f * u)
+                quadraticBezierTo(4f * u, 18f * u, 4f * u, 11.5f * u)
+                lineTo(4f * u, 5.5f * u); close()
+            }
+            drawPath(shield, c, style = st)
+            drawArc(c, -50f, 280f, false, topLeft = pt(8.6f, 9f), size = Size(6.8f * u, 6.8f * u), style = st)
+            drawLine(c, pt(12f, 8.2f), pt(12f, 12f), st.width, StrokeCap.Round)
+        }
+        "cart" -> { // سبد خرید
+            drawPath(poly(2.5f, 3.5f, 5.2f, 3.5f, 7.4f, 15f, 18.6f, 15f, 20.6f, 7f, 5.9f, 7f), c, style = st)
+            drawCircle(c, 1.7f * u, pt(9.2f, 19.5f))
+            drawCircle(c, 1.7f * u, pt(16.8f, 19.5f))
+        }
+        "support" -> { // هدست پشتیبانی
+            drawArc(c, 180f, 180f, false, topLeft = pt(4f, 3.5f), size = Size(16f * u, 16f * u), style = st)
+            drawRoundRect(c, topLeft = pt(2.8f, 11f), size = Size(4.4f * u, 6.6f * u), cornerRadius = CornerRadius(2f * u))
+            drawRoundRect(c, topLeft = pt(16.8f, 11f), size = Size(4.4f * u, 6.6f * u), cornerRadius = CornerRadius(2f * u))
+            val mic = Path().apply { moveTo(19f * u, 17.6f * u); quadraticBezierTo(19f * u, 20.8f * u, 14.5f * u, 20.8f * u) }
+            drawPath(mic, c, style = st)
+            drawCircle(c, 1.3f * u, pt(13.2f, 20.8f))
+        }
+        "share" -> { // اشتراک‌گذاری (سه گره)
+            drawCircle(c, 2.6f * u, pt(18f, 5.5f), style = st)
+            drawCircle(c, 2.6f * u, pt(6f, 12f), style = st)
+            drawCircle(c, 2.6f * u, pt(18f, 18.5f), style = st)
+            drawLine(c, pt(8.3f, 10.8f), pt(15.7f, 6.7f), st.width, StrokeCap.Round)
+            drawLine(c, pt(8.3f, 13.2f), pt(15.7f, 17.3f), st.width, StrokeCap.Round)
+        }
+        "logout" -> { // در با فلش خروج
+            drawPath(poly(10f, 3.5f, 4.5f, 3.5f, 4.5f, 20.5f, 10f, 20.5f), c, style = st)
+            drawLine(c, pt(9.5f, 12f), pt(20f, 12f), st.width, StrokeCap.Round)
+            drawPath(poly(16f, 8f, 20f, 12f, 16f, 16f), c, style = st)
+        }
+        else -> drawCircle(c, 8f * u, pt(12f, 12f), style = st)
+    }
 }

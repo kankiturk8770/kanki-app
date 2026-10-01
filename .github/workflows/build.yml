@@ -2,11 +2,22 @@ name: ساخت اپ کانکی
 on:
   push:
   workflow_dispatch:
+
+# فقط خواندن مخزن؛ کلید امضا فقط از Secrets می‌آید
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: دریافت فونت‌ها
         run: |
@@ -39,13 +50,7 @@ jobs:
         run: |
           if [ -z "$KANKI_KEYSTORE" ] || [ -z "$KANKI_KEY_PASS" ]; then echo "::error::GitHub Secrets (KANKI_KEYSTORE / KANKI_KEY_PASS) تنظیم نشده‌اند"; exit 1; fi
           echo "$KANKI_KEYSTORE" | base64 -d > app/kanki-release.jks
-          rm -f app/kanki-release.jks.b64
           keytool -list -keystore app/kanki-release.jks -storepass "$KANKI_KEY_PASS" | head -3
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v4
         with:

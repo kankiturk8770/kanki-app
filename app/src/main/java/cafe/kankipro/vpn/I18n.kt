@@ -173,6 +173,8 @@ private val PHRASES = listOf(
     "انتخاب هوشمند بهترین سرور" to "Smart: pick the best server",
     "در حال سنجش پینگ و جیتر…" to "Measuring ping & jitter…",
     "سروری برای سنجش پیدا نشد" to "No servers to measure",
+    "انتخاب هوشمند ناموفق بود، دوباره امتحان کنید" to "Smart pick failed, please try again",
+    "سرور: " to "Server: ",
     "تونل‌زنی انتخابی" to "Split tunneling",
     "همه‌ی برنامه‌ها از VPN رد می‌شوند" to "All apps go through VPN",
     "برنامه‌های روشن‌شده مستقیم و بدون VPN وصل می‌شوند (مثل بانک و اسنپ)" to "Selected apps bypass the VPN (e.g. banking apps)",

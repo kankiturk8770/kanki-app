@@ -40,7 +40,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "1.4.0"
+/** نسخه‌ی برنامه؛ مستقیم از خود اپ خوانده می‌شود تا همیشه با build.gradle.kts یکی باشد */
+@Suppress("DEPRECATION")
+fun appVersion(ctx: Context): String =
+    runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -80,6 +83,44 @@ private val flagTable = listOf(
     listOf("AM", "ARMENIA", "ارمنستان") to "🇦🇲",
     listOf("SG", "SINGAPORE", "سنگاپور") to "🇸🇬",
     listOf("JP", "JAPAN", "ژاپن") to "🇯🇵",
+    // کشورهای دیگر: برای سرورهایی که بعداً به پنل اضافه می‌شوند (اتصال مستقیم هم از روی همین تشخیص داده می‌شود)
+    listOf("ITALY", "ROME", "MILAN", "ایتالیا") to "🇮🇹",
+    listOf("SPAIN", "MADRID", "اسپانیا") to "🇪🇸",
+    listOf("CH", "SWITZERLAND", "ZURICH", "سوئیس") to "🇨🇭",
+    listOf("BELGIUM", "BRUSSELS", "بلژیک") to "🇧🇪",
+    listOf("CZ", "CZECH", "PRAGUE", "چک") to "🇨🇿",
+    listOf("RO", "ROMANIA", "BUCHAREST", "رومانی") to "🇷🇴",
+    listOf("BG", "BULGARIA", "SOFIA", "بلغارستان") to "🇧🇬",
+    listOf("UA", "UKRAINE", "KYIV", "KIEV", "اوکراین") to "🇺🇦",
+    listOf("KZ", "KAZAKHSTAN", "قزاقستان") to "🇰🇿",
+    listOf("GE", "GEORGIA", "TBILISI", "گرجستان") to "🇬🇪",
+    listOf("AZ", "AZERBAIJAN", "BAKU", "جمهوری آذربایجان") to "🇦🇿",
+    listOf("INDIA", "MUMBAI", "هند") to "🇮🇳",
+    listOf("KR", "KOREA", "SEOUL", "کره") to "🇰🇷",
+    listOf("HK", "HONGKONG", "HONG KONG", "هنگ کنگ") to "🇭🇰",
+    listOf("AU", "AUSTRALIA", "SYDNEY", "استرالیا") to "🇦🇺",
+    listOf("BR", "BRAZIL", "برزیل") to "🇧🇷",
+    listOf("IE", "IRELAND", "DUBLIN", "ایرلند") to "🇮🇪",
+    listOf("NORWAY", "OSLO", "نروژ") to "🇳🇴",
+    listOf("DK", "DENMARK", "COPENHAGEN", "دانمارک") to "🇩🇰",
+    listOf("LT", "LITHUANIA", "لیتوانی") to "🇱🇹",
+    listOf("LV", "LATVIA", "RIGA", "لتونی") to "🇱🇻",
+    listOf("EE", "ESTONIA", "TALLINN", "استونی") to "🇪🇪",
+    listOf("PT", "PORTUGAL", "LISBON", "پرتغال") to "🇵🇹",
+    listOf("GR", "GREECE", "ATHENS", "یونان") to "🇬🇷",
+    listOf("HU", "HUNGARY", "BUDAPEST", "مجارستان") to "🇭🇺",
+    listOf("RS", "SERBIA", "BELGRADE", "صربستان") to "🇷🇸",
+    listOf("SA", "SAUDI", "RIYADH", "عربستان") to "🇸🇦",
+    listOf("QA", "QATAR", "DOHA", "قطر") to "🇶🇦",
+    listOf("KW", "KUWAIT", "کویت") to "🇰🇼",
+    listOf("IQ", "IRAQ", "BAGHDAD", "عراق") to "🇮🇶",
+    listOf("THAILAND", "BANGKOK", "تایلند") to "🇹🇭",
+    listOf("VN", "VIETNAM", "ویتنام") to "🇻🇳",
+    listOf("INDONESIA", "JAKARTA", "اندونزی") to "🇮🇩",
+    listOf("MALAYSIA", "مالزی") to "🇲🇾",
+    listOf("MD", "MOLDOVA", "مولداوی") to "🇲🇩",
+    listOf("LU", "LUXEMBOURG", "لوکزامبورگ") to "🇱🇺",
+    listOf("CY", "CYPRUS", "قبرس") to "🇨🇾",
 )
 
 /** پرچم را از اسم سرور تشخیص می‌دهد (فقط کلمه‌های کامل) */
@@ -432,14 +473,7 @@ fun ConnectPanel(state: AppState, a: Account) {
             Modifier.fillMaxWidth().clip(smShape)
                 .background(Brush.horizontalGradient(listOf(K.Gold.copy(alpha = .22f), K.Accent.copy(alpha = .14f))))
                 .border(1.dp, K.Gold.copy(alpha = .6f), smShape)
-                .clickable(enabled = !state.smartBusy && !busy) {
-                    scope.launch {
-                        if (state.vstate == VState.ON) state.disconnect()
-                        val best = state.smartPick()
-                        if (best == null) toast(ctx, "سروری برای سنجش پیدا نشد")
-                        else state.requestVpn?.invoke { scope.launch { state.connect() } }
-                    }
-                }
+                .clickable(enabled = !state.smartBusy && !busy) { state.smartConnect() }
                 .padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -448,8 +482,9 @@ fun ConnectPanel(state: AppState, a: Account) {
             Spacer(Modifier.width(8.dp))
             T(if (state.smartBusy) "در حال سنجش پینگ و جیتر…" else "انتخاب هوشمند بهترین سرور", size = 13.sp, color = K.Gold, weight = FontWeight.Black)
         }
-        AnimatedVisibility(visible = state.smartRows.isNotEmpty()) {
-            Column(Modifier.padding(top = 8.dp)) {
+        AnimatedVisibility(visible = state.smartOpen && state.smartRows.isNotEmpty()) {
+            // با لمس خود فهرست هم می‌شود دستی بستش
+            Column(Modifier.padding(top = 8.dp).clickable { state.smartOpen = false }) {
                 state.smartRows.forEachIndexed { i, r ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         T(r.flag, size = 14.sp)
@@ -996,6 +1031,10 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
                 if (isOvpn) {
                     T("تنظیمات OpenVPN در اپ OpenVPN انجام می‌شود", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 } else {
+                    // دامنه‌ی سروری که این کانفیگ به آن وصل می‌شود (در «مستقیم» باید دامنه‌ی کشور باشد، مثل tr.kankipro.cafe)
+                    state.infos[key]?.host?.takeIf { it.isNotBlank() && it != "—" }?.let { h ->
+                        T("سرور: $h", size = 10.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = 4.dp))
+                    }
                     MtuEditor(state, p)
                     T("DNS از بخش تنظیمات تغییر می‌کند", size = 10.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = 4.dp))
                 }
@@ -1007,7 +1046,7 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
 @Composable
 fun ToggleRow(icon: String, title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        T(icon, size = 20.sp)
+        SettingIcon(icon, K.Gold)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             T(title, size = 15.sp)
@@ -1181,18 +1220,14 @@ fun SettingsTab(state: AppState) {
     fun flip(k: String) { open = if (open == k) null else k }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        Spacer(Modifier.height(6.dp))
-        RobotMascot { openBot(ctx) }
-        Spacer(Modifier.height(8.dp))
-
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Glass(Modifier.fillMaxWidth()) {
-            MenuRow("🌐", "DNS", dnsTitle(state.dns), open == "dns") { flip("dns") }
+            MenuRow("dns", "DNS", dnsTitle(state.dns), open == "dns", tint = K.Accent) { flip("dns") }
             AnimatedVisibility(visible = open == "dns") { DnsPicker(state) }
             GoldDivider()
 
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                T("⚡", size = 20.sp)
+                SettingIcon("auto", K.Gold)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     T("اتصال خودکار", size = 15.sp)
@@ -1208,23 +1243,23 @@ fun SettingsTab(state: AppState) {
                 )
             }
             GoldDivider()
-            ToggleRow("🔊", "صداهای اپ", "صدای ورود و دکمه‌ها", state.sounds) { state.sounds = it; state.save() }
+            ToggleRow("sound", "صداهای اپ", "صدای ورود و دکمه‌ها", state.sounds) { state.sounds = it; state.save() }
             GoldDivider()
             ThemePicker(state)
             GoldDivider()
 
-            MenuRow("🧩", "تونل‌زنی انتخابی", if (state.excluded.isEmpty()) "همه‌ی برنامه‌ها از VPN رد می‌شوند" else "${state.excluded.size} برنامه بدون VPN", false, arrow = "‹") { showSplit = true }
+            MenuRow("split", "تونل‌زنی انتخابی", if (state.excluded.isEmpty()) "همه‌ی برنامه‌ها از VPN رد می‌شوند" else "${state.excluded.size} برنامه بدون VPN", false, arrow = "‹", tint = K.Accent) { showSplit = true }
             GoldDivider()
-            MenuRow("🛡", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = "‹") {
+            MenuRow("kill", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = "‹", tint = K.Ok) {
                 runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 toast(ctx, "Kanki VPN را انتخاب و «همیشه روشن» را فعال کنید")
             }
             GoldDivider()
-            MenuRow("🛒", "خرید و تمدید اشتراک", "از طریق ربات تلگرام", false, arrow = "‹") { openBot(ctx) }
+            MenuRow("cart", "خرید و تمدید اشتراک", "از طریق ربات تلگرام", false, arrow = "‹") { openBot(ctx) }
             GoldDivider()
-            MenuRow("💬", "پشتیبانی", "@KANKI_VPN_ADMIN", false, arrow = "‹") { openSupport(ctx) }
+            MenuRow("support", "پشتیبانی", "@KANKI_VPN_ADMIN", false, arrow = "‹") { openSupport(ctx) }
             GoldDivider()
-            MenuRow("📤", "معرفی به دوستان", "ارسال لینک ربات کانکی", false, arrow = "‹") {
+            MenuRow("share", "معرفی به دوستان", "ارسال لینک ربات کانکی", false, arrow = "‹") {
                 runCatching {
                     ctx.startActivity(
                         Intent.createChooser(
@@ -1236,13 +1271,13 @@ fun SettingsTab(state: AppState) {
                 }
             }
             GoldDivider()
-            MenuRow("🚪", "خروج از حساب", "حذف اشتراک از این گوشی", false, arrow = "", danger = true) {
+            MenuRow("logout", "خروج از حساب", "حذف اشتراک از این گوشی", false, arrow = "", danger = true) {
                 scope.launch { state.logout() }
             }
         }
 
         Spacer(Modifier.height(14.dp))
-        T("Kanki VPN · v$APP_VERSION", size = 12.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.align(Alignment.CenterHorizontally))
+        T("Kanki VPN · v${appVersion(ctx)}", size = 12.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(16.dp))
     }
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
@@ -1322,13 +1357,13 @@ fun GoldDivider() {
 @Composable
 fun MenuRow(
     icon: String, title: String, sub: String, expanded: Boolean,
-    arrow: String? = null, danger: Boolean = false, onClick: () -> Unit,
+    arrow: String? = null, danger: Boolean = false, tint: Color = K.Gold, onClick: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        T(icon, size = 20.sp)
+        SettingIcon(icon, if (danger) K.Red else tint)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             T(title, size = 15.sp, color = if (danger) K.Red else K.Text)
@@ -1408,7 +1443,7 @@ fun ThemePicker(state: AppState) {
     val items = listOf("gold" to "طلایی", "mono" to "گرافیت", "crimson" to "زرشکی نئون", "cyber" to "سایبری", "violet" to "بنفش نئون")
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MiniIcon("shield", K.Gold, 18.dp)
+            SettingIcon("palette", K.Accent)
             Spacer(Modifier.width(12.dp))
             T("تم برنامه", size = 15.sp)
         }

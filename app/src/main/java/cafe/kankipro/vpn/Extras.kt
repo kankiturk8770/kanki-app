@@ -24,6 +24,11 @@ object LastConfig {
     }
     fun cfg(ctx: Context) = prefs(ctx).getString("lastcfg", null)
     fun title(ctx: Context) = prefs(ctx).getString("lasttitle", "Kanki VPN") ?: "Kanki VPN"
+
+    /** با خروج از حساب پاک می‌شود (کانفیگ شامل کلید خصوصی است) */
+    fun clear(ctx: Context) {
+        prefs(ctx).edit().remove("lastcfg").remove("lasttitle").apply()
+    }
 }
 
 // ------------------------------------------------------------------ نوتیفیکیشن ثابت

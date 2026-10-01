@@ -1,0 +1,20 @@
+# --- اندروید استودیو و گریدل
+*.iml
+.gradle/
+.idea/
+local.properties
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+.DS_Store
+
+# --- کلید امضا و رمزها: هرگز داخل مخزن نرود
+*.jks
+*.keystore
+*.b64
+keystore.properties
+
+# --- فایل‌هایی که هنگام ساخت خودکار دانلود می‌شوند (فونت‌ها و نقشه)
+app/src/main/res/font/
+app/src/main/assets/countries.geojson

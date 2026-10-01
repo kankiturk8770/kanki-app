@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App() {
     val ctx = LocalContext.current
-    val state = remember { AppState(ctx) }
+    val state = remember { AppState.from(ctx) }
     val scope = rememberCoroutineScope()
 
     var afterGrant by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -52,9 +52,13 @@ fun App() {
         else state.error = "برای اتصال باید اجازه‌ی VPN را تأیید کنید."
         afterGrant = null
     }
-    state.requestVpn = { onGranted ->
-        val intent = VpnService.prepare(ctx)
-        if (intent == null) onGranted() else { afterGrant = onGranted; permission.launch(intent) }
+    // درخواست مجوز VPN: با بسته‌شدن صفحه آزاد می‌شود تا صفحه‌ی قدیمی در حافظه نماند
+    DisposableEffect(state, permission) {
+        state.requestVpn = { onGranted ->
+            val intent = VpnService.prepare(ctx)
+            if (intent == null) onGranted() else { afterGrant = onGranted; permission.launch(intent) }
+        }
+        onDispose { state.requestVpn = null }
     }
 
     fun toggle() {

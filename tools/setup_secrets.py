@@ -2,7 +2,7 @@
 """
 یک‌بار اجرا می‌شود:
 ۱. کلید امضای فعلی را از مخزن می‌گیرد (همان کلید، تا آپدیت‌ها روی نسخه‌ی قبلی نصب شوند)
-۲. رمزش را به یک رمز تصادفی جدید عوض می‌کند (رمز قبلی لو رفته حساب می‌شود)
+۲. رمزش را به یک رمز تصادفی جدید عوض می‌کند (رمز قبلی لو رفته حساب می‌شود؛ رمز قبلی را با OLD_PASS می‌دهی)
 ۳. کلید و رمز جدید را در GitHub Secrets ذخیره می‌کند
 ۴. یک نسخه‌ی پشتیبان در /root/kanki-keystore-backup می‌گذارد
 """
@@ -11,9 +11,11 @@ import base64, json, os, secrets, subprocess, sys, tempfile, urllib.request
 GHT = os.environ.get("GHT", "")
 U = os.environ.get("U", "")
 REPO = f"{U}/kanki-app"
-OLD_PASS = "KankiVpn2026Store"
-if not GHT or not U:
-    sys.exit("❌ توکن یا نام کاربری خالی است")
+# رمز فعلی کلید را داخل فایل نمی‌نویسیم؛ هنگام اجرا به‌صورت متغیر محیطی داده می‌شود:
+#   GHT=توکن  U=نام_کاربری  OLD_PASS=رمز_فعلی  python3 tools/setup_secrets.py
+OLD_PASS = os.environ.get("OLD_PASS", "")
+if not GHT or not U or not OLD_PASS:
+    sys.exit("❌ سه متغیر GHT (توکن گیت‌هاب) ، U (نام کاربری) و OLD_PASS (رمز فعلی کلید) باید مقدار داشته باشند")
 
 try:
     from nacl import encoding, public

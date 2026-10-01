@@ -16,8 +16,22 @@ import java.net.URL
 const val BOT_URL = "https://t.me/kankivpn_bot"
 const val SUPPORT_URL = "https://t.me/KANKI_VPN_ADMIN"
 
-/** همه‌ی وضعیت اپ در یک جا */
-class AppState(context: Context) {
+/**
+ * همه‌ی وضعیت اپ در یک جا.
+ * فقط یک نمونه از آن برای کل برنامه ساخته می‌شود (AppState.from)؛ پس با چرخش صفحه
+ * یا ساخته‌شدن دوباره‌ی صفحه، حلقه‌ها و شنودگر شبکه دوباره و چندباره راه نمی‌افتند.
+ */
+class AppState private constructor(context: Context) {
+    companion object {
+        @Volatile
+        private var instance: AppState? = null
+
+        fun from(context: Context): AppState =
+            instance ?: synchronized(this) {
+                instance ?: AppState(context.applicationContext).also { instance = it }
+            }
+    }
+
     private val ctx = context.applicationContext
     private val prefs = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE)
 
@@ -55,27 +69,33 @@ class AppState(context: Context) {
     data class SmartRow(val node: String, val proto: String, val title: String, val flag: String, val ping: Long, val jitter: Long)
     val smartRows = androidx.compose.runtime.mutableStateListOf<SmartRow>()
     var smartBusy by mutableStateOf(false)
+    /** فهرست نتایج انتخاب هوشمند باز است؟ (بعد از اتصال موفق خودکار بسته می‌شود) */
+    var smartOpen by mutableStateOf(false)
 
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد و بهترین را انتخاب می‌کند */
     suspend fun smartPick(): SmartRow? {
         val a = account ?: return null
         smartBusy = true
         smartRows.clear()
-        val cands = a.configs.distinctBy { it.node }.flatMap { n ->
-            (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
-                infos["${n.node}/$p"]?.host?.takeIf { it != "—" }?.let { h -> Triple(n, p, h) }
+        val rows = try {
+            val cands = a.configs.distinctBy { it.node }.flatMap { n ->
+                (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
+                    infos["${n.node}/$p"]?.host?.takeIf { it != "—" }?.let { h -> Triple(n, p, h) }
+                }
             }
+            val measured = kotlinx.coroutines.coroutineScope {
+                cands.map { it.third }.distinct().map { h ->
+                    async(Dispatchers.IO) { h to Pinger.stats(h) }
+                }.awaitAll().toMap()
+            }
+            cands.mapNotNull { (n, p, h) ->
+                measured[h]?.let { (ping, jit) -> SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit) }
+            }.sortedBy { it.ping + 2 * it.jitter }
+        } finally {
+            smartBusy = false
         }
-        val measured = kotlinx.coroutines.coroutineScope {
-            cands.map { it.third }.distinct().map { h ->
-                async(Dispatchers.IO) { h to Pinger.stats(h) }
-            }.awaitAll().toMap()
-        }
-        val rows = cands.mapNotNull { (n, p, h) ->
-            measured[h]?.let { (ping, jit) -> SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit) }
-        }.sortedBy { it.ping + 2 * it.jitter }
         smartRows.addAll(rows.take(4))
-        smartBusy = false
+        smartOpen = rows.isNotEmpty()
         val best = rows.firstOrNull() ?: return null
         node = best.node
         route = if (best.proto.endsWith("-direct")) "direct" else "tunnel"
@@ -83,6 +103,41 @@ class AppState(context: Context) {
         proto = best.proto
         save()
         return best
+    }
+
+    /**
+     * دکمه‌ی «انتخاب هوشمند»: بهترین سرور را پیدا می‌کند، وصل می‌شود و بعد از اتصال موفق
+     * فهرست نتایج خودکار بسته می‌شود (دکمه به حالت اول برمی‌گردد).
+     * در محدوده‌ی خود برنامه اجرا می‌شود، پس با عوض‌کردن تب وسط کار قطع نمی‌شود.
+     */
+    fun smartConnect() {
+        if (smartBusy || vstate == VState.CONNECTING) return
+        bg.launch {
+            try {
+                if (vstate == VState.ON) disconnect()
+                val best = smartPick()
+                if (best == null) {
+                    toast(ctx, "سروری برای سنجش پیدا نشد")
+                    return@launch
+                }
+                val go: () -> Unit = {
+                    bg.launch {
+                        connect()
+                        if (vstate == VState.ON) {
+                            kotlinx.coroutines.delay(1500)   // چند لحظه برنده دیده شود، بعد جمع شود
+                            smartOpen = false
+                        }
+                    }
+                }
+                val ask = requestVpn
+                if (ask != null) ask(go) else go()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                smartBusy = false
+                toast(ctx, "انتخاب هوشمند ناموفق بود، دوباره امتحان کنید")
+            }
+        }
     }
 
     // ---------------- نوتیفیکیشن ثابت با سرعت لحظه‌ای
@@ -194,23 +249,36 @@ class AppState(context: Context) {
     }
 
     /**
-     * OpenVPN حذف می‌شود و برای هر سروری که امنزیا دارد، یک نسخه‌ی «مستقیم» ساخته می‌شود
-     * (همان کانفیگ امنزیا ولی با آدرس مستقیم سرور به‌جای تونل).
+     * OpenVPN و IKEv2 حذف می‌شوند. کانفیگ‌های بخش «تانل» همان‌هایی‌اند که از پنل می‌آیند
+     * (Endpoint آن‌ها دامنه‌ی ایرانی است).
+     *
+     * بخش «مستقیم»: فقط AmneziaWG (وایرگارد ساده‌ی مستقیم در ایران وصل نمی‌شود، پس برایش
+     * نسخه‌ی مستقیم ساخته نمی‌شود). برای هر سرور، همان کانفیگ AmneziaWG برداشته می‌شود و
+     * فقط Endpoint آن با دامنه‌ی مستقیم کشورِ همان سرور عوض می‌شود (در fetchConfig).
+     * سرور تازه (مثلاً فرانسه یا هلند) که بعداً به پنل اضافه شود، خودکار تشخیص داده می‌شود.
      */
     private fun augment(a: Account): Account {
         val base = a.configs.filter { !it.protocol.startsWith("openvpn") && !it.protocol.startsWith("ikev2") }
         val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
-            directHost(l.nodeName)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
+            directHost(l)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
         }
         return a.copy(configs = base + direct)
     }
 
-    /** آدرس مستقیم هر کشور */
-    private fun directHost(nodeName: String): String? = when (val iso = isoOfFlag(flagOf(nodeName))) {
-        "DE" -> "g.kankipro.cafe"
-        "TR" -> "tr.kankipro.cafe"
+    /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
+    private fun isoOfConfig(l: ConfigLink): String? =
+        isoOfFlag(flagOf(l.nodeName)) ?: isoOfFlag(flagOf(l.node))
+
+    /**
+     * دامنه‌ی مستقیم هر کشور:
+     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe
+     *   فرانسه → fr.kankipro.cafe    هلند → nl.kankipro.cafe
+     * هر کشور تازه هم به همین شکل «کدکشور.kankipro.cafe» می‌شود.
+     */
+    private fun directHost(l: ConfigLink): String? = when (val iso = isoOfConfig(l)) {
         null -> null
-        else -> "${iso.lowercase()}.kankipro.cafe" // نودهای جدید: مثلاً fr.kankipro.cafe یا nl.kankipro.cafe
+        "DE" -> "g.kankipro.cafe"
+        else -> "${iso.lowercase()}.kankipro.cafe"
     }
 
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
@@ -249,6 +317,7 @@ class AppState(context: Context) {
 
     /** تغییر مسیر بین تانل و مستقیم */
     fun changeRoute(r: String) {
+        smartOpen = false
         route = r
         prefs.edit().putString("route", r).apply()
         fixProto()
@@ -257,6 +326,7 @@ class AppState(context: Context) {
     /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
     suspend fun switchNode(n: String) {
         if (n == node) return
+        smartOpen = false
         val wasOn = vstate == VState.ON
         if (wasOn) disconnect()
         node = n
@@ -314,7 +384,9 @@ class AppState(context: Context) {
             val byName = geoOfName(links.first().nodeName)
             if (byName != null) { nodeGeo[nodeId] = byName; continue }
             // ۳) در آخر از IP آدرس سرور
-            val host = links.firstNotNullOfOrNull { infos["$nodeId/${it.protocol}"]?.host }
+            // اول میزبان «مستقیم» (دامنه‌ی خود کشور)، چون دامنه‌ی تانل ممکن است ایرانی باشد
+            val host = (listOf("amneziawg-direct") + links.map { it.protocol })
+                .firstNotNullOfOrNull { infos["$nodeId/$it"]?.host?.takeIf { h -> h != "—" } }
             if (host != null && host != "—") {
                 withContext(Dispatchers.IO) { lookupGeo(host) }?.let { (g, _) -> nodeGeo[nodeId] = g }
             }
@@ -372,7 +444,8 @@ class AppState(context: Context) {
             }
             account = augment(a)
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
-            loadInfos(account ?: a)
+            // هر بار از پنل دوباره خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل در پنل جا نماند
+            loadInfos(account ?: a, force = true)
             fixProto()
             locate()
         } catch (e: Exception) {
@@ -381,13 +454,15 @@ class AppState(context: Context) {
         loading = false
     }
 
-    private suspend fun loadInfos(a: Account) {
+    /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
+    private suspend fun loadInfos(a: Account, force: Boolean = false) {
         for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard") }) {
             val key = "${l.node}/${l.protocol}"
-            if (infos.containsKey(key)) continue
+            if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l) } }.getOrNull()
             val ok = txt != null && (if (l.protocol.startsWith("openvpn")) txt.contains("remote ") else txt.contains("[Interface]") && txt.contains("[Peer]"))
-            if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) } else badCfg[key] = true
+            if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) }
+            else if (!infos.containsKey(key)) badCfg[key] = true   // اگر قبلاً سالم خوانده شده بود، همان می‌ماند
         }
     }
 
@@ -446,6 +521,7 @@ class AppState(context: Context) {
 
     /** سوییچ سریع به پروتکل دیگر (اگر وصل است، قطع و دوباره وصل می‌شود) */
     suspend fun switchTo(p: String) {
+        smartOpen = false
         val wasOn = vstate == VState.ON
         if (wasOn) disconnect()
         proto = p
@@ -543,10 +619,21 @@ class AppState(context: Context) {
         }
     }
 
+    /** خروج کامل: اشتراک و همه‌ی چیزهایی که از آن ذخیره شده (کانفیگ‌ها و کلیدها) از گوشی پاک می‌شود */
     suspend fun logout() {
         disconnect()
-        prefs.edit().remove("base").remove("code").remove("node").apply()
+        val e = prefs.edit().remove("base").remove("code").remove("node").remove("ugeo").remove("uiso")
+        prefs.all.keys
+            .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("ngeo_") || it.startsWith("niso_") }
+            .forEach { e.remove(it) }
+        e.apply()
+        LastConfig.clear(ctx)
         base = null; code = null; account = null; node = null
-        infos.clear()
+        infos.clear(); badCfg.clear()
+        pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()
+        nodeGeo.clear(); nodeIso.clear(); userGeo = null; userIso = null
+        smartRows.clear(); smartOpen = false
+        openNode = null; accountOpen = false
+        error = null; errorDetail = null
     }
 }

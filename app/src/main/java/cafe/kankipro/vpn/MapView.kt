@@ -102,13 +102,31 @@ fun geoOfName(name: String): Geo? {
     }
 }
 
-/** موقعیت یک IP یا دامنه با ip-api.com (بدون کلید) */
-fun lookupGeo(target: String = ""): Pair<Geo, String>? = runCatching {
+/**
+ * موقعیت یک IP یا دامنه (اگر خالی باشد: همین IP خودِ کاربر).
+ * اول با HTTPS (ipinfo.io)؛ اگر جواب نداد، با ip-api.com که فقط HTTP دارد.
+ */
+fun lookupGeo(target: String = ""): Pair<Geo, String>? {
+    val ip = if (target.isBlank()) "" else runCatching { java.net.InetAddress.getByName(target).hostAddress }.getOrNull() ?: target
+    return lookupGeoHttps(ip) ?: lookupGeoHttp(ip)
+}
+
+private fun lookupGeoHttps(ip: String): Pair<Geo, String>? = runCatching {
+    val path = if (ip.isBlank()) "json" else "$ip/json"
+    val c = java.net.URL("https://ipinfo.io/$path").openConnection() as java.net.HttpURLConnection
+    c.connectTimeout = 4000; c.readTimeout = 4000
+    val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
+    val loc = j.optString("loc").split(",")
+    val cc = j.optString("country")
+    if (loc.size != 2 || cc.length != 2) null
+    else Geo(loc[0].trim().toDouble(), loc[1].trim().toDouble()) to cc
+}.getOrNull()
+
+private fun lookupGeoHttp(target: String): Pair<Geo, String>? = runCatching {
     val c = java.net.URL("http://ip-api.com/json/$target?fields=status,lat,lon,countryCode,city")
         .openConnection() as java.net.HttpURLConnection
     c.connectTimeout = 5000; c.readTimeout = 5000
-    val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-    c.disconnect()
+    val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
     if (j.optString("status") != "success") null
     else Geo(j.optDouble("lat"), j.optDouble("lon")) to j.optString("countryCode")
 }.getOrNull()
