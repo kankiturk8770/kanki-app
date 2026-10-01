@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "0.8.0"
+const val APP_VERSION = "0.9.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -44,7 +44,7 @@ fun openUrl(ctx: Context, url: String) {
 fun openBot(ctx: Context) = openUrl(ctx, BOT_URL)
 fun openSupport(ctx: Context) = openUrl(ctx, SUPPORT_URL)
 
-fun toast(ctx: Context, msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+fun toast(ctx: Context, msg: String) = Toast.makeText(ctx, tr(msg), Toast.LENGTH_SHORT).show()
 
 fun faStatus(s: String) = when (s.lowercase()) {
     "active" -> "فعال"
@@ -85,6 +85,7 @@ fun flagOf(name: String): String {
 
 fun protoTitle(p: String) = when (p) {
     "amneziawg" -> "AmneziaWG"
+    "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
     "openvpn/udp" -> "OpenVPN UDP"
     "openvpn/tcp" -> "OpenVPN TCP"
@@ -182,6 +183,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             BrandTitle(21.sp)
             Spacer(Modifier.weight(1f))
+            LangButton(state)
+            Spacer(Modifier.width(8.dp))
             IconCircle(42.dp, onClick = { state.accountOpen = true }) { c -> accountIcon(c) }
         }
 
@@ -320,14 +323,14 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         val mapShape = RoundedCornerShape(26.dp)
         Box(
             Modifier.fillMaxWidth().padding(top = 4.dp).clip(mapShape)
-                .background(Color(0xFF0D0A06)).border(1.2.dp, K.Line, mapShape),
+                .background(K.Panel).border(1.2.dp, K.Line, mapShape),
         ) {
             WorldMap(pins, state.userGeo, state.userIso, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(1.55f))
             // بالای نقشه: پرچم و اسم سرور (مثل پروتون)
             if (selName != null) {
                 Row(
                     Modifier.align(Alignment.TopCenter).padding(top = 10.dp).clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xCC0E0B07)).border(1.dp, K.Line, RoundedCornerShape(16.dp))
+                        .background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, RoundedCornerShape(16.dp))
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -340,7 +343,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             val on = state.vstate == VState.ON
             Row(
                 Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xCC0E0B07)).border(1.dp, (if (on) K.Green else K.Red).copy(alpha = .7f), RoundedCornerShape(14.dp))
+                    .background(K.Panel.copy(alpha = .8f)).border(1.dp, (if (on) K.Green else K.Red).copy(alpha = .7f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -383,7 +386,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         ask?.let { target ->
             AlertDialog(
                 onDismissRequest = { ask = null },
-                containerColor = Color(0xFF16120B),
+                containerColor = K.Panel,
                 title = { T("سوییچ به ${protoTitle(target)}", size = 18.sp, weight = FontWeight.Black) },
                 text = {
                     T(
@@ -466,7 +469,7 @@ fun HomeCard(state: AppState, a: Account, rxSpeed: Long, txSpeed: Long, session:
         ask?.let { target ->
             AlertDialog(
                 onDismissRequest = { ask = null },
-                containerColor = Color(0xFF16120B),
+                containerColor = K.Panel,
                 title = { T("سوییچ به ${target.nodeName}", size = 18.sp, weight = FontWeight.Black) },
                 text = { T("اتصال فعلی قطع و به ${target.nodeName} وصل می‌شود.", size = 14.sp, color = K.Sub, weight = FontWeight.Normal) },
                 confirmButton = { TextButton(onClick = { ask = null; hscope.launch { state.switchNode(target.node) } }) { T("تأیید و اتصال", color = K.Gold) } },
@@ -536,17 +539,17 @@ fun ProtocolSwitcher(current: String, available: List<String>, onPick: (String) 
     if (available.size <= 1) return
     val shape = RoundedCornerShape(20.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(Color(0xCC0E0B07)).border(1.dp, K.Line, shape).padding(4.dp),
+        Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, shape).padding(4.dp),
     ) {
-        listOf("amneziawg" to "Amnezia", "wireguard" to "WireGuard", "openvpn" to "OpenVPN").filter { it.first in available }.forEach { (p, title) ->
+        listOf("amneziawg" to "Amnezia", "amneziawg-direct" to "Direct ⚡", "wireguard" to "WireGuard").filter { it.first in available }.forEach { (p, title) ->
             val sel = p == current
             Box(
                 Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                    .background(if (sel) Brush.verticalGradient(listOf(Color(0xFFFFE08A), K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                    .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
                     .clickable { onPick(p) }.padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                T(title, size = 13.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) Color(0xFF1A1206) else K.Sub, ltr = true)
+                T(title, size = 13.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.OnGold else K.Sub, ltr = true)
             }
         }
     }
@@ -585,7 +588,7 @@ fun ServersTab(state: AppState) {
                 expanded = state.openNode == nodeId,
                 onHeader = { state.openNode = if (state.openNode == nodeId) null else nodeId },
             ) {
-                val cfgs = listOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp").filter { p -> state.hasCfg(nodeId, p) }
+                val cfgs = listOf("amneziawg", "amneziawg-direct", "wireguard").filter { p -> state.hasCfg(nodeId, p) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     LineButton("⚡ تست واقعی همه", Modifier.weight(1f)) {
                         state.requestVpn?.invoke {
@@ -678,6 +681,7 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
                 T(
                     when (p) {
                         "amneziawg" -> "عبور از فیلتر"
+                        "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
                         "wireguard" -> "سریع · مناسب گیم"
                         "openvpn/tcp" -> "پایدار"
                         else -> "سازگاری بالا"
@@ -724,7 +728,7 @@ fun ToggleRow(icon: String, title: String, sub: String, checked: Boolean, onChan
         Switch(
             checked = checked, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF1A1206), checkedTrackColor = K.Gold,
+                checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold,
                 uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF),
             ),
         )
@@ -779,7 +783,7 @@ fun FloatingRobot(onClick: () -> Unit) {
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = { active = true; tryAwaitRelease(); active = false },
-                        onTap = { playClick(ctx); onClick() },
+                        onTap = { onClick() },
                     )
                 },
         ) { RobotFace(62.dp, alpha) }
@@ -909,13 +913,15 @@ fun SettingsTab(state: AppState) {
                     checked = state.autoConnect,
                     onCheckedChange = { state.autoConnect = it; state.save() },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFF1A1206), checkedTrackColor = K.Gold,
+                        checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold,
                         uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF),
                     ),
                 )
             }
             GoldDivider()
             ToggleRow("🔊", "صداهای اپ", "صدای ورود و دکمه‌ها", state.sounds) { state.sounds = it; state.save() }
+            GoldDivider()
+            ThemePicker(state)
             GoldDivider()
 
             MenuRow("🛡", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = "‹") {
@@ -1017,6 +1023,58 @@ fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () -> Unit) {
             T(title, size = 14.sp)
             val latin = sub.first().isDigit()
             T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal, font = if (latin) Poppins else Vazir, ltr = latin)
+        }
+    }
+}
+
+
+/** دکمه‌ی تغییر زبان کنار آیکون حساب */
+@Composable
+fun LangButton(state: AppState) {
+    val scope = rememberCoroutineScope()
+    Box(
+        Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
+            .border(1.2.dp, K.Gold.copy(alpha = .7f), androidx.compose.foundation.shape.CircleShape)
+            .clickable {
+                state.setLang(if (LangState.en) "fa" else "en")
+                scope.launch { state.refresh() }
+            },
+        contentAlignment = Alignment.Center,
+    ) { T(if (LangState.en) "FA" else "EN", size = 13.sp, color = K.Gold, font = Poppins, weight = FontWeight.Bold, ltr = true) }
+}
+
+/** انتخاب تم: طلایی، سیاه و سفید، زرشکی و آبی */
+@Composable
+fun ThemePicker(state: AppState) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("🎨", size = 20.sp)
+            Spacer(Modifier.width(12.dp))
+            T("تم برنامه", size = 15.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf("gold" to "طلایی", "mono" to "سیاه و سفید", "crimson" to "زرشکی و آبی").forEach { (id, name) ->
+                val p = Themes.first { it.id == id }
+                val sel = ThemeState.current.id == id
+                val shape = RoundedCornerShape(16.dp)
+                Column(
+                    Modifier.weight(1f).clip(shape)
+                        .background(Brush.verticalGradient(listOf(p.bgMid, p.bgBottom)))
+                        .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else p.gold.copy(alpha = .3f), shape)
+                        .clickable { state.setTheme(id) }
+                        .padding(vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.gold))
+                        Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.accent))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    T(name, size = 11.sp, color = if (sel) p.gold else p.sub)
+                }
+            }
         }
     }
 }

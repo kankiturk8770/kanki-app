@@ -165,8 +165,8 @@ fun WorldMap(
                     if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
                     val fill = when (c.iso) {
                         selIso -> (if (connected) K.Green else K.Gold).copy(alpha = .30f)
-                        userIso -> Color(0xFF6FE7FF).copy(alpha = .18f)
-                        else -> Color(0xFF231B0E)
+                        userIso -> K.Accent.copy(alpha = .18f)
+                        else -> K.Surface.copy(alpha = 1f)
                     }
                     drawPath(c.path, fill)
                     drawPath(
@@ -214,7 +214,7 @@ fun WorldMap(
         // بقیه‌ی سرورها
         pins.filter { !it.selected }.forEach { p -> neonDot(K.Gold.copy(alpha = .8f), proj(p.geo), w / 150f) }
         // شما
-        user?.let { neonDot(Color(0xFF6FE7FF), proj(it), w / 120f) }
+        user?.let { neonDot(K.Accent, proj(it), w / 120f) }
     }
 }
 

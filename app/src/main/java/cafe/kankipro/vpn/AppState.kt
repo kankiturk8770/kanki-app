@@ -30,6 +30,14 @@ class AppState(context: Context) {
     var autoConnect by mutableStateOf(prefs.getBoolean("auto", false))
     var robotOnHome by mutableStateOf(prefs.getBoolean("robotHome", true))
     var sounds by mutableStateOf(prefs.getBoolean("sound", true))
+
+    init {
+        ThemeState.set(prefs.getString("theme", "gold") ?: "gold")
+        LangState.lang = prefs.getString("lang", "fa") ?: "fa"
+    }
+
+    fun setTheme(id: String) { ThemeState.set(id); prefs.edit().putString("theme", id).apply() }
+    fun setLang(l: String) { LangState.lang = l; prefs.edit().putString("lang", l).apply() }
     var ping by mutableStateOf<Long?>(null)
     val infos = mutableStateMapOf<String, ConfigInfo>()
 
@@ -69,9 +77,43 @@ class AppState(context: Context) {
         return a.configs.any { it.node == nodeId && it.protocol == protocol } && badCfg["$nodeId/$protocol"] != true
     }
 
+    /**
+     * OpenVPN حذف می‌شود و برای هر سروری که امنزیا دارد، یک نسخه‌ی «مستقیم» ساخته می‌شود
+     * (همان کانفیگ امنزیا ولی با آدرس مستقیم سرور به‌جای تونل).
+     */
+    private fun augment(a: Account): Account {
+        val base = a.configs.filter { !it.protocol.startsWith("openvpn") }
+        val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
+            directHost(l.nodeName)?.let { h -> l.copy(protocol = "amneziawg-direct", url = l.url + "#direct=" + h) }
+        }
+        return a.copy(configs = base + direct)
+    }
+
+    /** آدرس مستقیم هر کشور */
+    private fun directHost(nodeName: String): String? = when (isoOfFlag(flagOf(nodeName))) {
+        "DE" -> "g.kankipro.cafe"
+        "TR" -> "tr.kankipro.cafe"
+        else -> null
+    }
+
+    /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
+    private fun fetchConfig(l: ConfigLink): String {
+        val url = l.url.substringBefore("#direct=")
+        val host = l.url.substringAfter("#direct=", "")
+        val txt = SubscriptionApi.fetch(url)
+        if (host.isBlank()) return txt
+        return txt.lines().joinToString("\n") { line ->
+            if (line.trim().startsWith("Endpoint", ignoreCase = true) && line.contains("=")) {
+                val port = line.substringAfterLast(":").trim()
+                "Endpoint = $host:$port"
+            } else line
+        }
+    }
+
     /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
     fun available(nodeId: String? = node): List<String> = buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
+        if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "openvpn/udp") || hasCfg(nodeId, "openvpn/tcp")) add("openvpn")
     }
@@ -162,7 +204,7 @@ class AppState(context: Context) {
         if (r == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
         loading = true; error = null
         return try {
-            val a = withContext(Dispatchers.IO) { SubscriptionApi.load(r.first, r.second) }
+            val a = augment(withContext(Dispatchers.IO) { SubscriptionApi.load(r.first, r.second) })
             unlocking = true
             base = r.first; code = r.second
             prefs.edit().putString("base", base).putString("code", code).apply()
@@ -188,9 +230,9 @@ class AppState(context: Context) {
                     SubscriptionApi.load(b, c)
                 }
             }
-            account = a
+            account = augment(a)
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
-            loadInfos(a)
+            loadInfos(account ?: a)
             fixProto()
             locate()
         } catch (e: Exception) {
@@ -200,10 +242,10 @@ class AppState(context: Context) {
     }
 
     private suspend fun loadInfos(a: Account) {
-        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "wireguard", "openvpn/udp", "openvpn/tcp") }) {
+        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard") }) {
             val key = "${l.node}/${l.protocol}"
             if (infos.containsKey(key)) continue
-            val txt = runCatching { withContext(Dispatchers.IO) { SubscriptionApi.fetch(l.url) } }.getOrNull()
+            val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l) } }.getOrNull()
             val ok = txt != null && (if (l.protocol.startsWith("openvpn")) txt.contains("remote ") else txt.contains("[Interface]") && txt.contains("[Peer]"))
             if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) } else badCfg[key] = true
         }
@@ -219,7 +261,7 @@ class AppState(context: Context) {
 
         if (proto == "openvpn") {
             try {
-                val text = withContext(Dispatchers.IO) { SubscriptionApi.fetch(link.url) }
+                val text = withContext(Dispatchers.IO) { fetchConfig(link) }
                 val opened = OpenVpnHandoff.open(ctx, text, "Kanki-${link.nodeName}-${ovpnTransport.uppercase()}")
                 error = if (opened) null else "برای OpenVPN ابتدا اپ «OpenVPN Connect» را نصب کنید، سپس دوباره بزنید."
             } catch (e: Exception) {
@@ -231,7 +273,7 @@ class AppState(context: Context) {
         vstate = VState.CONNECTING
         try {
             withContext(Dispatchers.IO) {
-                val cfg = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(link.url), dns), mtuFor(proto))
+                val cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
                 VpnEngine.up(ctx, cfg)
             }
             vstate = VState.ON
@@ -290,7 +332,7 @@ class AppState(context: Context) {
         val prevLink = if (wasOn) a.configs.firstOrNull { it.node == node && it.protocol == protoKey() } else null
         val result = withContext(Dispatchers.IO) {
             try {
-                val cfg = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(link.url), dns), mtuFor(p))
+                val cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(p))
                 VpnEngine.up(ctx, cfg, resetTimer = false)
                 Thread.sleep(700)
                 RealPing.measure()
@@ -299,7 +341,7 @@ class AppState(context: Context) {
             } finally {
                 runCatching {
                     if (wasOn && prevLink != null) {
-                        val back = applyMtu(DnsOptions.apply(SubscriptionApi.fetch(prevLink.url), dns), mtuFor(proto))
+                        val back = applyMtu(DnsOptions.apply(fetchConfig(prevLink), dns), mtuFor(proto))
                         VpnEngine.up(ctx, back, resetTimer = false)
                     } else if (!wasOn) {
                         VpnEngine.down(ctx)

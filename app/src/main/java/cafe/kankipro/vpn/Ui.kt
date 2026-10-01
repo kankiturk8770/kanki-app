@@ -36,14 +36,58 @@ import kotlin.math.sin
 
 // ------------------------------------------------------------------ رنگ‌ها
 
+/** یک تم رنگی کامل */
+class Palette(
+    val id: String,
+    val gold: Color, val goldLight: Color, val goldDeep: Color, val shine: Color,
+    val ink: Color, val text: Color, val sub: Color,
+    val bgTop: Color, val bgMid: Color, val bgBottom: Color,
+    val surface: Color, val surface2: Color, val panel: Color, val onGold: Color, val accent: Color,
+)
+
+val Themes = listOf(
+    // طلایی کانکی
+    Palette(
+        "gold", Color(0xFFF5C451), Color(0xFFFFE9A6), Color(0xFFB8862B), Color(0xFFFFE08A),
+        Color(0xFF060504), Color(0xFFF7F1E3), Color(0xFFA89C82),
+        Color(0xFF0C0A06), Color(0xFF17110A), Color(0xFF050403),
+        Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), Color(0xFF1A1206), Color(0xFF6FE7FF),
+    ),
+    // سیاه و سفید زغالی
+    Palette(
+        "mono", Color(0xFFE4E4E4), Color(0xFFFFFFFF), Color(0xFF7C7C80), Color(0xFFF2F2F2),
+        Color(0xFF050506), Color(0xFFF5F5F5), Color(0xFF9A9AA0),
+        Color(0xFF0E0E10), Color(0xFF1A1A1D), Color(0xFF050506),
+        Color(0xE81E1E21), Color(0xF00D0D0F), Color(0xFF111113), Color(0xFF111113), Color(0xFFBFC7D5),
+    ),
+    // زرشکی و آبی مات
+    Palette(
+        "crimson", Color(0xFFC4505E), Color(0xFFE9A0A9), Color(0xFF7E2433), Color(0xFFD96B78),
+        Color(0xFF07060B), Color(0xFFF3EEF2), Color(0xFF9C93A6),
+        Color(0xFF0E0B14), Color(0xFF1A1022), Color(0xFF06050A),
+        Color(0xE81D1424), Color(0xF00D0A12), Color(0xFF110D17), Color(0xFF1A0B10), Color(0xFF5B8FD6),
+    ),
+)
+
+object ThemeState {
+    var current by androidx.compose.runtime.mutableStateOf(Themes[0])
+    fun set(id: String) { current = Themes.firstOrNull { it.id == id } ?: Themes[0] }
+}
+
 object K {
-    val Gold = Color(0xFFF5C451)
-    val GoldLight = Color(0xFFFFE9A6)
-    val GoldDeep = Color(0xFFB8862B)
-    val Ink = Color(0xFF060504)
-    val Text = Color(0xFFF7F1E3)
-    val Sub = Color(0xFFA89C82)
-    val Line = Color(0x40F5C451)
+    val Gold get() = ThemeState.current.gold
+    val GoldLight get() = ThemeState.current.goldLight
+    val GoldDeep get() = ThemeState.current.goldDeep
+    val Shine get() = ThemeState.current.shine
+    val Ink get() = ThemeState.current.ink
+    val Text get() = ThemeState.current.text
+    val Sub get() = ThemeState.current.sub
+    val Line get() = ThemeState.current.gold.copy(alpha = .25f)
+    val Surface get() = ThemeState.current.surface
+    val Surface2 get() = ThemeState.current.surface2
+    val Panel get() = ThemeState.current.panel
+    val OnGold get() = ThemeState.current.onGold
+    val Accent get() = ThemeState.current.accent
     val Green = Color(0xFF3DDC97)
     val Red = Color(0xFFFF6B6B)
 }
@@ -80,7 +124,7 @@ fun T(
     ltr: Boolean = false,
 ) {
     Text(
-        text, modifier = modifier,
+        tr(text), modifier = modifier,
         style = TextStyle(
             fontFamily = font, fontWeight = weight, fontSize = size, color = color, shadow = shadow,
             textDirection = if (ltr) TextDirection.Ltr else TextDirection.Content,
@@ -90,12 +134,11 @@ fun T(
 
 // ------------------------------------------------------------------ پس‌زمینه‌ی متحرک
 
-private class Star(val x: Float, val y: Float, val r: Float, val phase: Float, val color: Color)
+private class Star(val x: Float, val y: Float, val r: Float, val phase: Float, val ci: Int)
 
 private val stars: List<Star> = run {
     val rnd = java.util.Random(77)
-    val cols = listOf(K.Gold, K.Green, Color(0xFF6FE7FF), K.GoldLight)
-    List(38) { Star(rnd.nextFloat(), rnd.nextFloat(), 1.2f + rnd.nextFloat() * 2.2f, rnd.nextFloat(), cols[rnd.nextInt(cols.size)]) }
+    List(38) { Star(rnd.nextFloat(), rnd.nextFloat(), 1.2f + rnd.nextFloat() * 2.2f, rnd.nextFloat(), rnd.nextInt(4)) }
 }
 
 @Composable
@@ -110,7 +153,7 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
             val w = size.width
             val h = size.height
             val c = Offset(w / 2, h * 0.30f)
-            drawRect(Brush.verticalGradient(listOf(Color(0xFF0C0A06), Color(0xFF17110A), Color(0xFF050403))))
+            drawRect(Brush.verticalGradient(listOf(ThemeState.current.bgTop, ThemeState.current.bgMid, ThemeState.current.bgBottom)))
             drawCircle(
                 Brush.radialGradient(listOf(accent.copy(alpha = breathe), Color.Transparent), c, w * 0.95f),
                 w * 0.95f, c,
@@ -154,7 +197,7 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
             stars.forEach { st ->
                 val tw = ((sin((twinkle + st.phase) * 6.2832f) + 1f) / 2f).coerceIn(0f, 1f)
                 val pos = Offset(st.x * w, st.y * hy)
-                val col = st.color
+                val col = when (st.ci) { 0 -> K.Gold; 1 -> K.Green; 2 -> K.Accent; else -> K.GoldLight }
                 drawCircle(col.copy(alpha = .10f * tw), st.r * 5f, pos)
                 drawCircle(col.copy(alpha = .30f * tw), st.r * 2.2f, pos)
                 drawCircle(Color.White.copy(alpha = .35f + .65f * tw), st.r, pos)
@@ -313,7 +356,7 @@ fun ConnectButton(state: VState, size: Dp = 230.dp, onClick: () -> Unit) {
                 neonComet(accent, angle + 180f, 120f, c, r * .95f, w)
             }
             // دیسک داخلی
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF2A241A), Color(0xFF0B0A08)), c, r * .66f), r * .66f, c)
+            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel), c, r * .66f), r * .66f, c)
             drawCircle(Color.White.copy(alpha = .07f), r * .66f, c, style = Stroke(1.5.dp.toPx()))
             // آیکون پاور نئونی
             val pr = r * .21f
@@ -337,7 +380,7 @@ fun Glass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
     Column(
         modifier
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xE81C170E), Color(0xF00C0A06))))
+            .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
             .border(1.2.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .6f), K.Gold.copy(alpha = .12f))), shape)
             .padding(18.dp),
         content = content,
@@ -349,12 +392,12 @@ fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = f
     val shape = RoundedCornerShape(22.dp)
     Box(
         modifier.height(58.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xFFFFE08A), K.Gold, K.GoldDeep)))
+            .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
             .border(1.dp, K.GoldLight.copy(alpha = .7f), shape)
             .clickable(enabled = !loading, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        T(if (loading) "لطفاً صبر کنید…" else text, size = 18.sp, color = Color(0xFF1A1206), weight = FontWeight.Black)
+        T(if (loading) "لطفاً صبر کنید…" else text, size = 18.sp, color = K.OnGold, weight = FontWeight.Black)
     }
 }
 
@@ -362,7 +405,7 @@ fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = f
 fun LineButton(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
     Box(
-        modifier.height(58.dp).clip(shape).background(Color(0xCC0E0B07))
+        modifier.height(58.dp).clip(shape).background(K.Panel.copy(alpha = .8f))
             .border(1.5.dp, color.copy(alpha = .8f), shape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -461,7 +504,7 @@ fun SpeedGauge(value: Double, color: Color, modifier: Modifier = Modifier) {
 fun IconCircle(size: Dp = 40.dp, onClick: () -> Unit, draw: DrawScope.(Color) -> Unit) {
     Box(
         Modifier.size(size).clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(Color(0xFF2A2212), Color(0xFF0E0B07))))
+            .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
             .border(1.2.dp, K.Gold.copy(alpha = .7f), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -551,18 +594,6 @@ private val robotLines = listOf(
     "پشتیبانی ۲۴ ساعته 💬",
 )
 
-/** پخش صدای کوتاه (اگر صدا در تنظیمات روشن باشد) */
-fun playClick(ctx: android.content.Context) {
-    val on = ctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
-    if (!on) return
-    runCatching {
-        android.media.MediaPlayer.create(ctx, R.raw.kanki_click)?.apply {
-            setOnCompletionListener { it.release() }
-            start()
-        }
-    }
-}
-
 /** خود ربات: سر طلایی با چشم‌های نئونی، لوگوی کانکی روی پیشانی و تلگرام روی سینه */
 @Composable
 fun RobotFace(size: Dp, highlight: Float = 1f) {
@@ -626,7 +657,7 @@ fun RobotBubble(small: Boolean = false) {
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3500); idx = (idx + 1) % robotLines.size } }
     val shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp)
     Box(
-        Modifier.clip(shape).background(Color(0xEB1C170E)).border(1.dp, K.Gold.copy(alpha = .6f), shape)
+        Modifier.clip(shape).background(K.Surface).border(1.dp, K.Gold.copy(alpha = .6f), shape)
             .padding(horizontal = if (small) 8.dp else 10.dp, vertical = if (small) 4.dp else 6.dp),
     ) { T(robotLines[idx], size = if (small) 10.sp else 11.sp, color = K.Text) }
 }
@@ -636,7 +667,7 @@ fun RobotBubble(small: Boolean = false) {
 fun RobotMascot(onClick: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Row(
-        Modifier.clip(RoundedCornerShape(24.dp)).clickable { playClick(ctx); onClick() }.padding(4.dp),
+        Modifier.clip(RoundedCornerShape(24.dp)).clickable { onClick() }.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RobotFace(60.dp)

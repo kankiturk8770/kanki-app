@@ -94,14 +94,21 @@ object SubscriptionApi {
             ConfigLink(protocol = m.groupValues[2], node = node, nodeName = name, url = url)
         }.distinctBy { it.url }.toList()
 
+        // اطلاعات واقعی که پنل در data-* صفحه گذاشته (مرورگر با جاوااسکریپت از همین‌ها حساب می‌کند)
+        fun attr(name: String) = Regex("""$name="([^"]*)"""").find(html)?.groupValues?.get(1)?.trim().orEmpty()
+        val expiresAt = PanelTime.parse(attr("data-expires"))
+        val limitGb = attr("data-traffic-limit").toDoubleOrNull()
+        val usedGb = attr("data-traffic-used").toDoubleOrNull()
+
         return Account(
             username = username,
             status = status,
-            dataRemaining = after("Data remaining"),
-            used = after("Used traffic"),
+            dataRemaining = if (limitGb != null && usedGb != null && limitGb > 0)
+                String.format(java.util.Locale.US, "%.2f GB", (limitGb - usedGb).coerceAtLeast(0.0)) else after("Data remaining"),
+            used = if (usedGb != null) String.format(java.util.Locale.US, "%.2f GB", usedGb) else after("Used traffic"),
             connections = after("Connections"),
-            timeRemaining = after("Time remaining").let { if (it == "—" || it == "-") "نامحدود" else it },
-            expiry = after("Time remaining", 2).let { if (it.length > 40 || it.contains("کانفیگ") || it.contains("configurations")) "—" else it },
+            timeRemaining = if (expiresAt != null) PanelTime.remaining(expiresAt) else "نامحدود",
+            expiry = if (expiresAt != null) PanelTime.jalali(expiresAt) else "—",
             configs = configs,
         )
     }
@@ -210,5 +217,51 @@ fun parseSize(s: String): Double? {
     val v = m.groupValues[1].toDoubleOrNull() ?: return null
     return v * when (m.groupValues[2].uppercase()) {
         "TB" -> 1099511627776.0; "GB" -> 1073741824.0; "MB" -> 1048576.0; "KB" -> 1024.0; else -> 1.0
+    }
+}
+
+
+/** تبدیل تاریخ انقضای پنل به «X روز و Y ساعت» و تاریخ شمسی */
+object PanelTime {
+    /** زمان ISO (مثل 2026-12-13T05:21:37Z) → میلی‌ثانیه؛ تاریخ خالی یا قدیمی یعنی نامحدود */
+    fun parse(v: String): Long? {
+        if (v.isBlank()) return null
+        val ms = runCatching { java.time.Instant.parse(v).toEpochMilli() }.getOrNull()
+            ?: runCatching { java.time.OffsetDateTime.parse(v).toInstant().toEpochMilli() }.getOrNull()
+            ?: return null
+        return if (ms < 946684800000L) null else ms // قبل از سال ۲۰۰۰ = بدون انقضا
+    }
+
+    fun remaining(at: Long, now: Long = System.currentTimeMillis()): String {
+        val diff = at - now
+        if (diff <= 0) return "منقضی شده"
+        val hours = diff / 3_600_000
+        val d = hours / 24
+        val h = hours % 24
+        return when {
+            d > 0 && h > 0 -> "$d روز و $h ساعت"
+            d > 0 -> "$d روز"
+            h > 0 -> "$h ساعت"
+            else -> "${(diff / 60_000).coerceAtLeast(1)} دقیقه"
+        }
+    }
+
+    private val months = listOf("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
+
+    fun jalali(at: Long): String {
+        val z = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())
+        val (jy, jm, jd) = toJalali(z.year, z.monthValue, z.dayOfMonth)
+        return "$jd ${months[jm - 1]} $jy، " + String.format(java.util.Locale.US, "%02d:%02d", z.hour, z.minute)
+    }
+
+    private fun toJalali(gy: Int, gm: Int, gd: Int): Triple<Int, Int, Int> {
+        val gdm = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+        val gy2 = if (gm > 2) gy + 1 else gy
+        var days = 355666 + 365 * gy + (gy2 + 3) / 4 - (gy2 + 99) / 100 + (gy2 + 399) / 400 + gd + gdm[gm - 1]
+        var jy = -1595 + 33 * (days / 12053); days %= 12053
+        jy += 4 * (days / 1461); days %= 1461
+        if (days > 365) { jy += (days - 1) / 365; days = (days - 1) % 365 }
+        return if (days < 186) Triple(jy, 1 + days / 31, 1 + days % 31)
+        else Triple(jy, 7 + (days - 186) / 30, 1 + (days - 186) % 30)
     }
 }

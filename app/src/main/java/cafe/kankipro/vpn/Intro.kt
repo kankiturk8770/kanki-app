@@ -79,6 +79,13 @@ fun SplashScreen(onDone: () -> Unit) {
 /** انیمیشن باز شدن قفل با کلید بعد از تأیید اشتراک */
 @Composable
 fun UnlockScreen(onDone: () -> Unit) {
+    val uctx = LocalContext.current
+    LaunchedEffect(Unit) {
+        val on = uctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
+        if (on) runCatching {
+            MediaPlayer.create(uctx, R.raw.kanki_unlock)?.apply { setOnCompletionListener { it.release() }; start() }
+        }
+    }
     val p = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
@@ -137,7 +144,7 @@ fun UnlockScreen(onDone: () -> Unit) {
                         drawLine(K.GoldDeep.copy(alpha = lockAlpha * (1f - open)), Offset(c.x + sr, top - 6f * u - lift), Offset(c.x + sr, top), 15f * u)
                         // بدنه‌ی قفل
                         drawRoundRect(
-                            Brush.verticalGradient(listOf(Color(0xFFFFE08A), K.Gold, K.GoldDeep)),
+                            Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)),
                             topLeft = Offset(c.x - bw / 2, top), size = Size(bw, bh),
                             cornerRadius = CornerRadius(22f * u), alpha = lockAlpha,
                         )
