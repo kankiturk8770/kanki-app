@@ -30,8 +30,8 @@ class AppState(context: Context) {
     var autoConnect by mutableStateOf(prefs.getBoolean("auto", false))
     var robotOnHome by mutableStateOf(prefs.getBoolean("robotHome", true))
     var sounds by mutableStateOf(prefs.getBoolean("sound", true))
-    /** حالت گیمینگ: فقط WireGuard و IKEv2، با بهینه‌سازی پینگ */
-    var gaming by mutableStateOf(prefs.getBoolean("gaming", false))
+    /** مسیر اتصال: tunnel (از طریق سرور واسط) یا direct (مستقیم به سرور) */
+    var route by mutableStateOf(prefs.getString("route", "tunnel") ?: "tunnel")
     /** اجرای صفحه‌ی تأیید سیستم (برای IKEv2)؛ توسط MainActivity تنظیم می‌شود */
     var launchConsent: ((android.content.Intent, () -> Unit) -> Unit)? = null
 
@@ -115,36 +115,22 @@ class AppState(context: Context) {
     }
 
     /** پروتکل‌هایی که در این اشتراک واقعاً وجود دارند */
-    fun available(nodeId: String? = node): List<String> = if (gaming) buildList {
-        if (hasCfg(nodeId, "wireguard")) add("wireguard")
-        if (android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == "ikev2" } == true) add("ikev2")
+    fun hasIkev2(nodeId: String?): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 30 && account?.configs?.any { it.node == nodeId && it.protocol == "ikev2" } == true
+
+    /** پروتکل‌های موجود برای یک مسیر (تانل یا مستقیم) */
+    fun available(nodeId: String? = node, r: String = route): List<String> = if (r == "direct") buildList {
+        if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
+        if (hasIkev2(nodeId)) add("ikev2")
     } else buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
-        if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
-        if (hasCfg(nodeId, "wireguard")) add("wireguard")
-        if (hasCfg(nodeId, "openvpn/udp") || hasCfg(nodeId, "openvpn/tcp")) add("openvpn")
-    }
+        if (hasCfg(nodeId, "wireguard")) add("wireguard")    }
 
-    /** روشن/خاموش کردن حالت گیمینگ؛ با روشن شدن، کم‌پینگ‌ترین سرور انتخاب می‌شود */
-    suspend fun setGaming(on: Boolean) {
-        gaming = on
-        prefs.edit().putBoolean("gaming", on).apply()
-        if (on && vstate == VState.OFF) pickBestGameServer()
+    /** تغییر مسیر بین تانل و مستقیم */
+    fun setRoute(r: String) {
+        route = r
+        prefs.edit().putString("route", r).apply()
         fixProto()
-    }
-
-    private suspend fun pickBestGameServer() {
-        val a = account ?: return
-        val nodes = a.configs.filter { it.protocol == "wireguard" }.map { it.node }.distinct()
-        if (nodes.size < 2) return
-        var best: String? = null
-        var bestMs = Long.MAX_VALUE
-        for (n in nodes) {
-            val host = infos["$n/wireguard"]?.host ?: continue
-            val ms = withContext(Dispatchers.IO) { Pinger.icmp(host, 2) ?: Pinger.tcp(host, 443, 1) } ?: continue
-            if (ms < bestMs) { bestMs = ms; best = n }
-        }
-        best?.let { node = it; save() }
     }
 
     /** اتصال IKEv2 با موتور خود اندروید */
@@ -191,6 +177,10 @@ class AppState(context: Context) {
     }
 
     fun fixProto() {
+        if (available().isEmpty()) {
+            val other = if (route == "direct") "tunnel" else "direct"
+            if (available(node, other).isNotEmpty()) { route = other; prefs.edit().putString("route", other).apply() }
+        }
         val av = available()
         if (av.isNotEmpty() && proto !in av) { proto = av.first(); save() }
         val a = account ?: return
@@ -335,11 +325,7 @@ class AppState(context: Context) {
         try {
             withContext(Dispatchers.IO) {
                 var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
-                if (gaming) {
-                    // گیمینگ: MTU کوچک‌تر برای جلوگیری از تکه‌تکه شدن بسته‌ها + نگه‌داشتن مسیر NAT
-                    if (mtuFor(proto).isBlank()) cfg = applyMtu(cfg, "1280")
-                    cfg = applyKeepalive(cfg, 15)
-                }
+                cfg = applyKeepalive(cfg, 25)
                 VpnEngine.up(ctx, cfg)
             }
             vstate = VState.ON

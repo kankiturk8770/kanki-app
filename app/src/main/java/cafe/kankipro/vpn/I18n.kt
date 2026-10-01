@@ -160,4 +160,6 @@ private val PHRASES = listOf(
     " دقیقه" to " min",
     " مانده" to " left",
     "دلخواه · " to "Custom · ",
+    "تانل" to "Tunnel",
+    "مستقیم" to "Direct",
 )

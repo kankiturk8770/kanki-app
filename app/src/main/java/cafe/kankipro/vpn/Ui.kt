@@ -330,11 +330,11 @@ enum class VState { OFF, CONNECTING, ON }
 @Composable
 fun ConnectButton(state: VState, size: Dp = 230.dp, onClick: () -> Unit) {
     val t = rememberInfiniteTransition(label = "cb")
-    val angle by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "a")
-    val pulse by t.animateFloat(.94f, 1.03f, infiniteRepeatable(tween(750), RepeatMode.Reverse), label = "p")
-    val breathe by t.animateFloat(.55f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "b")
-    val accent = if (state == VState.ON) K.Green else K.Gold
-    val scale = if (state == VState.CONNECTING) pulse else 1f
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "a")
+    val chase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "c")
+    val breathe by t.animateFloat(.55f, 1f, infiniteRepeatable(tween(1500), RepeatMode.Reverse), label = "b")
+    val on = state == VState.ON
+    val acc = if (on) K.Ok else K.Gold
 
     Box(
         Modifier.size(size).clickable(
@@ -344,34 +344,57 @@ fun ConnectButton(state: VState, size: Dp = 230.dp, onClick: () -> Unit) {
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
-            val r = this.size.minDimension / 2 * scale
-            val w = 3.dp.toPx()
-            // هاله‌ی پشت دکمه
-            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .40f * breathe), Color.Transparent), c, r * 1.05f), r * 1.05f, c)
-            // حلقه‌ی نئونی ثابت (فقط وقتی وصل است)
-            if (state == VState.ON) neonRing(accent, c, r * .86f, w * .8f, breathe)
-            // حلقه‌ی طلایی
+            val r = this.size.minDimension / 2
+            // هاله‌ی نرم
+            drawCircle(Brush.radialGradient(listOf(acc.copy(alpha = (if (on) .32f else .18f) * breathe), Color.Transparent), c, r), r, c)
+            // حلقه‌ی درجه‌دار (مثل صفحه‌ی ساعت)؛ وصل: همه روشن، در حال اتصال: تعقیب
+            val ticks = 60
+            for (i in 0 until ticks) {
+                val ang = Math.toRadians(i * 6.0 - 90)
+                val lit = when (state) {
+                    VState.ON -> 1f
+                    VState.CONNECTING -> {
+                        val d = ((i / ticks.toFloat()) - chase + 1f) % 1f
+                        (1f - d * 3f).coerceIn(0f, 1f)
+                    }
+                    VState.OFF -> if (i % 5 == 0) .55f else .18f
+                }
+                val r1 = r * .86f
+                val r2 = r * (if (i % 5 == 0) .95f else .92f)
+                val p1 = Offset(c.x + r1 * cos(ang).toFloat(), c.y + r1 * sin(ang).toFloat())
+                val p2 = Offset(c.x + r2 * cos(ang).toFloat(), c.y + r2 * sin(ang).toFloat())
+                val col = if (state == VState.OFF) K.Gold else acc
+                if (lit > .5f && state != VState.OFF) drawLine(col.copy(alpha = .25f * lit), p1, p2, 7.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(col.copy(alpha = .25f + .75f * lit), p1, p2, 2.2.dp.toPx(), cap = StrokeCap.Round)
+            }
+            // قوس چرخان نازک
+            if (state != VState.OFF) {
+                rotate(spin, c) {
+                    drawArc(
+                        Brush.sweepGradient(0f to Color.Transparent, .25f to acc, .26f to Color.Transparent, 1f to Color.Transparent, center = c),
+                        0f, 90f, false, Offset(c.x - r * .80f, c.y - r * .80f), Size(r * 1.6f, r * 1.6f),
+                        style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round),
+                    )
+                }
+            }
+            // حلقه‌ی فلزی
             drawCircle(
                 Brush.sweepGradient(listOf(K.GoldDeep, K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight, K.GoldDeep), c),
-                r * .72f, c, style = Stroke(10.dp.toPx()),
+                r * .74f, c, style = Stroke(5.dp.toPx()),
             )
-            // دو نور نئونی چرخان
-            if (state != VState.OFF) {
-                neonComet(accent, angle, 120f, c, r * .95f, w)
-                neonComet(accent, angle + 180f, 120f, c, r * .95f, w)
-            }
-            // دیسک داخلی
-            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel), c, r * .66f), r * .66f, c)
-            drawCircle(Color.White.copy(alpha = .07f), r * .66f, c, style = Stroke(1.5.dp.toPx()))
-            // آیکون پاور نئونی
-            val pr = r * .21f
-            val sw = 7.dp.toPx()
+            // دیسک شیشه‌ای
+            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel), c, r * .70f), r * .70f, c)
+            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .10f), Color.Transparent), startY = c.y - r * .7f, endY = c.y), r * .70f, c)
+            drawCircle(acc.copy(alpha = .35f), r * .70f, c, style = Stroke(1.dp.toPx()))
+            // نماد پاور با درخشش
+            val pr = r * .20f
+            val sw = 6.dp.toPx()
             val tl = Offset(c.x - pr, c.y - pr)
             val sz = Size(pr * 2, pr * 2)
-            val glowOn = if (state == VState.OFF) .5f else 1f
             for ((m, a) in neonLayers) {
-                drawArc(accent.copy(alpha = a * glowOn), -60f, 300f, false, tl, sz, style = Stroke(sw * m, cap = StrokeCap.Round))
-                drawLine(accent.copy(alpha = a * glowOn), Offset(c.x, c.y - pr * 1.3f), Offset(c.x, c.y - pr * .15f), sw * m, cap = StrokeCap.Round)
+                val al = a * (if (state == VState.OFF) .65f else 1f)
+                drawArc(acc.copy(alpha = al), -60f, 300f, false, tl, sz, style = Stroke(sw * m, cap = StrokeCap.Round))
+                drawLine(acc.copy(alpha = al), Offset(c.x, c.y - pr * 1.3f), Offset(c.x, c.y - pr * .15f), sw * m, cap = StrokeCap.Round)
             }
         }
     }
@@ -678,5 +701,42 @@ fun RobotMascot(onClick: () -> Unit) {
         RobotFace(60.dp)
         Spacer(Modifier.width(4.dp))
         RobotBubble()
+    }
+}
+
+
+// ------------------------------------------------------------------ آیکون‌های نوار پایین
+
+fun DrawScope.navIcon(kind: Int, c: Color) {
+    val w = size.width
+    val sw = w * .09f
+    when (kind) {
+        0 -> { // خانه
+            val p = Path().apply {
+                moveTo(w * .14f, w * .48f); lineTo(w * .5f, w * .16f); lineTo(w * .86f, w * .48f)
+                moveTo(w * .24f, w * .40f); lineTo(w * .24f, w * .84f); lineTo(w * .76f, w * .84f); lineTo(w * .76f, w * .40f)
+            }
+            drawPath(p, c, style = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawRoundRect(c, topLeft = Offset(w * .42f, w * .60f), size = Size(w * .16f, w * .24f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .04f))
+        }
+        1 -> { // سرورها (کره‌ی زمین)
+            drawCircle(c, w * .36f, center, style = Stroke(sw))
+            drawOval(c, topLeft = Offset(w * .33f, w * .14f), size = Size(w * .34f, w * .72f), style = Stroke(sw * .8f))
+            drawLine(c, Offset(w * .14f, w * .5f), Offset(w * .86f, w * .5f), sw * .8f)
+        }
+        2 -> { // تست (سرعت‌سنج)
+            drawArc(c, 150f, 240f, false, topLeft = Offset(w * .12f, w * .16f), size = Size(w * .76f, w * .76f), style = Stroke(sw, cap = StrokeCap.Round))
+            drawLine(c, Offset(w * .5f, w * .54f), Offset(w * .70f, w * .34f), sw, cap = StrokeCap.Round)
+            drawCircle(c, w * .07f, Offset(w * .5f, w * .54f))
+        }
+        else -> { // تنظیمات (چرخ‌دنده)
+            for (i in 0 until 8) {
+                val a = Math.toRadians(i * 45.0)
+                drawLine(c, Offset(w / 2 + w * .26f * cos(a).toFloat(), w / 2 + w * .26f * sin(a).toFloat()),
+                    Offset(w / 2 + w * .40f * cos(a).toFloat(), w / 2 + w * .40f * sin(a).toFloat()), sw * 1.3f, cap = StrokeCap.Round)
+            }
+            drawCircle(c, w * .27f, center, style = Stroke(sw))
+            drawCircle(c, w * .09f, center)
+        }
     }
 }

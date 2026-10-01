@@ -98,7 +98,7 @@ object SubscriptionApi {
             .filter { it.second.lowercase() !in protocolTitles }
             .toList()
 
-        val linkRe = Regex("""(?:https?://[^"'\s<>]+)?/api/config/(\d+)/([a-z]+(?:/[a-z]+)?)\?[^"'\s<>]+""")
+        val linkRe = Regex("""(?:https?://[^"'\s<>]+)?/api/config/(\d+)/([a-z0-9]+(?:/[a-z0-9]+)?)\?[^"'\s<>]+""")
         val configs = linkRe.findAll(clean).mapNotNull { m ->
             val raw = decode(m.value)
             val url = if (raw.startsWith("http")) raw else base + raw

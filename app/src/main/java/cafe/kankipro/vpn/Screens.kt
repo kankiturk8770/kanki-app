@@ -40,7 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-const val APP_VERSION = "1.0.1"
+const val APP_VERSION = "1.1.0"
 
 fun openUrl(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -262,22 +262,31 @@ fun AccountPanel(state: AppState) {
 
 @Composable
 fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
-    val shape = RoundedCornerShape(28.dp)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(shape)
-            .background(K.Panel.copy(alpha = .94f)).border(1.dp, K.Line, shape).padding(5.dp),
-    ) {
-        KTab.entries.forEach { t ->
-            val sel = t == current
-            val s = RoundedCornerShape(22.dp)
-            Column(
-                Modifier.weight(1f).clip(s)
-                    .background(if (sel) K.Gold.copy(alpha = 0.33f) else Color.Transparent)
-                    .clickable { onSelect(t) }.padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                T(t.icon, size = 19.sp, color = if (sel) K.Gold else K.Sub)
-                T(t.title, size = 12.sp, color = if (sel) K.Gold else K.Sub)
+    val shape = RoundedCornerShape(30.dp)
+    Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clip(shape)
+                .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = .96f), K.Panel.copy(alpha = .98f))))
+                .border(1.dp, Brush.horizontalGradient(listOf(K.Gold.copy(alpha = .15f), K.Gold.copy(alpha = .55f), K.Gold.copy(alpha = .15f))), shape)
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            KTab.entries.forEachIndexed { i, t ->
+                val sel = t == current
+                val s = RoundedCornerShape(22.dp)
+                Row(
+                    Modifier.weight(if (sel) 1.6f else 1f).height(46.dp).clip(s)
+                        .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                        .clickable { onSelect(t) },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Canvas(Modifier.size(20.dp)) { navIcon(i, if (sel) K.OnGold else K.Sub) }
+                    if (sel) {
+                        Spacer(Modifier.width(6.dp))
+                        T(t.title, size = 12.sp, color = K.OnGold, weight = FontWeight.Black)
+                    }
+                }
             }
         }
     }
@@ -294,7 +303,6 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var rxSpeed by remember { mutableLongStateOf(0L) }
     var txSpeed by remember { mutableLongStateOf(0L) }
-    var session by remember { mutableLongStateOf(0L) }
     val history = remember { mutableStateListOf<Float>() }
     LaunchedEffect(state.vstate) {
         var last: Pair<Long, Long>? = null
@@ -308,11 +316,10 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
                     rxSpeed = (s.first - prev.first).coerceAtLeast(0)
                     txSpeed = (s.second - prev.second).coerceAtLeast(0)
                 }
-                session = s.first + s.second
                 last = s
             }
             history.add((rxSpeed + txSpeed).toFloat())
-            if (history.size > 32) history.removeAt(0)
+            if (history.size > 40) history.removeAt(0)
             tick++
             if (tick % 15 == 0) state.measurePing()
             delay(1000)
@@ -324,136 +331,273 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // نقشه‌ی جهان با سرورها و خط اتصال
+        val on = state.vstate == VState.ON
+        // ------------------------------------------------ نقشه
         val pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
             (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, state.nodeIso[l.node] ?: isoOfFlag(flagOf(l.nodeName)), l.node == state.node) }
         } ?: emptyList()
-        val selName = a?.configs?.firstOrNull { it.node == state.node }?.nodeName
         val mapShape = RoundedCornerShape(26.dp)
         Box(
             Modifier.fillMaxWidth().padding(top = 4.dp).clip(mapShape)
                 .background(K.Panel).border(1.2.dp, K.Line, mapShape),
         ) {
-            WorldMap(pins, state.userGeo, state.userIso, state.vstate == VState.ON, Modifier.fillMaxWidth().aspectRatio(1.55f))
-            // بالای نقشه: پرچم و اسم سرور (مثل پروتون)
-            if (selName != null) {
+            WorldMap(pins, state.userGeo, state.userIso, on, Modifier.fillMaxWidth().aspectRatio(1.55f))
+            // پایین نقشه: وضعیت امنیت · موج ترافیک با دانلود/آپلود · پینگ
+            Row(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, K.Panel.copy(alpha = .85f))))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Row(
-                    Modifier.align(Alignment.TopCenter).padding(top = 10.dp).clip(RoundedCornerShape(16.dp))
-                        .background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, RoundedCornerShape(16.dp))
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(K.Panel.copy(alpha = .7f))
+                        .border(1.dp, (if (on) K.Ok else K.Red).copy(alpha = .7f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    T(flagOf(selName), size = 18.sp)
-                    Spacer(Modifier.width(8.dp))
-                    T(selName, size = 13.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
+                    Dot(if (on) K.Ok else K.Red, 6.dp)
+                    Spacer(Modifier.width(5.dp))
+                    T(if (on) "محافظت‌شده" else "محافظت‌نشده", size = 10.sp, color = if (on) K.Ok else K.Red)
                 }
-            }
-            // دکمه‌ی حالت گیمینگ (بالا، گوشه)
-            val gShape = RoundedCornerShape(14.dp)
-            Row(
-                Modifier.align(Alignment.TopStart).padding(10.dp).clip(gShape)
-                    .background(if (state.gaming) K.Ok.copy(alpha = .22f) else K.Panel.copy(alpha = .8f))
-                    .border(1.dp, if (state.gaming) K.Ok else K.Line, gShape)
-                    .clickable {
-                        if (state.vstate != VState.OFF) toast(ctx, "برای تغییر، اول اتصال را قطع کنید")
-                        else scope.launch { state.setGaming(!state.gaming); toast(ctx, if (state.gaming) "حالت گیمینگ روشن شد 🎮" else "حالت گیمینگ خاموش شد") }
-                    }
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                T("🎮", size = 14.sp)
-                Spacer(Modifier.width(4.dp))
-                T("Gaming", size = 11.sp, font = Poppins, weight = FontWeight.Bold, color = if (state.gaming) K.Ok else K.Sub, ltr = true)
-            }
-            // نمودار ضربان ترافیک + پینگ (پایین، گوشه)
-            Column(
-                Modifier.align(Alignment.BottomEnd).padding(10.dp).width(132.dp).clip(RoundedCornerShape(14.dp))
-                    .background(K.Panel.copy(alpha = .75f)).border(1.dp, K.Line, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 8.dp, vertical = 5.dp),
-            ) {
-                PulseGraph(history, state.vstate == VState.ON, Modifier.fillMaxWidth().height(30.dp))
-                val spd = history.lastOrNull()?.toLong() ?: 0L
+                Column(Modifier.weight(1f).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    WaveRibbon(history, on, Modifier.fillMaxWidth().height(30.dp))
+                    T(
+                        if (on) "↓ ${formatBytes(rxSpeed)}/s   ↑ ${formatBytes(txSpeed)}/s" else "↓ —   ↑ —",
+                        size = 9.sp, font = Poppins, weight = FontWeight.SemiBold, color = K.Text, ltr = true,
+                    )
+                }
+                val pg = state.ping
                 T(
-                    if (state.vstate == VState.ON) "${formatBytes(spd)}/s" + (state.ping?.let { " · ${it}ms" } ?: "") else "— · —",
-                    size = 10.sp, font = Poppins, weight = FontWeight.SemiBold, color = K.Text, ltr = true,
+                    if (on && pg != null) "${pg}ms" else "— ms",
+                    size = 11.sp, font = Poppins, weight = FontWeight.Bold,
+                    color = if (on && pg != null) pingColor(pg) else K.Sub, ltr = true,
                 )
             }
-            // پایین نقشه: وضعیت امنیت
-            val on = state.vstate == VState.ON
-            Row(
-                Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(14.dp))
-                    .background(K.Panel.copy(alpha = .8f)).border(1.dp, (if (on) K.Green else K.Red).copy(alpha = .7f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Dot(if (on) K.Green else K.Red, 7.dp)
-                Spacer(Modifier.width(6.dp))
-                T(if (on) "محافظت‌شده" else "محافظت‌نشده", size = 11.sp, color = if (on) K.Green else K.Red)
-            }
         }
-        ConnectButton(state.vstate, 150.dp) { if (a != null) onToggle() }
 
+        // ------------------------------------------------ دکمه‌ی اتصال
+        Spacer(Modifier.height(4.dp))
+        ConnectButton(state.vstate, 168.dp) { if (a != null) onToggle() }
         val (label, color) = when (state.vstate) {
-            VState.ON -> "متصل" to K.Green
+            VState.ON -> "متصل" to K.Ok
             VState.CONNECTING -> "در حال اتصال…" to K.Gold
             VState.OFF -> "آماده‌ی اتصال" to K.Text
         }
-        T(label, size = 28.sp, color = color, weight = FontWeight.Black, shadow = glow(color, 30f))
-
-        if (state.vstate == VState.ON && VpnEngine.connectedAt > 0) {
+        T(label, size = 24.sp, color = color, weight = FontWeight.Black, shadow = glow(color, 26f))
+        if (on && VpnEngine.connectedAt > 0) {
             val sec = ((now - VpnEngine.connectedAt) / 1000).coerceAtLeast(0)
             T(
                 String.format(java.util.Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60),
-                size = 34.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(K.Green, 20f), ltr = true,
-            )
-        }
-
-
-        // سوییچ سریع پروتکل
-        Spacer(Modifier.height(10.dp))
-        var ask by remember { mutableStateOf<String?>(null) }
-        ProtocolSwitcher(state.proto, state.available()) { p ->
-            if (p == state.proto) return@ProtocolSwitcher
-            if (state.vstate == VState.CONNECTING) return@ProtocolSwitcher
-            if (state.vstate == VState.ON || p == "openvpn") ask = p
-            else { state.proto = p; state.save() }
-        }
-        ask?.let { target ->
-            AlertDialog(
-                onDismissRequest = { ask = null },
-                containerColor = K.Panel,
-                title = { T("سوییچ به ${protoTitle(target)}", size = 18.sp, weight = FontWeight.Black) },
-                text = {
-                    T(
-                        if (target == "openvpn") "پروفایل OpenVPN (${state.ovpnTransport.uppercase()}) در اپ OpenVPN باز می‌شود. اتصال فعلی قطع می‌شود."
-                        else "اتصال فعلی قطع و با ${protoTitle(target)} دوباره وصل می‌شود.",
-                        size = 14.sp, color = K.Sub, weight = FontWeight.Normal,
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = { ask = null; scope.launch { state.switchTo(target) } }) {
-                        T("تأیید و اتصال", color = K.Gold)
-                    }
-                },
-                dismissButton = { TextButton(onClick = { ask = null }) { T("انصراف", color = K.Sub) } },
+                size = 26.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(K.Ok, 18f), ltr = true,
             )
         }
 
         state.error?.let {
-            Spacer(Modifier.height(8.dp))
-            T(it, size = 13.sp, color = K.Red)
+            Spacer(Modifier.height(6.dp))
+            T(it, size = 12.sp, color = K.Red)
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         if (a == null) {
             if (state.loading) CircularProgressIndicator(color = K.Gold)
             else GoldButton("تلاش دوباره", Modifier.fillMaxWidth()) { scope.launch { state.refresh() } }
         } else {
-            UsageLine(a)
+            ConnectPanel(state, a)
         }
         Spacer(Modifier.height(12.dp))
     }
 }
+
+/** پنل جمع‌وجور صفحه‌ی اتصال: تانل/مستقیم، پروتکل، سرور و اطلاعات اشتراک */
+@Composable
+fun ConnectPanel(state: AppState, a: Account) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var askProto by remember { mutableStateOf<String?>(null) }
+    var askNode by remember { mutableStateOf<ConfigLink?>(null) }
+    val busy = state.vstate == VState.CONNECTING
+    val on = state.vstate == VState.ON
+    val nodes = a.configs.distinctBy { it.node }
+
+    Glass(Modifier.fillMaxWidth()) {
+        // تانل / مستقیم
+        val shape = RoundedCornerShape(18.dp)
+        Row(Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, shape).padding(3.dp)) {
+            listOf("tunnel" to "تانل", "direct" to "مستقیم").forEach { (r, title) ->
+                val sel = state.route == r
+                val has = state.available(state.node, r).isNotEmpty()
+                Box(
+                    Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+                        .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                        .clickable(enabled = has && !busy) {
+                            if (sel) return@clickable
+                            if (on) toast(ctx, "برای تغییر، اول اتصال را قطع کنید") else state.setRoute(r)
+                        }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) { T(if (r == "direct") "⚡ $title" else "🛡 $title", size = 13.sp, color = if (sel) K.OnGold else if (has) K.Text else K.Sub.copy(alpha = .5f), weight = FontWeight.Black) }
+            }
+        }
+        // پروتکل‌های این مسیر
+        val av = state.available()
+        if (av.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                av.forEach { p ->
+                    val sel = state.proto == p
+                    val cs = RoundedCornerShape(14.dp)
+                    Box(
+                        Modifier.weight(1f).clip(cs)
+                            .background(if (sel) K.Gold.copy(alpha = .20f) else Color(0x12FFFFFF))
+                            .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, cs)
+                            .clickable(enabled = !busy) {
+                                if (sel) return@clickable
+                                if (on) askProto = p else { state.proto = p; state.save() }
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { T(protoShort(p), size = 12.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true) }
+                }
+            }
+        }
+        // سرورها
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            nodes.forEach { n ->
+                val sel = n.node == state.node
+                val cs = RoundedCornerShape(14.dp)
+                Row(
+                    Modifier.clip(cs)
+                        .background(if (sel) K.Gold.copy(alpha = .20f) else Color(0x12FFFFFF))
+                        .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold else K.Line, cs)
+                        .clickable(enabled = !busy) {
+                            if (sel) return@clickable
+                            if (on) askNode = n else scope.launch { state.switchNode(n.node) }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    T(flagOf(n.nodeName), size = 15.sp)
+                    Spacer(Modifier.width(6.dp))
+                    T(n.nodeName, size = 11.sp, font = Poppins, weight = FontWeight.Bold, color = if (sel) K.Gold else K.Text, ltr = true)
+                }
+            }
+        }
+        // اطلاعات اشتراک با آیکون (جمع‌وجور)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            InfoChip("📦", a.dataRemaining, Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            InfoChip("⏳", a.timeRemaining, Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            InfoChip(if (isActive(a.status)) "🟢" else "🔴", faStatus(a.status), Modifier.weight(1f))
+        }
+        val used = parseSize(a.used)
+        val left = parseSize(a.dataRemaining)
+        if (used != null && left != null && used + left > 0) {
+            Spacer(Modifier.height(8.dp))
+            val f = (used / (used + left)).toFloat().coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(Color(0x22FFFFFF))) {
+                Box(Modifier.fillMaxWidth(f.coerceAtLeast(0.02f)).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(Brush.horizontalGradient(listOf(K.GoldDeep, K.Gold, K.GoldLight))))
+            }
+        }
+    }
+
+    askProto?.let { target ->
+        AlertDialog(
+            onDismissRequest = { askProto = null },
+            containerColor = K.Panel,
+            title = { T("سوییچ به ${protoTitle(target)}", size = 18.sp, weight = FontWeight.Black) },
+            text = { T("اتصال فعلی قطع و با ${protoTitle(target)} دوباره وصل می‌شود.", size = 14.sp, color = K.Sub, weight = FontWeight.Normal) },
+            confirmButton = { TextButton(onClick = { askProto = null; scope.launch { state.switchTo(target) } }) { T("تأیید و اتصال", color = K.Gold) } },
+            dismissButton = { TextButton(onClick = { askProto = null }) { T("انصراف", color = K.Sub) } },
+        )
+    }
+    askNode?.let { target ->
+        AlertDialog(
+            onDismissRequest = { askNode = null },
+            containerColor = K.Panel,
+            title = { T("سوییچ به ${target.nodeName}", size = 18.sp, weight = FontWeight.Black) },
+            text = { T("اتصال فعلی قطع و به ${target.nodeName} وصل می‌شود.", size = 14.sp, color = K.Sub, weight = FontWeight.Normal) },
+            confirmButton = { TextButton(onClick = { askNode = null; scope.launch { state.switchNode(target.node) } }) { T("تأیید و اتصال", color = K.Gold) } },
+            dismissButton = { TextButton(onClick = { askNode = null }) { T("انصراف", color = K.Sub) } },
+        )
+    }
+}
+
+fun protoShort(p: String) = when (p) {
+    "amneziawg" -> "Amnezia"
+    "amneziawg-direct" -> "Amnezia"
+    "wireguard" -> "WireGuard"
+    "ikev2" -> "IKEv2"
+    else -> p
+}
+
+@Composable
+fun InfoChip(icon: String, value: String, modifier: Modifier) {
+    val cs = RoundedCornerShape(12.dp)
+    Row(
+        modifier.clip(cs).background(Color(0x10FFFFFF)).border(1.dp, K.Line, cs).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        T(icon, size = 12.sp)
+        Spacer(Modifier.width(4.dp))
+        val latin = value.any { it.isDigit() } && value.none { it in '\u0600'..'\u06FF' }
+        T(value, size = 11.sp, font = if (latin) Poppins else Vazir, weight = FontWeight.Bold, ltr = latin)
+    }
+}
+
+/** موج ترافیک (چند منحنی سینوسی درهم + خط نبض)، بدون قاب */
+@Composable
+fun WaveRibbon(samples: List<Float>, active: Boolean, modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "wave")
+    val ph by t.animateFloat(0f, 6.2832f, infiniteRepeatable(tween(3000, easing = LinearEasing)), label = "ph")
+    val max = (samples.maxOrNull() ?: 1f).coerceAtLeast(1f)
+    val level = if (active) (.25f + .75f * ((samples.lastOrNull() ?: 0f) / max)) else .12f
+    val c1 = if (active) K.Ok else K.Gold
+    val c2 = K.Accent
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val mid = h / 2
+        // منحنی‌های درهم (مثل روبان)
+        for (i in 0 until 12) {
+            val f = i / 11f
+            val path = androidx.compose.ui.graphics.Path()
+            val steps = 48
+            for (k in 0..steps) {
+                val x = k / steps.toFloat()
+                val env = kotlin.math.sin(x * Math.PI).toFloat()
+                val y = mid + h * .42f * level * env * kotlin.math.sin(x * 9f + ph + f * 1.6f).toFloat() * (.35f + .65f * f)
+                if (k == 0) path.moveTo(x * w, y) else path.lineTo(x * w, y)
+            }
+            val col = if (i % 3 == 0) c2 else c1
+            drawPath(path, col.copy(alpha = .10f + .25f * f), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx()))
+        }
+        // خط نبض روشن از ترافیک واقعی
+        val n = samples.size.coerceAtLeast(2)
+        val pulse = androidx.compose.ui.graphics.Path()
+        for (i in 0 until 40) {
+            val sIdx = samples.size - 40 + i
+            val v = if (sIdx >= 0) samples[sIdx] / max else 0f
+            val x = i / 39f * w
+            val spike = if (i % 2 == 0) -1f else 1f
+            val y = mid + spike * h * .45f * (if (active) v * .9f else .04f)
+            if (i == 0) pulse.moveTo(x, y) else pulse.lineTo(x, y)
+        }
+        drawPath(pulse, Color.White.copy(alpha = if (active) .7f else .25f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+        drawLine(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = .6f), Color.Transparent)), androidx.compose.ui.geometry.Offset(0f, mid), androidx.compose.ui.geometry.Offset(w, mid), 1.2.dp.toPx())
+        // ذرات
+        for (i in 0 until 14) {
+            val x = ((i * 0.071f + ph / 6.2832f * .15f) % 1f) * w
+            val y = mid + kotlin.math.sin(i * 1.7f + ph).toFloat() * h * .35f * level
+            drawCircle(Color.White.copy(alpha = .5f), 1.dp.toPx(), androidx.compose.ui.geometry.Offset(x, y))
+        }
+        if (n < 0) return@Canvas
+    }
+}
+
 
 /** یک کارت جمع‌وجور: سرور + اشتراک + ترافیک */
 @Composable
@@ -662,7 +806,6 @@ fun ServersTab(state: AppState) {
             T("سرورها", size = 17.sp, color = K.Gold, weight = FontWeight.Black)
         }
         Spacer(Modifier.height(8.dp))
-        a?.let { ServerInfoCard(state, it); Spacer(Modifier.height(12.dp)) }
         if (locked) {
             T("برای تغییر سرور یا پروتکل، اول اتصال را قطع کنید", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
             Spacer(Modifier.height(8.dp))

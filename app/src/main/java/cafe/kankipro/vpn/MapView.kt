@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,6 +69,14 @@ object MapData {
         countries = out
         return out
     }
+}
+
+/** پرچم ایموجی از روی کد ISO (DE → 🇩🇪) */
+fun flagEmoji(iso: String?): String? {
+    if (iso == null || iso.length != 2) return null
+    val a = Character.toChars(0x1F1E6 + (iso[0].uppercaseChar() - 'A'))
+    val b = Character.toChars(0x1F1E6 + (iso[1].uppercaseChar() - 'A'))
+    return String(a) + String(b)
 }
 
 /** کد ISO دوحرفی از روی پرچم ایموجی (🇩🇪 → DE) */
@@ -131,6 +140,7 @@ fun WorldMap(
     pins: List<MapPin>, user: Geo?, userIso: String?, connected: Boolean, modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
     var countries by remember { mutableStateOf(MapData.countries) }
     LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { MapData.load(ctx) } }
 
@@ -210,6 +220,23 @@ fun WorldMap(
             drawCircle(c.copy(alpha = .55f), r * .85f, o, style = Stroke(w / 260f))
             if (connected) drawCircle(c.copy(alpha = (1 - pulse) * .7f), r * (.4f + pulse * .9f), o, style = Stroke(w / 300f))
             neonDot(c, o, w / 95f)
+            // سنجاق مکان با پرچم کشور روی نقطه‌ی سرور
+            val pr = w / 30f
+            val head = Offset(o.x, o.y - pr * 2.3f)
+            val pin = Path().apply {
+                moveTo(o.x, o.y - pr * .35f)
+                lineTo(head.x - pr * .75f, head.y + pr * .55f)
+                lineTo(head.x + pr * .75f, head.y + pr * .55f)
+                close()
+            }
+            drawPath(pin, c)
+            drawCircle(c.copy(alpha = .35f), pr * 1.45f, head)
+            drawCircle(c, pr * 1.15f, head)
+            drawCircle(K.Panel, pr * .98f, head)
+            flagEmoji(it.iso)?.let { f ->
+                val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.15f).toSp()))
+                drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f))
+            }
         }
         // بقیه‌ی سرورها
         pins.filter { !it.selected }.forEach { p -> neonDot(K.Gold.copy(alpha = .8f), proj(p.geo), w / 150f) }
