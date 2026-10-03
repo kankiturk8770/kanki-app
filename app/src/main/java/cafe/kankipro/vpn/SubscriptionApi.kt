@@ -26,14 +26,15 @@ data class Account(
 
 object SubscriptionApi {
     /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
-    const val DEFAULT_HOST = "https://g.kankipro.cafe"
+    const val DEFAULT_HOST = "https://tr.kankipro.cafe:2053"
 
-    private val codeRegex = Regex("""bub-\d+-[A-Za-z0-9]+""")
+    /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */
+    private val codeRegex = Regex("""\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}""")
 
     /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند */
     fun normalize(input: String): Pair<String, String>? {
         val s = input.trim()
-        val full = Regex("""(https?://[^/\s]+)\S*?/sub/(bub-\d+-[A-Za-z0-9]+)""").find(s)
+        val full = Regex("""(https?://[^/\s]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
         if (full != null) return full.groupValues[1] to full.groupValues[2]
         val code = codeRegex.find(s) ?: return null
         return DEFAULT_HOST to code.value
