@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "1.5.1"
+        versionCode = 22
+        versionName = "1.6.0"
     }
     signingConfigs {
         if (canSignRelease) {
@@ -51,7 +51,11 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging {
-        jniLibs { useLegacyPackaging = true }
+        jniLibs {
+            useLegacyPackaging = true
+            // libhysteria.so در واقع برنامه‌ی hysteria است؛ دست‌کاری (strip) نشود
+            keepDebugSymbols += "**/libhysteria.so"
+        }
         resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/{AL2.0,LGPL2.1}", "META-INF/INDEX.LIST") }
     }
 }

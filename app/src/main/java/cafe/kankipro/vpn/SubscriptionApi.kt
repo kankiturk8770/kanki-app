@@ -6,7 +6,7 @@ import java.net.URL
 
 /** یک کانفیگ قابل دانلود از صفحه‌ی اشتراک */
 data class ConfigLink(
-    val protocol: String,   // مثل amneziawg ، wireguard ، openvpn/udp
+    val protocol: String,   // مثل amneziawg ، wireguard ، hysteria2
     val node: String,       // مثل local
     val nodeName: String,   // مثل GERMANY-GAMING
     val url: String,
@@ -75,7 +75,7 @@ object SubscriptionApi {
 
     private fun strip(s: String) = decode(s.replace(Regex("<[^>]+>"), "")).trim()
 
-    private val protocolTitles = setOf("openvpn", "wireguard", "amneziawg")
+    private val protocolTitles = setOf("openvpn", "wireguard", "amneziawg", "hysteria2")
 
     fun parse(html: String, base: String): Account {
         val clean = html.replace(Regex("(?is)<script.*?</script>|<style.*?</style>"), "")
@@ -105,7 +105,10 @@ object SubscriptionApi {
             val url = if (raw.startsWith("http")) raw else base + raw
             val node = Regex("""[?&]node=([^&]+)""").find(raw)?.groupValues?.get(1) ?: "local"
             val name = headings.lastOrNull { it.first < m.range.first }?.second ?: node
-            ConfigLink(protocol = m.groupValues[2], node = node, nodeName = name, url = url)
+            // Hysteria2 در صفحه‌ی اشتراک فقط دکمه‌ی QR دارد؛ همان آدرس بدون /qr متن لینک hysteria2:// را می‌دهد
+            if (m.groupValues[2].startsWith("hysteria2"))
+                ConfigLink(protocol = "hysteria2", node = node, nodeName = name, url = url.replace(Regex("/hysteria2/[a-z0-9]+\\?"), "/hysteria2?"))
+            else ConfigLink(protocol = m.groupValues[2], node = node, nodeName = name, url = url)
         }.distinctBy { it.url }.toList()
 
         // اطلاعات واقعی که پنل در data-* صفحه گذاشته (مرورگر با جاوااسکریپت از همین‌ها حساب می‌کند)

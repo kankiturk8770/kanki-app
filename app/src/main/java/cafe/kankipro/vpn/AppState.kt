@@ -287,7 +287,7 @@ class AppState private constructor(context: Context) {
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
-        val txt = runCatching { SubscriptionApi.fetch(url) }
+        val txt = runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
             .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
             .getOrElse { e -> prefs.getString(cacheKey, null) ?: throw e }
         if (host.isBlank()) return txt
@@ -313,6 +313,7 @@ class AppState private constructor(context: Context) {
     } else buildList {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
+        if (hasCfg(nodeId, "hysteria2")) add("hysteria2")
     }
 
     /** تغییر مسیر بین تانل و مستقیم */
@@ -456,11 +457,15 @@ class AppState private constructor(context: Context) {
 
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
-        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard") }) {
+        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2") }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l) } }.getOrNull()
-            val ok = txt != null && (if (l.protocol.startsWith("openvpn")) txt.contains("remote ") else txt.contains("[Interface]") && txt.contains("[Peer]"))
+            val ok = txt != null && when {
+                l.protocol.startsWith("openvpn") -> txt.contains("remote ")
+                l.protocol == "hysteria2" -> txt.contains("hysteria2://")
+                else -> txt.contains("[Interface]") && txt.contains("[Peer]")
+            }
             if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) }
             else if (!infos.containsKey(key)) badCfg[key] = true   // اگر قبلاً سالم خوانده شده بود، همان می‌ماند
         }

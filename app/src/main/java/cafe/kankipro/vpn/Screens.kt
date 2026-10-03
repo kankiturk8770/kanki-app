@@ -133,6 +133,7 @@ fun protoTitle(p: String) = when (p) {
     "amneziawg" -> "AmneziaWG"
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
+    "hysteria2" -> "Hysteria2"
     "ikev2" -> "IKEv2"
     "ikev2-direct" -> "IKEv2 Direct"
     "openvpn/udp" -> "OpenVPN UDP"
@@ -615,6 +616,7 @@ fun protoShort(p: String) = when (p) {
     "amneziawg" -> "Amnezia"
     "amneziawg-direct" -> "Amnezia"
     "wireguard" -> "WireGuard"
+    "hysteria2" -> "Hysteria2"
     "ikev2", "ikev2-direct" -> "IKEv2"
     else -> p
 }
@@ -861,7 +863,7 @@ fun ProtocolSwitcher(current: String, available: List<String>, onPick: (String) 
     Row(
         Modifier.fillMaxWidth().clip(shape).background(K.Panel.copy(alpha = .8f)).border(1.dp, K.Line, shape).padding(4.dp),
     ) {
-        listOf("amneziawg" to "Amnezia", "amneziawg-direct" to "Direct ⚡", "wireguard" to "WireGuard", "ikev2" to "IKEv2").filter { it.first in available }.forEach { (p, title) ->
+        listOf("amneziawg" to "Amnezia", "amneziawg-direct" to "Direct ⚡", "wireguard" to "WireGuard", "hysteria2" to "Hysteria2", "ikev2" to "IKEv2").filter { it.first in available }.forEach { (p, title) ->
             val sel = p == current
             Box(
                 Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
@@ -908,7 +910,7 @@ fun ServersTab(state: AppState) {
                 expanded = state.openNode == nodeId,
                 onHeader = { state.openNode = if (state.openNode == nodeId) null else nodeId },
             ) {
-                val cfgs = listOf("amneziawg", "amneziawg-direct", "wireguard").filter { p -> state.hasCfg(nodeId, p) }
+                val cfgs = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2").filter { p -> state.hasCfg(nodeId, p) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     LineButton("⚡ تست واقعی همه", Modifier.weight(1f)) {
                         state.requestVpn?.invoke {
@@ -1006,6 +1008,7 @@ fun ProtoCard(state: AppState, nodeId: String, p: String, onSelect: () -> Unit, 
                         "amneziawg" -> "عبور از فیلتر"
                         "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
                         "wireguard" -> "سریع · مناسب گیم"
+                        "hysteria2" -> "پرسرعت · مناسب اینترنت ضعیف"
                         "openvpn/tcp" -> "پایدار"
                         else -> "سازگاری بالا"
                     },

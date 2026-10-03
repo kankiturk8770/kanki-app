@@ -43,6 +43,46 @@ jobs:
           curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
           ls -la app/src/main/assets
 
+      - name: دریافت هسته‌ی Hysteria2
+        run: |
+          set -e
+          get() { # $1=ABI اندروید  $2=نسخه‌ی اندروید هسته  $3=نسخه‌ی لینوکس (اگر نسخه‌ی اندروید نبود)
+            d=app/src/main/jniLibs/$1; mkdir -p "$d"
+            for u in "https://github.com/apernet/hysteria/releases/latest/download/hysteria-android-$2" \
+                     "https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-$3"; do
+              if curl -fsSL --retry 3 -o "$d/libhysteria.so" "$u"; then chmod +x "$d/libhysteria.so"; echo "$1 <- $u"; return 0; fi
+            done
+            echo "::error::Hysteria core for $1 was not found"; exit 1
+          }
+          get arm64-v8a arm64 arm64
+          get armeabi-v7a armv7 arm
+          get x86_64 amd64 amd64
+          get x86 386 386
+          ls -la app/src/main/jniLibs/*
+
+      - name: ساخت tun2socks برای Hysteria2 (hev-socks5-tunnel)
+        run: |
+          set -e
+          NDK="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK}}"
+          if [ ! -x "$NDK/ndk-build" ]; then NDK=$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1); fi
+          echo "NDK: $NDK"
+          rm -rf /tmp/hev && mkdir -p /tmp/hev && cd /tmp/hev
+          git clone --recursive --depth 1 --branch 2.17.1 https://github.com/heiher/hev-socks5-tunnel jni
+          printf '%s\n' \
+            'APP_OPTIM := release' \
+            'APP_PLATFORM := android-26' \
+            'APP_ABI := armeabi-v7a arm64-v8a x86 x86_64' \
+            'APP_CFLAGS := -O3 -DPKGNAME=cafe/kankipro/vpn -DCLSNAME=TProxyService' \
+            'APP_SUPPORT_FLEXIBLE_PAGE_SIZES := true' \
+            'NDK_TOOLCHAIN_VERSION := clang' > jni/Application.mk
+          "$NDK/ndk-build" -j"$(nproc)"
+          cd "$GITHUB_WORKSPACE"
+          for a in arm64-v8a armeabi-v7a x86_64 x86; do
+            mkdir -p app/src/main/jniLibs/$a
+            cp /tmp/hev/libs/$a/libhev-socks5-tunnel.so app/src/main/jniLibs/$a/
+          done
+          ls -la app/src/main/jniLibs/*
+
       - name: آماده‌سازی کلید امضا (از GitHub Secrets)
         env:
           KANKI_KEYSTORE: ${{ secrets.KANKI_KEYSTORE }}

@@ -65,8 +65,15 @@ object VpnEngine {
         }
 
     fun up(ctx: Context, configText: String, resetTimer: Boolean = true) {
-        val config = Config.parse(configText.byteInputStream())
-        backend(ctx).setState(tunnel, Tunnel.State.UP, config)
+        if (HyEngine.isHy(configText)) {
+            // Hysteria2 موتور جدا دارد؛ اول اتصال وایرگارد/امنزیا (اگر بالاست) پایین می‌آید
+            runCatching { if (awgUp(ctx)) backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
+            HyEngine.up(ctx, configText)
+        } else {
+            HyEngine.down(ctx)
+            val config = Config.parse(configText.byteInputStream())
+            backend(ctx).setState(tunnel, Tunnel.State.UP, config)
+        }
         if (resetTimer || connectedAt == 0L) connectedAt = System.currentTimeMillis()
     }
 
@@ -74,15 +81,18 @@ object VpnEngine {
     fun markConnected() { connectedAt = System.currentTimeMillis() }
 
     fun down(ctx: Context) {
+        runCatching { HyEngine.down(ctx) }
         runCatching { backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
         connectedAt = 0L
     }
 
-    fun isUp(ctx: Context): Boolean =
+    private fun awgUp(ctx: Context): Boolean =
         runCatching { backend(ctx).getState(tunnel) == Tunnel.State.UP }.getOrDefault(false)
 
+    fun isUp(ctx: Context): Boolean = HyEngine.isUp() || awgUp(ctx)
+
     /** کل دریافت و ارسال این نشست به بایت */
-    fun stats(ctx: Context): Pair<Long, Long>? = runCatching {
+    fun stats(ctx: Context): Pair<Long, Long>? = if (HyEngine.isUp()) HyEngine.stats() else runCatching {
         val s: Any = backend(ctx).getStatistics(tunnel)
         val rx = s.javaClass.getMethod("totalRx").invoke(s) as Long
         val tx = s.javaClass.getMethod("totalTx").invoke(s) as Long

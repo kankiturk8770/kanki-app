@@ -45,6 +45,15 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+        <!-- اتصال Hysteria2 (هسته‌ی hysteria + tun2socks) -->
+        <service
+            android:name="cafe.kankipro.vpn.KankiHyService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
         <provider
             android:name="cafe.kankipro.vpn.KankiFileProvider"
             android:authorities="${applicationId}.files"
