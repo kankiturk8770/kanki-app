@@ -271,7 +271,7 @@ class AppState private constructor(context: Context) {
 
     /**
      * دامنه‌ی مستقیم هر کشور:
-     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe   (آدرس پیش‌فرض اشتراک: tr.kankipro.cafe)
+     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe   (آدرس پیش‌فرض اشتراک: fi.kankipro.cafe)
      *   فرانسه → fr.kankipro.cafe    هلند → nl.kankipro.cafe
      * هر کشور تازه هم به همین شکل «کدکشور.kankipro.cafe» می‌شود.
      */

@@ -26,7 +26,7 @@ data class Account(
 
 object SubscriptionApi {
     /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
-    const val DEFAULT_HOST = "https://tr.kankipro.cafe:2053"
+    const val DEFAULT_HOST = "https://fi.kankipro.cafe:2053"
 
     /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */
     private val codeRegex = Regex("""\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}""")
