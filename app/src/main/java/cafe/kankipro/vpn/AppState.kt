@@ -159,7 +159,7 @@ class AppState private constructor(context: Context) {
                 if (s != null) { last?.let { rx = (s.first - it.first).coerceAtLeast(0); tx = (s.second - it.second).coerceAtLeast(0) }; last = s }
                 val sec = ((System.currentTimeMillis() - VpnEngine.connectedAt) / 1000).coerceAtLeast(0)
                 val time = String.format(java.util.Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60)
-                KankiNotif.show(ctx, LastConfig.title(ctx), "↓ ${formatBytes(rx)}/s   ↑ ${formatBytes(tx)}/s   ·   $time")
+                if (screenOn()) KankiNotif.show(ctx, LastConfig.title(ctx), "↓ ${formatBytes(rx)}/s   ↑ ${formatBytes(tx)}/s   ·   $time")
                 kotlinx.coroutines.delay(2000)
             }
             KankiNotif.hide(ctx)
@@ -185,6 +185,7 @@ class AppState private constructor(context: Context) {
                 else if (vstate == VState.OFF && up) {
                     if (VpnEngine.connectedAt == 0L) VpnEngine.markConnected()
                     vstate = VState.ON
+                    wantOn = true   // اتصالی که از بیرون برنامه (کاشی/نوتیفیکیشن) برقرار شده هم زیر نظر باشد
                     startNotif()
                 }
             }
@@ -208,29 +209,53 @@ class AppState private constructor(context: Context) {
                         kotlinx.coroutines.delay(2500)
                         if (vstate != VState.ON) return@launch
                         val alive = withContext(Dispatchers.IO) { RealPing.once() != null || RealPing.once() != null }
-                        if (!alive) { disconnect(); connect() }
+                        if (!alive) revive()
+                    }
+                }
+
+                // شبکه‌ی فعلی قطع شد (مثلاً وای‌فای رفت و دیتا ماند): بعد از چند ثانیه سلامت تونل بررسی می‌شود
+                override fun onLost(network: android.net.Network) {
+                    bg.launch {
+                        kotlinx.coroutines.delay(3500)
+                        if (vstate != VState.ON || !hasUnderlyingNet()) return@launch
+                        val alive = withContext(Dispatchers.IO) { RealPing.alive() }
+                        if (!alive) revive()
                     }
                 }
             })
         }
     }
 
-    /** هر ~۱۵ ثانیه از داخل تونل تست می‌کند؛ اگر ۳ بار پشت‌سرهم جواب نیامد، دوباره وصل می‌شود */
+    private var reviving = false
+
+    /** قطع و وصل دوباره‌ی تونل؛ همزمان فقط یک بار اجرا می‌شود */
+    private suspend fun revive() {
+        if (reviving || vstate != VState.ON) return
+        reviving = true
+        try { disconnect(); connect() } finally { reviving = false }
+    }
+
+    private fun screenOn(): Boolean =
+        runCatching { ctx.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: true }.getOrDefault(true)
+
+    /**
+     * هر ۳۰ ثانیه (فقط وقتی صفحه روشن است، تا باتری و دیتا هدر نرود) از داخل تونل تست می‌کند؛
+     * اگر ۲ بار پشت‌سرهم جواب نیامد، دوباره وصل می‌شود. مرگ هسته‌ی Hysteria جدا و فوری شناسایی می‌شود.
+     */
     private fun watchHealth() {
         bg.launch {
             var fails = 0
             while (true) {
-                kotlinx.coroutines.delay(15_000)
-                if (vstate != VState.ON || realTesting || !wantOn) { fails = 0; continue }
+                kotlinx.coroutines.delay(30_000)
+                if (vstate != VState.ON || realTesting || !wantOn || !screenOn()) { fails = 0; continue }
                 val ok = withContext(Dispatchers.IO) { RealPing.alive() }
                 if (ok) { fails = 0; autoRetries = 0; continue }
                 // اگر اصلاً شبکه‌ای زیر تونل نیست (قطعی گوشی)، بازاتصال بی‌فایده است
                 if (!hasUnderlyingNet()) { fails = 0; continue }
                 fails++
-                if (fails >= 3) {
+                if (fails >= 2) {
                     fails = 0
-                    disconnect()
-                    connect()
+                    revive()
                 }
             }
         }

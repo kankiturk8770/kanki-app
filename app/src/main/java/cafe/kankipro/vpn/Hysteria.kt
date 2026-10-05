@@ -197,6 +197,7 @@ class KankiHyService : VpnService() {
         }
         val hyFile = File(filesDir, "hy2.yaml").apply { writeText(hyCfg) }
 
+        killStaleCores()
         val pb = ProcessBuilder(listOf(bin.path, "client", "-c", hyFile.path))
             .directory(filesDir).redirectErrorStream(true)
         pb.environment()["HOME"] = filesDir.path
@@ -251,6 +252,21 @@ class KankiHyService : VpnService() {
         val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: 198.18.0.1\nsocks5:\n  port: $socksPort\n  address: 127.0.0.1\n  udp: 'udp'\nmisc:\n  task-stack-size: 81920\n"
         val hevFile = File(filesDir, "hev.yaml").apply { writeText(hevCfg) }
         if (!TProxyService.TProxyStartService(hevFile.path, fd.fd)) error("hysteria2: tun2socks did not start")
+    }
+
+    /**
+     * اگر برنامه ناگهانی بسته شده باشد، هسته‌ی hysteria قبلی می‌تواند یتیم بماند و بی‌صدا به سرور
+     * بسته بفرستد (و باتری بخورد). قبل از اجرای هسته‌ی جدید، هر هسته‌ی قدیمیِ همین برنامه کشته می‌شود.
+     */
+    private fun killStaleCores() {
+        val me = android.os.Process.myPid()
+        File("/proc").listFiles()?.forEach { d ->
+            val pid = d.name.toIntOrNull() ?: return@forEach
+            if (pid == me) return@forEach
+            runCatching {
+                if (File(d, "cmdline").readText().contains("libhysteria.so")) android.os.Process.killProcess(pid)
+            }
+        }
     }
 
     private fun lastLog(): String = synchronized(log) {
