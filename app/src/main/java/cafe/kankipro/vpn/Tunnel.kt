@@ -17,3 +17,24 @@ fun applyExcluded(cfg: String, pkgs: Set<String>): String {
     if (i >= 0) lines.add(i + 1, "ExcludedApplications = " + pkgs.sorted().joinToString(", "))
     return lines.joinToString("\n")
 }
+
+/**
+ * بستن کامل IPv6 در کانفیگ وایرگارد/امنزیا: آدرس، مسیر (AllowedIPs) و DNS ای‌پی‌وی‌شش حذف می‌شوند.
+ * در ایران IPv6 کار نمی‌کند و برنامه‌ها پیش از برگشتن به IPv4 معطل می‌مانند (پینگ بالا و کندی).
+ */
+fun stripIpv6(cfg: String): String {
+    fun keepV4(v: String): String =
+        v.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.contains(":") }.joinToString(", ")
+    return cfg.lines().mapNotNull { line ->
+        val t = line.trim()
+        if (!t.contains("=")) return@mapNotNull line
+        val key = t.substringBefore("=").trim()
+        val v = keepV4(t.substringAfter("="))
+        when (key.lowercase()) {
+            "address" -> if (v.isEmpty()) line else "$key = $v"
+            "dns" -> if (v.isEmpty()) null else "$key = $v"
+            "allowedips" -> "$key = " + v.ifEmpty { "0.0.0.0/0" }
+            else -> line
+        }
+    }.joinToString("\n")
+}

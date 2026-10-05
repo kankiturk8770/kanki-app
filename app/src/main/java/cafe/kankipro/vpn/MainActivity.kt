@@ -85,7 +85,7 @@ fun App() {
     // بارگذاری اطلاعات و اتصال خودکار
     LaunchedEffect(state.loggedIn) {
         if (state.loggedIn) {
-            state.refresh()
+            state.startupLoad()
             if (state.autoConnect && state.vstate == VState.OFF && state.account != null) toggle()
         }
     }

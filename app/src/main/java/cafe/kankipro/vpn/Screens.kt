@@ -365,6 +365,7 @@ fun HomeTab(state: AppState, onToggle: () -> Unit) {
             if (history.size > 40) history.removeAt(0)
             tick++
             if (tick % 15 == 0) state.measurePing()
+            if (tick % 30 == 0) state.refreshUsage()   // حجم مصرفی هر ۳۰ ثانیه بروز می‌شود
             delay(1000)
         }
         rxSpeed = 0; txSpeed = 0

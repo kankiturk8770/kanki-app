@@ -76,10 +76,14 @@ object Pinger {
 /** پینگ واقعی مثل v2rayNG: زمان پاسخ HTTP از مسیر فعلی (وقتی تونل بالاست، از داخل تونل) */
 object RealPing {
     private const val URL_204 = "http://www.gstatic.com/generate_204"
+    private const val URL_CF = "http://cp.cloudflare.com/generate_204"
 
-    fun once(): Long? = runCatching {
+    /** برای نظارت بر سلامت تونل: اگر یکی از دو آدرس جواب داد، تونل زنده است */
+    fun alive(): Boolean = once(URL_204) != null || once(URL_CF) != null
+
+    fun once(url: String = URL_204): Long? = runCatching {
         val t0 = System.nanoTime()
-        val c = (URL(URL_204).openConnection() as HttpURLConnection).apply {
+        val c = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 5000; readTimeout = 5000; useCaches = false
         }
         val code = c.responseCode

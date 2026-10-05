@@ -89,6 +89,8 @@ object HyEngine {
     @Volatile internal var pending: String? = null
     @Volatile internal var lastError: String? = null
     @Volatile internal var service: KankiHyService? = null
+    /** وقتی هسته‌ی hysteria خودش (بدون دستور کاربر) از بین برود true می‌شود */
+    @Volatile internal var crashed = false
 
     fun isHy(text: String) = text.contains("hysteria2://")
 
@@ -141,10 +143,13 @@ class KankiHyService : VpnService() {
 
     @Volatile private var tun: ParcelFileDescriptor? = null
     @Volatile private var proc: Process? = null
+    @Volatile private var stopping = false
     private val log = StringBuilder()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == START) {
+            stopping = false
+            HyEngine.crashed = false
             HyEngine.service = this
             val text = HyEngine.pending
             Thread({ doStart(text) }, "kanki-hy2").start()
@@ -168,7 +173,7 @@ class KankiHyService : VpnService() {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
-        val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: 8500
+        val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: 1400
         val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
         if (!TProxyService.loaded) error("hysteria2: tun2socks library is missing in this build")
@@ -208,6 +213,17 @@ class KankiHyService : VpnService() {
                 }
             }
         }, "kanki-hy2-log").start()
+
+        // اگر هسته بعد از اتصال از بین رفت (مثلاً اندروید پروسه را کشت)، تونل بسته و وضعیت گزارش می‌شود
+        Thread({
+            runCatching { p.waitFor() }
+            if (!stopping && HyEngine.service === this && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = "hysteria core exited. " + lastLog()
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
+        }, "kanki-hy2-mon").start()
 
         // صبر تا هسته به سرور وصل شود و پراکسی محلی را باز کند
         val end = System.currentTimeMillis() + 15_000
@@ -254,6 +270,7 @@ class KankiHyService : VpnService() {
 
     @Synchronized
     fun shutdown() {
+        stopping = true
         if (TProxyService.loaded) runCatching { TProxyService.TProxyStopService() }
         runCatching { tun?.close() }
         tun = null

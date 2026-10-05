@@ -56,6 +56,13 @@ class AppState private constructor(context: Context) {
 
     private var lastNet: android.net.Network? = null
 
+    /** true یعنی کاربر خودش وصل کرده و باید وصل بماند (برای بازاتصال خودکار) */
+    private var wantOn = false
+    private var autoRetries = 0
+    /** آخرین خواندن صفحه‌ی اشتراک از شبکه بود یا از نسخه‌ی ذخیره‌شده */
+    @Volatile private var lastFromCache = false
+    private val syncIntervalMs = 12L * 60 * 60 * 1000
+
     // ---------------- تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند
     val excluded = androidx.compose.runtime.mutableStateListOf<String>().apply {
         addAll(prefs.getStringSet("excluded", emptySet()) ?: emptySet())
@@ -166,7 +173,15 @@ class AppState private constructor(context: Context) {
                 kotlinx.coroutines.delay(2000)
                 if (realTesting || vstate == VState.CONNECTING) continue
                 val up = VpnEngine.isUp(ctx)
-                if (vstate == VState.ON && !up) { vstate = VState.OFF; ping = null; KankiNotif.hide(ctx) }
+                if (vstate == VState.ON && !up) {
+                    vstate = VState.OFF; ping = null; KankiNotif.hide(ctx)
+                    // هسته‌ی Hysteria2 خودش مرده؛ حداکثر ۳ بار خودکار دوباره وصل می‌شود
+                    if (HyEngine.crashed && wantOn && autoRetries < 3) {
+                        HyEngine.crashed = false
+                        autoRetries++
+                        connect()
+                    }
+                }
                 else if (vstate == VState.OFF && up) {
                     if (VpnEngine.connectedAt == 0L) VpnEngine.markConnected()
                     vstate = VState.ON
@@ -200,9 +215,107 @@ class AppState private constructor(context: Context) {
         }
     }
 
+    /** هر ~۱۵ ثانیه از داخل تونل تست می‌کند؛ اگر ۳ بار پشت‌سرهم جواب نیامد، دوباره وصل می‌شود */
+    private fun watchHealth() {
+        bg.launch {
+            var fails = 0
+            while (true) {
+                kotlinx.coroutines.delay(15_000)
+                if (vstate != VState.ON || realTesting || !wantOn) { fails = 0; continue }
+                val ok = withContext(Dispatchers.IO) { RealPing.alive() }
+                if (ok) { fails = 0; autoRetries = 0; continue }
+                // اگر اصلاً شبکه‌ای زیر تونل نیست (قطعی گوشی)، بازاتصال بی‌فایده است
+                if (!hasUnderlyingNet()) { fails = 0; continue }
+                fails++
+                if (fails >= 3) {
+                    fails = 0
+                    disconnect()
+                    connect()
+                }
+            }
+        }
+    }
+
+    private fun hasUnderlyingNet(): Boolean = runCatching {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java) ?: return@runCatching true
+        cm.allNetworks.any { n ->
+            val c = cm.getNetworkCapabilities(n)
+            c != null && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                !c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
+        }
+    }.getOrDefault(true)
+
+    /** هر ۱۲ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
+    private fun watchSync() {
+        bg.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                if (!loggedIn || loading || vstate == VState.CONNECTING || realTesting) continue
+                if (System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs) continue
+                silentSync()
+            }
+        }
+    }
+
+    private suspend fun silentSync() {
+        val b = base ?: return
+        val c = code ?: return
+        runCatching {
+            val a = augment(withContext(Dispatchers.IO) { loadAccount(b, c) })
+            if (lastFromCache) return@runCatching   // پنل جواب نداد؛ ساعت ثبت نمی‌شود تا بعداً دوباره تلاش شود
+            loadInfos(a, force = true)
+            account = a
+            if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
+            if (vstate == VState.OFF) fixProto()
+            prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
+        }
+    }
+
+    private var usageBusy = false
+
+    /**
+     * فقط حجم مصرفی، زمان باقی‌مانده و وضعیت حساب را از صفحه‌ی اشتراک می‌گیرد (یک درخواست کوچک).
+     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۱۲ ساعت یا با بروزرسانی دستی بروز می‌شوند.
+     */
+    suspend fun refreshUsage() {
+        val b = base ?: return
+        val c = code ?: return
+        if (usageBusy || loading) return
+        usageBusy = true
+        try {
+            val fresh = runCatching { augment(withContext(Dispatchers.IO) { loadAccount(b, c) }) }.getOrNull()
+            if (fresh == null || lastFromCache) return
+            val cur = account
+            account = if (cur != null) fresh.copy(configs = cur.configs) else fresh
+        } finally {
+            usageBusy = false
+        }
+    }
+
+    /**
+     * هنگام باز شدن برنامه: اگر کمتر از ۱۲ ساعت از آخرین بروزرسانی گذشته باشد، همه‌چیز از حافظه‌ی گوشی
+     * خوانده می‌شود و به پنل درخواستی نمی‌رود. وگرنه (یا بار اول) یک بروزرسانی کامل انجام می‌شود.
+     */
+    suspend fun startupLoad() {
+        val b = base ?: return
+        val c = code ?: return
+        val fresh = System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs
+        val html = prefs.getString("subhtml_$c", null)
+        val cached = if (fresh && html != null) runCatching { augment(SubscriptionApi.parse(html, b)) }.getOrNull() else null
+        if (cached == null) { refresh(); return }
+        account = cached
+        if (node == null || cached.configs.none { it.node == node }) node = cached.configs.firstOrNull()?.node
+        loadInfos(cached, force = false)
+        fixProto()
+        refreshUsage()   // حجم مصرفی همیشه تازه است، حتی وقتی کانفیگ‌ها از حافظه خوانده شده‌اند
+        locate()
+    }
+
     init {
         watchNetwork()
         watchState()
+        watchHealth()
+        watchSync()
         ThemeState.set(prefs.getString("theme", "gold") ?: "gold")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
@@ -282,14 +395,17 @@ class AppState private constructor(context: Context) {
     }
 
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
-    private fun fetchConfig(l: ConfigLink): String {
+    private fun fetchConfig(l: ConfigLink, forceNet: Boolean = false): String {
         val url = l.url.substringBefore("#direct=")
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
+        val cached = prefs.getString(cacheKey, null)
+        // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۱۲ ساعته) دوباره از پنل خوانده می‌شود.
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
-        val txt = runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
-            .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
-            .getOrElse { e -> prefs.getString(cacheKey, null) ?: throw e }
+        val txt = if (!forceNet && cached != null) cached else
+            runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
+                .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
+                .getOrElse { e -> cached ?: throw e }
         if (host.isBlank()) return txt
         return txt.lines().joinToString("\n") { line ->
             if (line.trim().startsWith("Endpoint", ignoreCase = true) && line.contains("=")) {
@@ -301,9 +417,10 @@ class AppState private constructor(context: Context) {
 
     /** صفحه‌ی اشتراک؛ اگر در دسترس نبود از نسخه‌ی ذخیره‌شده خوانده می‌شود */
     private fun loadAccount(b: String, c: String): Account {
+        lastFromCache = false
         val html = runCatching { SubscriptionApi.fetch("$b/sub/$c") }
             .onSuccess { prefs.edit().putString("subhtml_$c", it).apply() }
-            .getOrElse { e -> prefs.getString("subhtml_$c", null) ?: throw e }
+            .getOrElse { e -> lastFromCache = true; prefs.getString("subhtml_$c", null) ?: throw e }
         return SubscriptionApi.parse(html, b)
     }
 
@@ -420,7 +537,7 @@ class AppState private constructor(context: Context) {
             val a = augment(withContext(Dispatchers.IO) { loadAccount(r.first, r.second) })
             unlocking = true
             base = r.first; code = r.second
-            prefs.edit().putString("base", base).putString("code", code).apply()
+            prefs.edit().putString("base", base).putString("code", code).putLong("last_sync", System.currentTimeMillis()).apply()
             account = a
             node = a.configs.firstOrNull()?.node
             loading = false
@@ -445,8 +562,9 @@ class AppState private constructor(context: Context) {
             }
             account = augment(a)
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
-            // هر بار از پنل دوباره خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل در پنل جا نماند
+            // بروزرسانی کامل: همه‌ی کانفیگ‌ها دوباره از پنل خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل جا نماند
             loadInfos(account ?: a, force = true)
+            if (!lastFromCache) prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
             fixProto()
             locate()
         } catch (e: Exception) {
@@ -460,7 +578,7 @@ class AppState private constructor(context: Context) {
         for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2") }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
-            val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l) } }.getOrNull()
+            val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
             val ok = txt != null && when {
                 l.protocol.startsWith("openvpn") -> txt.contains("remote ")
                 l.protocol == "hysteria2" -> txt.contains("hysteria2://")
@@ -494,6 +612,7 @@ class AppState private constructor(context: Context) {
             val finalCfg = withContext(Dispatchers.IO) {
                 var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
                 cfg = applyKeepalive(cfg, 25)
+                if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
                 VpnEngine.up(ctx, cfg)
                 cfg
@@ -502,6 +621,7 @@ class AppState private constructor(context: Context) {
             val ok = withContext(Dispatchers.IO) { awaitHandshake() }
             if (!ok) throw IllegalStateException("no handshake: server did not answer (filtered or down)")
             vstate = VState.ON
+            wantOn = true
             LastConfig.save(ctx, finalCfg, "${flagOf(link.nodeName)} ${link.nodeName} · ${protoTitle(link.protocol)}")
             startNotif()
             measurePing()
@@ -605,29 +725,22 @@ class AppState private constructor(context: Context) {
     }
 
     suspend fun disconnect() {
+        wantOn = false
         withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
         KankiNotif.hide(ctx)
         vstate = VState.OFF
         ping = null
     }
 
+    /** پینگ واقعی از داخل تونل (HTTP روی اتصال زنده؛ نه HTTPS که چند رفت‌وبرگشت اضافه دارد) */
     suspend fun measurePing() {
-        ping = withContext(Dispatchers.IO) {
-            runCatching {
-                val t0 = System.nanoTime()
-                val c = URL("https://www.gstatic.com/generate_204").openConnection() as HttpURLConnection
-                c.connectTimeout = 5000; c.readTimeout = 5000
-                c.responseCode
-                c.disconnect()
-                (System.nanoTime() - t0) / 1_000_000
-            }.getOrNull()
-        }
+        ping = withContext(Dispatchers.IO) { RealPing.measure() }
     }
 
     /** خروج کامل: اشتراک و همه‌ی چیزهایی که از آن ذخیره شده (کانفیگ‌ها و کلیدها) از گوشی پاک می‌شود */
     suspend fun logout() {
         disconnect()
-        val e = prefs.edit().remove("base").remove("code").remove("node").remove("ugeo").remove("uiso")
+        val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("ugeo").remove("uiso")
         prefs.all.keys
             .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("ngeo_") || it.startsWith("niso_") }
             .forEach { e.remove(it) }
