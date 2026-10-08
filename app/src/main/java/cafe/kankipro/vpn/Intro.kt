@@ -28,7 +28,10 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** صفحه‌ی ورودی: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۴ ثانیه، هماهنگ با صدای «روشن شدن سپر») */
+/**
+ * صفحه‌ی ورود: صدای آرام ورود پخش می‌شود و تصویرش (SplashVisual در IntroUi.kt) هم‌زمان جلو می‌رود.
+ * صدا (res/raw/kanki_logo.mp3) و تصویر هر دو ۳.۸ ثانیه‌اند و لحظه‌ی ظاهر شدن لوگو (۱.۳ ثانیه) با اوج صدا یکی است.
+ */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
@@ -36,54 +39,12 @@ fun SplashScreen(onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         val soundOn = ctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
         val player = if (!soundOn) null else runCatching { MediaPlayer.create(ctx, R.raw.kanki_logo)?.apply { start() } }.getOrNull()
-        p.animateTo(1f, tween(4000, easing = LinearEasing))
+        p.animateTo(1f, tween((SPLASH_SEC * 1000).toInt(), easing = LinearEasing))
         onDone()
         delay(300)
         runCatching { player?.release() }
     }
-    val v = p.value
-    // هماهنگ با صدای ورود (res/raw/kanki_logo.mp3، کل صفحه ۴ ثانیه):
-    // ۰ تا ۱.۴۵ ثانیه صدا بالا می‌رود ← ذرات جمع می‌شوند
-    // ۱.۴ ثانیه ضربه و آکورد «قفل شدن سپر» ← لوگو ظاهر می‌شود، ۱.۸۵ ثانیه دو نت تأیید ← موج نور
-    // ۱.۷۵ تا ۲.۷۵ ثانیه اسم تایپ می‌شود، ۳.۵۵ تا ۴ ثانیه محو شدن
-    val gather = FastOutSlowInEasing.transform((v / 0.3625f).coerceIn(0f, 1f))
-    val logo = FastOutSlowInEasing.transform(((v - 0.35f) / 0.0875f).coerceIn(0f, 1f))
-    val typed = ((v - 0.4375f) / 0.25f).coerceIn(0f, 1f)
-    val swell = ((v - 0.4625f) / 0.1875f).coerceIn(0f, 1f)
-    val fadeOut = 1f - ((v - 0.8875f) / 0.1125f).coerceIn(0f, 1f)
-    val title = "KANKI VPN"
-
-    KankiBackground {
-        Box(Modifier.fillMaxSize().alpha(fadeOut), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val c = Offset(size.width / 2, size.height / 2 - 60.dp.toPx())
-                for (i in 0 until 60) {
-                    val ang = i * 137.5 * Math.PI / 180
-                    val far = size.maxDimension * (0.35f + (i % 7) * 0.05f)
-                    val r = far * (1f - gather)
-                    val pos = Offset(c.x + r * cos(ang).toFloat(), c.y + r * sin(ang).toFloat())
-                    val col = if (i % 5 == 0) K.Green else K.Gold
-                    drawCircle(col.copy(alpha = .25f * (1f - logo)), 9f, pos)
-                    drawCircle(Color.White.copy(alpha = (1f - logo)), 2.5f, pos)
-                }
-                if (logo > 0.01f && logo < 0.99f) neonRing(K.Gold, c, 60.dp.toPx() + logo * 160.dp.toPx(), 3.dp.toPx(), 1f - logo)
-                // موج دوم نور هم‌زمان با ضربه‌ی دوم صدا
-                if (swell > 0.01f && swell < 0.99f) {
-                    neonRing(K.Ok, c, 80.dp.toPx() + swell * 220.dp.toPx(), 3.dp.toPx(), 1f - swell)
-                    neonRing(K.Gold, c, 50.dp.toPx() + swell * 150.dp.toPx(), 2.dp.toPx(), (1f - swell) * .8f)
-                }
-                drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .35f * logo), Color.Transparent), c, 170.dp.toPx()), 170.dp.toPx(), c)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.graphicsLayer { scaleX = .5f + .5f * logo; scaleY = .5f + .5f * logo; alpha = logo }) { Logo3D(150.dp) }
-                Spacer(Modifier.height(20.dp))
-                Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-                    BrandTitle(34.sp, title.take((typed * title.length).toInt().coerceIn(0, title.length)))
-                }
-                T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.alpha(((v - 0.65f) / 0.0625f).coerceIn(0f, 1f)))
-            }
-        }
-    }
+    SplashVisual(p.value)
 }
 
 /** انیمیشن باز شدن قفل با کلید بعد از تأیید اشتراک */
