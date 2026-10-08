@@ -43,21 +43,32 @@ jobs:
           curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
           ls -la app/src/main/assets
 
+      # نسخه‌ی هسته ثابت است (نه «آخرین نسخه»)، تا هر ساخت دقیقاً همان هسته‌ی تست‌شده را بگیرد.
+      # برای ارتقا فقط HY_VERSION را عوض کن (فهرست نسخه‌ها: github.com/apernet/hysteria/releases).
       - name: دریافت هسته‌ی Hysteria2
+        env:
+          HY_VERSION: v2.12.3
         run: |
           set -e
-          get() { # $1=ABI اندروید  $2=نسخه‌ی اندروید هسته  $3=نسخه‌ی لینوکس (اگر نسخه‌ی اندروید نبود)
+          base="https://github.com/apernet/hysteria/releases/download/app%2F$HY_VERSION"
+          # فهرست اثر انگشت (SHA256) فایل‌ها که خود Hysteria برای همین نسخه منتشر کرده
+          curl -fsSL --retry 3 -o /tmp/hy-hashes.txt "$base/hashes.txt"
+          get() { # $1=ABI اندروید  $2=اسم معماری در فایل‌های Hysteria
             d=app/src/main/jniLibs/$1; mkdir -p "$d"
-            for u in "https://github.com/apernet/hysteria/releases/latest/download/hysteria-android-$2" \
-                     "https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-$3"; do
-              if curl -fsSL --retry 3 -o "$d/libhysteria.so" "$u"; then chmod +x "$d/libhysteria.so"; echo "$1 <- $u"; return 0; fi
-            done
-            echo "::error::Hysteria core for $1 was not found"; exit 1
+            f="hysteria-android-$2"
+            curl -fsSL --retry 3 -o "$d/libhysteria.so" "$base/$f"
+            want=$(awk -v f="$f" '{ n = $2; sub(/^.*\//, "", n); if (n == f) print $1 }' /tmp/hy-hashes.txt)
+            got=$(sha256sum "$d/libhysteria.so" | cut -d' ' -f1)
+            if [ -z "$want" ] || [ "$want" != "$got" ]; then
+              echo "::error::SHA256 of $f does not match ($HY_VERSION): want=$want got=$got"; exit 1
+            fi
+            chmod +x "$d/libhysteria.so"
+            echo "$1 <- $f ($HY_VERSION) sha256=$got"
           }
-          get arm64-v8a arm64 arm64
-          get armeabi-v7a armv7 arm
-          get x86_64 amd64 amd64
-          get x86 386 386
+          get arm64-v8a arm64
+          get armeabi-v7a armv7
+          get x86_64 amd64
+          get x86 386
           ls -la app/src/main/jniLibs/*
 
       - name: ساخت tun2socks برای Hysteria2 (hev-socks5-tunnel)
