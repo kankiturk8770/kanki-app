@@ -44,6 +44,7 @@ class Palette(
     val ink: Color, val text: Color, val sub: Color,
     val bgTop: Color, val bgMid: Color, val bgBottom: Color,
     val surface: Color, val surface2: Color, val panel: Color, val onGold: Color, val accent: Color,
+    /** رنگ «وصل / فعال» (سبز) */
     val ok: Color,
 )
 
@@ -54,7 +55,7 @@ val Themes: List<Palette> = listOf(
         Color(0xFF060504), Color(0xFFF7F1E3), Color(0xFFA89C82),
         Color(0xFF0C0A06), Color(0xFF17110A), Color(0xFF050403),
         Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), Color(0xFF1A1206), Color(0xFF6FE7FF),
-        Color(0xFFFFB547),
+        Color(0xFF35E39B),
     ),
     // گرافیت نئونی (مشکی، نقره‌ای، یخی)
     Palette(
@@ -70,7 +71,7 @@ val Themes: List<Palette> = listOf(
         Color(0xFF07030A), Color(0xFFFBEFF3), Color(0xFFA592A6),
         Color(0xFF0D0610), Color(0xFF1C0A1C), Color(0xFF07030A),
         Color(0xE8220C20), Color(0xF00E0610), Color(0xFF150A15), Color(0xFF1A0510), Color(0xFF3FA9FF),
-        Color(0xFF4DD7FF),
+        Color(0xFF45F0A6),
     ),
     // سایبری (فیروزه‌ای و صورتی نئون)
     Palette(
@@ -110,42 +111,12 @@ object K {
     val OnGold: Color get() = ThemeState.current.onGold
     val Accent: Color get() = ThemeState.current.accent
     val Ok: Color get() = ThemeState.current.ok
+    /** رنگ «وصل / فعال»؛ در همه‌ی تم‌ها سبز است */
     val Green: Color get() = ThemeState.current.ok
     val Red = Color(0xFFFF6B6B)
+    /** هشدار (حجم یا زمان کم) */
+    val Warn = Color(0xFFFFB547)
 }
-
-// ------------------------------------------------------------------ فونت‌ها
-// فایل‌های فونت (پوشه‌ی app/src/main/res/font) هنگام ساخت دانلود می‌شوند:
-//   • روی گیت‌هاب: مرحله‌ی «دریافت فونت‌ها» در build.yml
-//   • روی اندروید استودیو: تسک fetchAssets در app/build.gradle.kts
-// اگر به هر دلیل دانلود نشده باشند، برنامه به‌جای خطای ساخت یا بسته‌شدن،
-// از فونت پیش‌فرض اندروید استفاده می‌کند.
-
-/** شناسه‌ی فونت را با اسمش پیدا می‌کند؛ اگر فایلش نبود صفر برمی‌گرداند */
-private fun fontRes(name: String): Int =
-    runCatching { Class.forName("cafe.kankipro.vpn.R\$font").getField(name).getInt(null) }.getOrDefault(0)
-
-private fun fontFamilyOf(vararg parts: Pair<String, FontWeight>): FontFamily {
-    val fonts = parts.mapNotNull { (name, weight) ->
-        fontRes(name).takeIf { it != 0 }?.let { Font(it, weight) }
-    }
-    return if (fonts.isEmpty()) FontFamily.Default else FontFamily(fonts)
-}
-
-val Vazir: FontFamily = fontFamilyOf(
-    "vazir_regular" to FontWeight.Normal,
-    "vazir_bold" to FontWeight.Bold,
-    "vazir_black" to FontWeight.Black,
-)
-
-val Poppins: FontFamily = fontFamilyOf(
-    "poppins_semibold" to FontWeight.SemiBold,
-    "poppins_bold" to FontWeight.Bold,
-)
-
-val Orbitron: FontFamily = fontRes("orbitron").takeIf { it != 0 }?.let { id ->
-    FontFamily(Font(id, FontWeight.Black, variationSettings = FontVariation.Settings(FontVariation.weight(900))))
-} ?: FontFamily.Default
 
 fun glow(c: Color, r: Float = 22f) = Shadow(color = c.copy(alpha = .75f), offset = Offset.Zero, blurRadius = r)
 
@@ -160,11 +131,17 @@ fun T(
     modifier: Modifier = Modifier,
     ltr: Boolean = false,
 ) {
+    val s = tr(text)
     Text(
-        tr(text), modifier = modifier,
+        s, modifier = modifier,
         style = TextStyle(
             fontFamily = font, fontWeight = weight, fontSize = size, color = color, shadow = shadow,
-            textDirection = if (ltr) TextDirection.Ltr else TextDirection.Content,
+            // جمله‌ی فارسی که با کلمه‌ی لاتین شروع می‌شود (مثل «Amnezia برای …») هم راست‌به‌چپ بماند
+            textDirection = when {
+                ltr -> TextDirection.Ltr
+                s.any { it in '\u0600'..'\u06FF' } -> TextDirection.Rtl
+                else -> TextDirection.Content
+            },
         ),
     )
 }
@@ -523,7 +500,8 @@ fun SpeedGauge(value: Double, color: Color, modifier: Modifier = Modifier) {
     val anim by animateFloatAsState(gaugeFraction(value), tween(300), label = "g")
     Canvas(modifier) {
         val c = Offset(size.width / 2, size.height * .55f)
-        val r = minOf(size.width, size.height * 1.4f) / 2 * .86f
+        // شعاع طوری که قوس از بالای کادر بیرون نزند
+        val r = minOf(size.width / 2, size.height * .55f) * .9f
         val start = 145f
         val sweep = 250f
         val tl = Offset(c.x - r, c.y - r)
@@ -729,7 +707,6 @@ fun RobotBubble(small: Boolean = false) {
 /** ربات با حباب گفتگو (صفحه‌ی ورود و تنظیمات) */
 @Composable
 fun RobotMascot(onClick: () -> Unit) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     Row(
         Modifier.clip(RoundedCornerShape(24.dp)).clickable { onClick() }.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -828,6 +805,26 @@ fun DrawScope.miniIcon(kind: String, c: Color) {
                 lineTo(w * .68f, w * .52f); lineTo(w * .9f, w * .3f); lineTo(w * .9f, w * .78f); close()
             }
             drawPath(p, c)
+        }
+        "unlock" -> { // قفل باز (محافظت‌نشده)
+            drawRoundRect(c, topLeft = Offset(w * .18f, w * .46f), size = Size(w * .64f, w * .46f), cornerRadius = CornerRadius(w * .1f))
+            drawArc(c, 180f, 180f, false, topLeft = Offset(w * .36f, w * .08f), size = Size(w * .40f, w * .44f), style = Stroke(sw, cap = StrokeCap.Round))
+            drawLine(c, Offset(w * .36f, w * .30f), Offset(w * .36f, w * .34f), sw, cap = StrokeCap.Round)
+        }
+        "down", "up" -> { // فلش دانلود / آپلود
+            val up = kind == "up"
+            val y0 = if (up) w * .88f else w * .12f
+            val y1 = if (up) w * .14f else w * .86f
+            drawLine(c, Offset(w * .5f, y0), Offset(w * .5f, y1), sw * 1.2f, cap = StrokeCap.Round)
+            val d = if (up) w * .30f else -w * .30f
+            drawLine(c, Offset(w * .5f, y1), Offset(w * .2f, y1 + d), sw * 1.2f, cap = StrokeCap.Round)
+            drawLine(c, Offset(w * .5f, y1), Offset(w * .8f, y1 + d), sw * 1.2f, cap = StrokeCap.Round)
+        }
+        "ping" -> { // میله‌های سیگنال
+            for (i in 0 until 3) {
+                val h = w * (.30f + i * .28f)
+                drawRoundRect(c, topLeft = Offset(w * (.10f + i * .30f), w * .92f - h), size = Size(w * .2f, h), cornerRadius = CornerRadius(w * .06f))
+            }
         }
         else -> { // وضعیت: نقطه‌ی درخشان
             drawCircle(c.copy(alpha = .25f), w * .45f, center)
@@ -949,6 +946,12 @@ fun DrawScope.settingIcon(kind: String, c: Color) {
             drawPath(poly(10f, 3.5f, 4.5f, 3.5f, 4.5f, 20.5f, 10f, 20.5f), c, style = st)
             drawLine(c, pt(9.5f, 12f), pt(20f, 12f), st.width, StrokeCap.Round)
             drawPath(poly(16f, 8f, 20f, 12f, 16f, 16f), c, style = st)
+        }
+        "lang" -> { // کره‌ی زمین (زبان)
+            drawCircle(c, 9f * u, pt(12f, 12f), style = st)
+            drawOval(c, topLeft = pt(8f, 3f), size = Size(8f * u, 18f * u), style = st)
+            drawLine(c, pt(3.5f, 9f), pt(20.5f, 9f), st.width, StrokeCap.Round)
+            drawLine(c, pt(3.5f, 15f), pt(20.5f, 15f), st.width, StrokeCap.Round)
         }
         else -> drawCircle(c, 8f * u, pt(12f, 12f), style = st)
     }

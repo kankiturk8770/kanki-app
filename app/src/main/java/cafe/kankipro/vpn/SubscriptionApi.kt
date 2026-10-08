@@ -22,6 +22,11 @@ data class Account(
     val timeRemaining: String,
     val expiry: String,
     val configs: List<ConfigLink>,
+    /** زمان انقضا (میلی‌ثانیه)؛ null یعنی نامحدود */
+    val expiresAt: Long? = null,
+    /** کل حجم و حجم مصرفی به گیگابایت (اگر پنل داده باشد) */
+    val limitGb: Double? = null,
+    val usedGb: Double? = null,
 )
 
 object SubscriptionApi {
@@ -127,6 +132,9 @@ object SubscriptionApi {
             timeRemaining = if (expiresAt != null) PanelTime.remaining(expiresAt) else "نامحدود",
             expiry = if (expiresAt != null) PanelTime.jalali(expiresAt) else "—",
             configs = configs,
+            expiresAt = expiresAt,
+            limitGb = limitGb,
+            usedGb = usedGb,
         )
     }
 }

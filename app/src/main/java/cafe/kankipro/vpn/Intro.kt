@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** صفحه‌ی ورودی: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۴ ثانیه، هماهنگ با صدای «ووش») */
+/** صفحه‌ی ورودی: ذرات طلایی جمع می‌شوند، لوگو ظاهر و اسم تایپ می‌شود (۴ ثانیه، هماهنگ با صدای «روشن شدن سپر») */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
@@ -42,9 +42,9 @@ fun SplashScreen(onDone: () -> Unit) {
         runCatching { player?.release() }
     }
     val v = p.value
-    // هماهنگ با صدای ووش (کل صفحه ۴ ثانیه):
-    // ۰ تا ۱.۴۵ ثانیه صدا اوج می‌گیرد ← ذرات جمع می‌شوند
-    // ۱.۴ ثانیه اوج صدا ← لوگو ظاهر می‌شود، ۱.۸۵ ثانیه ضربه‌ی دوم ← موج نور
+    // هماهنگ با صدای ورود (res/raw/kanki_logo.mp3، کل صفحه ۴ ثانیه):
+    // ۰ تا ۱.۴۵ ثانیه صدا بالا می‌رود ← ذرات جمع می‌شوند
+    // ۱.۴ ثانیه ضربه و آکورد «قفل شدن سپر» ← لوگو ظاهر می‌شود، ۱.۸۵ ثانیه دو نت تأیید ← موج نور
     // ۱.۷۵ تا ۲.۷۵ ثانیه اسم تایپ می‌شود، ۳.۵۵ تا ۴ ثانیه محو شدن
     val gather = FastOutSlowInEasing.transform((v / 0.3625f).coerceIn(0f, 1f))
     val logo = FastOutSlowInEasing.transform(((v - 0.35f) / 0.0875f).coerceIn(0f, 1f))
