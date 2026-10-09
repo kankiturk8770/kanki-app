@@ -61,7 +61,7 @@ class AppState private constructor(context: Context) {
     private var autoRetries = 0
     /** آخرین خواندن صفحه‌ی اشتراک از شبکه بود یا از نسخه‌ی ذخیره‌شده */
     @Volatile private var lastFromCache = false
-    private val syncIntervalMs = 12L * 60 * 60 * 1000
+    private val syncIntervalMs = 3L * 60 * 60 * 1000
 
     // ---------------- ربات راهنما
     /** آموزش قدم‌به‌قدم یک بار دیده شده؟ (بار اول خودکار نشان داده می‌شود) */
@@ -283,7 +283,7 @@ class AppState private constructor(context: Context) {
         }
     }.getOrDefault(true)
 
-    /** هر ۱۲ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
+    /** هر ۳ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
     private fun watchSync() {
         bg.launch {
             while (true) {
@@ -313,7 +313,7 @@ class AppState private constructor(context: Context) {
 
     /**
      * فقط حجم مصرفی، زمان باقی‌مانده و وضعیت حساب را از صفحه‌ی اشتراک می‌گیرد (یک درخواست کوچک).
-     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۱۲ ساعت یا با بروزرسانی دستی بروز می‌شوند.
+     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۳ ساعت یا با بروزرسانی دستی بروز می‌شوند.
      */
     suspend fun refreshUsage() {
         val b = base ?: return
@@ -331,7 +331,7 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * هنگام باز شدن برنامه: اگر کمتر از ۱۲ ساعت از آخرین بروزرسانی گذشته باشد، همه‌چیز از حافظه‌ی گوشی
+     * هنگام باز شدن برنامه: اگر کمتر از ۳ ساعت از آخرین بروزرسانی گذشته باشد، همه‌چیز از حافظه‌ی گوشی
      * خوانده می‌شود و به پنل درخواستی نمی‌رود. وگرنه (یا بار اول) یک بروزرسانی کامل انجام می‌شود.
      */
     suspend fun startupLoad() {
@@ -438,7 +438,7 @@ class AppState private constructor(context: Context) {
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
         val cached = prefs.getString(cacheKey, null)
-        // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۱۲ ساعته) دوباره از پنل خوانده می‌شود.
+        // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۳ ساعته) دوباره از پنل خوانده می‌شود.
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
         val txt = if (!forceNet && cached != null) cached else
             runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
