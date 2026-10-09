@@ -75,6 +75,10 @@ class AppState private constructor(context: Context) {
     fun markTip(k: String) { tipsSeen[k] = true; prefs.edit().putBoolean("tip_$k", true).apply() }
     /** پیام‌های ربات که کاربر در همین اجرا بسته است */
     val dismissed = androidx.compose.runtime.mutableStateListOf<String>()
+    /** شناسه‌ی آخرین پیام ادمین که کاربر بسته؛ ذخیره می‌شود تا بعد از باز کردن دوباره‌ی برنامه برنگردد */
+    var closedNotice by mutableStateOf(prefs.getString("notice_closed", null))
+        private set
+    fun closeNotice(id: String) { closedNotice = id; prefs.edit().putString("notice_closed", id).apply() }
 
     // ---------------- تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند
     val excluded = androidx.compose.runtime.mutableStateListOf<String>().apply {

@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.7.2"
+        versionCode = 28
+        versionName = "1.7.3"
     }
     signingConfigs {
         if (canSignRelease) {

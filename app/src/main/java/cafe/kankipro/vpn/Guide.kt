@@ -168,12 +168,16 @@ data class RobotAlert(
 private const val DAY_MS = 86_400_000L
 
 /** پیام مناسب ربات بر اساس وضعیت اشتراک و آخرین خطا (یا null اگر همه‌چیز خوب است) */
-fun robotAlertFor(a: Account?, now: Long, error: String?, errorDetail: String?): RobotAlert? {
+fun robotAlertFor(a: Account?, now: Long, error: String?, errorDetail: String?, closedNotice: String? = null): RobotAlert? {
     if (error != null) {
         return if (errorDetail != null) RobotAlert("err:$errorDetail", 2, error, "انتخاب هوشمند", "smart", errorDetail)
         else RobotAlert("err:$error", 2, error)
     }
     a ?: return null
+    // پیام ادمین تا وقتی زمانش تمام نشده و کاربر نبسته‌اش
+    a.notice?.let { n ->
+        if (n.id != closedNotice && (n.until == 0L || n.until > now)) return RobotAlert("msg:${n.id}", 0, n.text)
+    }
     when (a.status.lowercase()) {
         "expired" -> return RobotAlert("expired", 2, "اشتراکت تموم شده 😔 برای ادامه از ربات تمدیدش کن.", "تمدید", "renew")
         "limited" -> return RobotAlert("limited", 2, "حجم اشتراکت تموم شده! با تمدید دوباره وصل می‌شی 🚀", "تمدید", "renew")

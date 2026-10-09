@@ -289,7 +289,9 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     }
     val used = a?.usedGb
     val limit = a?.limitGb
-    val alert = robotAlertFor(a, now, state.error, state.errorDetail)?.takeIf { it.id !in state.dismissed }
+    // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۳۰ ثانیه‌ای بالا آن را می‌آورد)
+    LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage() } }
+    val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
     val ui = HomeUi(
         vstate = state.vstate,
@@ -349,6 +351,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             dismissAlert = {
                 alert?.let { al ->
                     state.dismissed.add(al.id)
+                    if (al.id.startsWith("msg:")) state.closeNotice(al.id.removePrefix("msg:"))
                     if (al.id.startsWith("err:")) { state.error = null; state.errorDetail = null }
                 }
             },
