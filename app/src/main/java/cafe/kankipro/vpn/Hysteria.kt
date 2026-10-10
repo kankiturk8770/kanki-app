@@ -143,32 +143,43 @@ class KankiHyService : VpnService() {
 
     @Volatile private var tun: ParcelFileDescriptor? = null
     @Volatile private var proc: Process? = null
-    @Volatile private var stopping = false
+    /**
+     * شماره‌ی تلاش فعلی برای اتصال. با هر شروع تازه و هر shutdown یکی زیاد می‌شود؛
+     * پس تلاشی که شماره‌اش عوض شده یعنی لغو شده (کاربر قطع کرد، زمان تمام شد یا تلاش تازه‌تری شروع شد)
+     * و دیگر نباید VPN را بالا بیاورد.
+     */
+    @Volatile private var gen = 0
     private val log = StringBuilder()
+
+    private fun cancelled(my: Int) = gen != my
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == START) {
-            stopping = false
+            val my = synchronized(this) { ++gen }
             HyEngine.crashed = false
             HyEngine.service = this
             val text = HyEngine.pending
-            Thread({ doStart(text) }, "kanki-hy2").start()
+            Thread({ doStart(text, my) }, "kanki-hy2").start()
+        } else if (intent?.action == VpnService.SERVICE_INTERFACE) {
+            // اندروید خودش («همیشه‌روشن») این سرویس را بالا آورده
+            AlwaysOn.start(this)
         }
         return START_NOT_STICKY
     }
 
-    private fun doStart(text: String?) {
+    private fun doStart(text: String?, my: Int) {
         try {
-            start(text ?: error("hysteria2: no config"))
-            HyEngine.state = HyEngine.UP
+            start(text ?: error("hysteria2: no config"), my)
         } catch (t: Throwable) {
+            // تلاش لغو‌شده را کسی که لغوش کرده (shutdown) جمع کرده؛ خطا گزارش نمی‌شود
+            if (cancelled(my)) return
             HyEngine.lastError = t.message ?: t.javaClass.simpleName
             HyEngine.state = HyEngine.FAILED
             shutdown()
         }
     }
 
-    private fun start(text: String) {
+    private fun start(text: String, my: Int) {
         val lines = text.lines().map { it.trim() }
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
@@ -197,13 +208,16 @@ class KankiHyService : VpnService() {
         }
         val hyFile = File(filesDir, "hy2.yaml").apply { writeText(hyCfg) }
 
-        killStaleCores()
         val pb = ProcessBuilder(listOf(bin.path, "client", "-c", hyFile.path))
             .directory(filesDir).redirectErrorStream(true)
         pb.environment()["HOME"] = filesDir.path
         pb.environment()["HYSTERIA_DISABLE_UPDATE_CHECK"] = "1"
-        val p = pb.start()
-        proc = p
+        // پیدا کردن آی‌پی سرور (بالا) ممکن است طول بکشد؛ اگر در این فاصله لغو شده، هسته‌ای اجرا نمی‌شود
+        val p = synchronized(this) {
+            if (cancelled(my)) error("hysteria2: cancelled")
+            killStaleCores()
+            pb.start().also { proc = it }
+        }
         Thread({
             runCatching {
                 p.inputStream.bufferedReader().forEachLine { line ->
@@ -218,7 +232,7 @@ class KankiHyService : VpnService() {
         // اگر هسته بعد از اتصال از بین رفت (مثلاً اندروید پروسه را کشت)، تونل بسته و وضعیت گزارش می‌شود
         Thread({
             runCatching { p.waitFor() }
-            if (!stopping && HyEngine.service === this && HyEngine.state == HyEngine.UP) {
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
                 HyEngine.crashed = true
                 HyEngine.lastError = "hysteria core exited. " + lastLog()
                 shutdown()
@@ -230,6 +244,7 @@ class KankiHyService : VpnService() {
         val end = System.currentTimeMillis() + 15_000
         var ready = false
         while (System.currentTimeMillis() < end) {
+            if (cancelled(my)) error("hysteria2: cancelled")
             if (!p.isAlive) error("hysteria2: " + lastLog())
             ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress("127.0.0.1", socksPort), 300) }; true }.getOrDefault(false)
             if (ready) break
@@ -246,12 +261,19 @@ class KankiHyService : VpnService() {
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
-        val fd = b.establish() ?: error("hysteria2: VPN permission is missing")
-        tun = fd
 
         val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: 198.18.0.1\nsocks5:\n  port: $socksPort\n  address: 127.0.0.1\n  udp: 'udp'\nmisc:\n  task-stack-size: 81920\n"
         val hevFile = File(filesDir, "hev.yaml").apply { writeText(hevCfg) }
-        if (!TProxyService.TProxyStartService(hevFile.path, fd.fd)) error("hysteria2: tun2socks did not start")
+
+        // بررسی لغو و بالا آوردن VPN با هم (زیر یک قفل با shutdown) انجام می‌شود؛
+        // پس اگر زمان تمام شده یا کاربر قطع کرده، VPN دیگر بی‌صدا وصل نمی‌شود
+        synchronized(this) {
+            if (cancelled(my)) error("hysteria2: cancelled")
+            val fd = b.establish() ?: error("hysteria2: VPN permission is missing")
+            tun = fd
+            if (!TProxyService.TProxyStartService(hevFile.path, fd.fd)) error("hysteria2: tun2socks did not start")
+            HyEngine.state = HyEngine.UP
+        }
     }
 
     /**
@@ -286,7 +308,7 @@ class KankiHyService : VpnService() {
 
     @Synchronized
     fun shutdown() {
-        stopping = true
+        gen++   // هر تلاش در حال اجرا لغو می‌شود
         if (TProxyService.loaded) runCatching { TProxyService.TProxyStopService() }
         runCatching { tun?.close() }
         tun = null

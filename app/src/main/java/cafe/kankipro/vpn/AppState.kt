@@ -61,7 +61,24 @@ class AppState private constructor(context: Context) {
     private var autoRetries = 0
     /** آخرین خواندن صفحه‌ی اشتراک از شبکه بود یا از نسخه‌ی ذخیره‌شده */
     @Volatile private var lastFromCache = false
-    private val syncIntervalMs = 12L * 60 * 60 * 1000
+    private val syncIntervalMs = 3L * 60 * 60 * 1000
+
+    // ---------------- ربات راهنما
+    /** آموزش قدم‌به‌قدم یک بار دیده شده؟ (بار اول خودکار نشان داده می‌شود) */
+    var guideDone: Boolean
+        get() = prefs.getBoolean("guideDone", false)
+        set(v) { prefs.edit().putBoolean("guideDone", v).apply() }
+    /** نکته‌ی اول هر تب (سرورها، تست، تنظیمات) دیده شده؟ */
+    val tipsSeen = mutableStateMapOf<String, Boolean>().apply {
+        listOf("servers", "test", "settings").forEach { put(it, prefs.getBoolean("tip_$it", false)) }
+    }
+    fun markTip(k: String) { tipsSeen[k] = true; prefs.edit().putBoolean("tip_$k", true).apply() }
+    /** پیام‌های ربات که کاربر در همین اجرا بسته است */
+    val dismissed = androidx.compose.runtime.mutableStateListOf<String>()
+    /** شناسه‌ی آخرین پیام ادمین که کاربر بسته؛ ذخیره می‌شود تا بعد از باز کردن دوباره‌ی برنامه برنگردد */
+    var closedNotice by mutableStateOf(prefs.getString("notice_closed", null))
+        private set
+    fun closeNotice(id: String) { closedNotice = id; prefs.edit().putString("notice_closed", id).apply() }
 
     // ---------------- تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند
     val excluded = androidx.compose.runtime.mutableStateListOf<String>().apply {
@@ -270,7 +287,7 @@ class AppState private constructor(context: Context) {
         }
     }.getOrDefault(true)
 
-    /** هر ۱۲ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
+    /** هر ۳ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
     private fun watchSync() {
         bg.launch {
             while (true) {
@@ -300,7 +317,7 @@ class AppState private constructor(context: Context) {
 
     /**
      * فقط حجم مصرفی، زمان باقی‌مانده و وضعیت حساب را از صفحه‌ی اشتراک می‌گیرد (یک درخواست کوچک).
-     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۱۲ ساعت یا با بروزرسانی دستی بروز می‌شوند.
+     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۳ ساعت یا با بروزرسانی دستی بروز می‌شوند.
      */
     suspend fun refreshUsage() {
         val b = base ?: return
@@ -318,7 +335,7 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * هنگام باز شدن برنامه: اگر کمتر از ۱۲ ساعت از آخرین بروزرسانی گذشته باشد، همه‌چیز از حافظه‌ی گوشی
+     * هنگام باز شدن برنامه: اگر کمتر از ۳ ساعت از آخرین بروزرسانی گذشته باشد، همه‌چیز از حافظه‌ی گوشی
      * خوانده می‌شود و به پنل درخواستی نمی‌رود. وگرنه (یا بار اول) یک بروزرسانی کامل انجام می‌شود.
      */
     suspend fun startupLoad() {
@@ -425,7 +442,7 @@ class AppState private constructor(context: Context) {
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
         val cached = prefs.getString(cacheKey, null)
-        // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۱۲ ساعته) دوباره از پنل خوانده می‌شود.
+        // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۳ ساعته) دوباره از پنل خوانده می‌شود.
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
         val txt = if (!forceNet && cached != null) cached else
             runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
@@ -669,14 +686,79 @@ class AppState private constructor(context: Context) {
         return false
     }
 
-    /** سوییچ سریع به پروتکل دیگر (اگر وصل است، قطع و دوباره وصل می‌شود) */
-    suspend fun switchTo(p: String) {
+    /** انتخاب پروتکل؛ «Amnezia Direct» یعنی مسیر مستقیم، بقیه یعنی تانل */
+    fun selectProto(p: String) {
         smartOpen = false
-        val wasOn = vstate == VState.ON
-        if (wasOn) disconnect()
+        val r = if (p.endsWith("-direct")) "direct" else "tunnel"
+        if (route != r) { route = r; prefs.edit().putString("route", r).apply() }
         proto = p
         save()
+    }
+
+    /** سوییچ سریع به پروتکل دیگر (اگر وصل است، قطع و دوباره وصل می‌شود) */
+    suspend fun switchTo(p: String) {
+        val wasOn = vstate == VState.ON
+        if (wasOn) disconnect()
+        selectProto(p)
         if (wasOn || p == "openvpn") connect()
+    }
+
+    /** بهترین پینگ اندازه‌گیری‌شده‌ی یک کانفیگ (UDP واقعی، بعد TCP، بعد پینگ ساده) */
+    fun protoPing(nodeId: String?, p: String): Long? {
+        val k = "$nodeId/$p"
+        return listOfNotNull(udpPings[k], tcpPings[k], pings[k]).firstOrNull { it > 0 }
+            ?: listOfNotNull(udpPings[k], tcpPings[k], pings[k]).firstOrNull()
+    }
+
+    /** بهترین پینگ یک سرور از بین همه‌ی کانفیگ‌هایش */
+    fun nodePing(nodeId: String): Long? {
+        val fromTests = (udpPings.entries + tcpPings.entries + pings.entries)
+            .filter { it.key.startsWith("$nodeId/") && it.value > 0 }.minOfOrNull { it.value }
+        return fromTests ?: smartRows.filter { it.node == nodeId }.minOfOrNull { it.ping }
+    }
+
+    // ---------------- تست سرعت (در محدوده‌ی خود برنامه، تا با عوض کردن تب قطع نشود)
+    var speed by mutableStateOf(SpeedUi())
+    /** سرعت لحظه‌ای جدا نگه داشته می‌شود چون از رشته‌ی پس‌زمینه بروز می‌شود */
+    var speedLive by mutableStateOf(0.0)
+
+    fun runSpeedTest() {
+        if (speed.running) return
+        speed = SpeedUi(running = true, phase = "server", viaVpn = vstate == VState.ON)
+        speedLive = 0.0
+        bg.launch {
+            try {
+                var srv = withContext(Dispatchers.IO) { SpeedEngine.pickServer() } ?: SpeedEngine.CLOUDFLARE
+                speed = speed.copy(phase = "ping", server = srv.title)
+                var lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
+                if (lat == null && srv.kind != "cf") {
+                    srv = SpeedEngine.CLOUDFLARE
+                    speed = speed.copy(server = srv.title)
+                    lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
+                }
+                speed = speed.copy(phase = "down", ping = lat?.first, jitter = lat?.second)
+                // اگر سرور Ookla جواب نداد: یک بار با آدرس‌های قدیمی Ookla، بعد با Cloudflare
+                suspend fun <T> withFallback(block: (SpeedEngine.Server) -> T): T = withContext(Dispatchers.IO) {
+                    try { block(srv) } catch (e: java.io.IOException) {
+                        if (srv.kind == "ookla" && !srv.legacy) {
+                            srv.legacy = true
+                            try { block(srv) } catch (e2: java.io.IOException) { srv = SpeedEngine.CLOUDFLARE; block(srv) }
+                        } else if (srv.kind == "ookla") { srv = SpeedEngine.CLOUDFLARE; block(srv) } else throw e
+                    }
+                }
+                val (down, db) = withFallback { s -> SpeedEngine.download(s) { speedLive = it } }
+                speedLive = 0.0
+                speed = speed.copy(phase = "up", down = down, server = srv.title)
+                val (up, ub) = withFallback { s -> SpeedEngine.upload(s) { speedLive = it } }
+                speedLive = 0.0
+                speed = speed.copy(running = false, phase = "done", up = up, usedBytes = db + ub)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                speedLive = 0.0
+                speed = speed.copy(running = false, phase = "", error = "تست ناموفق بود. اینترنت را بررسی کنید.")
+            }
+        }
     }
 
     /** بروزرسانی اطلاعات کانفیگ‌های یک سرور */
@@ -771,6 +853,9 @@ class AppState private constructor(context: Context) {
             .forEach { e.remove(it) }
         e.apply()
         LastConfig.clear(ctx)
+        runCatching { java.io.File(ctx.filesDir, "hy2.yaml").delete() }
+        dismissed.clear()
+        speed = SpeedUi()
         base = null; code = null; account = null; node = null
         infos.clear(); badCfg.clear()
         pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()
