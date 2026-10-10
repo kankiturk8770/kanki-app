@@ -34,7 +34,7 @@ object SubscriptionApi {
     /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند */
     fun normalize(input: String): Pair<String, String>? {
         val s = input.trim()
-        val full = Regex("""(https?://[^/\s]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
+        val full = Regex("""(https://[^/\s]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
         if (full != null) return full.groupValues[1] to full.groupValues[2]
         val code = codeRegex.find(s) ?: return null
         return DEFAULT_HOST to code.value
@@ -102,7 +102,9 @@ object SubscriptionApi {
         val linkRe = Regex("""(?:https?://[^"'\s<>]+)?/api/config/(\d+)/([a-z0-9]+(?:/[a-z0-9]+)?)\?[^"'\s<>]+""")
         val configs = linkRe.findAll(clean).mapNotNull { m ->
             val raw = decode(m.value)
+            // config links carry private keys: only fetch them from the panel we logged in to
             val url = if (raw.startsWith("http")) raw else base + raw
+            if (!url.startsWith("$base/")) return@mapNotNull null
             val node = Regex("""[?&]node=([^&]+)""").find(raw)?.groupValues?.get(1) ?: "local"
             val name = headings.lastOrNull { it.first < m.range.first }?.second ?: node
             // Hysteria2 در صفحه‌ی اشتراک فقط دکمه‌ی QR دارد؛ همان آدرس بدون /qr متن لینک hysteria2:// را می‌دهد
