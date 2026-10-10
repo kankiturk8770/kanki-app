@@ -46,18 +46,19 @@ jobs:
       - name: دریافت هسته‌ی Hysteria2
         run: |
           set -e
-          get() { # $1=ABI اندروید  $2=نسخه‌ی اندروید هسته  $3=نسخه‌ی لینوکس (اگر نسخه‌ی اندروید نبود)
+          # The core is pinned by SHA-256: a changed upstream "latest" release fails the build instead of
+          # being shipped inside our signed APK. To upgrade Hysteria, update these four hashes on purpose
+          # (from the release's hashes.txt, after checking the release).
+          get() { # $1=ABI  $2=asset suffix  $3=expected sha256
             d=app/src/main/jniLibs/$1; mkdir -p "$d"
-            for u in "https://github.com/apernet/hysteria/releases/latest/download/hysteria-android-$2" \
-                     "https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-$3"; do
-              if curl -fsSL --retry 3 -o "$d/libhysteria.so" "$u"; then chmod +x "$d/libhysteria.so"; echo "$1 <- $u"; return 0; fi
-            done
-            echo "::error::Hysteria core for $1 was not found"; exit 1
+            curl -fsSL --retry 3 -o "$d/libhysteria.so" "https://github.com/apernet/hysteria/releases/latest/download/hysteria-android-$2"
+            echo "$3  $d/libhysteria.so" | sha256sum -c - || { echo "::error::Hysteria core for $1 does not match the pinned hash"; exit 1; }
+            chmod +x "$d/libhysteria.so"
           }
-          get arm64-v8a arm64 arm64
-          get armeabi-v7a armv7 arm
-          get x86_64 amd64 amd64
-          get x86 386 386
+          get arm64-v8a arm64 13d5b85cd45e11cf02847dc2b6229d6f9a20b3cb87a00b9356cf244e3bd8db84
+          get armeabi-v7a armv7 41a4c3f1f03fac5da47af33902f34dce66a3b491a59c0879a057b5899037e604
+          get x86_64 amd64 093c3f7b2d8cb255bd62148e2662d9054e1bc6fb69ae57ece4665016dfcd1a03
+          get x86 386 afaa6367db3a4fb718b85a9c6366be9ea3e1c4ef1dbb82402624b9215640d98f
           ls -la app/src/main/jniLibs/*
 
       - name: ساخت tun2socks برای Hysteria2 (hev-socks5-tunnel)

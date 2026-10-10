@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Panel, subscription and config traffic must be HTTPS (it carries the sub code and tunnel keys).
+     Cleartext is allowed only for the connectivity probes and the geo-IP fallback, which carry no secrets. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">www.gstatic.com</domain>
+        <domain includeSubdomains="false">cp.cloudflare.com</domain>
+        <domain includeSubdomains="false">ip-api.com</domain>
+    </domain-config>
+</network-security-config>
