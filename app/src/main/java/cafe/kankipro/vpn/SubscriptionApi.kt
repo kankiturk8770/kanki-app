@@ -22,7 +22,17 @@ data class Account(
     val timeRemaining: String,
     val expiry: String,
     val configs: List<ConfigLink>,
+    /** زمان انقضا (میلی‌ثانیه)؛ null یعنی نامحدود */
+    val expiresAt: Long? = null,
+    /** کل حجم و حجم مصرفی به گیگابایت (اگر پنل داده باشد) */
+    val limitGb: Double? = null,
+    val usedGb: Double? = null,
+    /** پیامی که ادمین در پنل (ربات فروش › پیام اپ) نوشته؛ ربات صفحه‌ی اول نشانش می‌دهد */
+    val notice: AppNotice? = null,
 )
+
+/** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
+data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
     /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
@@ -77,6 +87,14 @@ object SubscriptionApi {
 
     private val protocolTitles = setOf("openvpn", "wireguard", "amneziawg", "hysteria2")
 
+    /** پیام ادمین از JSON داخل صفحه‌ی اشتراک (<script id="data">)؛ پنل‌های قدیمی آن را ندارند */
+    private fun notice(html: String): AppNotice? {
+        val raw = Regex("""(?is)<script[^>]*id="data"[^>]*>(.*?)</script>""").find(html)?.groupValues?.get(1) ?: return null
+        val m = runCatching { org.json.JSONObject(raw).optJSONObject("app_msg") }.getOrNull() ?: return null
+        val text = m.optString("text").trim()
+        return if (text.isEmpty()) null else AppNotice(m.optString("id"), text, m.optLong("until") * 1000)
+    }
+
     fun parse(html: String, base: String): Account {
         val clean = html.replace(Regex("(?is)<script.*?</script>|<style.*?</style>"), "")
         val lines = decode(clean.replace(Regex("<[^>]+>"), "\n"))
@@ -129,6 +147,10 @@ object SubscriptionApi {
             timeRemaining = if (expiresAt != null) PanelTime.remaining(expiresAt) else "نامحدود",
             expiry = if (expiresAt != null) PanelTime.jalali(expiresAt) else "—",
             configs = configs,
+            expiresAt = expiresAt,
+            limitGb = limitGb,
+            usedGb = usedGb,
+            notice = notice(html),
         )
     }
 }
