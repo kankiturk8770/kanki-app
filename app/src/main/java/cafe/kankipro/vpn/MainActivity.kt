@@ -82,6 +82,9 @@ fun App() {
 
     var splash by rememberSaveable { mutableStateOf(true) }
 
+    // آدرس اضطراری را نگه می‌داریم تا وقتی اینترنت قطع است هم باز شود
+    LaunchedEffect(state.account) { Emergency.remember(ctx, state.account?.emergency) }
+
     // بارگذاری اطلاعات و اتصال خودکار
     LaunchedEffect(state.loggedIn) {
         if (state.loggedIn) {

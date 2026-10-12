@@ -38,11 +38,6 @@ class AppState private constructor(context: Context) {
     var base by mutableStateOf(prefs.getString("base", null))
     var code by mutableStateOf(prefs.getString("code", null))
     var account by mutableStateOf<Account?>(null)
-        set(v) {
-            field = v
-            // آدرس اضطراری را نگه می‌داریم تا وقتی اینترنت قطع است هم باز شود
-            Emergency.remember(ctx, v?.emergency)
-        }
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     /** جزئیات فنی آخرین خطا (با زدن «جزئیات» دیده می‌شود) */
