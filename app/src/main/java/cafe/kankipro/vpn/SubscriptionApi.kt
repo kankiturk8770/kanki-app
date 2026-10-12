@@ -29,6 +29,8 @@ data class Account(
     val usedGb: Double? = null,
     /** پیامی که ادمین در پنل (ربات فروش › پیام اپ) نوشته؛ ربات صفحه‌ی اول نشانش می‌دهد */
     val notice: AppNotice? = null,
+    /** آدرس دامنه‌ی اضطراری که ادمین در پنل گذاشته (https://…)؛ null یعنی پنل قدیمی است */
+    val emergency: String? = null,
 )
 
 /** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
@@ -88,6 +90,12 @@ object SubscriptionApi {
     private val protocolTitles = setOf("openvpn", "wireguard", "amneziawg", "hysteria2")
 
     /** پیام ادمین از JSON داخل صفحه‌ی اشتراک (<script id="data">)؛ پنل‌های قدیمی آن را ندارند */
+    /** JSON داخل <script id="data"> صفحه‌ی اشتراک؛ null اگر نباشد */
+    private fun dataJson(html: String): org.json.JSONObject? {
+        val raw = Regex("""(?is)<script[^>]*id="data"[^>]*>(.*?)</script>""").find(html)?.groupValues?.get(1) ?: return null
+        return runCatching { org.json.JSONObject(raw) }.getOrNull()
+    }
+
     private fun notice(html: String): AppNotice? {
         val raw = Regex("""(?is)<script[^>]*id="data"[^>]*>(.*?)</script>""").find(html)?.groupValues?.get(1) ?: return null
         val m = runCatching { org.json.JSONObject(raw).optJSONObject("app_msg") }.getOrNull() ?: return null
@@ -151,6 +159,7 @@ object SubscriptionApi {
             limitGb = limitGb,
             usedGb = usedGb,
             notice = notice(html),
+            emergency = dataJson(html)?.optString("emergency")?.takeIf { it.startsWith("https://") },
         )
     }
 }
