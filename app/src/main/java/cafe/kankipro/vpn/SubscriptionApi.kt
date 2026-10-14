@@ -31,6 +31,8 @@ data class Account(
     val notice: AppNotice? = null,
     /** آدرس دامنه‌ی اضطراری که ادمین در پنل گذاشته (https://…)؛ null یعنی پنل قدیمی است */
     val emergency: String? = null,
+    /** کلید عمومی امضای پیام‌های ادمین در چت اضطراری (base64) */
+    val emergencyKey: String? = null,
 )
 
 /** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
@@ -159,7 +161,8 @@ object SubscriptionApi {
             limitGb = limitGb,
             usedGb = usedGb,
             notice = notice(html),
-            emergency = dataJson(html)?.optString("emergency")?.takeIf { it.startsWith("https://") },
+            emergency = dataJson(html)?.optString("emergency")?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
+            emergencyKey = dataJson(html)?.optString("emergency_key")?.takeIf { it.isNotBlank() },
         )
     }
 }

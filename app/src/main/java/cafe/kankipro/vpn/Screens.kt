@@ -14,9 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -58,7 +55,7 @@ fun LoginScreen(state: AppState) {
     var text by remember { mutableStateOf("") }
 
     Box(Modifier.fillMaxSize()) {
-    EmergencyBox(Modifier.align(Alignment.TopEnd).padding(12.dp))
+    EmergencyBox(Modifier.align(Alignment.TopEnd).padding(12.dp)) { state.emergencyOpen = true }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -118,27 +115,6 @@ fun LoginScreen(state: AppState) {
     }
 }
 
-/** کادر کوچک گوشه‌ی صفحه‌ی ورود: فقط برای وقتی که اینترنت قطع است */
-@Composable
-fun EmergencyBox(modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val shape = RoundedCornerShape(14.dp)
-    Column(
-        modifier
-            .widthIn(max = 150.dp)
-            .clip(shape)
-            .background(Color(0xCC000000))
-            .border(1.dp, K.Gold.copy(alpha = .6f), shape)
-            .clickable { Emergency.open(ctx) }
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Logo3D(34.dp, animate = false)
-        T("اضطراری", size = 11.sp, color = K.Gold, weight = FontWeight.Black)
-        T("فقط وقتی اینترنت قطع است از این بخش استفاده کنید", size = 9.sp, color = K.Sub, weight = FontWeight.Normal)
-    }
-}
-
 // ================================================================== قاب اصلی
 
 @Composable
@@ -169,7 +145,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     fun startGuide() { tab = KTab.HOME; Guide.start() }
 
-    MainFrame(tab, onTab = { tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }) {
+    MainFrame(tab, onTab = { tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
         when (tab) {
             KTab.HOME -> HomeTab(state, countries, onToggle, openSheet = { sheet = true }, askProto = { askProto = it })
             KTab.SERVERS -> ServersTab(state)
@@ -411,13 +387,6 @@ private fun ServersTab(state: AppState) {
         ServerCardUi(nodeId, name, flagOf(name), state.node == nodeId, state.openNode == nodeId, state.nodePing(nodeId), protos)
     } ?: emptyList()
 
-    Column(Modifier.fillMaxSize()) {
-        LineButton(
-            "🆘 حالت اضطراری (وقتی اینترنت قطع است)",
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-            color = K.Red,
-        ) { Emergency.open(ctx) }
-        Box(Modifier.weight(1f)) {
     ServersContent(
         cards, locked,
         tip = if (state.tipsSeen["servers"] == true) null else RobotAlert("tip_servers", 0, "روی هر سرور بزن تا پروتکل‌هاش باز بشه. UDP پینگ واقعی داخل تونله و TCP پینگ خود سرور. با ⚙ هم MTU رو تنظیم می‌کنی."),
@@ -443,8 +412,6 @@ private fun ServersTab(state: AppState) {
             closeTip = { state.markTip("servers") },
         ),
     )
-        }
-    }
 }
 
 // ================================================================== تونل‌زنی انتخابی

@@ -8,4 +8,9 @@
         <domain includeSubdomains="false">cp.cloudflare.com</domain>
         <domain includeSubdomains="false">ip-api.com</domain>
     </domain-config>
+    <!-- Emergency chat on a server inside Iran: it may have no certificate when the internet is cut.
+         Safe anyway: the user is sent as a hash (never the sub code) and every admin message is signed. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">chat.kanki.pro</domain>
+    </domain-config>
 </network-security-config>

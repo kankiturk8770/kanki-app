@@ -1,0 +1,383 @@
+package cafe.kankipro.vpn
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+
+// ================================================================== لوگوی اضطراری
+
+/** نشان اضطراری: حلقه‌ی نجات قرمز و سفید */
+@Composable
+fun EmergencyIcon(size: Dp = 28.dp) {
+    Canvas(Modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        val ring = r * 0.36f
+        val mid = r - ring / 2f
+        drawCircle(K.Red, mid, center, style = Stroke(ring))
+        // چهار نوار سفید روی حلقه
+        for (i in 0 until 4) {
+            drawArc(
+                Color.White, startAngle = 45f + i * 90f - 16f, sweepAngle = 32f, useCenter = false,
+                topLeft = Offset(center.x - mid, center.y - mid), size = androidx.compose.ui.geometry.Size(mid * 2, mid * 2),
+                style = Stroke(ring),
+            )
+        }
+        drawCircle(K.Red.copy(alpha = .9f), r, center, style = Stroke(r * 0.07f))
+    }
+}
+
+/** دکمه‌ی کوچک گرد اضطراری (سربرگ برنامه) */
+@Composable
+fun EmergencyButton(size: Dp = 40.dp, onClick: () -> Unit) {
+    Box(
+        Modifier.size(size).clip(CircleShape).background(K.Red.copy(alpha = .10f))
+            .border(1.dp, K.Red.copy(alpha = .45f), CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { EmergencyIcon(size * 0.62f) }
+}
+
+/** کادر کوچک گوشه‌ی صفحه‌ی ورود */
+@Composable
+fun EmergencyBox(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier.widthIn(max = 190.dp).clip(shape).background(K.Red.copy(alpha = .08f))
+            .border(1.dp, K.Red.copy(alpha = .40f), shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        EmergencyIcon(26.dp)
+        Spacer(Modifier.width(6.dp))
+        Column {
+            T("ارتباط اضطراری", size = 11.sp, color = K.Red, weight = FontWeight.Black)
+            T("فقط وقتی اینترنت ملی شده", size = 9.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+    }
+}
+
+// ================================================================== صفحه‌ی چت اضطراری
+
+@Composable
+fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val clip = LocalClipboardManager.current
+    BackHandler(onBack = onClose)
+
+    var code by remember { mutableStateOf(state.code ?: Emergency.savedCode(ctx)) }
+    var codeText by remember { mutableStateOf("") }
+    val msgs = remember { mutableStateListOf<EMsg>() }
+    var user by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var text by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(true) }
+    val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
+    val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
+    val list = rememberLazyListState()
+
+    fun errText(e: Throwable): String = when {
+        e is EmergencyException && e.code == 403 -> "این اشتراک هنوز در سرور اضطراری ثبت نشده. کد را درست وارد کنید؛ اگر تازه خریده‌اید، باید یک بار وقتی اینترنت وصل بود برنامه را باز کرده باشید."
+        e is EmergencyException && e.code == 429 -> "تعداد درخواست زیاد بود. چند دقیقه صبر کنید."
+        e is EmergencyException -> e.message ?: "خطا"
+        else -> "به سرور اضطراری وصل نشد. اگر VPN روشن است خاموشش کنید و دوباره امتحان کنید."
+    }
+
+    suspend fun load() {
+        val c = code ?: return
+        try {
+            val after = msgs.lastOrNull()?.id ?: 0L
+            val (u, fresh) = withContext(Dispatchers.IO) { Emergency.messages(ctx, c, after) }
+            user = u
+            status = null
+            if (fresh.isNotEmpty()) {
+                msgs.addAll(fresh.filter { f -> msgs.none { it.id == f.id } })
+                helpOpen = false
+            }
+            // عکس‌های تازه
+            fresh.filter { it.img && it.id !in images }.forEach { m ->
+                runCatching {
+                    val bytes = withContext(Dispatchers.IO) { Emergency.image(ctx, c, m.id) }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { images[m.id] = it.asImageBitmap() }
+                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, u, bytes)
+                }
+            }
+        } catch (e: Exception) {
+            status = errText(e)
+        }
+    }
+
+    LaunchedEffect(code) {
+        msgs.clear()
+        while (code != null) {
+            load()
+            delay(5000)
+        }
+    }
+    LaunchedEffect(msgs.size) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size - 1) }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val c = code
+        if (uri != null && c != null) {
+            sending = true
+            scope.launch {
+                try {
+                    val jpeg = withContext(Dispatchers.Default) { shrink(ctx, uri) }
+                    if (jpeg == null) status = "این عکس خوانده نشد."
+                    else {
+                        withContext(Dispatchers.IO) { Emergency.sendImage(ctx, c, jpeg) }
+                        load()
+                    }
+                } catch (e: Exception) {
+                    status = errText(e)
+                }
+                sending = false
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
+        // سربرگ
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            RoundIcon(40.dp, onClick = onClose) { Canvas(Modifier.size(18.dp)) { backArrow(K.Gold) } }
+            Spacer(Modifier.width(10.dp))
+            EmergencyIcon(30.dp)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                T("ارتباط اضطراری", size = 18.sp, weight = FontWeight.Black)
+                T(if (user.isNotEmpty()) "حساب: $user" else "گفتگو با ادمین کانکی", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            T(if (helpOpen) "بستن راهنما" else "راهنما", size = 12.sp, color = K.Gold, modifier = Modifier.clickable { helpOpen = !helpOpen }.padding(6.dp))
+        }
+
+        // راهنما
+        if (helpOpen) {
+            KCard(Modifier.fillMaxWidth(), padding = 12.dp, border = K.Red.copy(alpha = .35f)) {
+                T("این بخش برای وقتی است که اینترنت ملی شده", size = 14.sp, color = K.Red, weight = FontWeight.Black)
+                Spacer(Modifier.height(6.dp))
+                T("وقتی اینترنت بین‌الملل قطع است، اینجا مستقیم با ادمین کانکی حرف می‌زنید و کانفیگ‌هایی که از این اختلال و فیلترینگ رد می‌شوند را تحویل می‌گیرید.", size = 12.sp, color = K.Text, weight = FontWeight.Normal)
+                Spacer(Modifier.height(4.dp))
+                T("• مشکل را بنویسید؛ می‌توانید اسکرین‌شات هم بفرستید.\n• جواب ادمین همین‌جا می‌آید. کانفیگ را با دکمه‌ی «کپی کانفیگ» بردارید.\n• پیام‌های ادمین امضا دارند: فقط پیامی که «✓ از طرف ادمین» دارد را قبول کنید.\n• در حالت عادی (اینترنت وصل) به این بخش نیازی ندارید.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        if (code == null) {
+            // کاربر هنوز وارد نشده: کد اشتراکش را می‌خواهیم
+            KCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+                T("کد اشتراک خود را وارد کنید", size = 14.sp, weight = FontWeight.Black)
+                T("فقط مشتری‌های کانکی می‌توانند پیام بدهند.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                Spacer(Modifier.height(10.dp))
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    OutlinedTextField(
+                        value = codeText, onValueChange = { codeText = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
+                        placeholder = { Text("kanki-4-…", color = K.Sub.copy(alpha = .5f)) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                GoldButton("ادامه", Modifier.fillMaxWidth()) {
+                    val c = SubscriptionApi.normalize(codeText)?.second
+                    if (c == null) status = "کد اشتراک درست نیست."
+                    else { Emergency.saveCode(ctx, c); code = c }
+                }
+            }
+        }
+
+        status?.let {
+            Spacer(Modifier.height(6.dp))
+            T(it, size = 12.sp, color = K.Red, weight = FontWeight.Normal)
+        }
+
+        // پیام‌ها
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+            if (code != null && msgs.isEmpty() && status == null) {
+                item { T("هنوز پیامی نیست. مشکل را بنویسید تا ادمین جواب بدهد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(8.dp)) }
+            }
+            items(msgs, key = { it.id }) { m ->
+                Bubble(m, images[m.id], if (m.img) imageOk[m.id] ?: false else m.verified) { clip.setText(AnnotatedString(it)); toast(ctx, "کانفیگ کپی شد") }
+            }
+        }
+
+        // نوشتن
+        if (code != null) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundIcon(44.dp, onClick = { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                    Canvas(Modifier.size(20.dp)) { pictureIcon(K.Gold) }
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = text, onValueChange = { if (it.length <= 2000) text = it }, modifier = Modifier.weight(1f), maxLines = 4,
+                    textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, color = K.Text),
+                    placeholder = { Text("پیام به ادمین…", color = K.Sub.copy(alpha = .6f), fontFamily = Vazir) },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
+                )
+                Spacer(Modifier.width(8.dp))
+                RoundIcon(44.dp, filled = true, onClick = {
+                    val c = code
+                    val t = text.trim()
+                    if (t.isNotEmpty() && c != null && !sending) {
+                        sending = true
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) { Emergency.send(ctx, c, t) }
+                                text = ""
+                                load()
+                            } catch (e: Exception) {
+                                status = errText(e)
+                            }
+                            sending = false
+                        }
+                    }
+                }) { Canvas(Modifier.size(20.dp)) { sendArrow(if (sending) K.Sub else K.Gold) } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, onCopy: (String) -> Unit) {
+    val mine = !m.admin
+    val shape = RoundedCornerShape(16.dp)
+    val bg = if (mine) K.Gold.copy(alpha = .14f) else if (ok) K.Green.copy(alpha = .10f) else K.Red.copy(alpha = .10f)
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterStart else Alignment.CenterEnd) {
+        Column(Modifier.widthIn(max = 300.dp).clip(shape).background(bg).padding(10.dp)) {
+            if (m.admin) {
+                T(if (ok) "✓ از طرف ادمین" else "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید", size = 11.sp, color = if (ok) K.Green else K.Red, weight = FontWeight.Black)
+                Spacer(Modifier.height(4.dp))
+            }
+            when {
+                m.img -> {
+                    if (img != null) Image(img, null, Modifier.widthIn(max = 240.dp).heightIn(max = 320.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Fit)
+                    else T("در حال دریافت عکس…", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
+                m.kind == "config" -> {
+                    T("کانفیگ", size = 12.sp, color = K.Gold, weight = FontWeight.Black)
+                    Spacer(Modifier.height(4.dp))
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Text(m.body, maxLines = 3, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = K.Text))
+                    }
+                    if (ok) {
+                        Spacer(Modifier.height(6.dp))
+                        LineButton("کپی کانفیگ", Modifier.fillMaxWidth()) { onCopy(m.body) }
+                    }
+                }
+                else -> T(m.body, size = 14.sp, color = K.Text, weight = FontWeight.Normal)
+            }
+            Spacer(Modifier.height(4.dp))
+            T(PanelTime.jalali(m.ts * 1000), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+    }
+}
+
+// ================================================================== شکل‌ها
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.backArrow(c: Color) {
+    val w = size.width
+    val h = size.height
+    // در راست‌به‌چپ «برگشت» به سمت راست است
+    drawLine(c, Offset(w * .2f, h * .5f), Offset(w * .85f, h * .5f), w * .12f, StrokeCap.Round)
+    drawLine(c, Offset(w * .55f, h * .2f), Offset(w * .85f, h * .5f), w * .12f, StrokeCap.Round)
+    drawLine(c, Offset(w * .55f, h * .8f), Offset(w * .85f, h * .5f), w * .12f, StrokeCap.Round)
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.sendArrow(c: Color) {
+    val w = size.width
+    val h = size.height
+    val p = Path().apply {
+        moveTo(w * .85f, h * .12f)
+        lineTo(w * .12f, h * .45f)
+        lineTo(w * .42f, h * .58f)
+        lineTo(w * .55f, h * .88f)
+        close()
+    }
+    drawPath(p, c, style = Stroke(w * .09f))
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.pictureIcon(c: Color) {
+    val w = size.width
+    val h = size.height
+    drawRoundRect(c, topLeft = Offset(w * .08f, h * .18f), size = androidx.compose.ui.geometry.Size(w * .84f, h * .64f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .12f), style = Stroke(w * .09f))
+    drawCircle(c, w * .08f, Offset(w * .34f, h * .40f))
+    val p = Path().apply {
+        moveTo(w * .14f, h * .76f)
+        lineTo(w * .42f, h * .50f)
+        lineTo(w * .60f, h * .66f)
+        lineTo(w * .72f, h * .56f)
+        lineTo(w * .88f, h * .76f)
+    }
+    drawPath(p, c, style = Stroke(w * .08f, cap = StrokeCap.Round))
+}
+
+/** عکس را کوچک می‌کند (بیشینه ۱۲۸۰ پیکسل، JPEG زیر ۱.۴ مگابایت) */
+private fun shrink(ctx: Context, uri: Uri): ByteArray? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / sample > 2560 || bounds.outHeight / sample > 2560) sample *= 2
+    val bmp = ctx.contentResolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: return null
+    val scale = minOf(1f, 1280f / maxOf(bmp.width, bmp.height))
+    val small = if (scale < 1f) Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true) else bmp
+    var q = 82
+    while (true) {
+        val out = ByteArrayOutputStream()
+        small.compress(Bitmap.CompressFormat.JPEG, q, out)
+        val b = out.toByteArray()
+        if (b.size < 1_400_000) return b
+        if (q <= 32) return null
+        q -= 15
+    }
+}

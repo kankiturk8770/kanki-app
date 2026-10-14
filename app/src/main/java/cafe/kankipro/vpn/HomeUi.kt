@@ -84,21 +84,24 @@ class HomeActions(
 
 /** قاب همه‌ی تب‌ها: سربرگ بالا، محتوا، نوار تب‌ها پایین */
 @Composable
-fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}, content: @Composable BoxScope.() -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        AppHeader(onRobot, onAccount)
+        AppHeader(onRobot, onAccount, onEmergency)
         Box(Modifier.weight(1f), content = content)
         BottomBar(tab, onTab)
     }
 }
 
 @Composable
-fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit) {
+fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Logo3D(36.dp)
         Spacer(Modifier.width(8.dp))
         BrandTitle(19.sp)
         Spacer(Modifier.weight(1f))
+        // ارتباط اضطراری (فقط وقتی اینترنت ملی شده)
+        Box(Modifier.guideTarget("emergency")) { EmergencyButton(36.dp, onClick = onEmergency) }
+        Spacer(Modifier.width(6.dp))
         Box(
             Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onRobot).guideTarget("robot"),
             contentAlignment = Alignment.Center,

@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.7.4"
+        versionCode = 30
+        versionName = "1.8.0"
         // فقط پردازنده‌های گوشی (ARM). x86 و x86_64 مال شبیه‌ساز و کروم‌بوک‌اند و نصفِ حجم فایل را می‌گرفتند؛
         // هیچ گوشی واقعیِ اندروید ۸ به بالا (minSdk 26) از آن‌ها استفاده نمی‌کند.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

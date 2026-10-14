@@ -83,7 +83,7 @@ fun App() {
     var splash by rememberSaveable { mutableStateOf(true) }
 
     // آدرس اضطراری را نگه می‌داریم تا وقتی اینترنت قطع است هم باز شود
-    LaunchedEffect(state.account) { Emergency.remember(ctx, state.account?.emergency) }
+    LaunchedEffect(state.account) { Emergency.remember(ctx, state.account?.emergency, state.account?.emergencyKey) }
 
     // بارگذاری اطلاعات و اتصال خودکار
     LaunchedEffect(state.loggedIn) {
@@ -96,6 +96,9 @@ fun App() {
     when {
         splash -> SplashScreen { splash = false }
         state.unlocking -> UnlockScreen { state.unlocking = false }
+        state.emergencyOpen -> KankiBackground(accent = K.Red) {
+            Box(Modifier.systemBarsPadding()) { EmergencyScreen(state) { state.emergencyOpen = false } }
+        }
         else -> KankiBackground(accent = if (state.vstate == VState.ON) K.Green else K.Gold) {
             Box(Modifier.systemBarsPadding()) {
                 if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }
