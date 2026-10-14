@@ -273,9 +273,9 @@ private fun ConnectArea(ui: HomeUi, act: HomeActions) {
         VState.OFF -> "آماده‌ی اتصال" to K.Text
     }
     Box(Modifier.guideTarget("connect")) {
-        ConnectButton(ui.vstate, 186.dp) { if (ui.hasAccount) act.toggle() }
+        ConnectButton(ui.vstate, 150.dp) { if (ui.hasAccount) act.toggle() }
     }
-    T(label, size = 22.sp, color = color, weight = FontWeight.Black, shadow = glow(color, 22f))
+    T(label, size = 20.sp, color = color, weight = FontWeight.Black, shadow = glow(color, 20f))
     Spacer(Modifier.height(2.dp))
     when (ui.vstate) {
         VState.ON -> {
@@ -306,7 +306,7 @@ private fun ControlCard(ui: HomeUi, act: HomeActions) {
             FlagBadge(ui.serverFlag, 46.dp, ring = if (ui.vstate == VState.ON) K.Green.copy(alpha = .8f) else K.Gold.copy(alpha = .55f))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                T("لوکیشن", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                T("کشور / سرور", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
                 AutoText(ui.serverName, size = 15.sp, color = K.Text, weight = FontWeight.Bold)
                 T(ui.serverSub, size = 11.sp, color = K.Gold, weight = FontWeight.Bold)
             }
@@ -316,7 +316,11 @@ private fun ControlCard(ui: HomeUi, act: HomeActions) {
                 if (ui.smartBusy) Spinner(18.dp) else MiniIcon("spark", K.Gold, 18.dp)
             }
             Spacer(Modifier.width(6.dp))
-            Chevron(K.Sub)
+            // دکمه‌ی واضح برای عوض کردن کشور
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Chevron(K.Gold)
+                T("تغییر", size = 9.sp, color = K.Gold, weight = FontWeight.Black)
+            }
         }
         // نتیجه‌ی انتخاب هوشمند
         AnimatedVisibility(visible = ui.smartOpen && ui.smartRows.isNotEmpty()) {
@@ -341,7 +345,10 @@ private fun ControlCard(ui: HomeUi, act: HomeActions) {
             }
         }
         Spacer(Modifier.height(10.dp))
+        T("نوع اتصال", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
         Segmented(ui.protos, ui.selectedProto, Modifier.guideTarget("protocols"), enabled = !busy, onSelect = act.pickProto)
+        Spacer(Modifier.height(6.dp))
+        T(protoHint(ui.selectedProto), size = 11.sp, color = if (ui.selectedProto == "amneziawg-direct") K.Gold else K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
 
@@ -491,4 +498,13 @@ fun CheckMark(on: Boolean, size: androidx.compose.ui.unit.Dp = 22.dp) {
             drawLine(K.Ink, Offset(w * .40f, w * .80f), Offset(w * .90f, w * .22f), w * .16f, StrokeCap.Round)
         }
     }
+}
+
+/** یک خط توضیح زیر انتخاب پروتکل: تانل است یا مستقیم، و کِی به درد می‌خورد */
+fun protoHint(p: String) = when (p) {
+    "amneziawg" -> "تانل · از سرور ایران رد می‌شود و فیلتر را دور می‌زند"
+    "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
+    "wireguard" -> "تانل · سریع و مناسب گیم"
+    "hysteria2" -> "تانل · پرسرعت روی اینترنت ضعیف"
+    else -> protoDesc(p)
 }
