@@ -67,8 +67,6 @@ jobs:
           }
           get arm64-v8a arm64
           get armeabi-v7a armv7
-          get x86_64 amd64
-          get x86 386
           ls -la app/src/main/jniLibs/*
 
       # هسته‌ی Xray-core، نسخه‌ی ثابت و تست‌شده (همان که پنل با آن کانفیگ‌ها را چک می‌کند).
@@ -107,13 +105,13 @@ jobs:
           printf '%s\n' \
             'APP_OPTIM := release' \
             'APP_PLATFORM := android-26' \
-            'APP_ABI := armeabi-v7a arm64-v8a x86 x86_64' \
+            'APP_ABI := armeabi-v7a arm64-v8a' \
             'APP_CFLAGS := -O3 -DPKGNAME=cafe/kankipro/vpn -DCLSNAME=TProxyService' \
             'APP_SUPPORT_FLEXIBLE_PAGE_SIZES := true' \
             'NDK_TOOLCHAIN_VERSION := clang' > jni/Application.mk
           "$NDK/ndk-build" -j"$(nproc)"
           cd "$GITHUB_WORKSPACE"
-          for a in arm64-v8a armeabi-v7a x86_64 x86; do
+          for a in arm64-v8a armeabi-v7a; do
             mkdir -p app/src/main/jniLibs/$a
             cp /tmp/hev/libs/$a/libhev-socks5-tunnel.so app/src/main/jniLibs/$a/
           done

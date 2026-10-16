@@ -76,6 +76,8 @@ private fun fitView(pts: List<Geo>, aspect: Double, minSpan: Double): View {
 @Composable
 fun WorldMap(
     countries: List<Country>?, pins: List<MapPin>, user: Geo?, userIso: String?, connected: Boolean, modifier: Modifier = Modifier,
+    /** رنگ حالت فعال (سرور انتخابی و خط پیش‌نمایش پیش از اتصال) */
+    accent: Color = K.Gold,
 ) {
     val tm = androidx.compose.ui.text.rememberTextMeasurer()
 
@@ -109,20 +111,33 @@ fun WorldMap(
                 countries?.forEach { c ->
                     if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
                     val fill = when (c.iso) {
-                        selIso -> (if (connected) K.Green else K.Gold).copy(alpha = .30f)
+                        selIso -> (if (connected) K.Green else accent).copy(alpha = .30f)
                         userIso -> K.Accent.copy(alpha = .18f)
                         else -> K.Surface.copy(alpha = 1f)
                     }
                     drawPath(c.path, fill)
                     drawPath(
                         c.path,
-                        if (c.iso == selIso) (if (connected) K.Green else K.Gold).copy(alpha = .9f) else K.Gold.copy(alpha = .22f),
+                        if (c.iso == selIso) (if (connected) K.Green else accent).copy(alpha = .9f) else K.Gold.copy(alpha = .22f),
                         style = Stroke(if (c.iso == selIso) border * 1.8f else border),
                     )
                 }
             }
         }
 
+        // پیش از اتصال: خط‌چین کم‌رنگ از شما تا سرور انتخابی (با نقطه‌ی روان)
+        if (user != null && sel != null && draw < 1f) {
+            val a = proj(user)
+            val b = proj(sel.geo)
+            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .30).toFloat()
+            val mid = Offset((a.x + b.x) / 2, (a.y + b.y) / 2 - lift)
+            val path = Path().apply { moveTo(a.x, a.y); quadraticBezierTo(mid.x, mid.y, b.x, b.y) }
+            val sw = w / 300f
+            drawPath(
+                path, accent.copy(alpha = .75f * (1f - draw)),
+                style = Stroke(sw, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(sw * 4f, sw * 4f), flow * sw * 8f)),
+            )
+        }
         // خط منحنی نئونی سبز از شما تا سرور
         if (user != null && sel != null && draw > 0f) {
             val a = proj(user)
@@ -149,7 +164,7 @@ fun WorldMap(
         // هاله و سنجاق سرور
         sel?.let {
             val o = proj(it.geo)
-            val c = if (connected) K.Green else K.Gold
+            val c = if (connected) K.Green else accent
             val r = w / 13f
             drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .35f), c.copy(alpha = .12f), Color.Transparent), o, r * 1.3f), r * 1.3f, o)
             drawCircle(c.copy(alpha = .55f), r * .85f, o, style = Stroke(w / 260f))
@@ -175,8 +190,14 @@ fun WorldMap(
         }
         // بقیه‌ی سرورها
         pins.filter { !it.selected }.forEach { p -> neonDot(K.Gold.copy(alpha = .8f), proj(p.geo), w / 150f) }
-        // شما
-        user?.let { neonDot(K.Accent, proj(it), w / 120f) }
+        // شما: نقطه‌ی تپنده با برچسب
+        user?.let {
+            val o = proj(it)
+            drawCircle(K.Accent.copy(alpha = (1 - pulse) * .6f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
+            neonDot(K.Accent, o, w / 120f)
+            val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontSize = (w / 38f).toSp(), color = K.Accent))
+            drawText(layout, topLeft = Offset(o.x - layout.size.width / 2f, o.y + w / 60f))
+        }
     }
 }
 

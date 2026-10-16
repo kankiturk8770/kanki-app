@@ -152,7 +152,7 @@ private class Star(val x: Float, val y: Float, val r: Float, val phase: Float, v
 
 private val stars: List<Star> = run {
     val rnd = java.util.Random(77)
-    List(38) { Star(rnd.nextFloat(), rnd.nextFloat(), 1.2f + rnd.nextFloat() * 2.2f, rnd.nextFloat(), rnd.nextInt(4)) }
+    List(70) { Star(rnd.nextFloat(), rnd.nextFloat(), 0.8f + rnd.nextFloat() * 1.8f, rnd.nextFloat(), rnd.nextInt(4)) }
 }
 
 @Composable
@@ -168,14 +168,21 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
             val h = size.height
             val c = Offset(w / 2, h * 0.30f)
             drawRect(Brush.verticalGradient(listOf(ThemeState.current.bgTop, ThemeState.current.bgMid, ThemeState.current.bgBottom)))
+            // سحابی‌های کهکشانی ملایم (بنفش بالا، آبی راست، ارغوانی پایین) با رنگ تم
+            val neb = listOf(
+                Triple(Offset(w * .18f, h * .10f), w * .85f, Color(0xFF2A1A55)),
+                Triple(Offset(w * .92f, h * .58f), w * .80f, Color(0xFF0F2F55)),
+                Triple(Offset(w * .28f, h * .96f), w * .75f, Color(0xFF3A1340)),
+            )
+            neb.forEach { (o, r, col) -> drawCircle(Brush.radialGradient(listOf(col.copy(alpha = .75f), Color.Transparent), o, r), r, o) }
             drawCircle(
-                Brush.radialGradient(listOf(accent.copy(alpha = breathe), Color.Transparent), c, w * 0.95f),
+                Brush.radialGradient(listOf(accent.copy(alpha = breathe * .6f), Color.Transparent), c, w * 0.95f),
                 w * 0.95f, c,
             )
             for (i in 0 until 8) {
                 drawCircle(
-                    K.Gold.copy(alpha = (0.13f - i * 0.014f).coerceAtLeast(0.02f)),
-                    w * (0.34f + i * 0.09f), c, style = Stroke(1.3f),
+                    K.Gold.copy(alpha = (0.07f - i * 0.008f).coerceAtLeast(0.012f)),
+                    w * (0.34f + i * 0.09f), c, style = Stroke(1.1f),
                 )
             }
             val hy = h * 0.70f
@@ -185,12 +192,12 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
             )
             val cx = w / 2
             for (i in -12..12) {
-                drawLine(K.Gold.copy(alpha = .16f), Offset(cx + i * w * 0.03f, hy), Offset(cx + i * w * 0.32f, h), 1.3f)
+                drawLine(K.Gold.copy(alpha = .07f), Offset(cx + i * w * 0.03f, hy), Offset(cx + i * w * 0.32f, h), 1.1f)
             }
             for (k in 0 until 10) {
                 val p = (k + shift) / 10f
                 val y = hy + (h - hy) * p * p
-                drawLine(K.Gold.copy(alpha = .04f + .22f * p), Offset(0f, y), Offset(w, y), 1.3f)
+                drawLine(K.Gold.copy(alpha = .02f + .09f * p), Offset(0f, y), Offset(w, y), 1.1f)
             }
             // شهاب‌ها
             for (k in 0 until 2) {
@@ -210,7 +217,7 @@ fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> 
             // ستاره‌های نئونی چشمک‌زن
             stars.forEach { st ->
                 val tw = ((sin((twinkle + st.phase) * 6.2832f) + 1f) / 2f).coerceIn(0f, 1f)
-                val pos = Offset(st.x * w, st.y * hy)
+                val pos = Offset(st.x * w, st.y * h)
                 val col = when (st.ci) { 0 -> K.Gold; 1 -> K.Green; 2 -> K.Accent; else -> K.GoldLight }
                 drawCircle(col.copy(alpha = .10f * tw), st.r * 5f, pos)
                 drawCircle(col.copy(alpha = .30f * tw), st.r * 2.2f, pos)

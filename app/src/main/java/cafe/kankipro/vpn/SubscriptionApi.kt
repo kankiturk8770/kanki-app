@@ -63,8 +63,36 @@ data class XrayLink(val name: String, val link: String)
 data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
-    /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
-    const val DEFAULT_HOST = "https://fi.kankipro.cafe:2053"
+    /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود (سرور ایران) */
+    const val DEFAULT_HOST = "https://sub.kanki.pro:2053"
+
+    /** آدرس قدیمی؛ اگر آدرس اصلی جواب نداد از این خوانده می‌شود */
+    const val FALLBACK_HOST = "https://fi.kankipro.cafe:2053"
+
+    /**
+     * آدرس‌هایی که به ترتیب امتحان می‌شوند. اگر پنل کاربر یکی از دو آدرس کانکی باشد،
+     * اول آدرس اصلی (ایران) و بعد آدرس قدیمی؛ پنل‌های دیگر فقط خودشان.
+     */
+    fun hosts(base: String): List<String> {
+        val b = base.trimEnd('/')
+        return if (b == DEFAULT_HOST || b == FALLBACK_HOST) listOf(DEFAULT_HOST, FALLBACK_HOST) else listOf(b)
+    }
+
+    /** همان آدرس روی میزبان‌های جایگزین (برای لینک کانفیگ‌ها وقتی میزبان اصلی در دسترس نیست) */
+    fun alternates(url: String): List<String> {
+        val h = listOf(DEFAULT_HOST, FALLBACK_HOST).firstOrNull { url.startsWith("$it/") } ?: return listOf(url)
+        val path = url.removePrefix(h)
+        return listOf(url) + listOf(DEFAULT_HOST, FALLBACK_HOST).filter { it != h }.map { it + path }
+    }
+
+    /** مثل fetch، ولی اگر میزبان جواب نداد، میزبان جایگزین امتحان می‌شود */
+    fun fetchAny(url: String): String {
+        var last: Exception? = null
+        for (u in alternates(url)) {
+            try { return fetch(u) } catch (e: Exception) { last = e }
+        }
+        throw last ?: IOException("no host")
+    }
 
     /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */
     private val codeRegex = Regex("""\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}""")
@@ -228,7 +256,9 @@ data class ConfigInfo(
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
                 val (h, p) = runCatching { XrayCfg.endpoint(link) }.getOrDefault("—" to 0)
-                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = XrayCfg.detail(link).ifBlank { null }, transport = "TCP", cipher = XrayCfg.protoName(link))
+                val detail = XrayCfg.detail(link)
+                // mKCP روی UDP است؛ بقیه‌ی ترنسپورت‌های Xray روی TCP
+                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = detail.ifBlank { null }, transport = if (detail.contains("KCP")) "UDP" else "TCP", cipher = XrayCfg.protoName(link))
             }
             val m = mutableMapOf<String, String>()
             text.lines().forEach { line ->

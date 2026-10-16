@@ -12,51 +12,50 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-/** تست پینگ سرورها */
+/**
+ * تست پینگ سرورها.
+ * AmneziaWG، WireGuard و Hysteria2 روی UDP کار می‌کنند و پورتشان به اتصال TCP جواب نمی‌دهد؛
+ * پس برای آن‌ها اول پینگ ICMP، بعد isReachable و در آخر اتصال TCP به یک پورت TCP شناخته‌شده‌ی
+ * همان سرور سنجیده می‌شود. Xray (روی TCP) با زمان اتصال TCP به پورت خودش سنجیده می‌شود.
+ */
 object Pinger {
+    /** پورت‌های TCP که معمولاً روی سرورهای کانکی باز است (پنل، وب، SSH) */
+    private val knownTcp = listOf(443, 2053, 80, 22, 8443)
+
+    private fun pingBin(): String =
+        listOf("/system/bin/ping", "/system/xbin/ping").firstOrNull { java.io.File(it).exists() } ?: "ping"
+
+    /** زمان‌های پاسخ ICMP (میلی‌ثانیه) */
+    private fun icmpTimes(host: String, count: Int): List<Double> = runCatching {
+        val args = mutableListOf(pingBin(), "-c", count.toString(), "-W", "2")
+        if (count > 1) { args.add("-i"); args.add("0.3") }
+        args.add(host)
+        val p = ProcessBuilder(args).redirectErrorStream(true).start()
+        if (!p.waitFor(4L + count * 2L, TimeUnit.SECONDS)) { p.destroy(); return@runCatching emptyList<Double>() }
+        val out = p.inputStream.bufferedReader().readText()
+        Regex("""time[=<]\s*([\d.]+)""").findAll(out).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
+    }.getOrDefault(emptyList())
 
     /** پینگ ICMP؛ میانگین به میلی‌ثانیه یا null */
-    fun icmp(host: String, count: Int = 3): Long? = runCatching {
-        val p = ProcessBuilder("ping", "-c", count.toString(), "-W", "2", host)
-            .redirectErrorStream(true).start()
-        if (!p.waitFor(10, TimeUnit.SECONDS)) { p.destroy(); return@runCatching null }
-        val out = p.inputStream.bufferedReader().readText()
-        val times = Regex("""time[=<]\s*([\d.]+)""").findAll(out).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
-        if (times.isEmpty()) null else times.average().toLong().coerceAtLeast(1)
-    }.getOrNull()
-
-    /** پینگ و جیتر (میلی‌ثانیه)؛ اول ICMP، اگر بسته بود TCP */
-    fun stats(host: String, count: Int = 4): Pair<Long, Long>? {
-        val icmp = runCatching {
-            val p = ProcessBuilder("ping", "-c", count.toString(), "-i", "0.3", "-W", "2", host).redirectErrorStream(true).start()
-            if (!p.waitFor(12, TimeUnit.SECONDS)) { p.destroy(); return@runCatching emptyList<Double>() }
-            val out = p.inputStream.bufferedReader().readText()
-            Regex("""time[=<]\s*([\d.]+)""").findAll(out).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
-        }.getOrDefault(emptyList())
-        val times = icmp.ifEmpty {
-            (1..3).mapNotNull {
-                runCatching {
-                    Socket().use { s ->
-                        val t0 = System.nanoTime()
-                        s.connect(InetSocketAddress(host, 443), 2500)
-                        (System.nanoTime() - t0) / 1e6
-                    }
-                }.getOrNull()
-            }
-        }
-        if (times.isEmpty()) return null
-        val avg = times.average().toLong().coerceAtLeast(1)
-        val jitter = if (times.size < 2) 0L else times.zipWithNext { a, b -> kotlin.math.abs(a - b) }.average().toLong()
-        return avg to jitter
+    fun icmp(host: String, count: Int = 2): Long? {
+        val t = icmpTimes(host, count)
+        return if (t.isEmpty()) null else t.average().toLong().coerceAtLeast(1)
     }
 
-    /** پینگ TCP (زمان برقراری اتصال)؛ برای OpenVPN TCP */
+    /** InetAddress.isReachable (ICMP یا TCP echo)؛ زمان پاسخ یا null */
+    fun reach(host: String): Long? = runCatching {
+        val a = java.net.InetAddress.getByName(host)
+        val t0 = System.nanoTime()
+        if (a.isReachable(2000)) ((System.nanoTime() - t0) / 1_000_000).coerceAtLeast(1) else null
+    }.getOrNull()
+
+    /** پینگ TCP (زمان برقراری اتصال) */
     fun tcp(host: String, port: Int, tries: Int = 3): Long? {
         val r = (1..tries).mapNotNull {
             runCatching {
                 Socket().use { s ->
                     val t0 = System.nanoTime()
-                    s.connect(InetSocketAddress(host, port), 3000)
+                    s.connect(InetSocketAddress(host, port), 2500)
                     (System.nanoTime() - t0) / 1_000_000
                 }
             }.getOrNull()
@@ -64,12 +63,47 @@ object Pinger {
         return if (r.isEmpty()) null else r.average().toLong().coerceAtLeast(1)
     }
 
-    /** بر اساس نوع کانفیگ بهترین روش را انتخاب می‌کند */
+    /** اتصال TCP به اولین پورت TCP باز از پورت‌های شناخته‌شده‌ی همان سرور */
+    fun tcpAny(host: String): Long? {
+        for (pt in knownTcp) tcp(host, pt, 1)?.let { return it }
+        return null
+    }
+
+    /** پینگ و جیتر (میلی‌ثانیه)؛ اول ICMP، اگر بسته بود TCP */
+    fun stats(host: String, count: Int = 4): Pair<Long, Long>? {
+        val times = icmpTimes(host, count).ifEmpty {
+            val port = knownTcp.firstOrNull { tcp(host, it, 1) != null } ?: return null
+            (1..3).mapNotNull { tcp(host, port, 1)?.toDouble() }
+        }
+        return summarize(times)
+    }
+
+    private fun summarize(times: List<Double>): Pair<Long, Long>? {
+        if (times.isEmpty()) return null
+        val avg = times.average().toLong().coerceAtLeast(1)
+        val jitter = if (times.size < 2) 0L else times.zipWithNext { a, b -> abs(a - b) }.average().toLong()
+        return avg to jitter
+    }
+
+    /** پینگ و جیتر یک کانفیگ با روش درست همان پروتکل (برای انتخاب هوشمند) */
+    fun measure(info: ConfigInfo): Pair<Long, Long>? {
+        val host = info.host
+        if (host.isBlank() || host == "—") return null
+        if (info.transport == "TCP" && info.port > 0) {
+            val t = (1..3).mapNotNull { tcp(host, info.port, 1)?.toDouble() }
+            return summarize(t) ?: stats(host, 3)
+        }
+        return stats(host, 3) ?: reach(host)?.let { it to 0L }
+    }
+
+    /** پینگ یک کانفیگ با روش مناسب پروتکلش */
     fun test(info: ConfigInfo): Long? {
         val host = info.host
         if (host.isBlank() || host == "—") return null
-        return if (info.transport == "TCP" && info.port > 0) tcp(host, info.port) ?: icmp(host)
-        else icmp(host) ?: if (info.port > 0) tcp(host, info.port, 1) else null
+        // Xray و OpenVPN TCP: زمان اتصال به خود پورت
+        if (info.transport == "TCP" && info.port > 0) return tcp(host, info.port) ?: icmp(host)
+        // UDP (WireGuard، AmneziaWG، Hysteria2/QUIC): پورت UDP به TCP جواب نمی‌دهد
+        return icmp(host) ?: reach(host) ?: tcpAny(host)
     }
 }
 

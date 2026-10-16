@@ -6,38 +6,36 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 
 /*
- * حالت‌های اتصال
- * --------------
- * کاربر به‌جای پروتکل، «حالت» انتخاب می‌کند و برنامه پروتکل مناسب را پیدا می‌کند:
- *   خودکار     تانل (Amnezia از سرور ایران) ← مستقیم (Amnezia Direct) ← فیلتر شدید (Xray)
- *   گیم         کمترین پینگ: WireGuard / Amnezia؛ گزینه‌ی «فقط بازی‌ها از VPN»
- *   وب و استریم سرعت بالا: Hysteria2، بعد Xray
- *   فیلتر شدید  سخت‌ترین برای مسدود شدن: Xray (REALITY / CDN)، بعد Hysteria2
- *   DNS         رفع تحریم بدون VPN (DNS کانکی)
- * برای هر اپراتور (ایرانسل، همراه اول، وای‌فای …) آخرین چیزی که در هر حالت وصل شد یادش می‌ماند
- * و دفعه‌ی بعد اول همان امتحان می‌شود.
+ * حالت‌های اتصال (چهار دکمه‌ی صفحه‌ی اول)
+ * -----------------------------------------
+ *   هوشمند    پینگ همه‌ی سرورها و پروتکل‌ها را می‌گیرد و به بهترین وصل می‌شود (اگر Xray خوب جواب بدهد، Xray)
+ *   گیمینگ     کاربر پروتکل (AmneziaWG تانل/مستقیم، WireGuard، Hysteria2) و کشور را انتخاب می‌کند؛
+ *              «انتخاب خودکار» کم‌پینگ‌ترین پروتکل همان کشور را برمی‌دارد
+ *   ضد فیلتر   با یک لمس: اول راه‌های مستقیم (اینباندهای Xray، AmneziaWG مستقیم)، اگر جواب ندادند تانل؛
+ *              با نگه‌داشتن، پروتکل و کشور دستی انتخاب می‌شود
+ *   DNS        رفع تحریم با DNS کانکی؛ فقط بازی‌ها و برنامه‌های انتخابی اینترنت دارند
+ * سرور و پروتکلی که کاربر انتخاب کرده قفل است: برنامه خودش آن را عوض نمی‌کند
+ * (فقط «هوشمند» و «انتخاب خودکار» اجازه‌ی امتحان گزینه‌ی بعدی را دارند).
  */
 enum class KMode(val key: String, val title: String, val sub: String) {
-    AUTO("auto", "خودکار", "بهترین راه را خودم پیدا می‌کنم"),
-    GAME("game", "گیم", "کمترین پینگ برای بازی"),
-    WEB("web", "وب و استریم", "سرعت بالا برای فیلم و دانلود"),
-    STRICT("strict", "فیلتر شدید", "وقتی بقیه وصل نمی‌شوند"),
-    DNS("dns", "رفع تحریم", "DNS کانکی · بدون VPN");
+    SMART("smart", "هوشمند", "پینگ همه را می‌گیرد و به بهترین وصل می‌شود"),
+    GAME("game", "گیمینگ", "کمترین پینگ برای بازی · پروتکل و کشور با شما"),
+    FILTER("filter", "ضد فیلتر", "یک لمس: عبور از فیلتر شدید · نگه دارید برای انتخاب دستی"),
+    DNS("dns", "DNS", "رفع تحریم بازی‌ها و برنامه‌های انتخابی با DNS کانکی");
 
     companion object {
-        fun of(k: String?) = entries.firstOrNull { it.key == k } ?: AUTO
+        /** کلیدهای نسخه‌های قبل (auto، web، strict) هم به حالت تازه‌ی هم‌معنا برمی‌گردند */
+        fun of(k: String?) = when (k) {
+            "auto", "web" -> SMART
+            "strict" -> FILTER
+            else -> entries.firstOrNull { it.key == k } ?: SMART
+        }
     }
 }
 
 object Modes {
-    /** پروتکل‌های هر حالت، به ترتیب اولویت */
-    fun protos(m: KMode): List<String> = when (m) {
-        KMode.AUTO -> listOf("amneziawg", "amneziawg-direct", "xray", "hysteria2", "wireguard")
-        KMode.GAME -> listOf("wireguard", "amneziawg", "amneziawg-direct")
-        KMode.WEB -> listOf("hysteria2", "xray", "amneziawg", "amneziawg-direct")
-        KMode.STRICT -> listOf("xray", "hysteria2", "amneziawg-direct")
-        KMode.DNS -> emptyList()
-    }
+    /** پروتکل‌های حالت گیمینگ، به ترتیب نمایش */
+    val GAME_PROTOS = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2")
 
     /** اسم شبکه‌ی فعلی برای حافظه‌ی اپراتور: «wifi» یا کد اپراتور موبایل (مثل 43235 ایرانسل) */
     fun networkKey(ctx: Context): String = runCatching {
@@ -71,7 +69,9 @@ object Modes {
 
     /** بسته‌های شناخته‌شده‌ی بازی (برای گوشی‌هایی که دسته‌ی «بازی» را درست نمی‌گویند) */
     private val knownGames = listOf(
-        "com.tencent.ig", "com.pubg.", "com.activision.callofduty", "com.supercell.", "com.miHoYo.", "com.HoYoverse.", "com.garena.",
+        "com.tencent.ig", "com.pubg.imobile", "com.pubg.", "com.vng.pubgmobile", "com.rekoo.pubgm", "com.tencent.tmgp.",
+        "com.activision.callofduty.shooter", "com.activision.callofduty", "com.garena.game.codm", "com.ea.gp.fifamobile",
+        "com.supercell.", "com.miHoYo.", "com.HoYoverse.", "com.garena.",
         "com.ea.gp.", "com.ea.game.", "com.epicgames.", "com.mobile.legends", "com.roblox.", "com.dts.freefire", "com.riotgames.",
         "com.kiloo.", "com.king.", "com.rovio.", "com.gameloft.", "com.netease.", "com.levelinfinite.", "com.proximabeta.",
         "com.krafton.", "com.innersloth.", "com.mojang.", "com.playstation.", "com.valvesoftware.", "com.nianticlabs.",
@@ -106,5 +106,13 @@ fun applyIncluded(cfg: String, pkgs: List<String>): String {
     }.toMutableList()
     val i = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
     if (i >= 0) lines.add(i + 1, "IncludedApplications = " + pkgs.joinToString(", "))
+    return lines.joinToString("\n")
+}
+
+/** «بقیه‌ی برنامه‌ها اینترنت نداشته باشند»؛ فقط برای Hysteria2/Xray/DNS (موتور امنزیا این کلید را نمی‌شناسد) */
+fun applyBlockOthers(cfg: String): String {
+    val lines = cfg.lines().filterNot { it.trim().startsWith("BlockOthers", ignoreCase = true) }.toMutableList()
+    val i = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
+    if (i >= 0) lines.add(i + 1, "BlockOthers = 1")
     return lines.joinToString("\n")
 }

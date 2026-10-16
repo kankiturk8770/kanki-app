@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,7 +43,6 @@ class MainActivity : ComponentActivity() {
 fun App() {
     val ctx = LocalContext.current
     val state = remember { AppState.from(ctx) }
-    val scope = rememberCoroutineScope()
 
     var afterGrant by remember { mutableStateOf<(() -> Unit)?>(null) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
@@ -61,16 +59,8 @@ fun App() {
         onDispose { state.requestVpn = null }
     }
 
-    fun toggle() {
-        when (state.vstate) {
-            VState.ON -> scope.launch { state.disconnect() }
-            VState.OFF -> {
-                if (state.proto == "openvpn") { scope.launch { state.connect() }; return }
-                state.requestVpn?.invoke { scope.launch { state.connectMode() } }
-            }
-            VState.CONNECTING -> {}
-        }
-    }
+    // دکمه‌ی اصلی: وصل/قطع بر اساس حالت فعال؛ هنگام اتصال، لمس یعنی لغو
+    fun toggle() = state.toggleMain()
 
     // اجازه‌ی نوتیفیکیشن (اندروید ۱۳ به بالا) برای نمایش سرعت در نوار اعلان
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }

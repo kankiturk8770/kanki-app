@@ -38,9 +38,17 @@ object KankiDns {
     fun ordered(info: DnsInfo, preferId: String? = null): List<DnsServer> =
         info.servers.sortedWith(compareBy({ if (it.id == preferId) 0 else 1 }, { if (it.role == "relay") 0 else 1 }))
 
-    /** متنی که موتور اتصال می‌گیرد: هر خط Server = <ip> <آدرس ثبت HTTP> */
-    fun wrap(list: List<DnsServer>): String = buildString {
+    /**
+     * متنی که موتور اتصال می‌گیرد: هر خط Server = <ip> <آدرس ثبت HTTP>
+     * apps: فقط این برنامه‌ها اینترنت دارند (از راه DNS کانکی)؛ بقیه‌ی برنامه‌ها تا خاموش شدن DNS بی‌اینترنت‌اند.
+     * خالی یعنی مثل قبل: همه‌ی برنامه‌ها از DNS کانکی استفاده می‌کنند و چیزی بسته نمی‌شود.
+     */
+    fun wrap(list: List<DnsServer>, apps: List<String> = emptyList()): String = buildString {
         append("[Interface]\n[KankiDNS]\n")
+        if (apps.isNotEmpty()) {
+            append("IncludedApplications = ").append(apps.joinToString(", ")).append('\n')
+            append("BlockOthers = 1\n")
+        }
         list.filter { it.ip.isNotBlank() }.forEach { append("Server = ").append(it.ip).append(' ').append(it.registerHttp.ifBlank { "-" }).append('\n') }
     }
 
@@ -88,14 +96,38 @@ object KankiDns {
      * کارت شبکه‌ی VPN را با یک مسیر (فقط DNS ساختگی) بالا می‌آورد و سؤال‌ها را جواب می‌دهد تا وقتی
      * کارت بسته شود. روی رشته‌ی پس‌زمینه صدا زده شود.
      */
-    fun buildTun(svc: VpnService, excluded: List<String>): ParcelFileDescriptor {
+    fun buildTun(svc: VpnService, excluded: List<String>, included: List<String> = emptyList()): ParcelFileDescriptor {
         val b = svc.Builder()
             .setSession("Kanki · DNS")
             .setMtu(1500)
             .addAddress(TUN_IP, 32)
             .addRoute(FAKE, 32)
             .addDnsServer(FAKE)
-        excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        // اندروید اجازه نمی‌دهد هر دو فهرست با هم باشند: «فقط این برنامه‌ها» مقدم است
+        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        if (android.os.Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        return b.establish() ?: error("VPN permission is missing")
+    }
+
+    /** آدرس داخلی کارت شبکه (برای tun2socks در حالت بستن برنامه‌ها) */
+    const val GATE_IP = TUN_IP
+
+    /**
+     * حالت «فقط برنامه‌های انتخابی»: همه‌ی ترافیک (IPv4 و IPv6) همه‌ی برنامه‌ها وارد VPN می‌شود؛
+     * AppGate فقط برنامه‌های مجاز را به tun2socks (و از آن‌جا مستقیم به اینترنت) می‌فرستد و بقیه را دور می‌ریزد.
+     * IPv6 آدرس ندارد، پس هیچ برنامه‌ای از راه IPv6 هم بیرون نمی‌رود. خود این برنامه (و هسته‌ی Xray که
+     * اتصال‌های مستقیم را برقرار می‌کند) بیرون از VPN است.
+     */
+    fun buildGateTun(svc: VpnService, mtu: Int): ParcelFileDescriptor {
+        val b = svc.Builder()
+            .setSession("Kanki · DNS")
+            .setMtu(mtu)
+            .addAddress(TUN_IP, 32)
+            .addRoute("0.0.0.0", 0)
+            .addDnsServer(FAKE)
+        runCatching { b.addRoute("::", 0) }
+        runCatching { b.addDisallowedApplication(svc.packageName) }
         if (android.os.Build.VERSION.SDK_INT >= 29) b.setMetered(false)
         return b.establish() ?: error("VPN permission is missing")
     }
@@ -131,23 +163,32 @@ object KankiDns {
             val buf = ByteArray(32767)
             while (running) {
                 val n = try { inp.read(buf) } catch (e: Exception) { break }
-                if (n <= 28) continue
-                val pkt = buf.copyOf(n)
-                val v = (pkt[0].toInt() shr 4) and 0xf
-                if (v != 4 || pkt[9].toInt() != 17) continue
-                val ihl = (pkt[0].toInt() and 0xf) * 4
-                if (n < ihl + 8 || !(pkt[16] == fake[0] && pkt[17] == fake[1] && pkt[18] == fake[2] && pkt[19] == fake[3])) continue
-                val dport = ((pkt[ihl + 2].toInt() and 0xff) shl 8) or (pkt[ihl + 3].toInt() and 0xff)
-                if (dport != 53) continue
-                val sport = ((pkt[ihl].toInt() and 0xff) shl 8) or (pkt[ihl + 1].toInt() and 0xff)
-                val total = ((pkt[2].toInt() and 0xff) shl 8) or (pkt[3].toInt() and 0xff)
-                val end = minOf(total, n)
-                if (end <= ihl + 8) continue
-                val query = pkt.copyOfRange(ihl + 8, end)
-                val src = pkt.copyOfRange(12, 16)
-                tx.addAndGet(query.size.toLong())
-                runCatching { pool.execute { answer(query, src, sport) } }
+                if (n < 0) break
+                handle(buf, n)
             }
+        }
+
+        /**
+         * اگر این بسته سؤال DNS به آدرس ساختگی باشد، جوابش (در پس‌زمینه) داده می‌شود و true برمی‌گردد.
+         * بافر بعد از برگشتن دوباره استفاده می‌شود، پس هر چه لازم است همین‌جا کپی می‌شود.
+         */
+        fun handle(pkt: ByteArray, n: Int): Boolean {
+            if (n <= 28) return false
+            val v = (pkt[0].toInt() shr 4) and 0xf
+            if (v != 4 || pkt[9].toInt() != 17) return false
+            val ihl = (pkt[0].toInt() and 0xf) * 4
+            if (n < ihl + 8 || !(pkt[16] == fake[0] && pkt[17] == fake[1] && pkt[18] == fake[2] && pkt[19] == fake[3])) return false
+            val dport = ((pkt[ihl + 2].toInt() and 0xff) shl 8) or (pkt[ihl + 3].toInt() and 0xff)
+            if (dport != 53) return false
+            val sport = ((pkt[ihl].toInt() and 0xff) shl 8) or (pkt[ihl + 1].toInt() and 0xff)
+            val total = ((pkt[2].toInt() and 0xff) shl 8) or (pkt[3].toInt() and 0xff)
+            val end = minOf(total, n)
+            if (end <= ihl + 8) return true
+            val query = pkt.copyOfRange(ihl + 8, end)
+            val src = pkt.copyOfRange(12, 16)
+            tx.addAndGet(query.size.toLong())
+            runCatching { pool.execute { answer(query, src, sport) } }
+            return true
         }
 
         private fun ask(t: Target, q: ByteArray): ByteArray? = runCatching {
