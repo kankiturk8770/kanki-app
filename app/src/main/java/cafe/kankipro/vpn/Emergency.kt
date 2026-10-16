@@ -161,13 +161,15 @@ object Emergency {
 
 /** HTTP/1.1 بی‌رمز روی سوکت خام (فقط برای سرور اضطراری که ادمین بدون گواهی گذاشته) */
 object PlainHttp {
-    fun request(method: String, url: String, headers: Map<String, String>, body: ByteArray?): Pair<Int, ByteArray> {
+    /** prepare: پیش از اتصال روی سوکت اجرا می‌شود (مثلاً protect تا از VPN بیرون برود) */
+    fun request(method: String, url: String, headers: Map<String, String>, body: ByteArray?, prepare: ((Socket) -> Unit)? = null, timeoutMs: Int = 15000): Pair<Int, ByteArray> {
         val u = URL(url)
         val port = if (u.port > 0) u.port else 80
         val path = (u.path.ifEmpty { "/" }) + (u.query?.let { "?$it" } ?: "")
         Socket().use { s ->
-            s.connect(InetSocketAddress(u.host, port), 15000)
-            s.soTimeout = 25000
+            prepare?.invoke(s)
+            s.connect(InetSocketAddress(u.host, port), timeoutMs)
+            s.soTimeout = maxOf(timeoutMs, 25000)
             val head = StringBuilder()
             head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
             head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != 80) ":${u.port}" else "").append("\r\n")

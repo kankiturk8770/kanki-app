@@ -66,7 +66,7 @@ fun App() {
             VState.ON -> scope.launch { state.disconnect() }
             VState.OFF -> {
                 if (state.proto == "openvpn") { scope.launch { state.connect() }; return }
-                state.requestVpn?.invoke { scope.launch { state.connect() } }
+                state.requestVpn?.invoke { scope.launch { state.connectMode() } }
             }
             VState.CONNECTING -> {}
         }

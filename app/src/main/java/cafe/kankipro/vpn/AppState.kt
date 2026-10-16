@@ -55,6 +55,117 @@ class AppState private constructor(context: Context) {
     /** مسیر اتصال: tunnel (از طریق سرور واسط) یا direct (مستقیم به سرور) */
     var route by mutableStateOf(prefs.getString("route", "tunnel") ?: "tunnel")
 
+    // ---------------- حالت‌های اتصال (خودکار، گیم، وب و استریم، فیلتر شدید، DNS)
+    var mode by mutableStateOf(KMode.of(prefs.getString("mode", "auto")))
+        private set
+    fun changeMode(m: KMode) { mode = m; smartOpen = false; pinned = null; prefs.edit().putString("mode", m.key).apply() }
+    /** سرور و پروتکلی که کاربر خودش در تب سرورها زده («node|proto»)؛ اول همین امتحان می‌شود */
+    var pinned by mutableStateOf<String?>(null)
+    /** حالت گیم: فقط بازی‌ها از VPN رد شوند */
+    var gamesOnly by mutableStateOf(prefs.getBoolean("gamesOnly", false))
+        private set
+    fun changeGamesOnly(v: Boolean) { gamesOnly = v; prefs.edit().putBoolean("gamesOnly", v).apply() }
+    /** سرور DNS انتخابی ("" = خودکار: اول ریلی ایران) و سروری که الان به آن وصل است */
+    var dnsPick by mutableStateOf(prefs.getString("dnsPick", "") ?: "")
+        private set
+    fun changeDnsPick(id: String) { dnsPick = id; prefs.edit().putString("dnsPick", id).apply() }
+    var dnsActive by mutableStateOf<DnsServer?>(null)
+    /** اسم شبکه‌ی فعلی (Wi-Fi، ایرانسل …) برای نمایش حافظه‌ی اپراتور */
+    var netName by mutableStateOf("")
+    /** مرحله‌ی فعلی زنجیره‌ی خودکار برای نمایش («تانل»، «مستقیم»، «فیلتر شدید») */
+    var tryStep by mutableStateOf<String?>(null)
+
+    private fun memKey(m: KMode) = "op_" + Modes.networkKey(ctx) + "_" + m.key
+
+    /** کانفیگ‌هایی که این حالت امتحان می‌کند، به ترتیب: آخرین موفق روی همین اپراتور، سرور انتخابی، بقیه به ترتیب پینگ */
+    fun candidates(m: KMode = mode): List<Pair<String, String>> {
+        val a = account ?: return emptyList()
+        val protos = Modes.protos(m)
+        val nodes = a.configs.map { it.node }.distinct()
+        val out = mutableListOf<Pair<String, String>>()
+        pinned?.split("|")?.takeIf { it.size == 2 }?.let { (n, p) -> if (hasCfg(n, p)) out.add(n to p) }
+        prefs.getString(memKey(m), null)?.split("|")?.takeIf { it.size == 2 }?.let { (n, p) -> if (p in protos && hasCfg(n, p)) out.add(n to p) }
+        val cur = node
+        for (p in protos) if (cur != null && hasCfg(cur, p)) out.add(cur to p)
+        val others = nodes.filter { it != cur }.sortedBy { nodePing(it)?.takeIf { p -> p > 0 } ?: 9999 }
+        for (p in protos) for (n in others) if (hasCfg(n, p)) out.add(n to p)
+        return out.distinct()
+    }
+
+    /** دکمه‌ی اتصال: بر اساس حالت، کانفیگ مناسب را پیدا و (اگر نشد) بعدی را امتحان می‌کند */
+    suspend fun connectMode() {
+        netName = Modes.networkName(ctx)
+        if (mode == KMode.DNS) { connectDns(); return }
+        val list = candidates().take(if (mode == KMode.AUTO) 5 else 3)
+        if (list.isEmpty()) {
+            error = when (mode) {
+                KMode.STRICT -> "برای فیلتر شدید، Xray یا Hysteria2 در اشتراک شما نیست. از پشتیبانی بخواهید."
+                KMode.GAME -> "کانفیگ مناسب گیم در اشتراک شما نیست."
+                else -> "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."
+            }
+            return
+        }
+        for ((i, c) in list.withIndex()) {
+            node = c.first
+            selectProto(c.second)
+            tryStep = stepName(c.second)
+            connect(quiet = i < list.size - 1)
+            if (vstate == VState.ON) {
+                prefs.edit().putString(memKey(mode), c.first + "|" + c.second).apply()
+                tryStep = null
+                return
+            }
+            if (!wantTry) break   // کاربر وسط کار قطع کرد
+        }
+        tryStep = null
+    }
+
+    /** کاربر وسط زنجیره قطع کرد؟ */
+    @Volatile private var wantTry = true
+
+    private fun stepName(p: String) = when (p) {
+        "amneziawg", "wireguard" -> "تانل"
+        "amneziawg-direct" -> "مستقیم"
+        "xray" -> "فیلتر شدید"
+        "hysteria2" -> "پرسرعت"
+        else -> protoTitle(p)
+    }
+
+    /** حالت DNS: ثبت IP، انتخاب سرور (اول ریلی) و بالا آوردن VPN کوچکِ فقط-DNS */
+    suspend fun connectDns() {
+        val info = account?.dns
+        if (info == null) { error = "رفع تحریم (DNS کانکی) در اشتراک شما فعال نیست. از پشتیبانی بخواهید."; return }
+        error = null
+        vstate = VState.CONNECTING
+        try {
+            val order = KankiDns.ordered(info, dnsPick.ifBlank { null })
+            // همه همزمان ثبت می‌شوند؛ انتخابی/ریلی اگر جواب داد همان، وگرنه سریع‌ترین
+            val reg = withContext(Dispatchers.IO) {
+                kotlinx.coroutines.coroutineScope { order.map { s -> async { s to KankiDns.register(s.registerHttp) } }.awaitAll() }
+            }
+            val ok = reg.filter { it.second != null }
+            val best = ok.firstOrNull { it.first.id == dnsPick }?.first
+                ?: ok.firstOrNull { it.first.role == "relay" && dnsPick.isBlank() }?.first
+                ?: ok.minByOrNull { it.second ?: Long.MAX_VALUE }?.first
+                ?: throw IllegalStateException("no DNS server answered the registration")
+            val text = applyExcluded(KankiDns.wrap(listOf(best) + order.filter { it != best }), excluded.toSet())
+            withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
+            val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }
+            if (!alive) throw IllegalStateException("no internet after DNS mode")
+            dnsActive = best
+            vstate = VState.ON
+            wantOn = true
+            LastConfig.save(ctx, text, "🛡 " + best.name.ifBlank { "Kanki DNS" } + " · " + tr("رفع تحریم"))
+            startNotif()
+        } catch (e: Exception) {
+            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+            vstate = VState.OFF
+            dnsActive = null
+            error = "DNS کانکی وصل نشد. اینترنت را بررسی کنید یا از پشتیبانی بپرسید."
+            errorDetail = "dns: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
 
     private var lastNet: android.net.Network? = null
 
@@ -251,7 +362,7 @@ class AppState private constructor(context: Context) {
     private suspend fun revive() {
         if (reviving || vstate != VState.ON) return
         reviving = true
-        try { disconnect(); connect() } finally { reviving = false }
+        try { val m = mode; disconnect(); if (m == KMode.DNS) connectDns() else connect() } finally { reviving = false }
     }
 
     private fun screenOn(): Boolean =
@@ -640,7 +751,8 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    suspend fun connect() {
+    suspend fun connect(quiet: Boolean = false) {
+        wantTry = true
         val a = account ?: return
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
@@ -665,6 +777,7 @@ class AppState private constructor(context: Context) {
                 cfg = applyKeepalive(cfg, 25)
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
+                if (mode == KMode.GAME && gamesOnly) cfg = applyIncluded(cfg, Modes.gamePackages(ctx))
                 VpnEngine.up(ctx, cfg)
                 cfg
             }
@@ -680,8 +793,10 @@ class AppState private constructor(context: Context) {
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
-            error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
-            errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
+            if (!quiet) {
+                error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
+                errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
+            }
         }
     }
 
@@ -830,6 +945,26 @@ class AppState private constructor(context: Context) {
         realTesting = false
     }
 
+    private var pingAllBusy = false
+
+    /** پینگ واقعی همه‌ی سرورها (هر کدام با یکی از کانفیگ‌هایش)، همزمان؛ برای فهرست کشورها */
+    suspend fun pingAll() {
+        val a = account ?: return
+        if (pingAllBusy) return
+        pingAllBusy = true
+        try {
+            val targets = a.configs.groupBy { it.node }.mapNotNull { (n, links) ->
+                links.map { it.protocol }.firstNotNullOfOrNull { p -> infos["$n/$p"]?.takeIf { i -> i.host != "—" }?.let { "$n/$p" to it } }
+            }
+            val res = kotlinx.coroutines.coroutineScope {
+                targets.map { (k, info) -> async(Dispatchers.IO) { k to (runCatching { Pinger.test(info) }.getOrNull() ?: -1L) } }.awaitAll()
+            }
+            res.forEach { (k, v) -> pings[k] = v }
+        } finally {
+            pingAllBusy = false
+        }
+    }
+
     /** تست پینگ یک کانفیگ */
     suspend fun pingTest(nodeId: String, p: String) {
         val key = "$nodeId/$p"
@@ -842,6 +977,9 @@ class AppState private constructor(context: Context) {
 
     suspend fun disconnect() {
         wantOn = false
+        wantTry = false
+        dnsActive = null
+        tryStep = null
         withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
         KankiNotif.hide(ctx)
         vstate = VState.OFF
