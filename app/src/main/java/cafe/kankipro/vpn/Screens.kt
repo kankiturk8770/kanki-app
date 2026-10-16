@@ -371,7 +371,7 @@ private fun ServersTab(state: AppState) {
     val scope = rememberCoroutineScope()
     val a = state.account
     val locked = state.vstate != VState.OFF
-    val all = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2")
+    val all = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
     val cards = a?.configs?.groupBy { it.node }?.map { (nodeId, links) ->
         val name = links.first().nodeName
         val protos = all.filter { p -> state.hasCfg(nodeId, p) && links.any { it.protocol == p } }.map { p ->

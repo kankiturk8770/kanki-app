@@ -33,7 +33,31 @@ data class Account(
     val emergency: String? = null,
     /** کلید عمومی امضای پیام‌های ادمین در چت اضطراری (base64) */
     val emergencyKey: String? = null,
+    /** DNS کانکی (رفع تحریم)؛ null یعنی این کاربر DNS ندارد */
+    val dns: DnsInfo? = null,
+    /** لینک‌های Xray این کاربر (vless:// vmess:// trojan:// ss://) */
+    val xray: List<XrayLink> = emptyList(),
 )
+
+/** یک سرور DNS کانکی. role: relay (داخل ایران) یا exit (خارج) */
+data class DnsServer(
+    val id: String,
+    val name: String,
+    val note: String,
+    val role: String,
+    val ip: String,
+    val host: String,
+    /** آدرس Private DNS (DoT) مخصوص همین کاربر */
+    val dot: String,
+    val doh: String,
+    /** آدرس ثبت IP (HTTPS) و نسخه‌ی HTTP آن روی خود IP */
+    val register: String,
+    val registerHttp: String,
+)
+
+data class DnsInfo(val token: String, val servers: List<DnsServer>)
+
+data class XrayLink(val name: String, val link: String)
 
 /** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
 data class AppNotice(val id: String, val text: String, val until: Long)
@@ -163,7 +187,25 @@ object SubscriptionApi {
             notice = notice(html),
             emergency = dataJson(html)?.optString("emergency")?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
             emergencyKey = dataJson(html)?.optString("emergency_key")?.takeIf { it.isNotBlank() },
+            dns = dataJson(html)?.optJSONObject("dns")?.let { parseDns(it) },
+            xray = dataJson(html)?.optJSONArray("xray")?.let { a ->
+                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }
+                    .map { XrayLink(it.optString("name"), it.optString("link").trim()) }
+                    .filter { XrayCfg.supported(it.link) }
+            } ?: emptyList(),
         )
+    }
+
+    private fun parseDns(o: org.json.JSONObject): DnsInfo? {
+        val arr = o.optJSONArray("servers") ?: return null
+        val list = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i) }.map { x ->
+            DnsServer(
+                id = x.optString("id"), name = x.optString("name"), note = x.optString("note"), role = x.optString("role"),
+                ip = x.optString("ip"), host = x.optString("host"), dot = x.optString("dot"), doh = x.optString("doh"),
+                register = x.optString("register"), registerHttp = x.optString("register_http"),
+            )
+        }.filter { it.ip.isNotBlank() || it.dot.isNotBlank() }
+        return if (list.isEmpty()) null else DnsInfo(o.optString("token"), list)
     }
 }
 
@@ -183,6 +225,11 @@ data class ConfigInfo(
     companion object {
         fun parse(text: String): ConfigInfo {
             if (text.lines().any { it.trim().startsWith("remote ") }) return parseOvpn(text)
+            if (XrayCfg.isXray(text)) {
+                val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
+                val (h, p) = runCatching { XrayCfg.endpoint(link) }.getOrDefault("—" to 0)
+                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = XrayCfg.detail(link).ifBlank { null }, transport = "TCP", cipher = XrayCfg.protoName(link))
+            }
             val m = mutableMapOf<String, String>()
             text.lines().forEach { line ->
                 val p = line.split("=", limit = 2)

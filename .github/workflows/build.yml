@@ -71,6 +71,31 @@ jobs:
           get x86 386
           ls -la app/src/main/jniLibs/*
 
+      # هسته‌ی Xray-core، نسخه‌ی ثابت و تست‌شده (همان که پنل با آن کانفیگ‌ها را چک می‌کند).
+      # فایل‌های geoip/geosite برداشته نمی‌شوند (حجم کم)؛ کانفیگ اپ به آن‌ها نیاز ندارد.
+      - name: دریافت هسته‌ی Xray-core
+        env:
+          XRAY_VERSION: v26.3.27
+        run: |
+          set -e
+          base="https://github.com/XTLS/Xray-core/releases/download/$XRAY_VERSION"
+          get() { # $1=ABI اندروید  $2=فایل zip
+            d=app/src/main/jniLibs/$1; mkdir -p "$d"
+            curl -fsSL --retry 3 -o /tmp/x.zip "$base/$2"
+            curl -fsSL --retry 3 -o /tmp/x.dgst "$base/$2.dgst"
+            want=$(grep -m1 '^SHA2-256' /tmp/x.dgst | awk '{print $2}')
+            got=$(sha256sum /tmp/x.zip | cut -d' ' -f1)
+            if [ -z "$want" ] || [ "$want" != "$got" ]; then
+              echo "::error::SHA256 of $2 does not match ($XRAY_VERSION): want=$want got=$got"; exit 1
+            fi
+            rm -rf /tmp/xr && unzip -q -o /tmp/x.zip xray -d /tmp/xr
+            mv /tmp/xr/xray "$d/libxray.so"; chmod +x "$d/libxray.so"
+            echo "$1 <- $2 ($XRAY_VERSION) sha256=$got"
+          }
+          get arm64-v8a Xray-android-arm64-v8a.zip
+          get armeabi-v7a Xray-linux-arm32-v7a.zip
+          ls -la app/src/main/jniLibs/*
+
       - name: ساخت tun2socks برای Hysteria2 (hev-socks5-tunnel)
         run: |
           set -e
@@ -111,6 +136,9 @@ jobs:
         env:
           KANKI_KEY_PASS: ${{ secrets.KANKI_KEY_PASS }}
         run: gradle assembleRelease --stacktrace
+
+      - name: حجم فایل‌ها
+        run: ls -la app/build/outputs/apk/release/
 
       - uses: actions/upload-artifact@v4
         with:

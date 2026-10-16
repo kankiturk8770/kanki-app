@@ -419,7 +419,11 @@ class AppState private constructor(context: Context) {
         val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
             directHost(l)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
         }
-        return a.copy(configs = base + direct)
+        // هر لینک Xray یک «سرور» جدا با پروتکل xray (اسمش همان نام اینباند در پنل)
+        val xray = a.xray.mapIndexed { i, x ->
+            ConfigLink(protocol = "xray", node = "xray-" + Emergency.sha256Hex(x.link.toByteArray()).take(8), nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
+        }
+        return a.copy(configs = base + direct + xray)
     }
 
     /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
@@ -440,6 +444,7 @@ class AppState private constructor(context: Context) {
 
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
     private fun fetchConfig(l: ConfigLink, forceNet: Boolean = false): String {
+        if (l.protocol == "xray") return XrayCfg.wrap(l.url.removePrefix("xray:"))
         val url = l.url.substringBefore("#direct=")
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
@@ -475,6 +480,7 @@ class AppState private constructor(context: Context) {
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "hysteria2")) add("hysteria2")
+        if (hasCfg(nodeId, "xray")) add("xray")
     }
 
     /** تغییر مسیر بین تانل و مستقیم */
@@ -619,13 +625,14 @@ class AppState private constructor(context: Context) {
 
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
-        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2") }) {
+        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray") }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
             val ok = txt != null && when {
                 l.protocol.startsWith("openvpn") -> txt.contains("remote ")
                 l.protocol == "hysteria2" -> txt.contains("hysteria2://")
+                l.protocol == "xray" -> XrayCfg.isXray(txt)
                 else -> txt.contains("[Interface]") && txt.contains("[Peer]")
             }
             if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) }

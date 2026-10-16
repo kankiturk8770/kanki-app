@@ -92,7 +92,8 @@ object HyEngine {
     /** وقتی هسته‌ی hysteria خودش (بدون دستور کاربر) از بین برود true می‌شود */
     @Volatile internal var crashed = false
 
-    fun isHy(text: String) = text.contains("hysteria2://")
+    /** این متن با این موتور (هسته + tun2socks) بالا می‌آید: Hysteria2 یا Xray */
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text)
 
     fun isUp() = state == UP
 
@@ -182,6 +183,7 @@ class KankiHyService : VpnService() {
     private fun start(text: String, my: Int) {
         val lines = text.lines().map { it.trim() }
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
+        if (XrayCfg.isXray(text)) return startXray(v("URI") ?: error("xray: link missing"), lines, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: 1400
@@ -251,15 +253,26 @@ class KankiHyService : VpnService() {
             Thread.sleep(250)
         }
         if (!ready) error("hysteria2: server did not answer. " + lastLog())
+        tunUp("Kanki · Hysteria2", ip, socksPort, mtu, dns, excluded, included(lines), my)
+    }
 
+    /** برنامه‌هایی که فقط آن‌ها از VPN رد می‌شوند (حالت «فقط بازی‌ها»)؛ خالی = همه */
+    private fun included(lines: List<String>): List<String> =
+        (lines.firstOrNull { it.startsWith("IncludedApplications", ignoreCase = true) && it.contains("=") }?.substringAfter("=") ?: "")
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** کارت شبکه‌ی VPN و tun2socks به پراکسی SOCKS محلی هسته (مشترک بین Hysteria2 و Xray) */
+    private fun tunUp(session: String, ip: InetAddress, socksPort: Int, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, my: Int) {
         val b = Builder()
-            .setSession("Kanki · Hysteria2")
+            .setSession(session)
             .setMtu(mtu)
             .addAddress("198.18.0.1", 32)
         if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
         else b.addRoute("0.0.0.0", 0)
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
-        excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        // اندروید اجازه نمی‌دهد هر دو فهرست با هم باشند: «فقط این برنامه‌ها» بر «به‌جز این‌ها» مقدم است
+        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
 
         val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: 198.18.0.1\nsocks5:\n  port: $socksPort\n  address: 127.0.0.1\n  udp: 'udp'\nmisc:\n  task-stack-size: 81920\n"
@@ -268,12 +281,69 @@ class KankiHyService : VpnService() {
         // بررسی لغو و بالا آوردن VPN با هم (زیر یک قفل با shutdown) انجام می‌شود؛
         // پس اگر زمان تمام شده یا کاربر قطع کرده، VPN دیگر بی‌صدا وصل نمی‌شود
         synchronized(this) {
-            if (cancelled(my)) error("hysteria2: cancelled")
-            val fd = b.establish() ?: error("hysteria2: VPN permission is missing")
+            if (cancelled(my)) error("cancelled")
+            val fd = b.establish() ?: error("VPN permission is missing")
             tun = fd
-            if (!TProxyService.TProxyStartService(hevFile.path, fd.fd)) error("hysteria2: tun2socks did not start")
+            if (!TProxyService.TProxyStartService(hevFile.path, fd.fd)) error("tun2socks did not start")
             HyEngine.state = HyEngine.UP
         }
+    }
+
+    /** Xray-core: مثل Hysteria2، فقط با هسته و کانفیگ دیگر */
+    private fun startXray(link: String, lines: List<String>, my: Int) {
+        fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
+        val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+        val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: 1400
+        val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (!TProxyService.loaded) error("xray: tun2socks library is missing in this build")
+        val bin = File(applicationInfo.nativeLibraryDir, "libxray.so")
+        if (!bin.exists()) error("xray: core is missing in this build")
+
+        val (host, _) = XrayCfg.endpoint(link)
+        val addrs = InetAddress.getAllByName(host)
+        val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
+        val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        val cfgFile = File(filesDir, "xray.json").apply { writeText(XrayCfg.config(link, ip.hostAddress ?: host, socksPort)) }
+
+        val pb = ProcessBuilder(listOf(bin.path, "run", "-c", cfgFile.path)).directory(filesDir).redirectErrorStream(true)
+        pb.environment()["HOME"] = filesDir.path
+        pb.environment()["XRAY_LOCATION_ASSET"] = filesDir.path
+        val p = synchronized(this) {
+            if (cancelled(my)) error("xray: cancelled")
+            killStaleCores()
+            pb.start().also { proc = it }
+        }
+        Thread({
+            runCatching {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    synchronized(log) {
+                        log.append(line).append('\n')
+                        if (log.length > 6000) log.delete(0, log.length - 4000)
+                    }
+                }
+            }
+        }, "kanki-xray-log").start()
+        Thread({
+            runCatching { p.waitFor() }
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = "xray core exited. " + lastLog()
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
+        }, "kanki-xray-mon").start()
+
+        val end = System.currentTimeMillis() + 10_000
+        var ready = false
+        while (System.currentTimeMillis() < end) {
+            if (cancelled(my)) error("xray: cancelled")
+            if (!p.isAlive) error("xray: " + lastLog())
+            ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress("127.0.0.1", socksPort), 300) }; true }.getOrDefault(false)
+            if (ready) break
+            Thread.sleep(200)
+        }
+        if (!ready) error("xray: the core did not start. " + lastLog())
+        tunUp("Kanki · Xray", ip, socksPort, mtu, dns, excluded, included(lines), my)
     }
 
     /**
@@ -286,7 +356,8 @@ class KankiHyService : VpnService() {
             val pid = d.name.toIntOrNull() ?: return@forEach
             if (pid == me) return@forEach
             runCatching {
-                if (File(d, "cmdline").readText().contains("libhysteria.so")) android.os.Process.killProcess(pid)
+                val cmd = File(d, "cmdline").readText()
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so")) android.os.Process.killProcess(pid)
             }
         }
     }

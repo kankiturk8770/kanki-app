@@ -64,6 +64,7 @@ fun protoDesc(p: String) = when (p) {
     "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
     "wireguard" -> "سریع · مناسب گیم"
     "hysteria2" -> "پرسرعت · مناسب اینترنت ضعیف"
+    "xray" -> "فیلتر شدید · سخت برای مسدود شدن"
     "openvpn/tcp" -> "پایدار"
     else -> "سازگاری بالا"
 }
