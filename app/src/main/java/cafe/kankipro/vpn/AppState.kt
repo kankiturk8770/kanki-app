@@ -55,83 +55,251 @@ class AppState private constructor(context: Context) {
     /** مسیر اتصال: tunnel (از طریق سرور واسط) یا direct (مستقیم به سرور) */
     var route by mutableStateOf(prefs.getString("route", "tunnel") ?: "tunnel")
 
-    // ---------------- حالت‌های اتصال (خودکار، گیم، وب و استریم، فیلتر شدید، DNS)
-    var mode by mutableStateOf(KMode.of(prefs.getString("mode", "auto")))
+    // ---------------- حالت‌های اتصال (هوشمند، گیمینگ، ضد فیلتر، DNS)
+    var mode by mutableStateOf(KMode.of(prefs.getString("mode", "smart")))
         private set
-    fun changeMode(m: KMode) { mode = m; smartOpen = false; pinned = null; prefs.edit().putString("mode", m.key).apply() }
-    /** سرور و پروتکلی که کاربر خودش در تب سرورها زده («node|proto»)؛ اول همین امتحان می‌شود */
-    var pinned by mutableStateOf<String?>(null)
-    /** حالت گیم: فقط بازی‌ها از VPN رد شوند */
+    fun changeMode(m: KMode) { mode = m; prefs.edit().putString("mode", m.key).apply() }
+
+    /** پنل‌های باز صفحه‌ی اول؛ تا وقتی یکی باز است، دکمه‌ی اصلی اتصال کاری نمی‌کند (گیج‌کننده نباشد) */
+    var gameSheet by mutableStateOf(false)
+    var filterSheet by mutableStateOf(false)
+    var appsPicker by mutableStateOf(false)
+
+    // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
+    var gameAuto by mutableStateOf(prefs.getBoolean("gameAuto", true))
+        private set
+    var gameProto by mutableStateOf(prefs.getString("gameProto", "amneziawg") ?: "amneziawg")
+        private set
+    var gameNode by mutableStateOf(prefs.getString("gameNode", null))
+        private set
+    /** کاربر حداقل یک بار پنل گیمینگ را تأیید کرده؟ (وگرنه دکمه‌ی اصلی اول پنل را باز می‌کند) */
+    var gameSet by mutableStateOf(prefs.getBoolean("gameSet", false))
+        private set
+    fun setGame(auto: Boolean, p: String, n: String?) {
+        gameAuto = auto; gameProto = p; gameNode = n; gameSet = true
+        prefs.edit().putBoolean("gameAuto", auto).putString("gameProto", p).putString("gameNode", n).putBoolean("gameSet", true).apply()
+    }
+
+    // ضد فیلتر: خودکار (اول مستقیم، بعد تانل) یا انتخاب دستی. filterProto: شناسه‌ی اینباند Xray (xray-…) یا amneziawg
+    var filterAuto by mutableStateOf(prefs.getBoolean("filterAuto", true))
+        private set
+    var filterProto by mutableStateOf(prefs.getString("filterProto", "") ?: "")
+        private set
+    var filterNode by mutableStateOf(prefs.getString("filterNode", null))
+        private set
+    fun setFilter(auto: Boolean, p: String, n: String?) {
+        filterAuto = auto; filterProto = p; filterNode = n
+        prefs.edit().putBoolean("filterAuto", auto).putString("filterProto", p).putString("filterNode", n).apply()
+    }
+
+    // ---------------- برنامه‌های مجاز (بازی‌ها و برنامه‌های انتخابی) برای «فقط بازی‌ها» و حالت DNS
+    /** گیمینگ: فقط بازی‌ها و برنامه‌های انتخابی اینترنت داشته باشند */
     var gamesOnly by mutableStateOf(prefs.getBoolean("gamesOnly", false))
         private set
     fun changeGamesOnly(v: Boolean) { gamesOnly = v; prefs.edit().putBoolean("gamesOnly", v).apply() }
+    /** بازی‌های نصب‌شده خودکار تشخیص داده شوند */
+    var autoGames by mutableStateOf(prefs.getBoolean("autoGames", true))
+        private set
+    fun changeAutoGames(v: Boolean) { autoGames = v; prefs.edit().putBoolean("autoGames", v).apply() }
+    /** برنامه‌هایی که کاربر اضافه کرده، و بازی‌های تشخیص‌داده‌شده‌ای که کاربر برداشته */
+    val appsAdded = androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(prefs.getStringSet("appsAdded", emptySet()) ?: emptySet()) }
+    val appsRemoved = androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(prefs.getStringSet("appsRemoved", emptySet()) ?: emptySet()) }
+    /** بازی‌های نصب‌شده روی گوشی (در پس‌زمینه پیدا می‌شوند) */
+    var detectedGames by mutableStateOf<List<String>>(emptyList())
+
+    fun loadGames() { bg.launch { detectedGames = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) } } }
+
+    fun isAllowedApp(pkg: String): Boolean =
+        pkg in appsAdded || (autoGames && pkg in detectedGames && pkg !in appsRemoved)
+
+    fun toggleApp(pkg: String) {
+        if (isAllowedApp(pkg)) {
+            appsAdded.remove(pkg)
+            if (pkg in detectedGames && pkg !in appsRemoved) appsRemoved.add(pkg)
+        } else {
+            appsRemoved.remove(pkg)
+            if (!isAllowedApp(pkg)) appsAdded.add(pkg)
+        }
+        prefs.edit().putStringSet("appsAdded", appsAdded.toSet()).putStringSet("appsRemoved", appsRemoved.toSet()).apply()
+    }
+
+    /** فهرست برنامه‌های مجاز همین حالا (بازی‌ها دوباره از روی گوشی خوانده می‌شوند) */
+    private suspend fun allowedAppsNow(): List<String> {
+        val games = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) }
+        detectedGames = games
+        return ((if (autoGames) games.filter { it !in appsRemoved } else emptyList()) + appsAdded).distinct()
+    }
+
+    fun allowedCount(): Int = (detectedGames.filter { autoGames && it !in appsRemoved } + appsAdded).distinct().size
+
     /** سرور DNS انتخابی ("" = خودکار: اول ریلی ایران) و سروری که الان به آن وصل است */
     var dnsPick by mutableStateOf(prefs.getString("dnsPick", "") ?: "")
         private set
     fun changeDnsPick(id: String) { dnsPick = id; prefs.edit().putString("dnsPick", id).apply() }
     var dnsActive by mutableStateOf<DnsServer?>(null)
-    /** اسم شبکه‌ی فعلی (Wi-Fi، ایرانسل …) برای نمایش حافظه‌ی اپراتور */
+    /** اسم شبکه‌ی فعلی (Wi-Fi، ایرانسل …) */
     var netName by mutableStateOf("")
-    /** مرحله‌ی فعلی زنجیره‌ی خودکار برای نمایش («تانل»، «مستقیم»، «فیلتر شدید») */
+    /** مرحله‌ی فعلی اتصال برای نمایش کوچک («سنجش پینگ…»، «اتصال به …») */
     var tryStep by mutableStateOf<String?>(null)
 
     private fun memKey(m: KMode) = "op_" + Modes.networkKey(ctx) + "_" + m.key
 
-    /** کانفیگ‌هایی که این حالت امتحان می‌کند، به ترتیب: آخرین موفق روی همین اپراتور، سرور انتخابی، بقیه به ترتیب پینگ */
-    fun candidates(m: KMode = mode): List<Pair<String, String>> {
-        val a = account ?: return emptyList()
-        val protos = Modes.protos(m)
-        val nodes = a.configs.map { it.node }.distinct()
-        val out = mutableListOf<Pair<String, String>>()
-        pinned?.split("|")?.takeIf { it.size == 2 }?.let { (n, p) -> if (hasCfg(n, p)) out.add(n to p) }
-        prefs.getString(memKey(m), null)?.split("|")?.takeIf { it.size == 2 }?.let { (n, p) -> if (p in protos && hasCfg(n, p)) out.add(n to p) }
-        val cur = node
-        for (p in protos) if (cur != null && hasCfg(cur, p)) out.add(cur to p)
-        val others = nodes.filter { it != cur }.sortedBy { nodePing(it)?.takeIf { p -> p > 0 } ?: 9999 }
-        for (p in protos) for (n in others) if (hasCfg(n, p)) out.add(n to p)
-        return out.distinct()
-    }
-
-    /** دکمه‌ی اتصال: بر اساس حالت، کانفیگ مناسب را پیدا و (اگر نشد) بعدی را امتحان می‌کند */
-    suspend fun connectMode() {
-        netName = Modes.networkName(ctx)
-        if (mode == KMode.DNS) { connectDns(); return }
-        val list = candidates().take(if (mode == KMode.AUTO) 5 else 3)
-        if (list.isEmpty()) {
-            error = when (mode) {
-                KMode.STRICT -> "برای فیلتر شدید، Xray یا Hysteria2 در اشتراک شما نیست. از پشتیبانی بخواهید."
-                KMode.GAME -> "کانفیگ مناسب گیم در اشتراک شما نیست."
-                else -> "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."
-            }
-            return
-        }
-        for ((i, c) in list.withIndex()) {
-            node = c.first
-            selectProto(c.second)
-            tryStep = stepName(c.second)
-            connect(quiet = i < list.size - 1)
-            if (vstate == VState.ON) {
-                prefs.edit().putString(memKey(mode), c.first + "|" + c.second).apply()
-                tryStep = null
-                return
-            }
-            if (!wantTry) break   // کاربر وسط کار قطع کرد
-        }
-        tryStep = null
-    }
-
-    /** کاربر وسط زنجیره قطع کرد؟ */
+    /** کاربر وسط کار قطع کرد؟ (false یعنی تلاش‌های بعدی انجام نشوند) */
     @Volatile private var wantTry = true
 
-    private fun stepName(p: String) = when (p) {
-        "amneziawg", "wireguard" -> "تانل"
-        "amneziawg-direct" -> "مستقیم"
-        "xray" -> "فیلتر شدید"
-        "hysteria2" -> "پرسرعت"
-        else -> protoTitle(p)
+    /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
+    fun toggleMain() {
+        if (gameSheet || filterSheet || appsPicker) return
+        // وسط سنجش «هوشمند»: لمس یعنی لغو
+        if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
+        when (vstate) {
+            VState.ON, VState.CONNECTING -> bg.launch { disconnect() }
+            VState.OFF -> when (mode) {
+                KMode.SMART -> smartConnect()
+                KMode.GAME -> if (!gameSet) gameSheet = true else launchConnect { connectGame() }
+                KMode.FILTER -> launchConnect { connectFilter() }
+                KMode.DNS -> launchConnect { connectDns() }
+            }
+        }
     }
 
-    /** حالت DNS: ثبت IP، انتخاب سرور (اول ریلی) و بالا آوردن VPN کوچکِ فقط-DNS */
+    /** دکمه‌های حالت (لمس) */
+    fun tapMode(m: KMode) {
+        if (vstate == VState.CONNECTING && m != KMode.GAME) return
+        when (m) {
+            KMode.SMART -> { changeMode(m); smartConnect() }
+            KMode.GAME -> { changeMode(m); gameSheet = true }
+            KMode.FILTER -> { changeMode(m); launchConnect(reconnect = true) { connectFilter() } }
+            KMode.DNS -> {
+                val wasOther = mode != KMode.DNS && vstate == VState.ON
+                changeMode(m)
+                if (wasOther) launchConnect(reconnect = true) { connectDns() }
+            }
+        }
+    }
+
+    /** اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN */
+    fun launchConnect(reconnect: Boolean = false, block: suspend () -> Unit) {
+        val go: () -> Unit = {
+            bg.launch {
+                if (reconnect && vstate != VState.OFF) disconnect()
+                wantTry = true
+                block()
+            }
+        }
+        val ask = requestVpn
+        if (ask != null) ask(go) else go()
+    }
+
+    /** چند گزینه را به ترتیب امتحان می‌کند (فقط برای حالت‌های خودکار بیشتر از یکی است) */
+    private suspend fun connectChain(list: List<Pair<String, String>>, title: (Pair<String, String>) -> String): Boolean {
+        for ((i, c) in list.withIndex()) {
+            if (!wantTry) break
+            node = c.first
+            selectProto(c.second)
+            tryStep = trf("اتصال به %s…", title(c))
+            connect(quiet = i < list.size - 1, chained = true)
+            if (vstate == VState.ON) { tryStep = null; return true }
+        }
+        tryStep = null
+        return false
+    }
+
+    private fun nodeName(n: String) = account?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
+
+    /** پینگ چند کانفیگ با هم (با روش درست هر پروتکل)؛ نتیجه در pings هم ذخیره می‌شود */
+    private suspend fun pingMany(list: List<Pair<String, String>>): Map<Pair<String, String>, Long?> {
+        val res = kotlinx.coroutines.coroutineScope {
+            list.map { c ->
+                async(Dispatchers.IO) { c to infos["${c.first}/${c.second}"]?.let { runCatching { Pinger.test(it) }.getOrNull() } }
+            }.awaitAll()
+        }
+        res.forEach { (c, v) -> pings["${c.first}/${c.second}"] = v ?: -1L }
+        return res.toMap()
+    }
+
+    /** کشوری که برای گیم کمترین پینگ را دارد (اگر کاربر کشوری انتخاب نکرده) */
+    private fun bestGameNode(): String? {
+        val a = account ?: return null
+        val nodes = a.configs.map { it.node }.distinct().filter { n -> Modes.GAME_PROTOS.any { hasCfg(n, it) } }
+        return nodes.minByOrNull { nodePing(it)?.takeIf { p -> p > 0 } ?: 9999 }
+    }
+
+    /** گیمینگ: پروتکل و کشور انتخابی (قفل)، یا با «انتخاب خودکار» کم‌پینگ‌ترین پروتکل همان کشور */
+    suspend fun connectGame() {
+        netName = Modes.networkName(ctx)
+        if (account == null) return
+        val n = gameNode?.takeIf { g -> Modes.GAME_PROTOS.any { hasCfg(g, it) } } ?: bestGameNode()
+        if (n == null) { error = "کانفیگ مناسب گیم در اشتراک شما نیست."; return }
+        val list = if (gameAuto) {
+            tryStep = "سنجش پینگ…"
+            val protos = Modes.GAME_PROTOS.filter { hasCfg(n, it) }.map { n to it }
+            val m = pingMany(protos)
+            // پروتکلی که جواب پینگ نداد آخر می‌رود؛ حداکثر سه تلاش
+            protos.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }.take(3)
+        } else {
+            if (!hasCfg(n, gameProto)) {
+                error = trf("%s روی این کشور نیست. از «گیمینگ» دوباره انتخاب کنید.", protoTitle(gameProto))
+                return
+            }
+            listOf(n to gameProto)
+        }
+        val ok = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
+        if (!ok && wantTry && !gameAuto) {
+            error = trf("اتصال با %s برقرار نشد. پروتکل یا کشور دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(n))
+        }
+    }
+
+    /**
+     * ضد فیلتر. خودکار: اول راه‌های مستقیم (اینباندهای Xray و AmneziaWG مستقیم)، اگر هیچ‌کدام وصل نشد
+     * راه‌های تانل. آخرین راهی که روی همین اینترنت وصل شد، دفعه‌ی بعد اول امتحان می‌شود.
+     * دستی: فقط همان اینباند Xray، یا AmneziaWG همان کشور (اول مستقیم، بعد تانل).
+     */
+    suspend fun connectFilter() {
+        netName = Modes.networkName(ctx)
+        val a = account ?: return
+        if (!filterAuto) {
+            val p = filterProto
+            val n = filterNode
+            val list = when {
+                p.startsWith("xray-") -> listOf(p to "xray").filter { hasCfg(it.first, "xray") }
+                n != null -> listOf(n to "amneziawg-direct", n to "amneziawg").filter { hasCfg(it.first, it.second) }
+                else -> emptyList()
+            }
+            if (list.isEmpty()) { error = "گزینه‌ی انتخابی ضد فیلتر در اشتراک شما نیست. آن را نگه دارید و دوباره انتخاب کنید."; return }
+            val ok = connectChain(list) { c -> nodeName(c.first) }
+            if (!ok && wantTry) error = trf("اتصال با %s برقرار نشد. گزینه‌ی دیگری انتخاب کنید یا «هوشمند» را بزنید.", nodeName(list.first().first))
+            return
+        }
+        val nodes = a.configs.map { it.node }.distinct()
+        val direct = nodes.filter { hasCfg(it, "xray") }.map { it to "xray" } +
+            nodes.filter { hasCfg(it, "amneziawg-direct") }.map { it to "amneziawg-direct" }
+        val tunnel = listOf("amneziawg", "hysteria2", "wireguard").flatMap { p -> nodes.filter { hasCfg(it, p) }.map { it to p } }
+        if (direct.isEmpty() && tunnel.isEmpty()) { error = "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."; return }
+        tryStep = "سنجش راه‌های مستقیم…"
+        val m = pingMany(direct + tunnel)
+        fun ok(c: Pair<String, String>) = (m[c] ?: -1L) > 0
+        fun order(l: List<Pair<String, String>>) = l.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }
+        val remembered = prefs.getString(memKey(KMode.FILTER), null)?.split("|")?.takeIf { it.size == 2 }
+            ?.let { it[0] to it[1] }?.takeIf { it in direct || it in tunnel }
+        val list = (listOfNotNull(remembered) + order(direct).filter { ok(it) }.take(3) + order(tunnel).filter { ok(it) }.take(3) +
+            direct.filter { !ok(it) }.take(1) + tunnel.filter { !ok(it) }.take(1)).distinct().take(7)
+        val done = connectChain(list) { c -> if (c.second == "xray") nodeName(c.first) else nodeName(c.first) + " · " + protoTitle(c.second) }
+        if (done) prefs.edit().putString(memKey(KMode.FILTER), node + "|" + proto).apply()
+        else if (wantTry) error = "هیچ راهی وصل نشد. اینترنت را بررسی کنید یا «هوشمند» را بزنید."
+    }
+
+    /** انتخاب در تب سرورها: همان سرور و پروتکل در حالت مناسبش قفل می‌شود */
+    fun lockFromServers(id: String, p: String) {
+        node = id
+        selectProto(p)
+        when (p) {
+            "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
+            in Modes.GAME_PROTOS -> { setGame(false, p, id); changeMode(KMode.GAME) }
+        }
+    }
+
+    /** حالت DNS: ثبت IP، انتخاب سرور (اول ریلی) و بالا آوردن VPN کوچکِ DNS */
     suspend fun connectDns() {
         val info = account?.dns
         if (info == null) { error = "رفع تحریم (DNS کانکی) در اشتراک شما فعال نیست. از پشتیبانی بخواهید."; return }
@@ -148,10 +316,14 @@ class AppState private constructor(context: Context) {
                 ?: ok.firstOrNull { it.first.role == "relay" && dnsPick.isBlank() }?.first
                 ?: ok.minByOrNull { it.second ?: Long.MAX_VALUE }?.first
                 ?: throw IllegalStateException("no DNS server answered the registration")
-            val text = applyExcluded(KankiDns.wrap(listOf(best) + order.filter { it != best }), excluded.toSet())
+            // فقط بازی‌ها و برنامه‌های انتخابی اینترنت دارند (از راه DNS کانکی)؛ خالی = همه‌ی برنامه‌ها مثل قبل
+            val apps = allowedAppsNow()
+            val text = applyExcluded(KankiDns.wrap(listOf(best) + order.filter { it != best }, apps), excluded.toSet())
+            if (!wantTry) throw IllegalStateException("cancelled")
             withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
             val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }
             if (!alive) throw IllegalStateException("no internet after DNS mode")
+            if (!wantTry) throw IllegalStateException("cancelled")
             dnsActive = best
             vstate = VState.ON
             wantOn = true
@@ -161,11 +333,12 @@ class AppState private constructor(context: Context) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             dnsActive = null
-            error = "DNS کانکی وصل نشد. اینترنت را بررسی کنید یا از پشتیبانی بپرسید."
-            errorDetail = "dns: ${e.message ?: e.javaClass.simpleName}"
+            if (wantTry) {
+                error = "DNS کانکی وصل نشد. اینترنت را بررسی کنید یا از پشتیبانی بپرسید."
+                errorDetail = "dns: ${e.message ?: e.javaClass.simpleName}"
+            }
         }
     }
-
 
     private var lastNet: android.net.Network? = null
 
@@ -206,74 +379,107 @@ class AppState private constructor(context: Context) {
     data class SmartRow(val node: String, val proto: String, val title: String, val flag: String, val ping: Long, val jitter: Long)
     val smartRows = androidx.compose.runtime.mutableStateListOf<SmartRow>()
     var smartBusy by mutableStateOf(false)
-    /** فهرست نتایج انتخاب هوشمند باز است؟ (بعد از اتصال موفق خودکار بسته می‌شود) */
+    /** پنل کوچک انتخاب هوشمند باز است؟ (بعد از اتصال موفق خودکار بسته می‌شود) */
     var smartOpen by mutableStateOf(false)
+    /** پیشرفت سنجش: چند تا از چند تا */
+    var smartDone by mutableStateOf(0)
+    var smartTotal by mutableStateOf(0)
+    /** متن مرحله‌ی فعلی پنل */
+    var smartStatus by mutableStateOf("")
+    /** ردیفی که الان به آن وصل می‌شود («node|proto») */
+    var smartCurrent by mutableStateOf<String?>(null)
 
-    /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد و بهترین را انتخاب می‌کند */
-    suspend fun smartPick(): SmartRow? {
-        val a = account ?: return null
-        smartBusy = true
-        smartRows.clear()
-        val rows = try {
-            val cands = a.configs.distinctBy { it.node }.flatMap { n ->
-                (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
-                    infos["${n.node}/$p"]?.host?.takeIf { it != "—" }?.let { h -> Triple(n, p, h) }
-                }
+    /** Xray اگر پینگش تا این حد باشد «خوب» است و بر بقیه مقدم می‌شود */
+    private val xrayGoodMs = 250L
+
+    /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
+    private suspend fun smartMeasure(): List<SmartRow> {
+        val a = account ?: return emptyList()
+        val cands = a.configs.distinctBy { it.node }.flatMap { n ->
+            (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
+                infos["${n.node}/$p"]?.takeIf { it.host != "—" }?.let { i -> Triple(n, p, i) }
             }
-            val measured = kotlinx.coroutines.coroutineScope {
-                cands.map { it.third }.distinct().map { h ->
-                    async(Dispatchers.IO) { h to Pinger.stats(h) }
-                }.awaitAll().toMap()
-            }
-            cands.mapNotNull { (n, p, h) ->
-                measured[h]?.let { (ping, jit) -> SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit) }
-            }.sortedBy { it.ping + 2 * it.jitter }
-        } finally {
-            smartBusy = false
         }
-        smartRows.addAll(rows.take(4))
-        smartOpen = rows.isNotEmpty()
-        val best = rows.firstOrNull() ?: return null
-        node = best.node
-        route = if (best.proto.endsWith("-direct")) "direct" else "tunnel"
-        prefs.edit().putString("route", route).apply()
-        proto = best.proto
-        save()
-        return best
+        // هر میزبان/پورت یک بار سنجیده می‌شود
+        val keys = cands.map { Triple(it.third.host, it.third.transport, it.third.port) }.distinct()
+        smartTotal = keys.size
+        smartDone = 0
+        val measured = kotlinx.coroutines.coroutineScope {
+            keys.map { k ->
+                async {
+                    val info = cands.first { Triple(it.third.host, it.third.transport, it.third.port) == k }.third
+                    val r = withContext(Dispatchers.IO) { runCatching { Pinger.measure(info) }.getOrNull() }
+                    smartDone += 1
+                    k to r
+                }
+            }.awaitAll().toMap()
+        }
+        return cands.mapNotNull { (n, p, i) ->
+            measured[Triple(i.host, i.transport, i.port)]?.let { (ping, jit) ->
+                pings["${n.node}/$p"] = ping
+                SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit)
+            }
+        }.sortedBy { it.ping + 2 * it.jitter }
     }
 
     /**
-     * دکمه‌ی «انتخاب هوشمند»: بهترین سرور را پیدا می‌کند، وصل می‌شود و بعد از اتصال موفق
-     * فهرست نتایج خودکار بسته می‌شود (دکمه به حالت اول برمی‌گردد).
-     * در محدوده‌ی خود برنامه اجرا می‌شود، پس با عوض‌کردن تب وسط کار قطع نمی‌شود.
+     * «هوشمند»: پنل کوچکی باز می‌شود، پینگ همه‌ی سرورها و پروتکل‌ها گرفته می‌شود، به بهترین وصل می‌شود
+     * و بعد از اتصال موفق پنل خودش بسته می‌شود. اگر یک سرور Xray خوب جواب بدهد، Xray مقدم است؛
+     * وگرنه کمترین پینگ. اگر بهترین وصل نشد، بعدی امتحان می‌شود (فقط این حالت اجازه‌ی عوض کردن دارد).
      */
     fun smartConnect() {
-        if (smartBusy || vstate == VState.CONNECTING) return
-        bg.launch {
-            try {
-                if (vstate == VState.ON) disconnect()
-                val best = smartPick()
-                if (best == null) {
-                    toast(ctx, "سروری برای سنجش پیدا نشد")
-                    return@launch
-                }
-                val go: () -> Unit = {
-                    bg.launch {
-                        connect()
-                        if (vstate == VState.ON) {
-                            kotlinx.coroutines.delay(1500)   // چند لحظه برنده دیده شود، بعد جمع شود
-                            smartOpen = false
-                        }
-                    }
-                }
-                val ask = requestVpn
-                if (ask != null) ask(go) else go()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                smartBusy = false
-                toast(ctx, "انتخاب هوشمند ناموفق بود، دوباره امتحان کنید")
+        if (smartBusy) return
+        // پنل بعد از گرفتن اجازه‌ی VPN باز می‌شود (اگر کاربر رد کرد، پنل باز نمی‌ماند)
+        val go: () -> Unit = {
+            if (!smartBusy) {
+                smartOpen = true
+                smartBusy = true
+                smartRows.clear()
+                smartDone = 0; smartTotal = 0; smartCurrent = null
+                smartStatus = "سنجش پینگ همه‌ی سرورها…"
+                error = null; errorDetail = null
+                bg.launch { runSmart() }
             }
+        }
+        val ask = requestVpn
+        if (ask != null) ask(go) else go()
+    }
+
+    private suspend fun runSmart() {
+        try {
+            if (vstate != VState.OFF) disconnect()
+            wantTry = true
+            val rows = smartMeasure()
+            if (!wantTry) return
+            smartRows.clear()
+            smartRows.addAll(rows.take(4))
+            if (rows.isEmpty()) {
+                error = "هیچ سروری جواب پینگ نداد. اینترنت را بررسی کنید."
+                return
+            }
+            val xrayGood = rows.filter { it.proto == "xray" && it.ping in 1..xrayGoodMs }
+            val order = (xrayGood.take(2) + rows).distinctBy { it.node + "|" + it.proto }.take(4)
+            for ((i, r) in order.withIndex()) {
+                if (!wantTry) return
+                smartCurrent = r.node + "|" + r.proto
+                smartStatus = trf("اتصال به %s…", r.title)
+                node = r.node
+                selectProto(r.proto)
+                connect(quiet = i < order.size - 1, chained = true)
+                if (vstate == VState.ON) {
+                    smartStatus = trf("وصل شد: %s", r.title)
+                    kotlinx.coroutines.delay(1300)   // چند لحظه برنده دیده شود، بعد پنل بسته شود
+                    return
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = "انتخاب هوشمند ناموفق بود، دوباره امتحان کنید"
+        } finally {
+            smartBusy = false
+            smartOpen = false
+            smartCurrent = null
         }
     }
 
@@ -362,7 +568,13 @@ class AppState private constructor(context: Context) {
     private suspend fun revive() {
         if (reviving || vstate != VState.ON) return
         reviving = true
-        try { val m = mode; disconnect(); if (m == KMode.DNS) connectDns() else connect() } finally { reviving = false }
+        try {
+            // همان سرور و پروتکل قبلی (قفل)، فقط دوباره وصل می‌شود
+            val wasDns = dnsActive != null
+            disconnect()
+            wantTry = true
+            if (wasDns) connectDns() else connect()
+        } finally { reviving = false }
     }
 
     private fun screenOn(): Boolean =
@@ -456,7 +668,7 @@ class AppState private constructor(context: Context) {
         val c = code ?: return
         val fresh = System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs
         val html = prefs.getString("subhtml_$c", null)
-        val cached = if (fresh && html != null) runCatching { augment(SubscriptionApi.parse(html, b)) }.getOrNull() else null
+        val cached = if (fresh && html != null) runCatching { augment(SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)) }.getOrNull() else null
         if (cached == null) { refresh(); return }
         account = cached
         if (node == null || cached.configs.none { it.node == node }) node = cached.configs.firstOrNull()?.node
@@ -467,6 +679,7 @@ class AppState private constructor(context: Context) {
     }
 
     init {
+        loadGames()
         watchNetwork()
         watchState()
         watchHealth()
@@ -563,7 +776,7 @@ class AppState private constructor(context: Context) {
         // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۳ ساعته) دوباره از پنل خوانده می‌شود.
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
         val txt = if (!forceNet && cached != null) cached else
-            runCatching { SubscriptionApi.fetch(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
+            runCatching { SubscriptionApi.fetchAny(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
                 .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
                 .getOrElse { e -> cached ?: throw e }
         if (host.isBlank()) return txt
@@ -575,13 +788,26 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    /** صفحه‌ی اشتراک؛ اگر در دسترس نبود از نسخه‌ی ذخیره‌شده خوانده می‌شود */
+    /**
+     * صفحه‌ی اشتراک. اول آدرس اصلی (sub.kanki.pro، سرور ایران)، اگر جواب نداد آدرس قدیمی؛
+     * اگر هیچ‌کدام در دسترس نبود از نسخه‌ی ذخیره‌شده خوانده می‌شود. لینک کانفیگ‌ها با همان آدرسی
+     * که جواب داده سنجیده می‌شوند (و آن آدرس برای خواندن نسخه‌ی ذخیره‌شده نگه داشته می‌شود).
+     */
     private fun loadAccount(b: String, c: String): Account {
         lastFromCache = false
-        val html = runCatching { SubscriptionApi.fetch("$b/sub/$c") }
-            .onSuccess { prefs.edit().putString("subhtml_$c", it).apply() }
-            .getOrElse { e -> lastFromCache = true; prefs.getString("subhtml_$c", null) ?: throw e }
-        return SubscriptionApi.parse(html, b)
+        var err: Exception? = null
+        for (h in SubscriptionApi.hosts(b)) {
+            try {
+                val html = SubscriptionApi.fetch("$h/sub/$c")
+                prefs.edit().putString("subhtml_$c", html).putString("subhost_$c", h).apply()
+                return SubscriptionApi.parse(html, h)
+            } catch (e: Exception) {
+                err = e
+            }
+        }
+        lastFromCache = true
+        val html = prefs.getString("subhtml_$c", null) ?: throw (err ?: java.io.IOException("subscription not reachable"))
+        return SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)
     }
 
     /** پروتکل‌های موجود برای یک مسیر (تانل یا مستقیم) */
@@ -596,7 +822,6 @@ class AppState private constructor(context: Context) {
 
     /** تغییر مسیر بین تانل و مستقیم */
     fun changeRoute(r: String) {
-        smartOpen = false
         route = r
         prefs.edit().putString("route", r).apply()
         fixProto()
@@ -605,7 +830,6 @@ class AppState private constructor(context: Context) {
     /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
     suspend fun switchNode(n: String) {
         if (n == node) return
-        smartOpen = false
         val wasOn = vstate == VState.ON
         if (wasOn) disconnect()
         node = n
@@ -721,12 +945,14 @@ class AppState private constructor(context: Context) {
                     loadAccount(b, c)
                 }
             }
-            account = augment(a)
-            if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
+            val aug = augment(a)
+            account = aug
+            // گره‌های Xray فقط در فهرست کامل (augment) هستند؛ پس با همان مقایسه شود
+            if (node == null || aug.configs.none { it.node == node }) node = aug.configs.firstOrNull()?.node
             // بروزرسانی کامل: همه‌ی کانفیگ‌ها دوباره از پنل خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل جا نماند
-            loadInfos(account ?: a, force = true)
+            loadInfos(aug, force = true)
             if (!lastFromCache) prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
-            fixProto()
+            if (vstate == VState.OFF) fixProto()
             locate()
         } catch (e: Exception) {
             error = "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید."
@@ -751,8 +977,13 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    suspend fun connect(quiet: Boolean = false) {
-        wantTry = true
+    /**
+     * به سرور و پروتکل فعلی (node، proto) وصل می‌شود. هیچ‌وقت خودش سرور یا پروتکل را عوض نمی‌کند.
+     * chained: بخشی از یک زنجیره‌ی امتحان است (لغو کاربر برای کل زنجیره معتبر می‌ماند).
+     */
+    suspend fun connect(quiet: Boolean = false, chained: Boolean = false) {
+        if (!chained) wantTry = true
+        if (!wantTry) return
         val a = account ?: return
         val key = protoKey()
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
@@ -771,19 +1002,30 @@ class AppState private constructor(context: Context) {
         }
 
         vstate = VState.CONNECTING
+        // گیمینگ با «فقط بازی‌ها»: فقط بازی‌ها و برنامه‌های انتخابی از VPN رد می‌شوند
+        val onlyApps = if (mode == KMode.GAME && gamesOnly) allowedAppsNow() else emptyList()
         try {
             val finalCfg = withContext(Dispatchers.IO) {
                 var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
                 cfg = applyKeepalive(cfg, 25)
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
-                if (mode == KMode.GAME && gamesOnly) cfg = applyIncluded(cfg, Modes.gamePackages(ctx))
+                if (onlyApps.isNotEmpty()) {
+                    // خود برنامه هم داخل تونل می‌ماند تا بررسی اتصال (هندشیک) واقعاً از تونل انجام شود
+                    cfg = applyIncluded(cfg, onlyApps + ctx.packageName)
+                    // Hysteria2/Xray: بقیه‌ی برنامه‌ها اصلاً اینترنت ندارند (AppGate). موتور امنزیا/وایرگارد
+                    // این خط را نمی‌شناسد، پس فقط برای آن‌ها نوشته نمی‌شود.
+                    if (HyEngine.isHy(cfg)) cfg = applyBlockOthers(cfg)
+                }
+                if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
                 cfg
             }
             // تا وقتی واقعاً از داخل تونل جواب نیاید، «متصل» نشان داده نمی‌شود
             val ok = withContext(Dispatchers.IO) { awaitHandshake() }
             if (!ok) throw IllegalStateException("no handshake: server did not answer (filtered or down)")
+            // کاربر وسط اتصال «قطع» زد
+            if (!wantTry) throw IllegalStateException("cancelled")
             vstate = VState.ON
             wantOn = true
             LastConfig.save(ctx, finalCfg, "${flagOf(link.nodeName)} ${link.nodeName} · ${protoTitle(link.protocol)}")
@@ -793,7 +1035,7 @@ class AppState private constructor(context: Context) {
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
-            if (!quiet) {
+            if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
                 errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -812,7 +1054,6 @@ class AppState private constructor(context: Context) {
 
     /** انتخاب پروتکل؛ «Amnezia Direct» یعنی مسیر مستقیم، بقیه یعنی تانل */
     fun selectProto(p: String) {
-        smartOpen = false
         val r = if (p.endsWith("-direct")) "direct" else "tunnel"
         if (route != r) { route = r; prefs.edit().putString("route", r).apply() }
         proto = p
@@ -1008,6 +1249,7 @@ class AppState private constructor(context: Context) {
         pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()
         nodeGeo.clear(); nodeIso.clear(); userGeo = null; userIso = null
         smartRows.clear(); smartOpen = false
+        gameSheet = false; filterSheet = false; appsPicker = false
         openNode = null; accountOpen = false
         error = null; errorDetail = null
     }
