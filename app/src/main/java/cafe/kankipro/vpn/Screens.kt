@@ -190,7 +190,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
         }
     }
 
-    // انتخاب سریع سرور
+    // انتخاب سریع سرور: با باز شدن فهرست، پینگ واقعی همه‌ی کشورها گرفته می‌شود
+    LaunchedEffect(sheet) { if (sheet) state.pingAll() }
     val a = state.account
     ServerSheet(
         visible = sheet && a != null,
@@ -296,13 +297,41 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage() } }
     val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
+    // تعداد بازی‌های نصب‌شده (برای «فقط بازی‌ها») و اسم شبکه‌ی فعلی
+    var gameCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        gameCount = withContext(Dispatchers.IO) { Modes.gamePackages(ctx).size }
+        state.netName = Modes.networkName(ctx)
+    }
+    val clipM = LocalClipboardManager.current
+    val dnsInfo = a?.dns
+    val isDns = state.mode == KMode.DNS
+    val modeUi = ModeUi(
+        mode = state.mode,
+        netName = state.netName,
+        tryStep = state.tryStep,
+        gamesOnly = state.gamesOnly,
+        gameCount = gameCount,
+        dnsServers = listOf(Triple("", tr("خودکار"), "auto")) + (dnsInfo?.servers ?: emptyList()).map { s ->
+            Triple(s.id, s.name.ifBlank { s.host.ifBlank { s.ip } } + (if (s.note.isNotBlank()) " · " + s.note else ""), s.role)
+        },
+        dnsPick = state.dnsPick,
+        dnsActive = state.dnsActive?.let { it.name.ifBlank { it.ip } },
+        dot = KankiDns.dotOf(dnsInfo, state.dnsPick.ifBlank { null }),
+        hasDns = dnsInfo != null,
+        hasXray = a?.xray?.isNotEmpty() == true,
+    )
+    val dnsShown = state.dnsActive ?: dnsInfo?.let { KankiDns.ordered(it, state.dnsPick.ifBlank { null }).firstOrNull() }
+
     val ui = HomeUi(
+        modeUi = modeUi,
         vstate = state.vstate,
         hasAccount = a != null,
         loading = state.loading,
-        serverName = link?.nodeName ?: "—",
-        serverFlag = link?.let { flagOf(it.nodeName) } ?: "🌐",
-        serverSub = (if (direct) "AmneziaWG" else protoTitle(state.proto)) + " · " + tr(if (direct) "مستقیم" else "تانل"),
+        serverName = if (isDns) (dnsShown?.name?.ifBlank { null } ?: "DNS کانکی") else link?.nodeName ?: "—",
+        serverFlag = if (isDns) "🛡" else link?.let { flagOf(it.nodeName) } ?: "🌐",
+        serverSub = if (isDns) tr(if (dnsShown?.role == "relay") "ریلی داخل ایران" else "سرور خارج") + (if (state.dnsPick.isBlank()) " · " + tr("خودکار") else "")
+            else (if (direct) "AmneziaWG" else protoTitle(state.proto)) + " · " + tr(if (direct) "مستقیم" else if (state.proto == "xray") "فیلتر شدید" else "تانل"),
         serverPing = if (state.vstate == VState.ON) state.ping else state.protoPing(state.node, state.proto),
         livePing = state.ping,
         rx = rx, tx = tx, history = history,
@@ -344,6 +373,17 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
                 }
             },
             openAccount = { state.accountOpen = true },
+            pickMode = { m -> state.changeMode(m) },
+            modeAct = ModeActions(
+                setGamesOnly = { state.changeGamesOnly(it) },
+                pickDns = { state.changeDnsPick(it) },
+                copyDot = { modeUi.dot?.let { clipM.setText(AnnotatedString(it)); toast(ctx, "آدرس کپی شد") } },
+                openPrivateDns = {
+                    modeUi.dot?.let { clipM.setText(AnnotatedString(it)) }
+                    KankiDns.openPrivateDnsSettings(ctx)
+                    toast(ctx, "Private DNS › نام میزبان › آدرس را جای‌گذاری کنید")
+                },
+            ),
             alertAction = { id ->
                 when (id) {
                     "renew" -> openBot(ctx)
@@ -371,7 +411,7 @@ private fun ServersTab(state: AppState) {
     val scope = rememberCoroutineScope()
     val a = state.account
     val locked = state.vstate != VState.OFF
-    val all = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2")
+    val all = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
     val cards = a?.configs?.groupBy { it.node }?.map { (nodeId, links) ->
         val name = links.first().nodeName
         val protos = all.filter { p -> state.hasCfg(nodeId, p) && links.any { it.protocol == p } }.map { p ->
@@ -394,7 +434,7 @@ private fun ServersTab(state: AppState) {
             toggle = { id -> state.openNode = if (state.openNode == id) null else id },
             select = { id, p ->
                 if (locked) toast(ctx, "برای تغییر، اول اتصال را قطع کنید")
-                else { state.node = id; state.selectProto(p) }
+                else { state.node = id; state.selectProto(p); state.pinned = "$id|$p" }
             },
             udp = { id, p ->
                 if (state.vstate != VState.OFF) toast(ctx, "برای تست واقعی UDP، اول اتصال را قطع کنید")

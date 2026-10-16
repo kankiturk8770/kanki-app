@@ -4,8 +4,12 @@ import android.content.Context
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.URL
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -36,15 +40,14 @@ class EmergencyException(val code: Int, msg: String) : IOException(msg)
  *   پیامی که امضایش درست نباشد «تأیید نشده» نشان داده می‌شود و کانفیگش قابل کپی نیست.
  */
 object Emergency {
-    /** پیش‌فرض، تا وقتی برنامه هنوز آدرسی از پنل نگرفته */
-    const val DEFAULT = "https://chat.kanki.pro"
     private const val ID_PREFIX = "kanki-emergency-v1:"
     private const val SIGN_PREFIX = "kanki-emergency-v1"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE)
 
-    fun base(ctx: Context): String =
-        prefs(ctx).getString("emergency_url", null)?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: DEFAULT
+    /** آدرس سرور اضطراری، فقط همانی که پنل در صفحه‌ی اشتراک داده؛ null یعنی هنوز نگرفته‌ایم */
+    fun base(ctx: Context): String? =
+        prefs(ctx).getString("emergency_url", null)?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
 
     /** کلید عمومی امضای ادمین (SubjectPublicKeyInfo، base64)؛ null یعنی هنوز از پنل نگرفته‌ایم */
     fun key(ctx: Context): String? = prefs(ctx).getString("emergency_key", null)?.takeIf { it.isNotBlank() }
@@ -81,41 +84,47 @@ object Emergency {
         }.getOrDefault(false)
     }
 
-    private fun conn(ctx: Context, path: String, code: String): HttpURLConnection =
-        (URL(base(ctx) + path).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15000
-            readTimeout = 25000
-            setRequestProperty("User-Agent", "KankiVPN-Android")
-            setRequestProperty("x-kanki-id", userId(code))
-        }
+    /** کد خطای «آدرس سرور اضطراری هنوز از پنل نیامده» */
+    const val NO_ADDRESS = -1
 
-    private fun read(c: HttpURLConnection): ByteArray {
-        try {
-            val status = c.responseCode
-            val stream = if (status in 200..299) c.inputStream else c.errorStream
-            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
-            if (status !in 200..299) {
-                val msg = runCatching { JSONObject(String(bytes, Charsets.UTF_8)).optString("error") }.getOrNull().orEmpty()
-                throw EmergencyException(status, msg.ifBlank { "HTTP $status" })
+    /**
+     * یک درخواست به سرور اضطراری. HTTPS با HttpURLConnection؛ HTTP ساده (وقتی ادمین گواهی نگذاشته)
+     * با یک سوکت خام، چون اندروید HTTP بی‌رمز را فقط برای دامنه‌های ثابتِ فایل تنظیمات اجازه می‌دهد
+     * و دامنه‌ی چت را حالا ادمین در پنل تعیین می‌کند. امنیت پیام‌ها به امضای ادمین است، نه به TLS.
+     */
+    private fun call(ctx: Context, method: String, path: String, code: String, body: ByteArray? = null, type: String? = null): ByteArray {
+        val b = base(ctx) ?: throw EmergencyException(NO_ADDRESS, "no emergency address yet")
+        val headers = linkedMapOf("User-Agent" to "KankiVPN-Android", "x-kanki-id" to userId(code))
+        if (type != null) headers["Content-Type"] = type
+        val (status, bytes) = if (b.startsWith("http://")) PlainHttp.request(method, b + path, headers, body)
+        else {
+            val c = (URL(b + path).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 25000
+                requestMethod = method
+                headers.forEach { (k, v) -> setRequestProperty(k, v) }
             }
-            return bytes
-        } finally {
-            c.disconnect()
+            try {
+                if (body != null) { c.doOutput = true; c.outputStream.use { it.write(body) } }
+                val st = c.responseCode
+                st to ((if (st in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes() } ?: ByteArray(0))
+            } finally {
+                c.disconnect()
+            }
         }
+        if (status !in 200..299) {
+            val msg = runCatching { JSONObject(String(bytes, Charsets.UTF_8)).optString("error") }.getOrNull().orEmpty()
+            throw EmergencyException(status, msg.ifBlank { "HTTP $status" })
+        }
+        return bytes
     }
 
-    private fun post(ctx: Context, path: String, code: String, body: ByteArray, type: String): JSONObject {
-        val c = conn(ctx, path, code)
-        c.requestMethod = "POST"
-        c.doOutput = true
-        c.setRequestProperty("Content-Type", type)
-        c.outputStream.use { it.write(body) }
-        return JSONObject(String(read(c), Charsets.UTF_8))
-    }
+    private fun post(ctx: Context, path: String, code: String, body: ByteArray, type: String): JSONObject =
+        JSONObject(String(call(ctx, "POST", path, code, body, type), Charsets.UTF_8))
 
     /** پیام‌های بعد از after؛ (نام کاربری، پیام‌ها) */
     fun messages(ctx: Context, code: String, after: Long): Pair<String, List<EMsg>> {
-        val o = JSONObject(String(read(conn(ctx, "/api/e/messages?after=$after", code)), Charsets.UTF_8))
+        val o = JSONObject(String(call(ctx, "GET", "/api/e/messages?after=$after", code), Charsets.UTF_8))
         val user = o.optString("user")
         val arr = o.optJSONArray("messages") ?: JSONArray()
         val pub = key(ctx)
@@ -143,9 +152,83 @@ object Emergency {
         post(ctx, "/api/e/image", code, jpeg, "image/jpeg")
     }
 
-    fun image(ctx: Context, code: String, id: Long): ByteArray = read(conn(ctx, "/api/e/image/$id", code))
+    fun image(ctx: Context, code: String, id: Long): ByteArray = call(ctx, "GET", "/api/e/image/$id", code)
 
     /** امضای عکس ادمین: روی هش فایل */
     fun verifyImage(ctx: Context, m: EMsg, user: String, bytes: ByteArray): Boolean =
         m.admin && verify(key(ctx), signedText(m.id, user, m.ts, m.kind, sha256Hex(bytes)), m.sig)
+}
+
+/** HTTP/1.1 بی‌رمز روی سوکت خام (فقط برای سرور اضطراری که ادمین بدون گواهی گذاشته) */
+object PlainHttp {
+    /** prepare: پیش از اتصال روی سوکت اجرا می‌شود (مثلاً protect تا از VPN بیرون برود) */
+    fun request(method: String, url: String, headers: Map<String, String>, body: ByteArray?, prepare: ((Socket) -> Unit)? = null, timeoutMs: Int = 15000): Pair<Int, ByteArray> {
+        val u = URL(url)
+        val port = if (u.port > 0) u.port else 80
+        val path = (u.path.ifEmpty { "/" }) + (u.query?.let { "?$it" } ?: "")
+        Socket().use { s ->
+            prepare?.invoke(s)
+            s.connect(InetSocketAddress(u.host, port), timeoutMs)
+            s.soTimeout = maxOf(timeoutMs, 25000)
+            val head = StringBuilder()
+            head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
+            head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != 80) ":${u.port}" else "").append("\r\n")
+            headers.forEach { (k, v) -> head.append(k).append(": ").append(v).append("\r\n") }
+            if (body != null) head.append("Content-Length: ").append(body.size).append("\r\n")
+            head.append("Connection: close\r\n\r\n")
+            val out = s.getOutputStream()
+            out.write(head.toString().toByteArray(Charsets.UTF_8))
+            if (body != null) out.write(body)
+            out.flush()
+            val inp = s.getInputStream().buffered()
+            val status = line(inp).split(' ').getOrNull(1)?.toIntOrNull() ?: throw IOException("bad HTTP answer")
+            var length = -1
+            var chunked = false
+            while (true) {
+                val l = line(inp)
+                if (l.isEmpty()) break
+                val k = l.substringBefore(':').trim().lowercase()
+                val v = l.substringAfter(':', "").trim()
+                if (k == "content-length") length = v.toIntOrNull() ?: -1
+                if (k == "transfer-encoding" && v.lowercase().contains("chunked")) chunked = true
+            }
+            val data = when {
+                chunked -> ByteArrayOutputStream().also { o ->
+                    while (true) {
+                        val n = line(inp).substringBefore(';').trim().toIntOrNull(16) ?: throw IOException("bad chunk")
+                        if (n == 0) break
+                        o.write(exact(inp, n))
+                        line(inp)
+                    }
+                }.toByteArray()
+                length >= 0 -> exact(inp, length)
+                else -> inp.readBytes()
+            }
+            return status to data
+        }
+    }
+
+    private fun line(i: InputStream): String {
+        val b = ByteArrayOutputStream()
+        while (true) {
+            val c = i.read()
+            if (c < 0) { if (b.size() == 0) throw IOException("connection closed"); break }
+            if (c == '\n'.code) break
+            if (c != '\r'.code) b.write(c)
+            if (b.size() > 16384) throw IOException("header too long")
+        }
+        return String(b.toByteArray(), Charsets.ISO_8859_1)
+    }
+
+    private fun exact(i: InputStream, n: Int): ByteArray {
+        if (n > 20_000_000) throw IOException("too large")
+        val buf = ByteArray(n)
+        var off = 0
+        while (off < n) {
+            val r = i.read(buf, off, n - off)
+            if (r < 0) throw IOException("connection closed")
+            off += r
+        }
+        return buf
+    }
 }

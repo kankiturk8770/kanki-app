@@ -124,6 +124,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     val list = rememberLazyListState()
 
     fun errText(e: Throwable): String = when {
+        e is EmergencyException && e.code == Emergency.NO_ADDRESS -> "آدرس سرور اضطراری هنوز از پنل نیامده. یک بار وقتی اینترنت وصل است برنامه را باز کنید تا اشتراک بروز شود."
         e is EmergencyException && e.code == 403 -> "این اشتراک هنوز در سرور اضطراری ثبت نشده. کد را درست وارد کنید؛ اگر تازه خریده‌اید، باید یک بار وقتی اینترنت وصل بود برنامه را باز کرده باشید."
         e is EmergencyException && e.code == 429 -> "تعداد درخواست زیاد بود. چند دقیقه صبر کنید."
         e is EmergencyException -> e.message ?: "خطا"

@@ -82,6 +82,7 @@ fun protoTitle(p: String) = when (p) {
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
     "hysteria2" -> "Hysteria2"
+    "xray" -> "Xray"
     "ikev2" -> "IKEv2"
     "ikev2-direct" -> "IKEv2 Direct"
     "openvpn/udp" -> "OpenVPN UDP"
@@ -103,6 +104,7 @@ fun protoShort(p: String) = when (p) {
     "amneziawg-direct" -> "Amnezia"
     "wireguard" -> "WireGuard"
     "hysteria2" -> "Hysteria2"
+    "xray" -> "Xray"
     "ikev2", "ikev2-direct" -> "IKEv2"
     else -> p
 }

@@ -24,11 +24,18 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "1.8.0"
-        // فقط پردازنده‌های گوشی (ARM). x86 و x86_64 مال شبیه‌ساز و کروم‌بوک‌اند و نصفِ حجم فایل را می‌گرفتند؛
-        // هیچ گوشی واقعیِ اندروید ۸ به بالا (minSdk 26) از آن‌ها استفاده نمی‌کند.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        versionCode = 31
+        versionName = "1.9.0"
+    }
+    // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
+    // x86 و x86_64 مال شبیه‌ساز و کروم‌بوک‌اند؛ هیچ گوشی واقعیِ اندروید ۸ به بالا از آن‌ها استفاده نمی‌کند.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
     }
     signingConfigs {
         if (canSignRelease) {
@@ -58,6 +65,8 @@ android {
             useLegacyPackaging = true
             // libhysteria.so در واقع برنامه‌ی hysteria است؛ دست‌کاری (strip) نشود
             keepDebugSymbols += "**/libhysteria.so"
+            // libxray.so هم برنامه‌ی xray است
+            keepDebugSymbols += "**/libxray.so"
         }
         resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/{AL2.0,LGPL2.1}", "META-INF/INDEX.LIST") }
     }

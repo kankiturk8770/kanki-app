@@ -65,6 +65,7 @@ data class HomeUi(
     val pins: List<MapPin>,
     val userGeo: Geo?,
     val userIso: String?,
+    val modeUi: ModeUi,
 )
 
 /** کارهایی که از صفحه‌ی اتصال انجام می‌شود */
@@ -78,6 +79,8 @@ class HomeActions(
     val alertAction: (String) -> Unit = {},
     val dismissAlert: () -> Unit = {},
     val retry: () -> Unit = {},
+    val pickMode: (KMode) -> Unit = {},
+    val modeAct: ModeActions = ModeActions(),
 )
 
 // ================================================================== قاب اصلی، سربرگ و نوار پایین
@@ -193,6 +196,7 @@ fun MapCard(ui: HomeUi, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val (txt, c) = when {
+                on && ui.modeUi.mode == KMode.DNS -> "رفع تحریم فعال" to K.Green
                 on -> "محافظت‌شده" to K.Green
                 connecting -> "در حال اتصال…" to K.Gold
                 else -> "محافظت‌نشده" to K.Red
@@ -295,6 +299,22 @@ private fun ConnectArea(ui: HomeUi, act: HomeActions) {
 private fun ControlCard(ui: HomeUi, act: HomeActions) {
     val busy = ui.vstate == VState.CONNECTING
     KCard(Modifier.fillMaxWidth(), padding = 12.dp) {
+        if (ui.modeUi.mode == KMode.DNS) {
+            // حالت DNS: سرور DNS به‌جای کشور
+            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(46.dp).clip(CircleShape).background(modeColor(KMode.DNS).copy(alpha = .14f))
+                        .border(1.5.dp, modeColor(KMode.DNS).copy(alpha = .6f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { ModeLogo(KMode.DNS, modeColor(KMode.DNS), 26.dp) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    T("رفع تحریم", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                    AutoText(ui.serverName, size = 15.sp, color = K.Text, weight = FontWeight.Bold)
+                    T(ui.serverSub, size = 11.sp, color = modeColor(KMode.DNS), weight = FontWeight.Bold)
+                }
+            }
+        } else
         // ردیف سرور: پرچم، اسم، پروتکل، پینگ، انتخاب هوشمند
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
@@ -345,10 +365,9 @@ private fun ControlCard(ui: HomeUi, act: HomeActions) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        T("نوع اتصال", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
-        Segmented(ui.protos, ui.selectedProto, Modifier.guideTarget("protocols"), enabled = !busy, onSelect = act.pickProto)
-        Spacer(Modifier.height(6.dp))
-        T(protoHint(ui.selectedProto), size = 11.sp, color = if (ui.selectedProto == "amneziawg-direct") K.Gold else K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(horizontal = 4.dp))
+        T("حالت اتصال", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+        ModeBar(ui.modeUi.mode, enabled = ui.vstate == VState.OFF, modifier = Modifier.guideTarget("protocols"), onPick = act.pickMode)
+        ModeExtras(ui.modeUi, act.modeAct, enabled = ui.vstate == VState.OFF)
     }
 }
 
@@ -506,5 +525,6 @@ fun protoHint(p: String) = when (p) {
     "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
     "wireguard" -> "تانل · سریع و مناسب گیم"
     "hysteria2" -> "تانل · پرسرعت روی اینترنت ضعیف"
+    "xray" -> "Xray · برای فیلتر شدید، سخت‌ترین برای مسدود شدن"
     else -> protoDesc(p)
 }
