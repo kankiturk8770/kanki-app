@@ -67,22 +67,26 @@ private data class View(val lon0: Double, val lon1: Double, val lat0: Double, va
 
 private fun lerp(a: Double, b: Double, t: Float) = a + (b - a) * t
 
-/** محدوده‌ای که نقاط را با حاشیه و نسبت درست نشان می‌دهد (نقاط کمی بالاتر از وسط، چون پایین نقشه محو می‌شود) */
+/**
+ * محدوده‌ای که نقاط را با حاشیه و نسبت درست نشان می‌دهد.
+ * نقاط کمی پایین‌تر از وسط می‌نشینند تا سنجاق‌های پرچم (که بالای نقطه‌اند) هم کامل دیده شوند
+ * و کل مسیر بین شما و سرور، از اول تا آخر، داخل نقشه بماند.
+ */
 private fun fitView(pts: List<Geo>, aspect: Double, minSpan: Double): View {
     val lon0 = pts.minOf { it.lon }; val lon1 = pts.maxOf { it.lon }
     val lat0 = pts.maxOf { it.lat }; val lat1 = pts.minOf { it.lat }
-    var w = (lon1 - lon0).coerceAtLeast(minSpan) * 1.45
+    var w = (lon1 - lon0).coerceAtLeast(minSpan) * 1.55
     var h = (lat0 - lat1).coerceAtLeast(minSpan / aspect) * 1.9
     if (w / h < aspect) w = h * aspect else h = w / aspect
     val cx = (lon0 + lon1) / 2
-    val cy = (lat0 + lat1) / 2 - h * .12
+    val cy = (lat0 + lat1) / 2 + h * .10
     return View(cx - w / 2, cx + w / 2, cy + h / 2, cy - h / 2)
 }
 
 /**
- * نقشه‌ی طلایی بدون قاب که لبه‌هایش در پس‌زمینه محو می‌شود:
- * خشکی تیره با مرزهای طلایی درخشان و نور شهرها، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها،
- * و وقتی وصل است کمان نئونی سبز از شما تا سرور.
+ * نقشه‌ی طلایی بدون قاب که لبه‌هایش در زمینه‌ی مشکی محو می‌شود (جزو خود صفحه است، نه یک کارت جدا):
+ * خشکی تیره با مرز طلایی، کشور شما فیروزه‌ای، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها،
+ * و وقتی وصل است نقشه روی مسیر زوم می‌کند و کمان نئونی سبز از شما تا سرور کامل دیده می‌شود.
  */
 @Composable
 fun WorldMap(
@@ -91,7 +95,6 @@ fun WorldMap(
     accent: Color = K.Gold,
 ) {
     val tm = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 24)
-    val lights = LightsData.lights
 
     val sel = pins.firstOrNull { it.selected }
     val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
@@ -111,7 +114,7 @@ fun WorldMap(
         // نمای عادی: همه‌ی سرورها و شما ؛ نمای اتصال: کمی نزدیک‌تر روی مسیر
         val all = (pins.map { it.geo } + listOfNotNull(user)).ifEmpty { listOf(Geo(45.0, 20.0)) }
         val far = fitView(all, aspect, 40.0)
-        val near = fitView(listOfNotNull(user, sel?.geo).ifEmpty { all }, aspect, 30.0)
+        val near = fitView(listOfNotNull(user, sel?.geo).ifEmpty { all }, aspect, 40.0)
         val v = View(lerp(far.lon0, near.lon0, zoom), lerp(far.lon1, near.lon1, zoom), lerp(far.lat0, near.lat0, zoom), lerp(far.lat1, near.lat1, zoom))
         val sx = (w / (v.lon1 - v.lon0)).toFloat()
         val sy = (h / (v.lat0 - v.lat1)).toFloat()
@@ -120,7 +123,7 @@ fun WorldMap(
         val selIso = sel?.iso
         val selColor = if (connected) K.Green else accent
         val border = 1f / sx
-        val key = listOf(size, zoom, pins, user, userIso, connected, accent, countries?.size, lights?.bright?.size, ThemeState.current.id)
+        val key = listOf(size, zoom, pins, user, userIso, connected, accent, countries?.size, ThemeState.current.id)
         val old = cache.bmp
         val bmp = if (old != null && old.width == w.toInt().coerceAtLeast(1) && old.height == h.toInt().coerceAtLeast(1)) old
             else ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
@@ -129,9 +132,8 @@ fun WorldMap(
         cache.bmp = bmp
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
             drawRect(Color.Black, blendMode = BlendMode.Clear)
-            // پس‌زمینه‌ی تیره پشت نقشه تا روی کهکشان واضح دیده شود (لبه‌هایش با بقیه‌ی نقشه محو می‌شود)
-            drawRect(Color(0xFF020205).copy(alpha = .78f))
-            drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .06f), Color.Transparent), Offset(w * .5f, h * .45f), w * .7f))
+            // نور طلایی خیلی ملایم پشت نقشه؛ زمینه همان مشکی صفحه است تا نقشه جزو خود صفحه باشد
+            drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .07f), Color.Transparent), Offset(w * .5f, h * .5f), w * .7f))
             clipRect {
                 withTransform({
                     translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
@@ -139,31 +141,23 @@ fun WorldMap(
                 }) {
                     countries?.forEach { c ->
                         if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
-                        // خشکی تیره‌تر از آسمان پشتش تا قاره‌ها روی کهکشان دیده شوند
-                        drawPath(c.path, Color(0xFF070402).copy(alpha = .62f))
-                        val fill = when (c.iso) {
-                            selIso -> selColor.copy(alpha = .20f)
-                            userIso -> K.Gold.copy(alpha = .14f)
-                            else -> K.Gold.copy(alpha = .10f)
+                        // خشکی شیشه‌ای تیره با مرز طلایی؛ کشور شما فیروزه‌ای، کشور سرور طلایی (وصل: سبز) و درخشان
+                        drawPath(c.path, Color(0xFF1E1A12).copy(alpha = .85f))
+                        when (c.iso) {
+                            selIso -> {
+                                drawPath(c.path, selColor.copy(alpha = .32f))
+                                drawPath(c.path, selColor.copy(alpha = .30f), style = Stroke(border * 4.5f))
+                                drawPath(c.path, selColor, style = Stroke(border * 1.8f))
+                            }
+                            userIso -> {
+                                drawPath(c.path, K.Accent.copy(alpha = .20f))
+                                drawPath(c.path, K.Accent.copy(alpha = .6f), style = Stroke(border * 1.2f))
+                            }
+                            else -> {
+                                drawPath(c.path, K.Gold.copy(alpha = .10f), style = Stroke(border * 3f))
+                                drawPath(c.path, K.Gold.copy(alpha = .38f), style = Stroke(border))
+                            }
                         }
-                        drawPath(c.path, fill)
-                        if (c.iso == selIso) {
-                            drawPath(c.path, selColor.copy(alpha = .18f), style = Stroke(border * 4f))
-                            drawPath(c.path, selColor.copy(alpha = .9f), style = Stroke(border * 1.6f))
-                        } else {
-                            drawPath(c.path, K.Gold.copy(alpha = .22f), style = Stroke(border * 4f))
-                            drawPath(c.path, K.GoldLight.copy(alpha = .88f), style = Stroke(border * 1.3f))
-                        }
-                    }
-                    // نور شهرها (مثل عکس شب زمین): نقطه‌های طلایی با هاله
-                    lights?.let { L ->
-                        val pm = androidx.compose.ui.graphics.PointMode.Points
-                        drawPoints(L.dim, pm, K.GoldLight.copy(alpha = .50f), border * 2f, StrokeCap.Round)
-                        drawPoints(L.mid, pm, K.Gold.copy(alpha = .16f), border * 5f, StrokeCap.Round)
-                        drawPoints(L.mid, pm, K.GoldLight.copy(alpha = .75f), border * 2.4f, StrokeCap.Round)
-                        drawPoints(L.bright, pm, K.Gold.copy(alpha = .14f), border * 11f, StrokeCap.Round)
-                        drawPoints(L.bright, pm, K.GoldLight.copy(alpha = .35f), border * 5.5f, StrokeCap.Round)
-                        drawPoints(L.bright, pm, Color(0xFFFFF3D0), border * 2.6f, StrokeCap.Round)
                     }
                 }
             }
@@ -227,21 +221,21 @@ fun WorldMap(
         // شما: نقطه‌ی تپنده، سنجاق با پرچم و برچسب
         user?.let {
             val o = proj(it)
-            drawCircle(K.GoldLight.copy(alpha = (1 - pulse) * .5f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
-            neonDot(K.GoldLight, o, w / 125f)
+            drawCircle(K.Accent.copy(alpha = (1 - pulse) * .55f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
+            neonDot(K.Accent, o, w / 125f)
             // اگر سرور انتخابی در همین کشور است، سنجاق پرچم همان سرور کافی است
-            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, K.GoldLight, pr * .85f)
+            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, K.Accent, pr * .85f)
             val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 34f).toSp(), color = K.Text))
             drawText(layout, topLeft = Offset(o.x + pr * 1.1f, o.y - pr * 2.2f - layout.size.height / 2f))
         }
 
         // محو شدن لبه‌ها در پس‌زمینه (بدون قاب)
         drawRect(
-            Brush.verticalGradient(0f to Color.Transparent, .10f to Color.Black, .58f to Color.Black, 1f to Color.Transparent),
+            Brush.verticalGradient(0f to Color.Transparent, .08f to Color.Black, .80f to Color.Black, 1f to Color.Transparent),
             blendMode = BlendMode.DstIn,
         )
         drawRect(
-            Brush.horizontalGradient(0f to Color.Transparent, .09f to Color.Black, .91f to Color.Black, 1f to Color.Transparent),
+            Brush.horizontalGradient(0f to Color.Transparent, .07f to Color.Black, .93f to Color.Black, 1f to Color.Transparent),
             blendMode = BlendMode.DstIn,
         )
     })

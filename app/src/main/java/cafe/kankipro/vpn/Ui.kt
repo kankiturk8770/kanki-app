@@ -54,14 +54,13 @@ class Palette(
 )
 
 val Themes: List<Palette> = listOf(
-    // طلایی کانکی
+    // طلایی کانکی: زمینه‌ی مشکی، طلایی روشن نئونی و کارت‌های شیشه‌ای براق
     Palette(
-        "gold", Color(0xFFE8B64C), Color(0xFFFFD97A), Color(0xFF9E701F), Color(0xFFFFE6A6),
-        Color(0xFF070504), Color(0xFFF6EEDC), Color(0xFFA3967C),
-        Color(0xFF0B0805), Color(0xFF110C07), Color(0xFF050403),
-        // کارت‌ها: شیشه‌ی تیره‌ی خنثی (مثل طرح) تا طلایی رویش بدرخشد
-        Color(0xC91A1A1A), Color(0xB8090A0D), Color(0xF2101012), Color(0xFF1C1305), Color(0xFF5CC8FF),
-        Color(0xFF35E39B),
+        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFE09A10), Color(0xFFFFF2B8),
+        Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFFB9B2A2),
+        Color(0xFF000000), Color(0xFF050505), Color(0xFF000000),
+        Color(0xD60C0C0C), Color(0xE0050505), Color(0xF20A0A0A), Color(0xFF1A1000), Color(0xFF3FD8FF),
+        Color(0xFF2EE58C),
     ),
     // گرافیت نئونی (مشکی، نقره‌ای، یخی)
     Palette(
@@ -170,28 +169,19 @@ private val motes: List<Mote> = run {
 }
 
 /**
- * پس‌زمینه‌ی کهکشانی: عکس واقعی کهکشان طلایی و آبی (res/drawable-nodpi/galaxy_bg.jpg).
- * عکس ثابت است و یک بار در لایه‌ی خودش کشیده می‌شود (هر فریم دوباره کشیده نمی‌شود، تا جابه‌جایی بین صفحه‌ها روان بماند).
- * رویش یک لایه‌ی تیره‌ی ملایم برای خوانایی و چند ستاره‌ی چشمک‌زن در لایه‌ی جدا (فقط همین لایه‌ی سبک هر فریم کشیده می‌شود).
+ * پس‌زمینه: مشکی خالص با چند ستاره‌ی تک چشمک‌زن و نور گرم خیلی ملایم وسط صفحه (پشت دکمه‌ی اتصال)،
+ * تا کارت‌های شیشه‌ای و لبه‌های نئونی طلایی رویش خوب دیده شوند.
+ * لایه‌ی نور ثابت است و فقط لایه‌ی سبک ستاره‌ها هر فریم کشیده می‌شود.
  * calm: صفحه‌ی ورود و صفحه‌های آرام (ستاره‌های کمتر).
  */
 @Composable
 fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
-    val sky = ImageBitmap.imageResource(R.drawable.galaxy_bg)
     Box(Modifier.fillMaxSize().background(K.Ink)) {
-        Image(
-            sky, null, Modifier.fillMaxSize().graphicsLayer(),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop, filterQuality = FilterQuality.Medium,
-        )
-        // لایه‌ی تیره: بالا (نقشه) و پایین (کارت‌ها) کمی تیره‌تر تا نقشه و دکمه‌ها روی کهکشان دیده شوند
         Box(
-            Modifier.fillMaxSize().graphicsLayer().background(
-                // مثل طرح: پرده‌ی تیره روی کل کهکشان تا طلایی‌ها برجسته شوند
-                Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = .52f), .45f to Color.Black.copy(alpha = .46f),
-                    .62f to Color.Black.copy(alpha = .55f), 1f to Color.Black.copy(alpha = .66f),
-                ),
-            ),
+            Modifier.fillMaxSize().graphicsLayer().drawBehind {
+                val c = Offset(size.width / 2, size.height * .46f)
+                drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f), size.width * .95f, c)
+            },
         )
         Twinkles(if (calm) 12 else motes.size, accent)
         content()
@@ -337,29 +327,39 @@ enum class VState { OFF, CONNECTING, ON }
 val Nebula = Color(0xFF3E4568)
 
 /**
- * پنل شیشه‌ای تیره (مثل طرح): گرادیان خاکستری‌مشکی نیمه‌شفاف، لبه‌ای که از طلایی به tint و بعد آبی تیره می‌رود،
- * کمی براقی بالای کارت و درخشش طلایی ملایم بیرون لبه؛ selected پررنگ‌تر و با ته‌رنگ طلایی.
+ * پنل شیشه‌ای براق با لبه‌ی نئونی طلایی (مثل طرح): شیشه‌ی مشکی نیمه‌شفاف با کمی ته‌رنگ طلایی مورب،
+ * براقی سفید بالای کارت، لبه‌ی طلایی روشن، درخشش طلایی بیرون لبه و یک خط نور طلایی وسط لبه‌ی پایین.
+ * selected: لبه‌ی روشن‌تر و ضخیم‌تر، درخشش بیشتر و ته‌رنگ طلایی داخل کارت.
  */
 fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier = this
     .drawBehind {
         val o = shape.createOutline(size, layoutDirection, this)
-        val layers = if (selected) listOf(10f to .08f, 6f to .14f, 3f to .26f) else listOf(7f to .04f, 3.5f to .07f)
+        val layers = if (selected) listOf(12f to .07f, 7f to .14f, 3.5f to .30f) else listOf(9f to .05f, 4.5f to .10f, 2f to .16f)
         for ((m, a) in layers) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
     }
     .clip(shape)
+    .background(K.Surface)
     .background(
-        if (selected) Brush.linearGradient(listOf(tint.copy(alpha = .22f), Color(0xC9161309), Color(0xC91A160D)))
-        else Brush.linearGradient(listOf(K.Surface, K.Surface2, Color(0xC91A160D))),
+        Brush.linearGradient(
+            if (selected) listOf(tint.copy(alpha = .26f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .25f), tint.copy(alpha = .12f))
+            else listOf(tint.copy(alpha = .11f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .35f), tint.copy(alpha = .06f)),
+        ),
     )
     .drawWithContent {
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .12f else .06f), Color.Transparent), endY = size.height * .45f))
+        // براقی شیشه در نیمه‌ی بالا
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .16f else .10f), Color.Transparent), endY = size.height * .5f))
         drawContent()
+        // خط نور طلایی وسط لبه‌ی پایین
+        val y = size.height - 1.dp.toPx()
+        val line = Brush.horizontalGradient(listOf(Color.Transparent, K.GoldLight, Color.Transparent), startX = size.width * .16f, endX = size.width * .84f)
+        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 3.dp.toPx(), alpha = .35f)
+        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 1.2.dp.toPx())
     }
     .border(
         if (selected) 1.5.dp else 1.dp,
         Brush.linearGradient(
-            if (selected) listOf(K.Shine, tint, tint.copy(alpha = .55f))
-            else listOf(tint.copy(alpha = .72f), tint.copy(alpha = .34f), Nebula.copy(alpha = .4f)),
+            if (selected) listOf(K.Shine, K.GoldLight, tint, K.GoldLight)
+            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .45f), tint.copy(alpha = .70f)),
         ),
         shape,
     )

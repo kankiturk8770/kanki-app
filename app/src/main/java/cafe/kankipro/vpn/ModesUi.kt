@@ -146,7 +146,7 @@ fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, on
         KMode.entries.forEach { m ->
             val sel = m == selected
             val shape = RoundedCornerShape(16.dp)
-            Box(Modifier.weight(1f).height(76.dp)) {
+            Box(Modifier.weight(1f).height(68.dp)) {
                 Column(
                     Modifier.matchParentSize().goldGlass(shape, selected = sel)
                         .alpha(if (enabled) 1f else .5f)
