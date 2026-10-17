@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -194,63 +193,50 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
 fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
     val mc = modeColor(ui.mode)
     val on = ui.vstate == VState.ON
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    // ارتفاع بخش پایین (حالت‌ها، کارت‌ها، آمار و نوار اشتراک) اندازه گرفته می‌شود و نقشه هر چه جا ماند
-    // را می‌گیرد؛ پس همه‌چیز در صفحه جا می‌شود و چیزی زیر نوار پایین نمی‌رود. اگر باز هم جا نشد
-    // (مثلاً گوشی خیلی کوتاه)، صفحه اسکرول می‌خورد.
-    var belowPx by remember { mutableIntStateOf(0) }
-    var chipPx by remember { mutableIntStateOf(0) }
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val free = with(density) { maxHeight - (belowPx + chipPx).toDp() }
-        val mapBox = free.coerceIn(214.dp, 334.dp)
-        val orb = if (mapBox < 290.dp) 132.dp else 156.dp
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp).onSizeChanged { chipPx = it.height }) {
-                LocationChip(ui.locationIso, ui.locationIsExit)
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+            LocationChip(ui.locationIso, ui.locationIsExit)
+        }
+        // نقشه‌ی بزرگ بدون قاب؛ دکمه‌ی گرد اتصال روی لبه‌ی محوشده‌ی پایین نقشه
+        Box(Modifier.fillMaxWidth().height(334.dp)) {
+            WorldMap(
+                ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(276.dp).guideTarget("map"),
+                accent = if (ui.vstate == VState.OFF) K.Gold else mc,
+            )
+            Box(Modifier.align(Alignment.BottomCenter).guideTarget("connect")) {
+                OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, onClick = act.toggle)
             }
-            // نقشه‌ی بزرگ بدون قاب؛ دکمه‌ی گرد اتصال روی لبه‌ی محوشده‌ی پایین نقشه
-            Box(Modifier.fillMaxWidth().height(mapBox)) {
-                WorldMap(
-                    ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
-                    Modifier.align(Alignment.TopCenter).fillMaxWidth().height(mapBox - orb * .37f).guideTarget("map"),
-                    accent = if (ui.vstate == VState.OFF) K.Gold else mc,
-                )
-                Box(Modifier.align(Alignment.BottomCenter).guideTarget("connect")) {
-                    OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = orb, onClick = act.toggle)
+        }
+        Spacer(Modifier.height(10.dp))
+
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (!ui.hasAccount) {
+                if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
+            } else {
+                ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), onTap = act.tapMode, onLong = act.longMode)
+                Spacer(Modifier.height(8.dp))
+                ModeHint(ui.mode)
+                AnimatedVisibility(ui.smart.open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                    SmartPanel(ui.smart, Modifier.padding(top = 8.dp))
                 }
+                if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns, Modifier.padding(top = 8.dp))
             }
 
-            Column(
-                Modifier.fillMaxWidth().onSizeChanged { belowPx = it.height }.padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (!ui.hasAccount) {
-                    if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
-                } else {
-                    ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), onTap = act.tapMode, onLong = act.longMode)
-                    Spacer(Modifier.height(8.dp))
-                    // در حالت DNS کارت DNS خودش توضیح می‌دهد؛ خط راهنما جا نمی‌گیرد
-                    if (ui.mode != KMode.DNS) ModeHint(ui.mode)
-                    AnimatedVisibility(ui.smart.open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                        SmartPanel(ui.smart, Modifier.padding(top = 8.dp))
-                    }
-                    if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
-                }
-
-                AnimatedVisibility(visible = ui.alert != null) {
-                    ui.alert?.let { al ->
-                        RobotBanner(al, Modifier.padding(top = 8.dp), onAction = act.alertAction, onClose = act.dismissAlert)
-                    }
-                }
-                if (ui.hasAccount) {
-                    Spacer(Modifier.height(8.dp))
-                    StatsRow(ui)
-                }
-                ui.sub?.let {
-                    Spacer(Modifier.height(8.dp))
-                    UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount)
+            AnimatedVisibility(visible = ui.alert != null) {
+                ui.alert?.let { al ->
+                    RobotBanner(al, Modifier.padding(top = 8.dp), onAction = act.alertAction, onClose = act.dismissAlert)
                 }
             }
+            if (ui.hasAccount) {
+                Spacer(Modifier.height(8.dp))
+                StatsRow(ui)
+            }
+            ui.sub?.let {
+                Spacer(Modifier.height(8.dp))
+                UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount)
+            }
+            Spacer(Modifier.height(10.dp))
         }
     }
 }
@@ -274,36 +260,19 @@ private fun LocationChip(iso: String?, on: Boolean) {
 }
 
 /**
- * دکمه‌ی گرد اتصال: دیسک شیشه‌ای تیره با دو حلقه‌ی نئونی که خلاف جهت هم می‌چرخند:
- *   حلقه‌ی بیرونی: سه قوس روشن با درخشش، ساعتگرد
- *   حلقه‌ی درونی: نازک‌تر، دو قوس، پادساعتگرد
- * موقع اتصال تند می‌چرخند، وقتی وصل است آرام، و وقتی قطع است خیلی آرام و کم‌نورتر.
- * رنگ حلقه‌ها رنگ همان حالت است: هوشمند طلایی، گیمینگ سبز، ضد فیلتر آبی، DNS بنفش.
+ * دکمه‌ی گرد اتصال: دیسک شیشه‌ای تیره با حلقه‌ی نئونی. هنگام اتصال و وقتی وصل است یک قوس نورانی
+ * دورش می‌چرخد (هنگام اتصال تندتر). رنگ حلقه و نور وقتی وصل است رنگ همان حالت است:
+ * هوشمند طلایی، گیمینگ سبز نئونی، ضد فیلتر آبی، DNS بنفش.
  */
 @Composable
 fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp, onClick: () -> Unit) {
-    val on = ui.vstate == VState.ON
-    val connecting = ui.vstate == VState.CONNECTING
-    // سرعت چرخش (دور در ثانیه) نرم عوض می‌شود تا با تغییر وضعیت حلقه‌ها نپرند
-    val speed by animateFloatAsState(if (connecting) .9f else if (on) .16f else .07f, tween(900), label = "spd")
-    var outerAngle by remember { mutableFloatStateOf(0f) }
-    var innerAngle by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L) {
-                    val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
-                    outerAngle = (outerAngle + 360f * speed * dt) % 360f
-                    innerAngle = (innerAngle - 360f * speed * 1.35f * dt) % 360f
-                }
-                last = now
-            }
-        }
-    }
     val t = rememberInfiniteTransition(label = "orb")
+    val spinFast by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1300, easing = LinearEasing)), label = "sf")
+    val spinSlow by t.animateFloat(0f, 360f, infiniteRepeatable(tween(4200, easing = LinearEasing)), label = "ss")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "pulse")
     val breathe by t.animateFloat(.6f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "br")
+    val on = ui.vstate == VState.ON
+    val connecting = ui.vstate == VState.CONNECTING
     val ring by animateColorAsState(if (on || connecting) color else K.Gold, tween(500), label = "ring")
     val pad = 34.dp
 
@@ -318,24 +287,22 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp,
             val c = center
             val outer = this.size.minDimension / 2
             val r = outer * (diameter.value / (diameter.value + pad.value))
-            val sw = 2.4.dp.toPx()
-            val strength = if (on) 1f else if (connecting) .85f else .55f
+            val sw = 2.6.dp.toPx()
             // هاله
-            val glowA = (if (on) .38f else if (connecting) .30f else .15f) * breathe
+            val glowA = (if (on) .40f else if (connecting) .30f else .16f) * breathe
             drawCircle(Brush.radialGradient(listOf(ring.copy(alpha = glowA), Color.Transparent), c, outer), outer, c)
             // دیسک شیشه‌ای تیره
-            val disc = r * .86f
-            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Ink), c, disc), disc, c)
-            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .08f), Color.Transparent), startY = c.y - disc, endY = c.y), disc, c)
-            // حلقه‌ی بیرونی: مسیر کم‌رنگ + سه قوس روشن (ساعتگرد)
-            drawCircle(ring.copy(alpha = .14f * strength), r, c, style = Stroke(sw))
-            for (k in 0 until 3) neonArc(ring, outerAngle + k * 120f, 64f, c, r, sw, strength)
-            // حلقه‌ی درونی: نازک‌تر، دو قوس (پادساعتگرد)
-            val ri = r * .9f
-            drawCircle(ring.copy(alpha = .10f * strength), ri, c, style = Stroke(sw * .5f))
-            for (k in 0 until 2) neonArc(ring, innerAngle + k * 180f, 100f, c, ri, sw * .55f, strength * .9f)
-            // موج تپنده وقتی وصل است
-            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .4f), r * (1.04f + pulse * .14f), c, style = Stroke(1.4.dp.toPx()))
+            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Ink), c, r), r, c)
+            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .08f), Color.Transparent), startY = c.y - r, endY = c.y), r, c)
+            drawCircle(ring.copy(alpha = .16f), r * .84f, c, style = Stroke(1.dp.toPx()))
+            // حلقه‌ی نئونی
+            neonRing(ring, c, r, sw, if (on) 1f else if (connecting) .7f else .5f)
+            // قوس چرخان
+            if (connecting || on) {
+                val head = if (connecting) spinFast else spinSlow
+                neonComet(ring, head - 90f, if (connecting) 130f else 85f, c, r, sw * 1.1f)
+            }
+            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .45f), r * (1.03f + pulse * .15f), c, style = Stroke(1.5.dp.toPx()))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val dnsOn = ui.mode == KMode.DNS
@@ -352,22 +319,6 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp,
             }
         }
     }
-}
-
-/** یک قوس نئونی با لبه‌های محو (چند لایه‌ی درخشش، وسطش روشن‌تر) */
-private fun DrawScope.neonArc(color: Color, start: Float, sweep: Float, c: Offset, r: Float, w: Float, strength: Float) {
-    val tl = Offset(c.x - r, c.y - r)
-    val sz = Size(r * 2, r * 2)
-    val seg = 10
-    for (i in 0 until seg) {
-        // روشنایی از دو سر قوس به وسط بیشتر می‌شود
-        val f = 1f - kotlin.math.abs((i + .5f) / seg * 2f - 1f)
-        val a0 = start + sweep * i / seg
-        for ((m, a) in listOf(4.2f to .07f, 2.4f to .16f, 1.4f to .42f, 1f to 1f)) {
-            drawArc(color.copy(alpha = a * f * strength), a0, sweep / seg + .5f, false, tl, sz, style = Stroke(w * m, cap = StrokeCap.Butt))
-        }
-    }
-    drawArc(Color.White.copy(alpha = .5f * strength), start + sweep * .3f, sweep * .4f, false, tl, sz, style = Stroke(w * .35f, cap = StrokeCap.Round))
 }
 
 private fun elapsed(s: Long?): String {
@@ -403,7 +354,7 @@ private fun StatsRow(ui: HomeUi) {
 private fun StatCard(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Column(
-        modifier.height(80.dp).clip(shape)
+        modifier.height(88.dp).clip(shape)
             .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
             .border(1.dp, K.Gold.copy(alpha = .22f), shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),
