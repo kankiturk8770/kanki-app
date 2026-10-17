@@ -67,6 +67,8 @@ android {
             keepDebugSymbols += "**/libhysteria.so"
             // libxray.so هم برنامه‌ی xray است
             keepDebugSymbols += "**/libxray.so"
+            // libkmix.so هم برنامه‌ی هسته‌ی KANKI MIX است
+            keepDebugSymbols += "**/libkmix.so"
         }
         resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/{AL2.0,LGPL2.1}", "META-INF/INDEX.LIST") }
     }
@@ -75,9 +77,6 @@ android {
 dependencies {
     // موتور اتصال امنزیا (وایرگارد معمولی را هم پشتیبانی می‌کند)
     implementation("com.zaneschepke:amneziawg-android:2.3.7")
-    // هسته‌ی KANKI MIX (kmix.aar، ساخته‌شده با gomobile از پوشه‌ی kmix-core در build.yml).
-    // اگر نباشد (ساخت روی کامپیوتر بدون Go)، برنامه ساخته می‌شود و فقط KANKI MIX وصل نمی‌شود.
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)

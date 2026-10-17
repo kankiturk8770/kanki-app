@@ -6,7 +6,6 @@ require (
 	github.com/xtaci/kcp-go/v5 v5.6.21
 	github.com/xtaci/smux v1.5.24
 	golang.org/x/crypto v0.58.0
-	golang.org/x/mobile v0.0.0-20261011034528-197770444867
 	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259
 )
 
@@ -18,10 +17,7 @@ require (
 	github.com/templexxx/cpu v0.1.1 // indirect
 	github.com/templexxx/xorsimd v0.4.3 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
-	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
-	golang.org/x/tools v0.52.0 // indirect
 )

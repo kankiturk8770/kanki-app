@@ -504,7 +504,7 @@ class KankiHyService : VpnService() {
             if (pid == me) return@forEach
             runCatching {
                 val cmd = File(d, "cmdline").readText()
-                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so")) android.os.Process.killProcess(pid)
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so")) android.os.Process.killProcess(pid)
             }
         }
     }
@@ -525,14 +525,13 @@ class KankiHyService : VpnService() {
     }
 
     /**
-     * KANKI MIX: کارت شبکه‌ی VPN مستقیم به هسته‌ی Go داده می‌شود (بدون tun2socks).
+     * KANKI MIX: کارت شبکه‌ی VPN مستقیم به هسته‌ی Go (برنامه‌ی جدای libkmix.so) داده می‌شود؛ بدون tun2socks.
      * آی‌پی سرور از مسیرهای VPN بیرون است تا سوکت‌های خود هسته دور خودشان نچرخند.
      * MTU ثابت ۱۲۸۰ است (باید با tunMTU هسته یکی باشد): بسته‌ی رمزشده هیچ‌وقت روی موبایل تکه نمی‌شود.
      */
     private fun startKmix(link: String, lines: List<String>, my: Int) {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         val u = KmixUri.parse(link)
-        if (!KmixCore.loaded) error("kanki mix: the core is missing in this build")
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val included = included(lines)
@@ -554,19 +553,22 @@ class KankiHyService : VpnService() {
         else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
 
-        val goFd = synchronized(this) {
+        val bin = KmixCore.binary(this)
+        if (!bin.exists()) error("kanki mix: core is missing in this build")
+        val fd = synchronized(this) {
             if (cancelled(my)) error("kanki mix: cancelled")
-            val fd = b.establish() ?: error("VPN permission is missing")
-            tun = fd
-            // هسته مالک نسخه‌ی خودش از fd است و موقع Stop آن را می‌بندد؛ tun برای سرویس می‌ماند
-            ParcelFileDescriptor.dup(fd.fileDescriptor).detachFd()
+            killStaleCores()
+            (b.establish() ?: error("VPN permission is missing")).also { tun = it }
         }
-        // تا ۱۰ ثانیه: سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
-        try {
-            KmixCore.start(goFd, server, u.key, u.fecData, u.fecParity, gaming)
-        } catch (t: Throwable) {
-            // هسته در خطا fd خودش را می‌بندد؛ اینجا دوباره بسته نمی‌شود (ممکن است شماره‌اش به فایل دیگری رسیده باشد)
-            throw IllegalStateException("kanki mix: " + (t.message ?: t.javaClass.simpleName))
+        // تا ~۲۲ ثانیه: هسته بالا می‌آید و سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
+        KmixCore.start(bin, fd, server, u.key, u.fecData, u.fecParity, gaming) { why ->
+            // هسته بعد از اتصال خودش از بین رفت (مثلاً اندروید پروسه‌اش را کشت): تونل بسته و وضعیت گزارش می‌شود
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = why
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
         }
         synchronized(this) {
             if (cancelled(my)) { KmixCore.stop(); error("kanki mix: cancelled") }

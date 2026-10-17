@@ -19,6 +19,5 @@ keystore.properties
 app/src/main/res/font/
 app/src/main/assets/countries.geojson
 
-# ساخته‌شده در build.yml (gomobile)
-app/libs/*.aar
-app/libs/*.jar
+# ساخته‌شده در build.yml (هسته‌ی KANKI MIX)
+app/src/main/jniLibs/*/libkmix.so
