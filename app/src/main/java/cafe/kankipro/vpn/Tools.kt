@@ -115,10 +115,13 @@ object RealPing {
     /** برای نظارت بر سلامت تونل: اگر یکی از دو آدرس جواب داد، تونل زنده است */
     fun alive(): Boolean = once(URL_204) != null || once(URL_CF) != null
 
-    fun once(url: String = URL_204): Long? = runCatching {
+    /** یک درخواست کوتاه برای بررسی اتصال تازه: دو آدرس به نوبت، هر کدام با مهلت کوتاه */
+    fun quick(attempt: Int): Long? = once(if (attempt % 2 == 0) URL_204 else URL_CF, 3000)
+
+    fun once(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {
         val t0 = System.nanoTime()
         val c = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 5000; readTimeout = 5000; useCaches = false
+            connectTimeout = timeoutMs; readTimeout = timeoutMs; useCaches = false
         }
         val code = c.responseCode
         c.inputStream.use { it.readBytes() }

@@ -14,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -152,47 +154,71 @@ fun T(
 
 // ------------------------------------------------------------------ پس‌زمینه‌ی متحرک
 
-/** ذره‌ی طلایی کم‌رنگ پس‌زمینه */
-private class Mote(val x: Float, val y: Float, val r: Float, val phase: Float, val speed: Float)
+/** ستاره‌ی چشمک‌زن روی عکس کهکشان */
+private class Mote(val x: Float, val y: Float, val r: Float, val phase: Float, val speed: Float, val warm: Boolean)
 
-/** فقط چند ذره‌ی کم‌نور (نه آسمان پرستاره)؛ speed عدد صحیح است تا چشمک‌زدن در پایان هر دور نپرد */
+/** speed عدد صحیح است تا چشمک‌زدن در پایان هر دور نپرد */
 private val motes: List<Mote> = run {
     val rnd = java.util.Random(77)
-    List(16) { Mote(.04f + rnd.nextFloat() * .92f, .03f + rnd.nextFloat() * .94f, .6f + rnd.nextFloat() * .9f, rnd.nextFloat(), (1 + rnd.nextInt(2)).toFloat()) }
+    List(34) {
+        Mote(.03f + rnd.nextFloat() * .94f, .02f + rnd.nextFloat() * .96f, .5f + rnd.nextFloat() * 1.1f, rnd.nextFloat(),
+            (1 + rnd.nextInt(3)).toFloat(), rnd.nextFloat() < .6f)
+    }
 }
 
 /**
- * پس‌زمینه‌ی آرام: مشکی گرم، یک هاله‌ی طلایی خیلی کم‌رنگ و چند ذره‌ی طلایی که آهسته چشمک می‌زنند.
- * calm: صفحه‌ی ورود و صفحه‌های آرام (ذره‌های کمتر).
+ * پس‌زمینه‌ی کهکشانی: عکس واقعی کهکشان طلایی و آبی (res/drawable-nodpi/galaxy_bg.jpg)،
+ * یک لایه‌ی تیره‌ی ملایم تا نوشته‌ها خوانا بمانند، و ستاره‌هایی که آرام چشمک می‌زنند و
+ * ستاره‌های درشت‌تر نور چهارپر دارند. عکس خیلی آهسته جابه‌جا می‌شود تا آسمان زنده به نظر برسد.
+ * calm: صفحه‌ی ورود و صفحه‌های آرام (لایه‌ی تیره کمتر، ستاره‌های کمتر).
  */
 @Composable
 fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     val t = rememberInfiniteTransition(label = "bg")
     val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "tw")
+    val drift by t.animateFloat(0f, 1f, infiniteRepeatable(tween(60000, easing = LinearEasing), RepeatMode.Reverse), label = "dr")
     val breathe by t.animateFloat(0f, 1f, infiniteRepeatable(tween(6000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
-    val count = if (calm) 7 else motes.size
+    val count = if (calm) 18 else motes.size
+    val sky = androidx.compose.ui.res.imageResource(R.drawable.galaxy_bg)
 
     Box(Modifier.fillMaxSize().background(K.Ink)) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            drawRect(Brush.verticalGradient(listOf(ThemeState.current.bgTop, ThemeState.current.bgMid, ThemeState.current.bgBottom)))
-            // هاله‌ی خیلی کم‌رنگ بالا و گوشه‌ی پایین
-            val g = Offset(w * .5f, h * .16f)
+            // عکس کهکشان: پرکردن صفحه (Crop) با کمی بزرگ‌نمایی برای جابه‌جایی آرام
+            val sc = maxOf(w / sky.width, h / sky.height) * 1.06f
+            val dw = sky.width * sc
+            val dh = sky.height * sc
+            val ox = (w - dw) / 2 + (drift - .5f) * (dw - w) * .8f
+            val oy = (h - dh) / 2
+            drawImage(
+                sky, dstOffset = androidx.compose.ui.unit.IntOffset(ox.toInt(), oy.toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(dw.toInt(), dh.toInt()),
+                filterQuality = FilterQuality.Medium,
+            )
+            // لایه‌ی تیره: وسط صفحه (جای کارت‌ها) کمی تیره‌تر، لبه‌ها روشن
+            drawRect(Color.Black.copy(alpha = if (calm) .18f else .26f))
+            drawRect(Brush.radialGradient(listOf(Color.Black.copy(alpha = .30f), Color.Transparent), Offset(w * .5f, h * .62f), w * .9f))
+            // هاله‌ی رنگ اتصال خیلی کم‌رنگ بالای صفحه
+            val g = Offset(w * .5f, h * .22f)
             val gr = w * .95f
-            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .06f + .03f * breathe), Color.Transparent), g, gr), gr, g)
-            val g2 = Offset(w * .9f, h * .96f)
-            val gr2 = w * .7f
-            drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .035f), Color.Transparent), g2, gr2), gr2, g2)
-            // ذره‌های طلایی کم‌نور
+            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .05f + .03f * breathe), Color.Transparent), g, gr), gr, g)
+            // ستاره‌های چشمک‌زن
             val u = 1.dp.toPx()
             for (i in 0 until count) {
                 val m = motes[i]
                 val tw = (sin((twinkle * m.speed + m.phase) * 6.2832f) + 1f) / 2f
                 val pos = Offset(m.x * w, m.y * h)
-                val a = (if (calm) .20f else .28f) * tw
-                drawCircle(K.Gold.copy(alpha = a * .22f), m.r * 4f * u, pos)
-                drawCircle(K.GoldLight.copy(alpha = a), m.r * u, pos)
+                val c = if (m.warm) Color(0xFFFFD58A) else Color(0xFFDDE8FF)
+                val a = .85f * tw * tw
+                drawCircle(c.copy(alpha = a * .18f), m.r * 5f * u, pos)
+                drawCircle(c.copy(alpha = a), m.r * u, pos)
+                if (m.r > 1.1f) {
+                    val l = m.r * 7f * u * (.6f + .4f * tw)
+                    val sw = .6f * u
+                    drawLine(c.copy(alpha = a * .7f), Offset(pos.x - l, pos.y), Offset(pos.x + l, pos.y), sw, StrokeCap.Round)
+                    drawLine(c.copy(alpha = a * .7f), Offset(pos.x, pos.y - l), Offset(pos.x, pos.y + l), sw, StrokeCap.Round)
+                }
             }
         }
         content()
@@ -308,14 +334,39 @@ enum class VState { OFF, CONNECTING, ON }
 
 // ------------------------------------------------------------------ اجزای مشترک
 
+/**
+ * ظاهر شیشه‌ای براق طلایی برای کارت‌ها و کاشی‌ها (مثل طرح):
+ * شیشه‌ی تیره با ته‌رنگ طلایی، براقی روشن بالای کارت، لبه‌ی طلایی که بالایش روشن‌تر است،
+ * و وقتی selected است درخشش طلایی بیرون لبه.
+ */
+fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier = this
+    .drawBehind {
+        if (selected) {
+            val o = shape.createOutline(size, layoutDirection, this)
+            for ((m, a) in listOf(9f to .06f, 5f to .12f, 2.5f to .22f)) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
+        }
+    }
+    .clip(shape)
+    .background(Brush.verticalGradient(listOf(tint.copy(alpha = if (selected) .20f else .09f), K.Surface.copy(alpha = .82f), K.Surface2.copy(alpha = .92f))))
+    .drawWithContent {
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .13f else .08f), Color.Transparent), endY = size.height * .48f))
+        drawContent()
+    }
+    .border(
+        if (selected) 1.5.dp else 1.1.dp,
+        Brush.verticalGradient(
+            if (selected) listOf(K.Shine, tint, K.GoldDeep.copy(alpha = .8f))
+            else listOf(tint.copy(alpha = .75f), tint.copy(alpha = .30f), tint.copy(alpha = .14f)),
+        ),
+        shape,
+    )
+
 @Composable
 fun Glass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(26.dp)
     Column(
         modifier
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
-            .border(1.2.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .6f), K.Gold.copy(alpha = .12f))), shape)
+            .goldGlass(shape)
             .padding(18.dp),
         content = content,
     )

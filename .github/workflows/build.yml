@@ -40,7 +40,7 @@ jobs:
         run: |
           mkdir -p app/src/main/assets
           rm -f app/src/main/assets/land.geojson
-          curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
+          curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson || curl -fsSL --retry 3 -o app/src/main/assets/countries.geojson https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json || echo '{"features":[]}' > app/src/main/assets/countries.geojson
           ls -la app/src/main/assets
 
       # نسخه‌ی هسته ثابت است (نه «آخرین نسخه»)، تا هر ساخت دقیقاً همان هسته‌ی تست‌شده را بگیرد.

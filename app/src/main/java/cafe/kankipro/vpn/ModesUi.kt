@@ -145,19 +145,10 @@ fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, on
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         KMode.entries.forEach { m ->
             val sel = m == selected
-            val bg by animateColorAsState(if (sel) K.Gold.copy(alpha = .10f) else Color(0x08FFFFFF), tween(220), label = "mode")
             val shape = RoundedCornerShape(16.dp)
             Box(Modifier.weight(1f).height(76.dp)) {
-                if (sel) {
-                    // نور طلایی ملایم پشت کاشی انتخاب‌شده
-                    Canvas(Modifier.matchParentSize()) {
-                        drawRoundRect(K.Gold.copy(alpha = .10f), cornerRadius = CornerRadius(18.dp.toPx()), style = Stroke(6.dp.toPx()))
-                    }
-                }
                 Column(
-                    Modifier.matchParentSize().clip(shape)
-                        .background(Brush.verticalGradient(listOf(bg, K.Panel.copy(alpha = .55f))))
-                        .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold.copy(alpha = .9f) else K.Gold.copy(alpha = .22f), shape)
+                    Modifier.matchParentSize().goldGlass(shape, selected = sel)
                         .alpha(if (enabled) 1f else .5f)
                         .pointerInput(m, enabled) {
                             if (enabled) detectTapGestures(
@@ -182,7 +173,7 @@ fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, on
 fun ModeHint(m: KMode, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        modifier.fillMaxWidth().clip(shape).background(Color(0x08FFFFFF)).border(1.dp, K.Gold.copy(alpha = .16f), shape)
+        modifier.fillMaxWidth().goldGlass(shape)
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -236,101 +227,92 @@ fun SmartPanel(u: SmartPanelUi, modifier: Modifier = Modifier) {
 
 // ================================================================== کارت حالت DNS
 
+/** یک سرور DNS در فهرست: خودکار، مستقیم (سرور خارج) یا تانل (ریلی ایران ← سرور خارج) */
+data class DnsRowUi(val id: String, val title: String, val role: String, val flag: String, val exitFlag: String = "", val exitTitle: String = "")
+
 data class DnsCardUi(
     val hasDns: Boolean = false,
-    /** اسم چند برنامه‌ی انتخابی برای نمایش */
-    val appNames: List<String> = emptyList(),
-    val appCount: Int = 0,
-    /** (شناسه، عنوان، نقش) سرورهای DNS؛ شناسه‌ی خالی یعنی خودکار */
-    val servers: List<Triple<String, String, String>> = emptyList(),
+    /** سرورهایی که در پنل اضافه شده‌اند؛ شناسه‌ی خالی یعنی خودکار */
+    val servers: List<DnsRowUi> = emptyList(),
     val pick: String = "",
     val active: String? = null,
     /** مسیر سرور فعال: «از ریلی ایران» یا «مستقیم» */
     val activeRoute: String? = null,
-    /** این گوشی می‌تواند بقیه‌ی برنامه‌ها را ببندد (اندروید ۱۰ به بالا) */
-    val canBlock: Boolean = true,
-    /** بقیه‌ی برنامه‌ها بسته‌اند (پینگ برنامه‌های انتخابی بالاتر می‌رود) */
-    val block: Boolean = false,
     /** مصرف این اتصال (دریافت + ارسال، بایت)؛ null وقتی وصل نیست */
     val sessionBytes: Long? = null,
 )
 
 class DnsActions(
-    val pickApps: () -> Unit = {},
     val pickDns: (String) -> Unit = {},
-    val toggleBlock: () -> Unit = {},
 )
 
+/**
+ * کارت حالت DNS: دکمه‌ی «سرورهای DNS» که فهرست سرورهای پنل را باز می‌کند.
+ * سرور مستقیم: پرچم و اسم سرور خارج. سرور تانل: 🇮🇷 ← پرچم خارج با برچسب «تانل»، تا معلوم باشد از ایران رد می‌شود.
+ */
 @Composable
 fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = Modifier) {
     val mc = modeColor(KMode.DNS)
     val shape = RoundedCornerShape(16.dp)
+    var open by remember { mutableStateOf(false) }
     Column(
-        modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(mc.copy(alpha = .10f), mc.copy(alpha = .04f))))
-            .border(1.dp, mc.copy(alpha = .38f), shape)
+        modifier.fillMaxWidth().goldGlass(shape, tint = mc)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (!u.hasDns) {
             T("اشتراک شما DNS ندارد", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
             return@Column
         }
-        // دکمه‌ی انتخاب برنامه‌ها
+        val cur = u.servers.firstOrNull { it.id == u.pick } ?: u.servers.firstOrNull()
         val bs = RoundedCornerShape(14.dp)
         Row(
             Modifier.fillMaxWidth().clip(bs)
-                .background(Brush.horizontalGradient(listOf(mc.copy(alpha = .28f), mc.copy(alpha = .12f))))
+                .background(Brush.horizontalGradient(listOf(mc.copy(alpha = .26f), mc.copy(alpha = .10f))))
                 .border(1.dp, mc.copy(alpha = .7f), bs)
-                .clickable(enabled = vstate != VState.CONNECTING, onClick = act.pickApps)
+                .clickable { open = !open }
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Canvas(Modifier.size(20.dp)) { appsGridIcon(mc) }
+            T("DNS", size = 11.sp, color = mc, font = Poppins, weight = FontWeight.Bold, ltr = true)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                T("انتخاب برنامه‌ها", size = 13.sp, color = K.Text, weight = FontWeight.Black)
-                if (u.appCount > 0) T(
-                    u.appNames.joinToString(" · ") + if (u.appCount > u.appNames.size) " …" else "",
-                    size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1,
-                )
+                T("سرورهای DNS", size = 13.sp, color = K.Text, weight = FontWeight.Black)
+                cur?.let { T(dnsRowLabel(it), size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1) }
             }
-            if (u.appCount > 0) {
-                Box(Modifier.clip(CircleShape).background(mc).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                    T(u.appCount.toString(), size = 11.sp, color = Color.White, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                }
-                Spacer(Modifier.width(6.dp))
-            }
-            Chevron(mc)
+            T(if (open) "▴" else "▾", size = 14.sp, color = mc)
         }
-        if (u.canBlock) {
-            Spacer(Modifier.height(6.dp))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .clickable(enabled = vstate == VState.OFF, onClick = act.toggleBlock).padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CheckMark(u.block, 20.dp, mc)
-                Spacer(Modifier.width(8.dp))
-                T("بقیه‌ی برنامه‌ها اینترنت نداشته باشند", size = 12.sp, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            }
-        }
-        if (u.servers.size > 2) {
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                u.servers.forEach { (id, title, role) ->
-                    val sel = u.pick == id
-                    val cs = RoundedCornerShape(10.dp)
+        AnimatedVisibility(open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                u.servers.forEach { r ->
+                    val sel = u.pick == r.id
+                    val rs = RoundedCornerShape(12.dp)
                     Row(
-                        Modifier.clip(cs).background(if (sel) mc.copy(alpha = .2f) else Color(0x0AFFFFFF))
-                            .border(1.dp, if (sel) mc else Color(0x16FFFFFF), cs)
-                            .clickable(enabled = vstate == VState.OFF) { act.pickDns(id) }
-                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                        Modifier.fillMaxWidth().clip(rs)
+                            .background(if (sel) mc.copy(alpha = .16f) else Color(0x0CFFFFFF))
+                            .border(1.dp, if (sel) mc else Color(0x18FFFFFF), rs)
+                            .clickable(enabled = vstate != VState.CONNECTING) { act.pickDns(r.id); open = false }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        T(when (role) { "relay" -> "🇮🇷 "; "exit" -> "🌍 "; else -> "✨ " }, size = 10.sp, weight = FontWeight.Normal)
-                        AutoText(title, size = 10.sp, color = if (sel) mc else K.Text)
+                        when (r.role) {
+                            "relay" -> {
+                                T("🇮🇷", size = 16.sp, weight = FontWeight.Normal)
+                                T(" ➜ ", size = 12.sp, color = mc, ltr = true)
+                                T(r.exitFlag, size = 16.sp, weight = FontWeight.Normal)
+                            }
+                            "auto" -> T("✨", size = 16.sp, weight = FontWeight.Normal)
+                            else -> T(r.flag, size = 16.sp, weight = FontWeight.Normal)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        AutoText(if (r.role == "relay") r.exitTitle.ifBlank { r.title } else r.title, size = 12.sp, color = if (sel) mc else K.Text, modifier = Modifier.weight(1f))
+                        val tag = when (r.role) { "relay" -> "تانل"; "auto" -> "سریع‌ترین"; else -> "مستقیم" }
+                        val ts = RoundedCornerShape(50)
+                        Box(Modifier.clip(ts).border(1.dp, mc.copy(alpha = .5f), ts).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                            T(tag, size = 10.sp, color = mc, weight = FontWeight.Bold)
+                        }
                     }
                 }
+                if (vstate == VState.ON) T("برای عوض کردن سرور، یک بار قطع و وصل کن", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
         }
         u.active?.let {
@@ -341,6 +323,12 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             }
         }
     }
+}
+
+private fun dnsRowLabel(r: DnsRowUi): String = when (r.role) {
+    "relay" -> "🇮🇷 ➜ " + r.exitFlag + " " + r.exitTitle.ifBlank { r.title } + " · " + tr("تانل")
+    "auto" -> tr("خودکار") + " · " + tr("سریع‌ترین")
+    else -> r.flag + " " + r.title + " · " + tr("مستقیم")
 }
 
 /** چهار مربع (آیکون برنامه‌ها) */

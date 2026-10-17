@@ -58,6 +58,9 @@ data class DnsServer(
     /** آدرس ثبت IP (HTTPS) و نسخه‌ی HTTP آن روی خود IP */
     val register: String,
     val registerHttp: String,
+    /** ریلی (داخل ایران): شناسه و اسم سرور خارجی که تانلش به آن می‌رسد */
+    val exit: String = "",
+    val exitName: String = "",
 )
 
 data class DnsInfo(val token: String, val servers: List<DnsServer>)
@@ -250,6 +253,7 @@ object SubscriptionApi {
                 id = x.optString("id"), name = x.optString("name"), note = x.optString("note"), role = x.optString("role"),
                 ip = x.optString("ip"), host = x.optString("host"), dot = x.optString("dot"), doh = x.optString("doh"),
                 register = x.optString("register"), registerHttp = x.optString("register_http"),
+                exit = x.optString("exit"), exitName = x.optString("exit_name"),
             )
         }.filter { it.ip.isNotBlank() || it.dot.isNotBlank() }
         return if (list.isEmpty()) null else DnsInfo(o.optString("token"), list)

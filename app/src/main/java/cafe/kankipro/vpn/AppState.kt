@@ -186,6 +186,7 @@ class AppState private constructor(context: Context) {
     /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
     fun toggleMain() {
         if (gameSheet || appsPicker || filterSheet) return
+        userTaps++
         // وسط سنجش «هوشمند»: لمس یعنی لغو
         if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
         when (vstate) {
@@ -426,9 +427,8 @@ class AppState private constructor(context: Context) {
             val best = ranked.firstOrNull() ?: throw IllegalStateException("no DNS server answered the registration")
             // بقیه‌ی سرورها (حتی آن‌هایی که الان ثبت نشدند) به ترتیب ریلی ← مستقیم برای جابه‌جایی خودکار می‌مانند
             val fallback = ranked + order.filter { it !in ranked }.sortedBy { if (it.role == "relay") 0 else 1 }
-            // فقط بازی‌ها و برنامه‌های انتخابی اینترنت دارند (از راه DNS کانکی)؛ خالی = همه‌ی برنامه‌ها مثل قبل
-            val apps = allowedAppsNow()
-            val text = applyExcluded(KankiDns.wrap(fallback, apps, dnsBlock), excluded.toSet())
+            // DNS برای همه‌ی برنامه‌هاست (انتخاب برنامه در حالت DNS برداشته شد)
+            val text = applyExcluded(KankiDns.wrap(fallback), excluded.toSet())
             if (!wantTry) throw IllegalStateException("cancelled")
             withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
             val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }
@@ -673,6 +673,8 @@ class AppState private constructor(context: Context) {
     }
 
     private var reviving = false
+    /** هر لمس دکمه‌ی اصلی؛ اتصال دوباره‌ی خودکار اگر کاربر وسطش دکمه را زد، ادامه نمی‌دهد */
+    @Volatile private var userTaps = 0
 
     /** قطع و وصل دوباره‌ی تونل؛ همزمان فقط یک بار اجرا می‌شود */
     private suspend fun revive() {
@@ -681,9 +683,16 @@ class AppState private constructor(context: Context) {
         try {
             // همان سرور و پروتکل قبلی (قفل)، فقط دوباره وصل می‌شود
             val wasDns = dnsActive != null
+            val taps = userTaps
             disconnect()
-            wantTry = true
-            if (wasDns) connectDns() else connect()
+            // تا سه بار (شبکه‌ی تازه گاهی چند ثانیه طول می‌کشد تا واقعاً اینترنت بدهد)؛ فقط تلاش آخر خطا نشان می‌دهد
+            for (k in 1..3) {
+                wantTry = true
+                if (wasDns) connectDns() else connect(quiet = k < 3)
+                if (vstate == VState.ON || !wantTry || userTaps != taps) break
+                kotlinx.coroutines.delay(2000L * k)
+                if (userTaps != taps) break
+            }
         } finally { reviving = false }
     }
 
@@ -1194,11 +1203,15 @@ class AppState private constructor(context: Context) {
     }
 
     /** چند بار از داخل تونل درخواست می‌فرستد؛ اگر جواب آمد یعنی هندشیک واقعی انجام شده */
-    private fun awaitHandshake(timeoutMs: Long = 9000): Boolean {
+    // هر تلاش مهلت کوتاه دارد و دو آدرس به نوبت امتحان می‌شوند، تا یک درخواست کند (مثلاً اولین بسته
+    // که پیش از تمام شدن هندشیک امنزیا رفته) کل زمان را نخورد و اتصال سالم «ناموفق» حساب نشود
+    private fun awaitHandshake(timeoutMs: Long = 12000): Boolean {
         val end = System.currentTimeMillis() + timeoutMs
+        var i = 0
         while (System.currentTimeMillis() < end) {
-            if (RealPing.once() != null) return true
-            Thread.sleep(700)
+            if (!wantTry) return false
+            if (RealPing.quick(i++) != null) return true
+            Thread.sleep(400)
         }
         return false
     }

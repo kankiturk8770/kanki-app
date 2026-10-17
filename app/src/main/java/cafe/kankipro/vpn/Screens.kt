@@ -138,7 +138,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     // نقشه‌ی کشورها (یک بار از فایل خوانده می‌شود)
     var countries by remember { mutableStateOf(MapData.countries) }
-    LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { MapData.load(ctx) } }
+    LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { LightsData.load(ctx); MapData.load(ctx) } }
 
     // آموزش ربات: بار اول بعد از ورود خودکار شروع می‌شود
     LaunchedEffect(state.account != null) {
@@ -296,8 +296,6 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     val locIso = if (viaExit) state.exitIso ?: state.node?.let { state.isoOfNode(it) } else state.userIso
 
     // نام چند برنامه‌ی مجاز برای کارت DNS
-    val allowed = (state.detectedGames.filter { state.autoGames && it !in state.appsRemoved } + state.appsAdded).distinct()
-    val names = remember(allowed) { allowed.take(3).map { Modes.label(ctx, it) } }
 
     val ui = HomeUi(
         vstate = state.vstate,
@@ -331,16 +329,18 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         ),
         dns = DnsCardUi(
             hasDns = dnsInfo != null,
-            appNames = names,
-            appCount = allowed.size,
-            servers = listOf(Triple("", tr("خودکار"), "auto")) + (dnsInfo?.servers ?: emptyList()).map { s ->
-                Triple(s.id, s.name.ifBlank { s.host.ifBlank { s.ip } }, s.role)
+            servers = listOf(DnsRowUi("", tr("خودکار"), "auto", "✨")) + (dnsInfo?.servers ?: emptyList()).map { s ->
+                val exitIso = if (s.role == "relay" && s.exit.isNotBlank()) state.isoOfNode(s.exit) else null
+                DnsRowUi(
+                    s.id, s.name.ifBlank { s.host.ifBlank { s.ip } }, s.role,
+                    flag = flagEmoji(state.isoOfNode(s.id)) ?: "🌍",
+                    exitFlag = flagEmoji(exitIso) ?: "🌍",
+                    exitTitle = s.exitName.ifBlank { countryName(exitIso) ?: "" },
+                )
             },
             pick = state.dnsPick,
             active = state.dnsActive?.let { it.name.ifBlank { it.ip } },
             activeRoute = state.dnsRoute(state.dnsActive),
-            canBlock = AppGate.supported,
-            block = state.dnsBlock,
             sessionBytes = if (state.vstate == VState.ON && state.mode == KMode.DNS) session else null,
         ),
         // رنگ اتصال: DNS فیروزه‌ای، بقیه رنگ پروتکل وصل‌شده؛ قطع: رنگ حالت انتخاب‌شده
@@ -370,11 +370,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
                 }
             },
             openAccount = { state.accountOpen = true },
-            dns = DnsActions(
-                pickApps = { state.appsPicker = true },
-                pickDns = { state.changeDnsPick(it) },
-                toggleBlock = { state.changeDnsBlock(!state.dnsBlock) },
-            ),
+            dns = DnsActions(pickDns = { state.changeDnsPick(it) }),
             alertAction = { id ->
                 when (id) {
                     "renew" -> openBot(ctx)

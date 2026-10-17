@@ -80,7 +80,7 @@ private fun fitView(pts: List<Geo>, aspect: Double, minSpan: Double): View {
 
 /**
  * نقشه‌ی طلایی بدون قاب که لبه‌هایش در پس‌زمینه محو می‌شود:
- * مرز کشورها طلایی با کمی درخشش، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها،
+ * خشکی تیره با مرزهای طلایی درخشان و نور شهرها، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها،
  * و وقتی وصل است کمان نئونی سبز از شما تا سرور.
  */
 @Composable
@@ -90,6 +90,7 @@ fun WorldMap(
     accent: Color = K.Gold,
 ) {
     val tm = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 24)
+    val lights = LightsData.lights
 
     val sel = pins.firstOrNull { it.selected }
     val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
@@ -121,19 +122,31 @@ fun WorldMap(
             }) {
                 countries?.forEach { c ->
                     if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
+                    // خشکی تیره‌تر از آسمان پشتش تا قاره‌ها روی کهکشان دیده شوند
+                    drawPath(c.path, Color(0xFF070402).copy(alpha = .62f))
                     val fill = when (c.iso) {
                         selIso -> selColor.copy(alpha = .20f)
-                        userIso -> K.Gold.copy(alpha = .13f)
-                        else -> K.Gold.copy(alpha = .055f)
+                        userIso -> K.Gold.copy(alpha = .14f)
+                        else -> K.Gold.copy(alpha = .06f)
                     }
                     drawPath(c.path, fill)
                     if (c.iso == selIso) {
                         drawPath(c.path, selColor.copy(alpha = .18f), style = Stroke(border * 4f))
                         drawPath(c.path, selColor.copy(alpha = .9f), style = Stroke(border * 1.6f))
                     } else {
-                        drawPath(c.path, K.Gold.copy(alpha = .10f), style = Stroke(border * 3.2f))
-                        drawPath(c.path, K.Gold.copy(alpha = .55f), style = Stroke(border))
+                        drawPath(c.path, K.Gold.copy(alpha = .16f), style = Stroke(border * 3.6f))
+                        drawPath(c.path, K.GoldLight.copy(alpha = .70f), style = Stroke(border * 1.05f))
                     }
+                }
+                // نور شهرها (مثل عکس شب زمین): نقطه‌های طلایی با هاله
+                lights?.let { L ->
+                    val pm = androidx.compose.ui.graphics.PointMode.Points
+                    drawPoints(L.dim, pm, K.Gold.copy(alpha = .38f), border * 1.8f, StrokeCap.Round)
+                    drawPoints(L.mid, pm, K.Gold.copy(alpha = .16f), border * 5f, StrokeCap.Round)
+                    drawPoints(L.mid, pm, K.GoldLight.copy(alpha = .75f), border * 2.4f, StrokeCap.Round)
+                    drawPoints(L.bright, pm, K.Gold.copy(alpha = .14f), border * 11f, StrokeCap.Round)
+                    drawPoints(L.bright, pm, K.GoldLight.copy(alpha = .35f), border * 5.5f, StrokeCap.Round)
+                    drawPoints(L.bright, pm, Color(0xFFFFF3D0), border * 2.6f, StrokeCap.Round)
                 }
             }
         }

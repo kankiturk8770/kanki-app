@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.12.0"
+        versionCode = 38
+        versionName = "1.13.0"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -130,6 +130,7 @@ val fetchAssets by tasks.registering {
         grab(File(fontDir, "orbitron.ttf"), "$g1/orbitron/Orbitron%5Bwght%5D.ttf", "$g2/orbitron/Orbitron%5Bwght%5D.ttf")
         grab(
             File(assetDir, "countries.geojson"),
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
             "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson",
             "https://raw.githubusercontent.com/martynafford/natural-earth-geojson/master/110m/cultural/ne_110m_admin_0_countries.json",
         )

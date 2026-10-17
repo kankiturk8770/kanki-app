@@ -32,11 +32,16 @@ object MapData {
                 val coords = g.optJSONArray("coordinates") ?: continue
                 val path = Path()
                 var mnX = 999f; var mxX = -999f; var mnY = 999f; var mxY = -999f
+                // نقشه‌ی دقیق (50m) است؛ نقطه‌هایی که کمتر از ۰٫۰۶ درجه با قبلی فاصله دارند حذف می‌شوند تا رسم سبک بماند
                 fun addRing(r: JSONArray) {
+                    var px = 0f; var py = 0f
                     for (k in 0 until r.length()) {
                         val pt = r.optJSONArray(k) ?: continue
                         val x = pt.optDouble(0).toFloat(); val y = pt.optDouble(1).toFloat()
-                        if (k == 0) path.moveTo(x, -y) else path.lineTo(x, -y)
+                        if (k == 0) path.moveTo(x, -y)
+                        else if (k == r.length() - 1 || kotlin.math.abs(x - px) + kotlin.math.abs(y - py) > .06f) path.lineTo(x, -y)
+                        else continue
+                        px = x; py = y
                         mnX = minOf(mnX, x); mxX = maxOf(mxX, x); mnY = minOf(mnY, y); mxY = maxOf(mxY, y)
                     }
                     path.close()
@@ -53,6 +58,47 @@ object MapData {
         }
         countries = out
         return out
+    }
+}
+
+/**
+ * نور شهرها روی نقشه (مثل عکس شب زمین از فضا): از فایل city_lights.csv (شهرهای Natural Earth با جمعیت).
+ * هر شهر یک نقطه‌ی روشن است و دورش به اندازه‌ی جمعیتش چند نقطه‌ی کم‌نورتر پخش می‌شود.
+ * مختصات در همان فضای نقشه است (x = lon , y = -lat).
+ */
+class CityLights(val bright: List<androidx.compose.ui.geometry.Offset>, val mid: List<androidx.compose.ui.geometry.Offset>, val dim: List<androidx.compose.ui.geometry.Offset>)
+
+object LightsData {
+    @Volatile
+    var lights: CityLights? = null
+        private set
+
+    fun load(ctx: Context): CityLights {
+        lights?.let { return it }
+        val b = ArrayList<androidx.compose.ui.geometry.Offset>()
+        val m = ArrayList<androidx.compose.ui.geometry.Offset>()
+        val d = ArrayList<androidx.compose.ui.geometry.Offset>()
+        val rnd = java.util.Random(7)
+        runCatching {
+            ctx.assets.open("city_lights.csv").bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    val p = line.split(',')
+                    if (p.size < 3) return@forEach
+                    val x = p[0].toFloatOrNull() ?: return@forEach
+                    val y = p[1].toFloatOrNull() ?: return@forEach
+                    val w = p[2].toIntOrNull() ?: 1
+                    val o = androidx.compose.ui.geometry.Offset(x, -y)
+                    when { w >= 6 -> b.add(o); w >= 3 -> m.add(o); else -> d.add(o) }
+                    // پخش نور شهر بزرگ در اطرافش
+                    val spread = .12f + w * .06f
+                    repeat(w * 2) {
+                        val q = androidx.compose.ui.geometry.Offset(x + (rnd.nextGaussian() * spread).toFloat(), -y + (rnd.nextGaussian() * spread).toFloat())
+                        if (it < w / 2) m.add(q) else d.add(q)
+                    }
+                }
+            }
+        }
+        return CityLights(b, m, d).also { lights = it }
     }
 }
 

@@ -71,10 +71,28 @@ object VpnEngine {
             HyEngine.up(ctx, configText)
         } else {
             HyEngine.down(ctx)
-            val config = Config.parse(configText.byteInputStream())
+            val config = Config.parse(resolveEndpoint(configText).byteInputStream())
             backend(ctx).setState(tunnel, Tunnel.State.UP, config)
         }
         if (resetTimer || connectedAt == 0L) connectedAt = System.currentTimeMillis()
+    }
+
+    /**
+     * اسم دامنه‌ی Endpoint پیش از روشن شدن موتور به IPv4 تبدیل می‌شود، با سه بار تلاش.
+     * موتور امنزیا فقط یک بار اسم را می‌پرسد و اگر DNS همان لحظه جواب نداد، کل اتصال شکست می‌خورد.
+     * اگر هیچ تلاشی جواب نداد، متن دست‌نخورده می‌ماند (موتور خودش امتحان می‌کند).
+     */
+    private fun resolveEndpoint(text: String): String {
+        val re = Regex("""(?m)^([ \t]*Endpoint[ \t]*=[ \t]*)([^\s:\[\]]+):(\d+)[ \t\r]*$""")
+        val m = re.find(text) ?: return text
+        val host = m.groupValues[2]
+        if (host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) return text
+        repeat(3) { n ->
+            val ip = runCatching { java.net.InetAddress.getAllByName(host).firstOrNull { it is java.net.Inet4Address }?.hostAddress }.getOrNull()
+            if (ip != null) return text.replaceRange(m.range, m.groupValues[1] + ip + ":" + m.groupValues[3])
+            if (n < 2) Thread.sleep(600L * (n + 1))
+        }
+        return text
     }
 
     /** برای اتصال‌هایی که با موتور دیگر (IKEv2) برقرار می‌شوند */
