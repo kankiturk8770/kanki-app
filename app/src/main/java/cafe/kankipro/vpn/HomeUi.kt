@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -281,21 +284,12 @@ private val orbStars: List<OrbStar> = run {
     }
 }
 
-/** یک سیاره روی مدار بیضی: شعاع مدار (نسبت به دکمه)، اندازه، سرعت، زاویه‌ی شروع و رنگ */
-private class Planet(val orbit: Float, val size: Float, val speed: Float, val start: Float, val color: Color, val ring: Boolean = false)
-
-private val planets = listOf(
-    Planet(1.17f, 3.2f, 26f, 40f, Color(0xFFFFC56B)),
-    Planet(1.36f, 4.6f, 17f, 200f, Color(0xFFE89A4C), ring = true),
-    Planet(1.56f, 3.6f, 11f, 310f, Color(0xFF8FB8FF)),
-)
-
 /**
- * دکمه‌ی گرد اتصال با هاله‌ی منظومه‌ی شمسی:
- * دیسک شیشه‌ای براق با لبه‌ی طلایی، لوگوی K وسط، و دورش سه مدار بیضی کج با سیاره‌هایی که می‌چرخند
- * (نیمه‌ی پشتی مدار پشت دکمه می‌رود، مثل سه‌بعدی) و غبار ستاره‌ای که آرام می‌چرخد و چشمک می‌زند.
+ * دکمه‌ی گرد اتصال با هاله‌ی کهکشانی:
+ * پشت دکمه همان کهکشان مارپیچ طلایی عکس پس‌زمینه (res/drawable-nodpi/galaxy_halo.webp، از روبه‌رو)
+ * کمی کج و سه‌بعدی می‌چرخد؛ دورش غبار ستاره‌ای چشمک می‌زند و وسطش دیسک شیشه‌ای براق با لبه‌ی طلایی و لوگوی K است.
  * رنگ‌ها همیشه طلایی کهکشانی است؛ وقتی وصل است فقط پرنورتر و گرم‌تر می‌شود و کمی رنگ پروتکل
- * (color) قاطی‌اش می‌شود. موقع اتصال سیاره‌ها تند می‌چرخند.
+ * (color) قاطی‌اش می‌شود. موقع اتصال کهکشان تند می‌چرخد.
  */
 @Composable
 fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp, onClick: () -> Unit) {
@@ -320,6 +314,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
     // طلایی کهکشانی؛ وصل: روشن‌تر با ۲۰٪ رنگ پروتکل
     val gold by animateColorAsState(if (on) androidx.compose.ui.graphics.lerp(K.GoldLight, color, .2f) else K.Gold, tween(700), label = "g")
     val halo = 96.dp
+    val galaxy = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.galaxy_halo)
 
     Box(
         Modifier.size(diameter + halo).alpha(if (enabled) 1f else .55f).clickable(
@@ -332,37 +327,19 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
             val c = center
             val outer = this.size.minDimension / 2
             val r = outer * (diameter.value / (diameter.value + halo.value))
-            val tilt = Math.toRadians(-18.0)
-            val ct = kotlin.math.cos(tilt).toFloat()
-            val st = kotlin.math.sin(tilt).toFloat()
-            val flat = .36f
-            fun onOrbit(rr: Float, deg: Float): Offset {
-                val a = Math.toRadians(deg.toDouble())
-                val x = rr * kotlin.math.cos(a).toFloat()
-                val y = rr * flat * kotlin.math.sin(a).toFloat()
-                return Offset(c.x + x * ct - y * st, c.y + x * st + y * ct)
+            // ---- کهکشان چرخان (کمی کج، مثل سه‌بعدی)
+            val gs = outer * 2.05f
+            withTransform({
+                rotate(-16f, c)
+                scale(1f, .74f, c)
+                rotate(time * 10f, c)
+            }) {
+                drawImage(
+                    galaxy, dstOffset = androidx.compose.ui.unit.IntOffset((c.x - gs / 2).toInt(), (c.y - gs / 2).toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize(gs.toInt(), gs.toInt()), alpha = .55f + .45f * lit,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
+                )
             }
-            fun orbitPath(rr: Float, front: Boolean) = Path().apply {
-                val from = if (front) 0 else 180
-                for (i in 0..60) {
-                    val p = onOrbit(rr, from + i * 3f)
-                    if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
-                }
-            }
-            fun planet(p: Planet) {
-                val deg = (p.start + p.speed * time) % 360f
-                val o = onOrbit(r * p.orbit, deg)
-                val pr = p.size.dp.toPx() * (.85f + .15f * kotlin.math.sin(Math.toRadians(deg.toDouble())).toFloat())
-                drawCircle(p.color.copy(alpha = .25f * lit), pr * 2.6f, o)
-                drawCircle(Brush.radialGradient(listOf(Color.White, p.color, p.color.copy(alpha = .9f)), Offset(o.x - pr * .35f, o.y - pr * .35f), pr * 1.3f), pr, o)
-                if (p.ring) {
-                    drawOval(p.color.copy(alpha = .8f * lit), Offset(o.x - pr * 1.9f, o.y - pr * .5f), Size(pr * 3.8f, pr), style = Stroke(.9.dp.toPx()))
-                }
-            }
-            val behind = { p: Planet -> kotlin.math.sin(Math.toRadians(((p.start + p.speed * time) % 360f).toDouble())) < 0 }
-
-            // ---- هاله‌ی نرم طلایی
-            drawCircle(Brush.radialGradient(listOf(gold.copy(alpha = .26f * lit * breathe), gold.copy(alpha = .06f), Color.Transparent), c, outer), outer, c)
             // ---- غبار ستاره‌ای
             orbStars.forEach { s ->
                 val deg = s.start + time * (14f / s.orbit)
@@ -375,10 +352,6 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
                 drawCircle(col.copy(alpha = .18f * tw * lit), sz * 3f, o)
                 drawCircle(col.copy(alpha = (.35f + .65f * tw) * lit), sz, o)
             }
-            // ---- نیمه‌ی پشتی مدارها و سیاره‌های پشت دکمه
-            val ow = 1.dp.toPx()
-            planets.forEach { drawPath(orbitPath(r * it.orbit, front = false), gold.copy(alpha = .30f * lit), style = Stroke(ow)) }
-            planets.filter(behind).forEach { planet(it) }
 
             // ---- دیسک شیشه‌ای براق
             val disc = r
@@ -401,9 +374,6 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
             // موج تپنده وقتی وصل است
             if (on) drawCircle(gold.copy(alpha = (1f - pulse) * .5f), disc * (1.04f + pulse * .22f), c, style = Stroke(1.4.dp.toPx()))
 
-            // ---- نیمه‌ی جلویی مدارها و سیاره‌های جلوی دکمه
-            planets.forEach { drawPath(orbitPath(r * it.orbit, front = true), gold.copy(alpha = .55f * lit), style = Stroke(ow)) }
-            planets.filterNot(behind).forEach { planet(it) }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Logo3D(26.dp, animate = on)
