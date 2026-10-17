@@ -336,6 +336,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             active = state.dnsActive?.let { it.name.ifBlank { it.ip } },
             activeRoute = state.dnsRoute(state.dnsActive),
             canBlock = AppGate.supported,
+            block = state.dnsBlock,
         ),
     )
 
@@ -355,6 +356,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             dns = DnsActions(
                 pickApps = { state.appsPicker = true },
                 pickDns = { state.changeDnsPick(it) },
+                toggleBlock = { state.changeDnsBlock(!state.dnsBlock) },
             ),
             alertAction = { id ->
                 when (id) {
