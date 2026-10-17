@@ -195,6 +195,9 @@ object SubscriptionApi {
             // Hysteria2 در صفحه‌ی اشتراک فقط دکمه‌ی QR دارد؛ همان آدرس بدون /qr متن لینک hysteria2:// را می‌دهد
             if (m.groupValues[2].startsWith("hysteria2"))
                 ConfigLink(protocol = "hysteria2", node = node, nodeName = name, url = url.replace(Regex("/hysteria2/[a-z0-9]+\\?"), "/hysteria2?"))
+            // KANKI MIX هم مثل Hysteria2 فقط QR دارد؛ همان آدرس بدون /qr متن لینک kanki:// را می‌دهد
+            else if (m.groupValues[2].startsWith("kankimix"))
+                ConfigLink(protocol = "kankimix", node = node, nodeName = name, url = url.replace(Regex("/kankimix/[a-z0-9]+\\?"), "/kankimix?"))
             else ConfigLink(protocol = m.groupValues[2], node = node, nodeName = name, url = url)
         }.distinctBy { it.url }.toList()
 
@@ -269,6 +272,14 @@ data class ConfigInfo(
     companion object {
         fun parse(text: String): ConfigInfo {
             if (text.lines().any { it.trim().startsWith("remote ") }) return parseOvpn(text)
+            if (KmixUri.isKmix(text)) {
+                val u = runCatching { KmixUri.parse(text) }.getOrNull()
+                return ConfigInfo(
+                    endpoint = u?.let { "${it.host}:${it.port}" } ?: "—", address = "—", dns = "—", mtu = "1280",
+                    obfuscation = u?.let { "ChaCha20 · KCP + FEC ${it.fecData}+${it.fecParity}" + if (it.ports != null) " · ${it.ports.first}-${it.ports.last}" else "" },
+                    transport = "UDP", cipher = "KANKI MIX",
+                )
+            }
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
                 val (h, p) = runCatching { XrayCfg.endpoint(link) }.getOrDefault("—" to 0)

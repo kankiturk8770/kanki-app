@@ -54,7 +54,8 @@ fun modeColor(m: KMode): Color = when (m) {
     KMode.SMART -> K.Gold
     KMode.GAME -> Color(0xFF46D99A)
     KMode.FILTER -> Color(0xFF58A6F0)
-    KMode.DNS -> Color(0xFF9E82EE)
+    // آبی-فیروزه‌ای: با بنفش Amnezia قاطی نشود
+    KMode.DNS -> Color(0xFF3ED6E0)
 }
 
 /** آیکون هر حالت (کشیده‌شده، بدون فایل تصویر) */
@@ -250,6 +251,8 @@ data class DnsCardUi(
     val canBlock: Boolean = true,
     /** بقیه‌ی برنامه‌ها بسته‌اند (پینگ برنامه‌های انتخابی بالاتر می‌رود) */
     val block: Boolean = false,
+    /** مصرف این اتصال (دریافت + ارسال، بایت)؛ null وقتی وصل نیست */
+    val sessionBytes: Long? = null,
 )
 
 class DnsActions(
@@ -272,16 +275,6 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             T("اشتراک شما DNS ندارد", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
             return@Column
         }
-        Row(verticalAlignment = Alignment.Top) {
-            T("⚠", size = 13.sp, color = K.Warn, weight = FontWeight.Normal)
-            Spacer(Modifier.width(6.dp))
-            T(
-                if (u.canBlock && u.block) "تا وقتی DNS روشن است، فقط بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید به اینترنت وصل‌اند و از DNS کانکی استفاده می‌کنند. بقیه‌ی برنامه‌ها تا خاموش کردن DNS اینترنت ندارند."
-                else "تا وقتی DNS روشن است، بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید از DNS کانکی استفاده می‌کنند؛ ترافیکشان مستقیم می‌رود.",
-                size = 11.5.sp, color = K.Text, weight = FontWeight.Normal, modifier = Modifier.weight(1f),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
         // دکمه‌ی انتخاب برنامه‌ها
         val bs = RoundedCornerShape(14.dp)
         Row(
@@ -296,10 +289,9 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 T("انتخاب برنامه‌ها", size = 13.sp, color = K.Text, weight = FontWeight.Black)
-                T(
-                    if (u.appCount == 0) "هنوز برنامه‌ای انتخاب نشده (همه‌ی برنامه‌ها از DNS استفاده می‌کنند)"
-                    else u.appNames.joinToString(" · ") + if (u.appCount > u.appNames.size) " …" else "",
-                    size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
+                if (u.appCount > 0) T(
+                    u.appNames.joinToString(" · ") + if (u.appCount > u.appNames.size) " …" else "",
+                    size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1,
                 )
             }
             if (u.appCount > 0) {
@@ -319,10 +311,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             ) {
                 CheckMark(u.block, 20.dp, mc)
                 Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    T("بقیه‌ی برنامه‌ها اینترنت نداشته باشند", size = 12.sp, color = K.Text, weight = FontWeight.Bold)
-                    T("پینگ بازی بالاتر می‌رود؛ فقط اگر لازم است روشن کنید", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
-                }
+                T("بقیه‌ی برنامه‌ها اینترنت نداشته باشند", size = 12.sp, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             }
         }
         if (u.servers.size > 2) {
@@ -346,7 +335,10 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
         }
         u.active?.let {
             Spacer(Modifier.height(6.dp))
-            T(trf("وصل به: %s", it) + (u.activeRoute?.let { r -> " · " + tr(r) } ?: ""), size = 10.sp, color = K.Green, weight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(trf("وصل به: %s", it) + (u.activeRoute?.let { r -> " · " + tr(r) } ?: ""), size = 10.sp, color = K.Green, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                u.sessionBytes?.let { b -> T(trf("مصرف: %s", formatBytes(b)), size = 10.sp, color = mc, weight = FontWeight.Bold) }
+            }
         }
     }
 }
@@ -363,12 +355,6 @@ fun DrawScope.appsGridIcon(c: Color) {
 }
 
 // ================================================================== پنل‌های پایین (گیمینگ و ضد فیلتر)
-
-/** یک گزینه‌ی پروتکل در پنل */
-data class SheetOption(val key: String, val title: String, val tag: String? = null, val ping: Long? = null, val enabled: Boolean = true)
-
-/** یک کشور در پنل */
-data class SheetCountry(val id: String, val name: String, val flag: String, val ping: Long?)
 
 /** قاب پنل پایین با پرده‌ی تیره روی نقشه؛ با لمس بیرون بسته می‌شود */
 @Composable
@@ -427,35 +413,6 @@ private fun SheetLabel(text: String, trailing: @Composable RowScope.() -> Unit =
     }
 }
 
-/** گزینه‌ی رادیویی: دایره، اسم، پینگ و برچسب (مثل «تانل»، «مستقیم») */
-@Composable
-private fun OptionRow(o: SheetOption, selected: Boolean, color: Color, dim: Boolean, badge: String? = null, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(shape)
-            .background(if (selected) K.Gold.copy(alpha = .08f) else Color(0x08FFFFFF))
-            .border(if (selected) 1.3.dp else 1.dp, if (selected) K.Gold.copy(alpha = .75f) else K.Gold.copy(alpha = .16f), shape)
-            .alpha(if (!o.enabled) .4f else if (dim) .8f else 1f)
-            .clickable(enabled = o.enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Radio(selected, color)
-        Spacer(Modifier.width(10.dp))
-        AutoText(o.title, size = 13.5.sp, color = K.Text, modifier = Modifier.weight(1f, fill = false))
-        Spacer(Modifier.weight(1f))
-        o.ping?.let { p ->
-            T(if (p < 0) "✕" else "$p ms", size = 10.5.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true)
-            Spacer(Modifier.width(8.dp))
-        }
-        badge?.let {
-            Tag(it, K.GoldLight, strong = true)
-            Spacer(Modifier.width(5.dp))
-        }
-        o.tag?.let { Tag(it, K.Gold) }
-    }
-}
-
 /** برچسب کوچک گرد */
 @Composable
 private fun Tag(text: String, c: Color, strong: Boolean = false) {
@@ -473,83 +430,6 @@ private fun Radio(on: Boolean, c: Color) {
         Modifier.size(18.dp).clip(CircleShape).border(1.6.dp, if (on) c else K.Sub.copy(alpha = .6f), CircleShape),
         contentAlignment = Alignment.Center,
     ) { if (on) Box(Modifier.size(9.dp).clip(CircleShape).background(c)) }
-}
-
-/** شبکه‌ی دوستونی کشورها */
-@Composable
-private fun CountryGrid(list: List<SheetCountry>, selected: String?, color: Color, enabled: Boolean = true, onPick: (String) -> Unit) {
-    if (list.isEmpty()) {
-        T("کشوری برای این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-        return
-    }
-    list.chunked(2).forEach { row ->
-        Row(Modifier.fillMaxWidth().padding(bottom = 7.dp).alpha(if (enabled) 1f else .55f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            row.forEach { c ->
-                val sel = c.id == selected
-                val shape = RoundedCornerShape(14.dp)
-                Row(
-                    Modifier.weight(1f).clip(shape)
-                        .background(if (sel) K.Gold.copy(alpha = .08f) else Color(0x08FFFFFF))
-                        .border(if (sel) 1.3.dp else 1.dp, if (sel) K.Gold.copy(alpha = .75f) else K.Gold.copy(alpha = .16f), shape)
-                        .clickable(enabled = enabled) { onPick(c.id) }
-                        .padding(horizontal = 10.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Radio(sel, color)
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            T(c.flag, size = 13.sp, weight = FontWeight.Normal)
-                            Spacer(Modifier.width(4.dp))
-                            AutoText(c.name, size = 12.5.sp, color = K.Text)
-                        }
-                        T(
-                            c.ping?.let { if (it > 0) trf("پینگ %d", it) else "بدون پاسخ" } ?: "…",
-                            size = 10.sp, color = c.ping?.let { pingColor(it) } ?: K.Sub, weight = FontWeight.Normal,
-                        )
-                    }
-                }
-            }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-/** دکمه‌ی بزرگ طلایی «اتصال» پایین پنل */
-@Composable
-private fun SheetConnect(enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Box(
-        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp).height(54.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
-            .border(1.dp, K.GoldLight.copy(alpha = .7f), shape)
-            .alpha(if (enabled) 1f else .45f)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { T("اتصال", size = 17.sp, color = K.OnGold, weight = FontWeight.Black) }
-}
-
-/** چک‌باکس کوچک (مثل «انتخاب هوشمند سرور») */
-@Composable
-private fun AutoCheck(on: Boolean, color: Color, label: String, onToggle: () -> Unit) {
-    Row(
-        Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val shape = RoundedCornerShape(5.dp)
-        Box(
-            Modifier.size(16.dp).clip(shape).background(if (on) color else Color.Transparent).border(1.5.dp, if (on) color else K.Sub.copy(alpha = .7f), shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (on) Canvas(Modifier.size(10.dp)) {
-                val w = size.width
-                drawLine(K.OnGold, Offset(w * .1f, w * .52f), Offset(w * .4f, w * .82f), w * .2f, StrokeCap.Round)
-                drawLine(K.OnGold, Offset(w * .4f, w * .82f), Offset(w * .92f, w * .18f), w * .2f, StrokeCap.Round)
-            }
-        }
-        Spacer(Modifier.width(5.dp))
-        T(label, size = 11.sp, color = if (on) K.GoldLight else K.Sub, weight = FontWeight.Bold)
-    }
 }
 
 @Composable
@@ -581,68 +461,151 @@ fun DrawScope.gearIcon(c: Color) {
     drawCircle(c, w * .10f, Offset(w / 2, w / 2), style = Stroke(sw))
 }
 
+/** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …) و پینگ */
+data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?)
+
+/** یک خانواده‌ی پروتکل در پنل گیمینگ (KANKI MIX، Amnezia، WireGuard) با سرورهای خودش */
+data class GameFamilyUi(val key: String, val title: String, val sub: String, val servers: List<SheetServer>) {
+    val best: Long? get() = servers.mapNotNull { it.ping }.filter { it > 0 }.minOrNull()
+}
+
+/** کارت یک خانواده‌ی پروتکل (سه کارت کنار هم بالای پنل گیمینگ) */
+@Composable
+private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modifier: Modifier, onClick: () -> Unit) {
+    val c = familyColor(f.key)
+    val shape = RoundedCornerShape(16.dp)
+    val has = f.servers.isNotEmpty()
+    Column(
+        modifier.clip(shape)
+            .background(Brush.verticalGradient(listOf(c.copy(alpha = if (selected) .22f else .07f), K.Panel.copy(alpha = .6f))))
+            .border(if (selected) 1.6.dp else 1.dp, if (selected) c else c.copy(alpha = .28f), shape)
+            .alpha(if (has) 1f else .4f)
+            .clickable(enabled = has, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Canvas(Modifier.size(24.dp)) { familyIcon(f.key, c) }
+        Spacer(Modifier.height(5.dp))
+        AutoText(f.title, size = 12.5.sp, color = if (selected) K.Text else K.Text.copy(alpha = .85f))
+        T(if (!has) tr("در اشتراک نیست") else f.best?.let { "$it ms" } ?: trf("%d سرور", f.servers.size),
+            size = 9.5.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null)
+        badge?.let {
+            Spacer(Modifier.height(4.dp))
+            Tag(it, c, strong = true)
+        }
+    }
+}
+
+/** یک ردیف سرور: لمس یعنی همین حالا به همین وصل شو */
+@Composable
+private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(shape)
+            .background(if (selected) color.copy(alpha = .12f) else Color(0x08FFFFFF))
+            .border(if (selected) 1.3.dp else 1.dp, if (selected) color.copy(alpha = .85f) else K.Gold.copy(alpha = .16f), shape)
+            .alpha(if (enabled) 1f else .55f)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Radio(selected, color)
+        Spacer(Modifier.width(10.dp))
+        T(sv.flag, size = 15.sp, weight = FontWeight.Normal)
+        Spacer(Modifier.width(8.dp))
+        AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f))
+        sv.tag?.let { Tag(it, color); Spacer(Modifier.width(6.dp)) }
+        sv.ping?.let { p -> T(if (p < 0) "✕" else "$p ms", size = 11.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true) }
+            ?: T("…", size = 11.sp, color = K.Sub, font = Poppins, ltr = true)
+    }
+}
+
+/** ردیف «سریع‌ترین سرور»: خودش کم‌پینگ‌ترین سرور همین پروتکل را انتخاب و وصل می‌کند */
+@Composable
+private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape)
+            .background(Brush.horizontalGradient(listOf(color.copy(alpha = if (selected) .26f else .14f), color.copy(alpha = .04f))))
+            .border(if (selected) 1.5.dp else 1.dp, color.copy(alpha = if (selected) .9f else .45f), shape)
+            .alpha(if (enabled) 1f else .5f)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T("⚡", size = 18.sp, weight = FontWeight.Normal)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            T("سریع‌ترین سرور", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+            T("خودش کم‌پینگ‌ترین را انتخاب و وصل می‌کند", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+        best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true); Spacer(Modifier.width(6.dp)) }
+        Chevron(color)
+    }
+}
+
 /**
- * پنل گیمینگ: «انتخاب هوشمند سرور»، فهرست پروتکل‌ها با برچسب، انتخاب کشور، تنظیمات پیشرفته
- * (با پیشنهاد ربات) و دکمه‌ی طلایی «اتصال». options(node): پروتکل‌های همان کشور با پینگ.
- * با «انتخاب هوشمند سرور»، کم‌پینگ‌ترین کشور و پروتکل خودکار برداشته می‌شود (bestNode).
+ * پنل گیمینگ: بالا سه پروتکل (KANKI MIX اول، Amnezia، WireGuard)؛ زیرش فقط سرورهای همان پروتکل.
+ * لمس یک سرور = اتصال مستقیم به همان. «سریع‌ترین سرور» کم‌پینگ‌ترین سرور همان پروتکل را برمی‌دارد.
+ * برای KANKI MIX کلید «ارسال دوتایی» هست؛ «تنظیمات پیشرفته» همان «فقط بازی‌ها» است.
  */
 @Composable
 fun GameSheet(
     visible: Boolean,
-    countries: List<SheetCountry>,
-    options: (String?) -> List<SheetOption>,
-    bestNode: String?,
-    initAuto: Boolean,
-    initProto: String,
-    initNode: String?,
+    families: List<GameFamilyUi>,
+    initFamily: String,
+    current: String?,
+    currentAuto: Boolean,
+    busy: Boolean,
+    kmixDup: Boolean,
     gamesOnly: Boolean,
     autoGames: Boolean,
     appCount: Int,
     canBlock: Boolean,
+    onKmixDup: (Boolean) -> Unit,
     onGamesOnly: (Boolean) -> Unit,
     onAutoGames: (Boolean) -> Unit,
     onPickApps: () -> Unit,
-    onNodeShown: (String) -> Unit,
-    onConnect: (Boolean, String, String?) -> Unit,
+    onFamilyShown: (String) -> Unit,
+    onConnect: (node: String, proto: String) -> Unit,
+    onFastest: (family: String) -> Unit,
     onClose: () -> Unit,
 ) {
-    val mc = modeColor(KMode.GAME)
-    var auto by remember(visible) { mutableStateOf(initAuto) }
-    var proto by remember(visible) { mutableStateOf(initProto) }
-    var picked by remember(visible) { mutableStateOf(initNode?.takeIf { n -> countries.any { it.id == n } } ?: countries.firstOrNull()?.id) }
+    var fam by remember(visible) {
+        mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
+            ?: families.firstOrNull { it.servers.isNotEmpty() }?.key ?: initFamily)
+    }
     var advanced by remember(visible) { mutableStateOf(false) }
-    // با «انتخاب هوشمند» کشوری که نشان داده می‌شود همان کم‌پینگ‌ترین است
-    val node = if (auto) (bestNode?.takeIf { b -> countries.any { it.id == b } } ?: picked) else picked
-    LaunchedEffect(visible, node) { if (visible) node?.let { onNodeShown(it) } }
-    ModeSheet(
-        visible, KMode.GAME, "گیمینگ", "سریع‌ترین سرورها برای بازی", onClose,
-        trailing = { AutoCheck(auto, K.Gold, "انتخاب هوشمند سرور") { auto = !auto } },
-    ) {
-        val opts = options(node)
-        val best = opts.filter { it.enabled }.minByOrNull { it.ping?.takeIf { p -> p > 0 } ?: 99_999L }?.key
+    LaunchedEffect(visible, fam) { if (visible) onFamilyShown(fam) }
+    val f = families.firstOrNull { it.key == fam }
+    val c = familyColor(fam)
+    ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
         SheetLabel("پروتکل")
-        opts.forEach { o ->
-            val sel = if (auto) o.key == best else o.key == proto
-            OptionRow(o, sel, K.Gold, dim = auto, badge = if (o.key == best && opts.size > 1) "پیشنهادی" else null) { proto = o.key; auto = false }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            families.forEach { x ->
+                FamilyCard(x, x.key == fam, if (x.key == "kankimix") tr("ویژه گیم") else null, Modifier.weight(1f)) { fam = x.key }
+            }
         }
-        SheetLabel("کشور")
-        CountryGrid(countries, node, K.Gold, enabled = true) { picked = it; auto = false }
+        T(f?.sub ?: "", size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+        if (fam == "kankimix" && f?.servers?.isNotEmpty() == true) {
+            SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
+        }
+        SheetLabel(trf("سرورهای %s", f?.title ?: ""))
+        if (f == null || f.servers.isEmpty()) {
+            T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
+        } else {
+            FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
+            f.servers.forEach { sv ->
+                ServerRow(sv, !currentAuto && current == sv.node + "|" + sv.proto, c, !busy) { onConnect(sv.node, sv.proto) }
+            }
+        }
 
-        // پیشنهاد ربات: تنظیم پیشرفته‌ی «فقط بازی‌ها» (پیش‌فرض خاموش است)
-        if (!gamesOnly && !advanced) {
-            Spacer(Modifier.height(6.dp))
-            RobotSays(
-                "اینجا رو ببین ⭐ توی «تنظیمات پیشرفته» گزینه‌ی «فقط بازی‌ها اینترنت داشته باشند» رو روشن کن؛ اینترنت فقط به بازی می‌رسه و پینگت بهتر میشه.",
-                robotSize = 56.dp, robotAtStart = false, onClick = { advanced = true },
-            )
-        }
-        // دکمه‌ی تنظیمات پیشرفته
+        // تنظیمات پیشرفته: «فقط بازی‌ها اینترنت داشته باشند»
         val ash = RoundedCornerShape(16.dp)
-        val cyan = Color(0xFF6FD3F0)
         Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp).clip(ash)
-                .background(cyan.copy(alpha = .05f))
-                .border(1.2.dp, Brush.horizontalGradient(listOf(cyan.copy(alpha = .75f), K.Gold.copy(alpha = .45f))), ash)
+            Modifier.fillMaxWidth().padding(top = 6.dp).clip(ash)
+                .background(c.copy(alpha = .05f))
+                .border(1.2.dp, Brush.horizontalGradient(listOf(c.copy(alpha = .7f), K.Gold.copy(alpha = .4f))), ash)
                 .clickable { advanced = !advanced }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -653,27 +616,134 @@ fun GameSheet(
             T(if (advanced) "▲" else "▼", size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
         }
         AnimatedVisibility(advanced, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(top = 6.dp)) {
+            Column(Modifier.padding(top = 6.dp, bottom = 6.dp)) {
                 SwitchRow(
                     "فقط بازی‌ها اینترنت داشته باشند",
                     if (appCount > 0) trf("%d برنامه مجاز است؛ بقیه تا قطع اتصال اینترنت ندارند", appCount) else "اول بازی یا برنامه‌ای انتخاب کنید",
-                    gamesOnly, mc, enabled = appCount > 0 || gamesOnly, onChange = onGamesOnly,
+                    gamesOnly, c, enabled = appCount > 0 || gamesOnly, onChange = onGamesOnly,
                 )
-                SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, mc, onChange = onAutoGames)
+                SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, c, onChange = onAutoGames)
                 SmallLine("انتخاب برنامه‌ها", Modifier.fillMaxWidth(), color = K.Gold, onClick = onPickApps)
-                if (gamesOnly) {
+                if (gamesOnly && !canBlock) {
                     Spacer(Modifier.height(6.dp))
-                    T(
-                        if (canBlock) "با Hysteria2 بقیه‌ی برنامه‌ها کاملاً بسته می‌شوند. با AmneziaWG و WireGuard برای بستن کامل، «مسدود کردن اتصال‌های بدون VPN» را در تنظیمات VPN گوشی روشن کنید."
-                        else "روی این نسخه‌ی اندروید بقیه‌ی برنامه‌ها مستقیم وصل می‌مانند؛ برای بستنشان «مسدود کردن اتصال‌های بدون VPN» را در تنظیمات VPN گوشی روشن کنید.",
-                        size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
-                    )
+                    T("روی این نسخه‌ی اندروید برای بستن بقیه‌ی برنامه‌ها «مسدود کردن اتصال‌های بدون VPN» را در تنظیمات VPN گوشی روشن کنید.",
+                        size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
             }
         }
-        val chosen = if (auto) best else proto.takeIf { p -> opts.any { it.key == p && it.enabled } }
-        SheetConnect(enabled = node != null && (auto || chosen != null)) {
-            onConnect(auto, chosen ?: proto, node)
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/**
+ * پنل ضد فیلتر (نگه‌داشتن کاشی «ضد فیلتر»): فقط سرورهای Xray و Amnezia، نه همه‌ی سرورها.
+ * دو تیک بالا (Xray و Amnezia) هم فهرست را عوض می‌کنند و هم اینکه «خودکار» بین کدام‌ها بگردد.
+ */
+@Composable
+fun FilterSheet(
+    visible: Boolean,
+    xray: List<SheetServer>,
+    amnezia: List<SheetServer>,
+    useX: Boolean,
+    useAwg: Boolean,
+    auto: Boolean,
+    current: String?,
+    busy: Boolean,
+    onTicks: (Boolean, Boolean) -> Unit,
+    onShown: () -> Unit,
+    onAuto: () -> Unit,
+    onConnect: (node: String, proto: String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val mc = modeColor(KMode.FILTER)
+    LaunchedEffect(visible) { if (visible) onShown() }
+    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای فیلتر شدید", onClose) {
+        SheetLabel("پروتکل‌ها")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
+            TickChip("Amnezia", trf("%d سرور", amnezia.size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
+        }
+        val list = (if (useX) xray else emptyList()) + (if (useAwg) amnezia else emptyList())
+        Spacer(Modifier.height(10.dp))
+        FastestRow(auto, mc, list.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && list.isNotEmpty(), onAuto)
+        if (useX) {
+            SheetLabel("Xray")
+            if (xray.isEmpty()) T("اشتراک شما Xray ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
+            xray.forEach { sv -> ServerRow(sv, !auto && current == sv.node + "|" + sv.proto, protoColor("xray"), !busy) { onConnect(sv.node, sv.proto) } }
+        }
+        if (useAwg) {
+            SheetLabel("Amnezia")
+            if (amnezia.isEmpty()) T("اشتراک شما Amnezia ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
+            amnezia.forEach { sv -> ServerRow(sv, !auto && current == sv.node + "|" + sv.proto, protoColor("amneziawg"), !busy) { onConnect(sv.node, sv.proto) } }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** چیپ تیک‌دار بزرگ (Xray / Amnezia) */
+@Composable
+private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier.clip(shape)
+            .background(if (on) c.copy(alpha = .16f) else Color(0x08FFFFFF))
+            .border(if (on) 1.5.dp else 1.dp, if (on) c else K.Gold.copy(alpha = .18f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CheckMark(on, 20.dp, c)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            T(title, size = 13.5.sp, color = K.Text, weight = FontWeight.Black, font = Poppins, ltr = true)
+            T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+    }
+}
+
+/** رنگ هر پروتکل (حلقه و هاله‌ی کهکشانی دکمه‌ی اتصال، کارت‌ها) */
+fun protoColor(p: String?): Color = when (p) {
+    "kankimix" -> Color(0xFFFF8A3D)
+    "amneziawg", "amneziawg-direct" -> Color(0xFF9B7BFF)
+    "wireguard" -> Color(0xFF34D399)
+    "hysteria2" -> Color(0xFFF06292)
+    "xray" -> Color(0xFF4FB3FF)
+    else -> K.Gold
+}
+
+fun familyColor(f: String): Color = when (f) {
+    "kankimix" -> protoColor("kankimix")
+    "amnezia" -> protoColor("amneziawg")
+    else -> protoColor("wireguard")
+}
+
+/** آیکون خانواده‌ی پروتکل: KANKI MIX دسته‌ی بازی با جرقه، Amnezia سپر، WireGuard اژدهای ساده (موج) */
+fun DrawScope.familyIcon(f: String, c: Color) {
+    val w = size.width
+    val st = Stroke(w * .09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    when (f) {
+        "kankimix" -> {
+            modeLogo(KMode.GAME, c)
+            drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
+        }
+        "amnezia" -> {
+            val sh = Path().apply {
+                moveTo(w * .5f, w * .06f); lineTo(w * .88f, w * .2f); lineTo(w * .88f, w * .48f)
+                cubicTo(w * .88f, w * .72f, w * .72f, w * .88f, w * .5f, w * .96f)
+                cubicTo(w * .28f, w * .88f, w * .12f, w * .72f, w * .12f, w * .48f); lineTo(w * .12f, w * .2f); close()
+            }
+            drawPath(sh, c, style = st)
+            drawLine(c, Offset(w * .36f, w * .52f), Offset(w * .47f, w * .63f), w * .09f, StrokeCap.Round)
+            drawLine(c, Offset(w * .47f, w * .63f), Offset(w * .66f, w * .40f), w * .09f, StrokeCap.Round)
+        }
+        else -> {
+            val wave = Path().apply {
+                moveTo(w * .08f, w * .55f)
+                cubicTo(w * .25f, w * .25f, w * .4f, w * .25f, w * .5f, w * .5f)
+                cubicTo(w * .6f, w * .75f, w * .75f, w * .75f, w * .92f, w * .45f)
+            }
+            drawPath(wave, c, style = st)
+            drawCircle(c, w * .08f, Offset(w * .92f, w * .45f))
         }
     }
 }

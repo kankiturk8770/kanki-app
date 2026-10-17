@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "1.11.3"
+        versionCode = 37
+        versionName = "1.12.0"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -75,6 +75,9 @@ android {
 dependencies {
     // موتور اتصال امنزیا (وایرگارد معمولی را هم پشتیبانی می‌کند)
     implementation("com.zaneschepke:amneziawg-android:2.3.7")
+    // هسته‌ی KANKI MIX (kmix.aar، ساخته‌شده با gomobile از پوشه‌ی kmix-core در build.yml).
+    // اگر نباشد (ساخت روی کامپیوتر بدون Go)، برنامه ساخته می‌شود و فقط KANKI MIX وصل نمی‌شود.
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)

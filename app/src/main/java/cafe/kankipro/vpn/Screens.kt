@@ -150,7 +150,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     }
     // وقتی آموزش در حال اجراست، صفحه‌ی خانه نشان داده شود
     LaunchedEffect(Guide.step) {
-        if (Guide.active) { state.tab = KTab.HOME; state.gameSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false }
+        if (Guide.active) { state.tab = KTab.HOME; state.gameSheet = false; state.filterSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false }
     }
 
     fun startGuide() { state.tab = KTab.HOME; Guide.start() }
@@ -203,11 +203,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     val a = state.account
 
     // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد، بعد به تب خانه برمی‌گردد
-    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
+    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
         when {
             state.appsPicker -> state.appsPicker = false
             showSplit -> showSplit = false
             state.gameSheet -> state.gameSheet = false
+            state.filterSheet -> state.filterSheet = false
             state.accountOpen -> state.accountOpen = false
             else -> state.tab = KTab.HOME
         }
@@ -253,6 +254,8 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var rx by remember { mutableLongStateOf(0L) }
     var tx by remember { mutableLongStateOf(0L) }
+    /** مصرف کل این اتصال (دریافت + ارسال) */
+    var session by remember { mutableLongStateOf(0L) }
     LaunchedEffect(state.vstate) {
         var last: Pair<Long, Long>? = null
         var tick = 0
@@ -262,6 +265,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             if (s != null) {
                 last?.let { p -> rx = (s.first - p.first).coerceAtLeast(0); tx = (s.second - p.second).coerceAtLeast(0) }
                 last = s
+                session = s.first + s.second
             }
             if (tick % 3 == 0) launch { state.samplePing() }   // نمودار زنده‌ی پینگ (هر ۳ ثانیه یک نمونه‌ی سبک)
             if (state.mode == KMode.DNS) state.syncDnsActive()
@@ -269,7 +273,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             if (tick % 30 == 0) state.refreshUsage()   // حجم مصرفی هر ۳۰ ثانیه بروز می‌شود
             delay(1000)
         }
-        rx = 0; tx = 0
+        rx = 0; tx = 0; session = 0
     }
     // هشدارهای زمانی (مثل روزهای باقی‌مانده) هر دقیقه دوباره بررسی شوند
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
@@ -316,7 +320,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         userIso = state.userIso,
         locationIso = locIso,
         locationIsExit = viaExit,
-        sheetOpen = state.gameSheet || state.appsPicker,
+        sheetOpen = state.gameSheet || state.filterSheet || state.appsPicker,
         smart = SmartPanelUi(
             open = state.smartOpen,
             done = state.smartDone,
@@ -337,7 +341,19 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             activeRoute = state.dnsRoute(state.dnsActive),
             canBlock = AppGate.supported,
             block = state.dnsBlock,
+            sessionBytes = if (state.vstate == VState.ON && state.mode == KMode.DNS) session else null,
         ),
+        // رنگ اتصال: DNS فیروزه‌ای، بقیه رنگ پروتکل وصل‌شده؛ قطع: رنگ حالت انتخاب‌شده
+        accent = when {
+            state.vstate != VState.OFF && state.mode == KMode.DNS -> modeColor(KMode.DNS)
+            state.vstate != VState.OFF -> protoColor(state.proto)
+            else -> modeColor(state.mode)
+        },
+        server = if (state.vstate == VState.ON && state.mode != KMode.DNS) state.node?.let { n ->
+            val iso = state.isoOfNode(n)
+            val name = a?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
+            ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: name, exitCityName(iso, state.nodeCity[n]), state.proto)
+        } else null,
     )
 
     HomeContent(
@@ -348,7 +364,8 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             longMode = { m ->
                 when (m) {
                     KMode.GAME -> { state.changeMode(m); state.gameSheet = true }
-                    KMode.FILTER -> state.tab = KTab.SERVERS
+                    // نگه‌داشتن ضد فیلتر: فقط سرورهای Xray و Amnezia (نه همه‌ی سرورها)
+                    KMode.FILTER -> { state.changeMode(m); state.filterSheet = true }
                     else -> state.tapMode(m)
                 }
             },
@@ -386,70 +403,121 @@ private fun subUi(a: Account, now: Long): SubUi {
         parseSize(a.dataRemaining)?.let { b -> String.format(java.util.Locale.US, "%.1f", b / 1073741824.0) } ?: "∞"
     }
     val days = a.expiresAt?.let { e -> ((e - now).coerceAtLeast(0) / 86_400_000L).toString() } ?: "∞"
-    return SubUi(gb, days, a.status)
+    val frac = if (a.limitGb != null && a.usedGb != null && a.limitGb > 0) (a.usedGb / a.limitGb).toFloat() else null
+    return SubUi(gb, days, a.status, frac)
 }
 
-/** پنل گیمینگ */
+/** پنل‌های گیمینگ و ضد فیلتر */
 @Composable
 private fun ModeSheets(state: AppState) {
     val scope = rememberCoroutineScope()
     val a = state.account ?: return
     val nodes = a.configs.distinctBy { it.node }
+    fun nodeOf(id: String) = nodes.firstOrNull { it.node == id }
 
-    fun country(n: ConfigLink, protos: List<String>) = SheetCountry(
-        n.node, countryName(state.isoOfNode(n.node))?.let { c -> if (nodes.count { state.isoOfNode(it.node) == state.isoOfNode(n.node) } > 1) "$c · ${n.nodeName}" else c } ?: n.nodeName,
-        flagEmoji(state.isoOfNode(n.node)) ?: "🌐",
-        protos.mapNotNull { p -> state.protoPing(n.node, p) }.filter { it > 0 }.minOrNull()
-            ?: protos.mapNotNull { p -> state.protoPing(n.node, p) }.firstOrNull(),
-    )
+    /** اسم کشور (و اگر یک کشور چند سرور دارد، اسم سرور) */
+    fun place(id: String): Pair<String, String> {
+        val iso = state.isoOfNode(id)
+        val n = nodeOf(id)?.nodeName ?: id
+        val c = countryName(iso)
+        val name = when {
+            c == null -> n
+            nodes.count { state.isoOfNode(it.node) == iso } > 1 -> "$c · $n"
+            else -> exitCityName(iso, state.nodeCity[id])?.let { "$c · $it" } ?: c
+        }
+        return (flagEmoji(iso) ?: "🌐") to name
+    }
+    fun server(id: String, p: String, tag: String?): SheetServer {
+        val (flag, name) = place(id)
+        return SheetServer(id, p, flag, name, tag, state.protoPing(id, p))
+    }
+    fun awgTag(p: String) = if (p == "amneziawg-direct") tr("مستقیم") else tr("تانل")
 
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
-    val gameNodes = nodes.filter { n -> Modes.GAME_PROTOS.any { state.hasCfg(n.node, it) } }
-    val gameCountries = gameNodes.map { country(it, Modes.GAME_PROTOS) }
-    // کم‌پینگ‌ترین کشور (برای «انتخاب هوشمند سرور»)
-    val bestNode = gameNodes.minByOrNull { n ->
-        Modes.GAME_PROTOS.filter { state.hasCfg(n.node, it) }.mapNotNull { p -> state.protoPing(n.node, p)?.takeIf { it > 0 } }.minOrNull() ?: 99_999L
-    }?.node
+    val families = Modes.GAME_FAMILIES.map { (key, _) ->
+        val list = state.gameConfigs(key).map { (id, p) -> server(id, p, if (key == "amnezia") awgTag(p) else null) }
+            .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
+        GameFamilyUi(
+            key, state.familyTitle(key),
+            when (key) {
+                "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
+                "amnezia" -> tr("عبور از فیلتر؛ مستقیم یا از تانل ایران")
+                else -> tr("سبک و سریع، روی اینترنت پایدار")
+            },
+            list,
+        )
+    }
+    val busy = state.vstate == VState.CONNECTING || state.smartBusy
     GameSheet(
         visible = state.gameSheet,
-        countries = gameCountries,
-        options = { node ->
-            Modes.GAME_PROTOS.filter { p -> p != "amneziawg-direct" || (node != null && state.hasCfg(node, p)) }.map { p ->
-                SheetOption(
-                    key = p,
-                    title = protoShort(p).let { if (it == "Amnezia") "AmneziaWG" else it },
-                    tag = when (p) {
-                        "amneziawg" -> tr("تانل")
-                        "amneziawg-direct" -> tr("مستقیم")
-                        "wireguard" -> tr("سریع")
-                        else -> tr("پایدار")
-                    },
-                    ping = state.protoPing(node, p),
-                    enabled = node != null && state.hasCfg(node, p),
-                )
-            }
-        },
-        bestNode = bestNode,
-        initAuto = state.gameAuto,
-        initProto = state.gameProto,
-        initNode = state.gameNode ?: state.node,
+        families = families,
+        initFamily = Modes.familyOf(state.gameProto) ?: "kankimix",
+        current = state.gameNode?.let { it + "|" + state.gameProto } ?: ("|" + state.gameProto),
+        currentAuto = state.gameAuto,
+        busy = busy,
+        kmixDup = state.kmixDup,
         gamesOnly = state.gamesOnly,
         autoGames = state.autoGames,
         appCount = state.allowedCount(),
         canBlock = AppGate.supported,
+        onKmixDup = { state.changeKmixDup(it) },
         onGamesOnly = { state.changeGamesOnly(it) },
         onAutoGames = { state.changeAutoGames(it) },
         onPickApps = { state.appsPicker = true },
-        onNodeShown = { n -> scope.launch { Modes.GAME_PROTOS.filter { state.hasCfg(n, it) }.forEach { p -> launch { state.pingTest(n, p) } } } },
-        onConnect = { auto, p, n ->
-            state.setGame(auto, p, n)
+        onFamilyShown = { f -> scope.launch { state.gameConfigs(f).forEach { (n, p) -> launch { state.pingTest(n, p) } } } },
+        onConnect = { n, p ->
+            state.setGame(false, p, n)
+            state.gameSheet = false
+            state.error = null; state.errorDetail = null
+            state.launchConnect(reconnect = true) { state.connectGame() }
+        },
+        onFastest = { f ->
+            state.setGame(true, Modes.familyProtos(f).first(), null)
             state.gameSheet = false
             state.error = null; state.errorDetail = null
             state.launchConnect(reconnect = true) { state.connectGame() }
         },
         onClose = { state.gameSheet = false },
+    )
+
+    // ضد فیلتر: فقط Xray و Amnezia
+    val xrayRows = a.configs.filter { it.protocol == "xray" && state.hasCfg(it.node, "xray") }
+        .map { SheetServer(it.node, "xray", "🛡", it.nodeName, null, state.protoPing(it.node, "xray")) }
+        .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
+    val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, awgTag(p)) } }
+        .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
+    FilterSheet(
+        visible = state.filterSheet,
+        xray = xrayRows,
+        amnezia = awgRows,
+        useX = state.filterUseX,
+        useAwg = !state.filterXray,
+        auto = state.filterAuto,
+        current = when {
+            state.filterProto.startsWith("xray-") -> state.filterProto + "|xray"
+            state.filterNode != null -> state.filterNode + "|" + state.filterProto.ifBlank { if (state.hasCfg(state.filterNode, "amneziawg-direct")) "amneziawg-direct" else "amneziawg" }
+            else -> null
+        },
+        busy = busy,
+        onTicks = { x, w -> state.changeFilterTicks(x, w) },
+        onShown = { state.startPingAll() },
+        onAuto = {
+            state.filterSheet = false
+            state.changeMode(KMode.FILTER)
+            state.setFilter(true, "", null)
+            state.error = null; state.errorDetail = null
+            state.launchConnect(reconnect = true) { state.connectFilter() }
+        },
+        onConnect = { n, p ->
+            state.filterSheet = false
+            state.changeMode(KMode.FILTER)
+            if (p == "xray") state.setFilter(false, n, null) else state.setFilter(false, p, n)
+            state.error = null; state.errorDetail = null
+            state.launchConnect(reconnect = true) { state.connectFilter() }
+        },
+        onClose = { state.filterSheet = false },
     )
 }
 
@@ -469,7 +537,7 @@ private fun cfgTitle(l: ConfigLink, multi: Boolean): String {
 @Composable
 private fun ServersTab(state: AppState) {
     val a = state.account
-    val order = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
+    val order = listOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
     val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
     // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
     // کشور هر کانفیگ = کشور خروجی واقعی سرورش (از پنل یا از داخل تونل)، نه کشور Endpoint

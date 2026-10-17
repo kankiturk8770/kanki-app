@@ -78,6 +78,7 @@ fun flagOf(name: String): String {
 }
 
 fun protoTitle(p: String) = when (p) {
+    "kankimix" -> "KANKI MIX"
     "amneziawg" -> "AmneziaWG"
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
@@ -100,6 +101,7 @@ fun pingColor(ms: Long) = when {
 fun dnsTitle(dns: String) = DnsOptions.list.firstOrNull { it.first == dns }?.second ?: "دلخواه · $dns"
 
 fun protoShort(p: String) = when (p) {
+    "kankimix" -> "KANKI MIX"
     "amneziawg" -> "Amnezia"
     "amneziawg-direct" -> "Amnezia"
     "wireguard" -> "WireGuard"

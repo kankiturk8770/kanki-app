@@ -35,8 +35,20 @@ enum class KMode(val key: String, val title: String, val sub: String) {
 }
 
 object Modes {
-    /** پروتکل‌های حالت گیمینگ، به ترتیب نمایش */
-    val GAME_PROTOS = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2")
+    /**
+     * گیمینگ: سه خانواده‌ی پروتکل، به ترتیب نمایش (KANKI MIX، پروتکل خود کانکی، اول).
+     * Amnezia هر دو راه را دارد: مستقیم و تانل.
+     */
+    val GAME_FAMILIES = listOf(
+        "kankimix" to listOf("kankimix"),
+        "amnezia" to listOf("amneziawg-direct", "amneziawg"),
+        "wireguard" to listOf("wireguard"),
+    )
+
+    fun familyOf(p: String): String? = GAME_FAMILIES.firstOrNull { p in it.second }?.first
+
+    fun familyProtos(f: String): List<String> = GAME_FAMILIES.firstOrNull { it.first == f }?.second ?: emptyList()
+
 
     /** اسم شبکه‌ی فعلی برای حافظه‌ی اپراتور: «wifi» یا کد اپراتور موبایل (مثل 43235 ایرانسل) */
     fun networkKey(ctx: Context): String = runCatching {

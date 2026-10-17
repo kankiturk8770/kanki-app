@@ -41,8 +41,11 @@ import kotlin.math.sin
 
 enum class KTab(val title: String) { HOME("خانه"), SERVERS("سرورها"), TEST("تست سرعت"), SETTINGS("تنظیمات") }
 
-/** اطلاعات خلاصه‌ی اشتراک برای نوار پایین صفحه‌ی اتصال (فقط عدد) */
-data class SubUi(val gbLeft: String, val daysLeft: String, val status: String)
+/** اطلاعات خلاصه‌ی اشتراک برای نوار پایین صفحه‌ی اتصال (فقط عدد)؛ usedFrac: سهم مصرف‌شده از حجم (null = نامحدود) */
+data class SubUi(val gbLeft: String, val daysLeft: String, val status: String, val usedFrac: Float? = null)
+
+/** سروری که الان به آن وصل است (کارت زیر دکمه‌ی اتصال) */
+data class ServerChipUi(val flag: String, val country: String, val city: String?, val proto: String)
 
 /** همه‌ی چیزهایی که صفحه‌ی اتصال نشان می‌دهد */
 data class HomeUi(
@@ -70,6 +73,10 @@ data class HomeUi(
     val sheetOpen: Boolean,
     val smart: SmartPanelUi,
     val dns: DnsCardUi,
+    /** رنگ اتصال: پروتکل وصل‌شده (یا DNS)، وقتی قطع است رنگ حالت */
+    val accent: Color = K.Gold,
+    /** سرور وصل‌شده (null وقتی قطع است یا حالت DNS) */
+    val server: ServerChipUi? = null,
 )
 
 /** کارهایی که از صفحه‌ی اتصال انجام می‌شود */
@@ -191,14 +198,14 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
 
 @Composable
 fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
-    val mc = modeColor(ui.mode)
+    val mc = ui.accent
     val on = ui.vstate == VState.ON
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
             LocationChip(ui.locationIso, ui.locationIsExit)
         }
         // نقشه‌ی بزرگ بدون قاب؛ دکمه‌ی گرد اتصال روی لبه‌ی محوشده‌ی پایین نقشه
-        Box(Modifier.fillMaxWidth().height(334.dp)) {
+        Box(Modifier.fillMaxWidth().height(344.dp)) {
             WorldMap(
                 ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().height(276.dp).guideTarget("map"),
@@ -208,9 +215,12 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, onClick = act.toggle)
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
 
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            AnimatedVisibility(on && ui.server != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                ui.server?.let { ConnectedCard(it, mc, Modifier.padding(bottom = 8.dp)) }
+            }
             if (!ui.hasAccount) {
                 if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
             } else {
@@ -231,6 +241,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
             if (ui.hasAccount) {
                 Spacer(Modifier.height(8.dp))
                 StatsRow(ui)
+                AnimatedVisibility(on, enter = fadeIn(), exit = fadeOut()) { SecureStrip(mc, Modifier.padding(top = 8.dp)) }
             }
             ui.sub?.let {
                 Spacer(Modifier.height(8.dp))
@@ -259,42 +270,61 @@ private fun LocationChip(iso: String?, on: Boolean) {
     }
 }
 
+/** یک ستاره‌ی هاله‌ی کهکشانی: روی یک مدار می‌چرخد و دنباله‌ی محو دارد */
+private class GalaxyStar(val orbit: Float, val start: Float, val speed: Float, val size: Float, val tail: Float, val twinkle: Float, val white: Boolean)
+
+/** ستاره‌های ثابت (با بذر ثابت)، تا با هر بار ساخته شدن صفحه جایشان نپرد */
+private val galaxyStars: List<GalaxyStar> = run {
+    val rnd = java.util.Random(2077)
+    List(46) {
+        GalaxyStar(
+            orbit = .60f + rnd.nextFloat() * .40f,
+            start = rnd.nextFloat() * 360f,
+            // ستاره‌های نزدیک‌تر به دکمه تندتر می‌چرخند (مثل کهکشان)
+            speed = 0f,
+            size = .6f + rnd.nextFloat() * 1.3f,
+            tail = 10f + rnd.nextFloat() * 26f,
+            twinkle = .5f + rnd.nextFloat() * 2f,
+            white = rnd.nextFloat() < .35f,
+        )
+    }.map { g -> GalaxyStar(g.orbit, g.start, 34f / g.orbit + 10f * (g.size - .6f), g.size, g.tail, g.twinkle, g.white) }
+}
+
 /**
- * دکمه‌ی گرد اتصال: دیسک شیشه‌ای تیره با دو حلقه‌ی نئونی که خلاف جهت هم می‌چرخند:
- *   حلقه‌ی بیرونی: سه قوس روشن با درخشش، ساعتگرد
- *   حلقه‌ی درونی: نازک‌تر، دو قوس، پادساعتگرد
- * موقع اتصال تند می‌چرخند، وقتی وصل است آرام، و وقتی قطع است خیلی آرام و کم‌نورتر.
- * رنگ حلقه‌ها رنگ همان حالت است: هوشمند طلایی، گیمینگ سبز، ضد فیلتر آبی، DNS بنفش.
+ * دکمه‌ی گرد اتصال (مثل طرح): دیسک شیشه‌ای تیره، حلقه‌ی نئونی، لوگوی سپر K وسط و زیرش وضعیت و زمان.
+ * دورش هاله‌ی کهکشانی: دو بازوی مارپیچ کم‌رنگ و ستاره‌هایی که با دنباله پشت سر هم دور دکمه می‌روند.
+ * رنگ همه‌چیز رنگ اتصال است: KANKI MIX نارنجی، Amnezia بنفش، WireGuard سبز، Xray آبی، Hysteria2 صورتی،
+ * DNS فیروزه‌ای، و وقتی قطع است طلایی. موقع اتصال ستاره‌ها تند می‌شوند، وقتی وصل است آرام و پرنور.
  */
 @Composable
-fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp, onClick: () -> Unit) {
+fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 128.dp, onClick: () -> Unit) {
     val on = ui.vstate == VState.ON
     val connecting = ui.vstate == VState.CONNECTING
-    // سرعت چرخش (دور در ثانیه) نرم عوض می‌شود تا با تغییر وضعیت حلقه‌ها نپرند
-    val speed by animateFloatAsState(if (connecting) .9f else if (on) .16f else .07f, tween(900), label = "spd")
-    var outerAngle by remember { mutableFloatStateOf(0f) }
-    var innerAngle by remember { mutableFloatStateOf(0f) }
+    // سرعت (نرم عوض می‌شود تا ستاره‌ها با تغییر وضعیت نپرند)
+    val speed by animateFloatAsState(if (connecting) 3.2f else if (on) 1f else .35f, tween(900), label = "spd")
+    var time by remember { mutableFloatStateOf(0f) }
+    var ringAngle by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) {
             withFrameNanos { now ->
                 if (last != 0L) {
                     val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
-                    outerAngle = (outerAngle + 360f * speed * dt) % 360f
-                    innerAngle = (innerAngle - 360f * speed * 1.35f * dt) % 360f
+                    time += dt * speed
+                    ringAngle = (ringAngle + 360f * .12f * speed * dt) % 360f
                 }
                 last = now
             }
         }
     }
     val t = rememberInfiniteTransition(label = "orb")
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "pulse")
-    val breathe by t.animateFloat(.6f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "br")
-    val ring by animateColorAsState(if (on || connecting) color else K.Gold, tween(500), label = "ring")
-    val pad = 34.dp
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "pulse")
+    val breathe by t.animateFloat(.65f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "br")
+    val ring by animateColorAsState(if (on || connecting) color else K.Gold, tween(600), label = "ring")
+    val halo = 72.dp
 
     Box(
-        Modifier.size(diameter + pad).alpha(if (enabled) 1f else .55f).clickable(
+        Modifier.size(diameter + halo).alpha(if (enabled) 1f else .55f).clickable(
             enabled = enabled,
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
         ),
@@ -303,38 +333,63 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp,
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val outer = this.size.minDimension / 2
-            val r = outer * (diameter.value / (diameter.value + pad.value))
-            val sw = 2.4.dp.toPx()
-            val strength = if (on) 1f else if (connecting) .85f else .55f
-            // هاله
-            val glowA = (if (on) .38f else if (connecting) .30f else .15f) * breathe
-            drawCircle(Brush.radialGradient(listOf(ring.copy(alpha = glowA), Color.Transparent), c, outer), outer, c)
-            // دیسک شیشه‌ای تیره
-            val disc = r * .86f
+            val r = outer * (diameter.value / (diameter.value + halo.value))
+            val strength = if (on) 1f else if (connecting) .9f else .55f
+            // ---- کهکشان
+            drawCircle(Brush.radialGradient(listOf(ring.copy(alpha = (if (on) .30f else .16f) * breathe), ring.copy(alpha = .05f), Color.Transparent), c, outer), outer, c)
+            for (arm in 0 until 2) {
+                for (k in 0 until 70) {
+                    val f = k / 70f
+                    val ang = Math.toRadians((arm * 180f + f * 260f + time * 9f).toDouble())
+                    val rr = r * (1.02f + f * .52f)
+                    val p = Offset(c.x + rr * kotlin.math.cos(ang).toFloat(), c.y + rr * kotlin.math.sin(ang).toFloat())
+                    drawCircle(ring.copy(alpha = (1f - f) * .22f * strength), (1.6f - f) * 1.4.dp.toPx(), p)
+                }
+            }
+            galaxyStars.forEach { s ->
+                val rr = r * (1.04f + (s.orbit - .6f) * 1.25f)
+                val head = s.start + s.speed * time
+                val tw = .55f + .45f * kotlin.math.sin((time * s.twinkle + s.start).toDouble()).toFloat()
+                val col = if (s.white) Color.White else ring
+                val tl = Offset(c.x - rr, c.y - rr)
+                val sz = Size(rr * 2, rr * 2)
+                // دنباله: چند تکه با نور کمتر پشت سر ستاره
+                for (j in 0 until 4) {
+                    val a = (1f - j / 4f) * .32f * tw * strength
+                    drawArc(col.copy(alpha = a), head - s.tail * (j + 1) / 4f, s.tail / 4f + .4f, false, tl, sz,
+                        style = Stroke(s.size.dp.toPx() * (1f - j * .18f), cap = StrokeCap.Round))
+                }
+                val rad = Math.toRadians(head.toDouble())
+                drawCircle(col.copy(alpha = (.55f + .45f * tw) * strength), s.size.dp.toPx() * 1.15f,
+                    Offset(c.x + rr * kotlin.math.cos(rad).toFloat(), c.y + rr * kotlin.math.sin(rad).toFloat()))
+            }
+            // ---- دیسک شیشه‌ای تیره
+            val disc = r * .9f
             drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Ink), c, disc), disc, c)
             drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .08f), Color.Transparent), startY = c.y - disc, endY = c.y), disc, c)
-            // حلقه‌ی بیرونی: مسیر کم‌رنگ + سه قوس روشن (ساعتگرد)
-            drawCircle(ring.copy(alpha = .14f * strength), r, c, style = Stroke(sw))
-            for (k in 0 until 3) neonArc(ring, outerAngle + k * 120f, 64f, c, r, sw, strength)
-            // حلقه‌ی درونی: نازک‌تر، دو قوس (پادساعتگرد)
-            val ri = r * .9f
-            drawCircle(ring.copy(alpha = .10f * strength), ri, c, style = Stroke(sw * .5f))
-            for (k in 0 until 2) neonArc(ring, innerAngle + k * 180f, 100f, c, ri, sw * .55f, strength * .9f)
+            // ---- حلقه‌ی نئونی: مسیر کم‌رنگ + دو قوس روشن چرخان
+            val sw = 2.6.dp.toPx()
+            drawCircle(ring.copy(alpha = .22f * strength), r, c, style = Stroke(sw))
+            for (k in 0 until 2) neonArc(ring, ringAngle + k * 180f, 120f, c, r, sw, strength)
+            drawCircle(ring.copy(alpha = .12f * strength), r * .93f, c, style = Stroke(sw * .45f))
             // موج تپنده وقتی وصل است
-            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .4f), r * (1.04f + pulse * .14f), c, style = Stroke(1.4.dp.toPx()))
+            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .45f), r * (1.03f + pulse * .16f), c, style = Stroke(1.4.dp.toPx()))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Logo3D(30.dp)
+            Spacer(Modifier.height(4.dp))
             val dnsOn = ui.mode == KMode.DNS
             val (title, sub) = when (ui.vstate) {
-                VState.ON -> (if (dnsOn) "روشن است" else "وصل است") to
-                    (if (dnsOn) (ui.dns.activeRoute ?: "DNS") else tr("پیوسته") + " · " + elapsed(ui.elapsedSec))
+                VState.ON -> (if (dnsOn) "DNS فعال" else "اتصال فعال") to
+                    (if (dnsOn) (ui.dns.activeRoute ?: "DNS") else elapsed(ui.elapsedSec))
                 VState.CONNECTING -> "در حال اتصال" to "لمس: لغو"
-                VState.OFF -> "وصل شو" to ui.mode.title
+                VState.OFF -> "اتصال" to ui.mode.title
             }
-            T(title, size = if (on) 21.sp else 19.sp, color = if (on) Color.White else K.GoldLight, weight = FontWeight.Black, shadow = glow(ring, 14f))
+            T(title, size = 14.sp, color = if (on) Color.White else K.GoldLight, weight = FontWeight.Black, shadow = glow(ring, 12f), maxLines = 1)
             if (sub.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
-                T(sub, size = 11.sp, color = K.Text.copy(alpha = .8f), weight = FontWeight.Bold)
+                val num = on && !dnsOn
+                T(sub, size = if (num) 13.sp else 10.sp, color = if (num) ring else K.Text.copy(alpha = .8f), font = if (num) Poppins else Vazir,
+                    weight = FontWeight.Bold, ltr = num, maxLines = 1)
             }
         }
     }
@@ -359,6 +414,52 @@ private fun DrawScope.neonArc(color: Color, start: Float, sweep: Float, c: Offse
 private fun elapsed(s: Long?): String {
     val v = s ?: 0
     return String.format(java.util.Locale.US, "%02d:%02d:%02d", v / 3600, v / 60 % 60, v % 60)
+}
+
+/** کارت سرور وصل‌شده (مثل طرح): پرچم، کشور و شهر، پروتکل و «اتصال پایدار» */
+@Composable
+private fun ConnectedCard(s: ServerChipUi, c: Color, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        modifier.fillMaxWidth().clip(shape)
+            .background(Brush.horizontalGradient(listOf(c.copy(alpha = .14f), K.Surface.copy(alpha = .9f))))
+            .border(1.dp, c.copy(alpha = .55f), shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T(s.flag, size = 22.sp, weight = FontWeight.Normal)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            T(s.country, size = 14.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T(listOfNotNull(s.city, protoTitle(s.proto)).joinToString(" · "), size = 10.5.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1)
+        }
+        val sh = RoundedCornerShape(50)
+        Row(
+            Modifier.clip(sh).background(K.Green.copy(alpha = .1f)).border(1.dp, K.Green.copy(alpha = .5f), sh).padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Dot(K.Green, 6.dp)
+            Spacer(Modifier.width(5.dp))
+            T("اتصال پایدار", size = 10.5.sp, color = K.Green, weight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+/** نوار کوچک «رمزنگاری شده | اتصال پایدار و بدون قطعی» وقتی وصل است */
+@Composable
+private fun SecureStrip(c: Color, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier.fillMaxWidth().clip(shape).background(Color(0x08FFFFFF)).border(1.dp, c.copy(alpha = .3f), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Dot(K.Green, 7.dp)
+        Spacer(Modifier.width(6.dp))
+        T("رمزنگاری شده", size = 11.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
+        Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(14.dp).background(c.copy(alpha = .35f)))
+        T("اتصال پایدار و بدون قطعی", size = 11.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1)
+    }
 }
 
 /** کارت پینگ (با نمودار زنده) و کارت دانلود/آپلود */
@@ -443,26 +544,37 @@ private fun Sparkline(values: List<Long>, modifier: Modifier) {
     }
 }
 
-/** نوار باریک وضعیت اشتراک: گیگ باقی‌مانده · روز باقی‌مانده · وضعیت (فقط عدد) */
+/** نوار باریک وضعیت اشتراک: گیگ باقی‌مانده · روز باقی‌مانده · وضعیت (فقط عدد)، و زیرش نوار حجم مصرف‌شده */
 @Composable
 fun UsageStrip(s: SubUi, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val active = isActive(s.status)
     val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier.fillMaxWidth().height(46.dp).clip(shape)
+    Column(
+        modifier.fillMaxWidth().clip(shape)
             .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2))).border(1.dp, K.Gold.copy(alpha = .22f), shape)
-            .clickable(onClick = onClick).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
     ) {
-        UsageCell(s.gbLeft, "گیگ", Modifier.weight(1f))
-        Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
-        UsageCell(s.daysLeft, "روز", Modifier.weight(1f))
-        Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            val c = if (active) K.Green else K.Red
-            Dot(c, 7.dp)
-            Spacer(Modifier.width(6.dp))
-            T(faStatus(s.status), size = 13.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            UsageCell(s.gbLeft, "گیگ", Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
+            UsageCell(s.daysLeft, "روز", Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                val c = if (active) K.Green else K.Red
+                Dot(c, 7.dp)
+                Spacer(Modifier.width(6.dp))
+                T(faStatus(s.status), size = 13.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+        // نوار حجم مصرف‌شده (فقط اگر حجم نامحدود نیست)
+        s.usedFrac?.let { f ->
+            val bar = RoundedCornerShape(2.dp)
+            Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp).height(4.dp).clip(bar).background(K.Gold.copy(alpha = .12f))) {
+                Box(
+                    Modifier.fillMaxWidth(f.coerceIn(0f, 1f)).fillMaxHeight().clip(bar)
+                        .background(Brush.horizontalGradient(listOf(K.Green, if (f > .85f) K.Warn else K.Green.copy(alpha = .7f)))),
+                )
+            }
         }
     }
 }
@@ -497,6 +609,7 @@ fun CheckMark(on: Boolean, size: Dp = 22.dp, color: Color = K.Green) {
 
 /** یک خط توضیح زیر انتخاب پروتکل: تانل است یا مستقیم، و کِی به درد می‌خورد */
 fun protoHint(p: String) = when (p) {
+    "kankimix" -> "پروتکل کانکی · بسته‌های بازی بدون صف و دوتایی، کمترین لگ"
     "amneziawg" -> "تانل · از سرور ایران رد می‌شود و فیلتر را دور می‌زند"
     "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
     "wireguard" -> "تانل · سریع و مناسب گیم"

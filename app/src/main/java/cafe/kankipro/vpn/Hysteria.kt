@@ -95,9 +95,13 @@ object HyEngine {
     @Volatile internal var dnsGate = false
     /** وقتی هسته‌ی hysteria خودش (بدون دستور کاربر) از بین برود true می‌شود */
     @Volatile internal var crashed = false
+    /** اتصال فعلی KANKI MIX است (هسته‌ی Go داخل همین پروسه) */
+    @Volatile internal var kmix = false
+    /** حالت DNS بدون دروازه: شمارنده‌های کل گوشی در لحظه‌ی اتصال (سرعت واقعی اینترنت گوشی) */
+    @Volatile internal var dnsBase: Pair<Long, Long>? = null
 
-    /** این متن با این موتور (هسته + tun2socks) بالا می‌آید: Hysteria2 یا Xray */
-    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text)
+    /** این متن با این موتور بالا می‌آید: Hysteria2، Xray، DNS کانکی یا KANKI MIX */
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text)
 
     fun isUp() = state == UP
 
@@ -134,11 +138,31 @@ object HyEngine {
         state = IDLE
     }
 
-    /** (دریافت، ارسال) به بایت */
-    fun stats(): Pair<Long, Long>? = if (state == UP && dnsMode && !dnsGate) KankiDns.rx.get() to KankiDns.tx.get() else if (state != UP || !TProxyService.loaded) null else runCatching {
-        val s = TProxyService.TProxyGetStats()   // [tx_packets, tx_bytes, rx_packets, rx_bytes]
-        s[1] to s[3]
-    }.getOrNull()
+    /**
+     * (دریافت، ارسال) به بایت از شروع اتصال.
+     * حالت DNS بدون دروازه: فقط DNS از VPN رد می‌شود، پس ترافیک واقعی برنامه‌ها مستقیم است؛ سرعت و مصرف
+     * از شمارنده‌های کل گوشی (TrafficStats) از لحظه‌ی اتصال حساب می‌شود (قبلاً فقط چند کیلوبایت DNS بود).
+     */
+    fun stats(): Pair<Long, Long>? = when {
+        state != UP -> null
+        kmix -> KmixCore.stats()
+        dnsMode && !dnsGate -> deviceStats()?.let { now ->
+            val b = dnsBase ?: now.also { dnsBase = it }
+            (now.first - b.first).coerceAtLeast(0) to (now.second - b.second).coerceAtLeast(0)
+        }
+        !TProxyService.loaded -> null
+        else -> runCatching {
+            val s = TProxyService.TProxyGetStats()   // [tx_packets, tx_bytes, rx_packets, rx_bytes]
+            s[1] to s[3]
+        }.getOrNull()
+    }
+
+    /** دریافت و ارسال کل گوشی (همه‌ی شبکه‌ها)؛ null اگر گوشی پشتیبانی نکند */
+    fun deviceStats(): Pair<Long, Long>? {
+        val rx = android.net.TrafficStats.getTotalRxBytes()
+        val tx = android.net.TrafficStats.getTotalTxBytes()
+        return if (rx == android.net.TrafficStats.UNSUPPORTED.toLong() || tx == android.net.TrafficStats.UNSUPPORTED.toLong()) null else rx to tx
+    }
 }
 
 class KankiHyService : VpnService() {
@@ -146,6 +170,8 @@ class KankiHyService : VpnService() {
         const val START = "cafe.kankipro.vpn.HY_START"
         /** MTU پیش‌فرض کارت شبکه برای tun2socks (فقط داخل گوشی است؛ بزرگ‌تر یعنی بسته‌ی کمتر و سرعت بیشتر) */
         const val TUN_MTU = 8500
+        /** MTU کارت شبکه‌ی KANKI MIX؛ باید با tunMTU در kmix-core/mobile/mobile.go یکی باشد */
+        const val KMIX_MTU = 1280
     }
 
     @Volatile private var tun: ParcelFileDescriptor? = null
@@ -191,6 +217,7 @@ class KankiHyService : VpnService() {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         if (XrayCfg.isXray(text)) return startXray(v("URI") ?: error("xray: link missing"), lines, my)
         if (KankiDns.isDns(text)) return startDns(lines, my)
+        if (KmixUri.isKmix(text)) return startKmix(v("URI") ?: error("kanki mix: link missing"), lines, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: TUN_MTU
@@ -347,6 +374,7 @@ class KankiHyService : VpnService() {
         val gateMode = blockOthers(lines) && included.isNotEmpty() && AppGate.supported && TProxyService.loaded && bin.exists()
         KankiDns.rx.set(0)
         KankiDns.tx.set(0)
+        HyEngine.dnsBase = HyEngine.deviceStats()
         if (gateMode) {
             // هسته‌ی Xray فقط به‌عنوان خروجی مستقیم (بدون سرور): SOCKS محلی ← اینترنت خود گوشی
             val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
@@ -496,9 +524,61 @@ class KankiHyService : VpnService() {
         }
     }
 
+    /**
+     * KANKI MIX: کارت شبکه‌ی VPN مستقیم به هسته‌ی Go داده می‌شود (بدون tun2socks).
+     * آی‌پی سرور از مسیرهای VPN بیرون است تا سوکت‌های خود هسته دور خودشان نچرخند.
+     * MTU ثابت ۱۲۸۰ است (باید با tunMTU هسته یکی باشد): بسته‌ی رمزشده هیچ‌وقت روی موبایل تکه نمی‌شود.
+     */
+    private fun startKmix(link: String, lines: List<String>, my: Int) {
+        fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
+        val u = KmixUri.parse(link)
+        if (!KmixCore.loaded) error("kanki mix: the core is missing in this build")
+        val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+        val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val included = included(lines)
+        val gaming = v("Gaming")?.let { it == "1" } ?: u.gaming
+
+        val addrs = InetAddress.getAllByName(u.host)
+        val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
+        val server = if (ip is Inet4Address) "${ip.hostAddress}:${u.pickPort()}" else "[${ip.hostAddress}]:${u.pickPort()}"
+
+        val b = Builder()
+            .setSession("Kanki · KANKI MIX")
+            .setMtu(KMIX_MTU)
+            .addAddress("10.77.0.2", 32)
+        if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
+        else b.addRoute("0.0.0.0", 0)
+        if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
+        dns.forEach { d -> runCatching { b.addDnsServer(d) } }
+        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+
+        val goFd = synchronized(this) {
+            if (cancelled(my)) error("kanki mix: cancelled")
+            val fd = b.establish() ?: error("VPN permission is missing")
+            tun = fd
+            // هسته مالک نسخه‌ی خودش از fd است و موقع Stop آن را می‌بندد؛ tun برای سرویس می‌ماند
+            ParcelFileDescriptor.dup(fd.fileDescriptor).detachFd()
+        }
+        // تا ۱۰ ثانیه: سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
+        try {
+            KmixCore.start(goFd, server, u.key, u.fecData, u.fecParity, gaming)
+        } catch (t: Throwable) {
+            // هسته در خطا fd خودش را می‌بندد؛ اینجا دوباره بسته نمی‌شود (ممکن است شماره‌اش به فایل دیگری رسیده باشد)
+            throw IllegalStateException("kanki mix: " + (t.message ?: t.javaClass.simpleName))
+        }
+        synchronized(this) {
+            if (cancelled(my)) { KmixCore.stop(); error("kanki mix: cancelled") }
+            HyEngine.kmix = true
+            HyEngine.state = HyEngine.UP
+        }
+    }
+
     @Synchronized
     fun shutdown() {
         gen++   // هر تلاش در حال اجرا لغو می‌شود
+        if (HyEngine.kmix) { KmixCore.stop(); HyEngine.kmix = false }
         dnsFwd?.stop()
         dnsFwd = null
         HyEngine.dnsMode = false

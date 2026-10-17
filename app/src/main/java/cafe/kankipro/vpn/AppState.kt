@@ -66,6 +66,17 @@ class AppState private constructor(context: Context) {
     /** پنل‌های باز صفحه‌ی اول؛ تا وقتی یکی باز است، دکمه‌ی اصلی اتصال کاری نمی‌کند (گیج‌کننده نباشد) */
     var gameSheet by mutableStateOf(false)
     var appsPicker by mutableStateOf(false)
+    /** پنل ضد فیلتر (نگه‌داشتن کاشی، یا لمس دوباره وقتی همین حالت انتخاب است): فقط سرورهای Xray و Amnezia */
+    var filterSheet by mutableStateOf(false)
+
+    /** KANKI MIX: هر بسته‌ی بازی دو بار فرستاده شود (ضد پکت‌لاس)؛ وسط اتصال هم عوض می‌شود */
+    var kmixDup by mutableStateOf(prefs.getBoolean("kmixDup", true))
+        private set
+    fun changeKmixDup(v: Boolean) {
+        kmixDup = v
+        prefs.edit().putBoolean("kmixDup", v).apply()
+        if (HyEngine.kmix) KmixCore.setGaming(v)
+    }
 
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
     var gameAuto by mutableStateOf(prefs.getBoolean("gameAuto", true))
@@ -93,6 +104,15 @@ class AppState private constructor(context: Context) {
     var filterXray by mutableStateOf(prefs.getBoolean("filterXray", true))
         private set
     fun changeFilterXray(v: Boolean) { filterXray = v; prefs.edit().putBoolean("filterXray", v).apply() }
+    /** تیک Xray در پنل ضد فیلتر (تیک Amnezia همان !filterXray است)؛ همیشه دست‌کم یکی روشن است */
+    var filterUseX by mutableStateOf(prefs.getBoolean("filterUseX", true))
+        private set
+    fun changeFilterTicks(xray: Boolean, amnezia: Boolean) {
+        if (!xray && !amnezia) return
+        filterUseX = xray
+        prefs.edit().putBoolean("filterUseX", xray).apply()
+        changeFilterXray(!amnezia)
+    }
     /** «خودکار» در تب سرورها: ضد فیلتر خودش بهترین را انتخاب کند (انتخاب دستی کنار می‌رود) */
     fun changeFilterAuto(v: Boolean) { if (v) setFilter(true, "", null) else setFilter(false, filterProto, filterNode) }
 
@@ -165,7 +185,7 @@ class AppState private constructor(context: Context) {
 
     /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
     fun toggleMain() {
-        if (gameSheet || appsPicker) return
+        if (gameSheet || appsPicker || filterSheet) return
         // وسط سنجش «هوشمند»: لمس یعنی لغو
         if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
         when (vstate) {
@@ -197,7 +217,8 @@ class AppState private constructor(context: Context) {
             }
             KMode.GAME -> { changeMode(m); gameSheet = true }
             KMode.FILTER -> {
-                if (mode == KMode.FILTER) { tab = KTab.SERVERS; return }
+                // لمس دوباره: پنل ضد فیلتر (فقط Xray و Amnezia)، نه همه‌ی سرورها
+                if (mode == KMode.FILTER) { filterSheet = true; return }
                 changeMode(m)
                 setFilter(true, "", null)
                 launchConnect(reconnect = true) { connectFilter() }
@@ -250,40 +271,46 @@ class AppState private constructor(context: Context) {
         return res.toMap()
     }
 
-    /** کشوری که برای گیم کمترین پینگ را دارد (اگر کاربر کشوری انتخاب نکرده) */
-    private fun bestGameNode(): String? {
-        val a = account ?: return null
-        val nodes = a.configs.map { it.node }.distinct().filter { n -> Modes.GAME_PROTOS.any { hasCfg(n, it) } }
-        return nodes.minByOrNull { nodePing(it)?.takeIf { p -> p > 0 } ?: 9999 }
+    /** کانفیگ‌های یک خانواده‌ی گیم (KANKI MIX، Amnezia، WireGuard) روی همه‌ی سرورها */
+    fun gameConfigs(family: String): List<Pair<String, String>> {
+        val a = account ?: return emptyList()
+        val protos = Modes.familyProtos(family)
+        return a.configs.map { it.node }.distinct().flatMap { nd -> protos.filter { hasCfg(nd, it) }.map { nd to it } }
     }
 
     /**
-     * گیمینگ: پروتکل و کشور انتخابی (قفل؛ هیچ‌وقت بی‌صدا عوض نمی‌شود)، یا با «انتخاب هوشمند سرور»
-     * کم‌پینگ‌ترین کشور و پروتکل از بین همه‌ی کانفیگ‌های گیم (اگر وصل نشد، بعدی؛ حداکثر سه تلاش).
+     * گیمینگ: خانواده‌ی پروتکل (KANKI MIX، Amnezia، WireGuard) با سرور انتخابی (قفل؛ هیچ‌وقت بی‌صدا عوض
+     * نمی‌شود)، یا «سریع‌ترین سرور» همان خانواده (کم‌پینگ‌ترین؛ اگر وصل نشد، بعدی؛ حداکثر سه تلاش).
+     * پروتکلی که از تب سرورها انتخاب شده (مثلاً Hysteria2) هم مستقیم همان وصل می‌شود.
      */
     suspend fun connectGame() {
         netName = Modes.networkName(ctx)
-        val a = account ?: return
-        val n = gameNode?.takeIf { g -> Modes.GAME_PROTOS.any { hasCfg(g, it) } } ?: bestGameNode()
-        if (n == null) { error = "کانفیگ مناسب گیم در اشتراک شما نیست."; return }
+        val fam = Modes.familyOf(gameProto)
         val list = if (gameAuto) {
+            val all = gameConfigs(fam ?: "kankimix")
+            if (all.isEmpty()) {
+                error = trf("%s در اشتراک شما نیست. از «گیمینگ» پروتکل دیگری انتخاب کنید.", familyTitle(fam ?: "kankimix"))
+                return
+            }
             tryStep = "سنجش پینگ…"
-            val all = a.configs.map { it.node }.distinct().flatMap { nd -> Modes.GAME_PROTOS.filter { hasCfg(nd, it) }.map { nd to it } }
             val m = pingMany(all)
             // کانفیگی که جواب پینگ نداد آخر می‌رود
             all.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }.take(3)
         } else {
-            if (!hasCfg(n, gameProto)) {
-                error = trf("%s روی این کشور نیست. از «گیمینگ» دوباره انتخاب کنید.", protoTitle(gameProto))
+            val n = gameNode
+            if (n == null || !hasCfg(n, gameProto)) {
+                error = trf("%s روی این سرور نیست. از «گیمینگ» دوباره انتخاب کنید.", protoTitle(gameProto))
                 return
             }
             listOf(n to gameProto)
         }
         val ok = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
         if (!ok && wantTry && !gameAuto) {
-            error = trf("اتصال با %s برقرار نشد. پروتکل یا کشور دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(n))
+            error = trf("اتصال با %s برقرار نشد. سرور یا پروتکل دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(gameNode ?: ""))
         }
     }
+
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
@@ -299,6 +326,8 @@ class AppState private constructor(context: Context) {
             val n = filterNode
             val list = when {
                 p.startsWith("xray-") -> listOf(p to "xray").filter { hasCfg(it.first, "xray") }
+                // یک سرور Amnezia مشخص از پنل ضد فیلتر (تانل یا مستقیم): دقیقاً همان
+                n != null && p.startsWith("amneziawg") -> listOf(n to p).filter { hasCfg(it.first, it.second) }
                 n != null -> listOf(n to "amneziawg-direct", n to "amneziawg").filter { hasCfg(it.first, it.second) }
                 else -> emptyList()
             }
@@ -311,11 +340,11 @@ class AppState private constructor(context: Context) {
         val xray = nodes.filter { hasCfg(it, "xray") }.map { it to "xray" }
         val direct = nodes.filter { hasCfg(it, "amneziawg-direct") }.map { it to "amneziawg-direct" }
         val tunnel = listOf("amneziawg", "hysteria2", "wireguard").flatMap { p -> nodes.filter { hasCfg(it, p) }.map { it to p } }
-        // «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray؛ برداشته شود: همه‌ی راه‌ها با هم، کمترین پینگ اول
-        val pool = if (filterXray) xray else xray + direct + tunnel
+        // تیک‌های پنل ضد فیلتر: Xray (پیش‌فرض روشن) و Amnezia (همه‌ی راه‌ها)؛ کمترین پینگ اول
+        val pool = (if (filterUseX) xray else emptyList()) + (if (!filterXray) direct + tunnel else emptyList())
         if (pool.isEmpty()) {
             error = if (filterXray && (direct + tunnel).isNotEmpty())
-                "اشتراک شما Xray ندارد. در تب سرورها تیک «اولویت Xray» را بردارید تا AmneziaWG هم امتحان شود."
+                "اشتراک شما Xray ندارد. «ضد فیلتر» را نگه دارید و تیک Amnezia را بزنید."
             else "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."
             return
         }
@@ -328,7 +357,7 @@ class AppState private constructor(context: Context) {
         val list = (listOfNotNull(remembered) + ranked.take(5) + pool.filter { !ok(it) }.take(2)).distinct().take(7)
         val done = connectChain(list) { c -> if (c.second == "xray") nodeName(c.first) else nodeName(c.first) + " · " + protoTitle(c.second) }
         if (done) prefs.edit().putString(memKey(KMode.FILTER), node + "|" + proto).apply()
-        else if (wantTry) error = if (filterXray) "هیچ اینباند Xray وصل نشد. تیک «اولویت Xray» را در تب سرورها بردارید یا «هوشمند» را بزنید."
+        else if (wantTry) error = if (filterXray) "هیچ اینباند Xray وصل نشد. «ضد فیلتر» را نگه دارید و تیک Amnezia را بزنید یا «هوشمند» را بزنید."
             else "هیچ راهی وصل نشد. اینترنت را بررسی کنید یا «هوشمند» را بزنید."
     }
 
@@ -340,7 +369,8 @@ class AppState private constructor(context: Context) {
             p == "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
             // در حالت ضد فیلتر، AmneziaWG (مستقیم/تانل) هم انتخاب دستی همین حالت است
             mode == KMode.FILTER && p.startsWith("amneziawg") -> setFilter(false, "", id)
-            p in Modes.GAME_PROTOS -> { setGame(false, p, id); changeMode(KMode.GAME) }
+            // هر پروتکل دیگر (KANKI MIX، WireGuard، Hysteria2، …) انتخاب دستی همان در گیمینگ است
+            else -> { setGame(false, p, id); changeMode(KMode.GAME) }
         }
     }
 
@@ -619,6 +649,8 @@ class AppState private constructor(context: Context) {
                     val prev = lastNet
                     lastNet = network
                     if (prev == null || prev == network) return
+                    // KANKI MIX سوکت‌هایش را فوراً روی شبکه‌ی تازه می‌سازد؛ بازی قطع نمی‌شود
+                    if (HyEngine.kmix) KmixCore.reconnect()
                     bg.launch {
                         kotlinx.coroutines.delay(2500)
                         if (vstate != VState.ON) return@launch
@@ -865,7 +897,11 @@ class AppState private constructor(context: Context) {
         // کانفیگ یک بار گرفته و ذخیره می‌شود؛ فقط در بروزرسانی (دستی یا ۳ ساعته) دوباره از پنل خوانده می‌شود.
         // اگر پنل در دسترس نبود (فیلتر/قطعی)، آخرین کانفیگ سالم استفاده می‌شود
         val txt = if (!forceNet && cached != null) cached else
-            runCatching { SubscriptionApi.fetchAny(url).let { if (l.protocol == "hysteria2") HyUri.wrap(it) else it } }
+            runCatching {
+                SubscriptionApi.fetchAny(url).let {
+                    when (l.protocol) { "hysteria2" -> HyUri.wrap(it); "kankimix" -> KmixUri.wrap(it); else -> it }
+                }
+            }
                 .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
                 .getOrElse { e -> cached ?: throw e }
         if (host.isBlank()) return txt
@@ -903,6 +939,7 @@ class AppState private constructor(context: Context) {
     fun available(nodeId: String? = node, r: String = route): List<String> = if (r == "direct") buildList {
         if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
     } else buildList {
+        if (hasCfg(nodeId, "kankimix")) add("kankimix")
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "hysteria2")) add("hysteria2")
@@ -1074,13 +1111,14 @@ class AppState private constructor(context: Context) {
 
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
-        for (l in a.configs.filter { it.protocol in setOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray") }) {
+        for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray") }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
             val ok = txt != null && when {
                 l.protocol.startsWith("openvpn") -> txt.contains("remote ")
                 l.protocol == "hysteria2" -> txt.contains("hysteria2://")
+                l.protocol == "kankimix" -> KmixUri.isKmix(txt)
                 l.protocol == "xray" -> XrayCfg.isXray(txt)
                 else -> txt.contains("[Interface]") && txt.contains("[Peer]")
             }
@@ -1122,6 +1160,7 @@ class AppState private constructor(context: Context) {
                 cfg = applyKeepalive(cfg, 25)
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
+                cfg = applyKmixGaming(cfg, kmixDup)
                 if (onlyApps.isNotEmpty()) {
                     // خود برنامه هم داخل تونل می‌ماند تا بررسی اتصال (هندشیک) واقعاً از تونل انجام شود
                     cfg = applyIncluded(cfg, onlyApps + ctx.packageName)
@@ -1401,7 +1440,7 @@ class AppState private constructor(context: Context) {
         nodeGeo.clear(); nodeIso.clear(); nodeCity.clear(); exitIso = null; userGeo = null; userIso = null
         smartRows.clear(); smartOpen = false
         pingHist.clear(); pingAllUi = PingAllUi()
-        gameSheet = false; appsPicker = false; tab = KTab.HOME
+        gameSheet = false; appsPicker = false; filterSheet = false; tab = KTab.HOME
         openNode = null; accountOpen = false
         error = null; errorDetail = null
     }
