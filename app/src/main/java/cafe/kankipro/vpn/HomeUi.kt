@@ -260,19 +260,36 @@ private fun LocationChip(iso: String?, on: Boolean) {
 }
 
 /**
- * دکمه‌ی گرد اتصال: دیسک شیشه‌ای تیره با حلقه‌ی نئونی. هنگام اتصال و وقتی وصل است یک قوس نورانی
- * دورش می‌چرخد (هنگام اتصال تندتر). رنگ حلقه و نور وقتی وصل است رنگ همان حالت است:
- * هوشمند طلایی، گیمینگ سبز نئونی، ضد فیلتر آبی، DNS بنفش.
+ * دکمه‌ی گرد اتصال: دیسک شیشه‌ای تیره با دو حلقه‌ی نئونی که خلاف جهت هم می‌چرخند:
+ *   حلقه‌ی بیرونی: سه قوس روشن با درخشش، ساعتگرد
+ *   حلقه‌ی درونی: نازک‌تر، دو قوس، پادساعتگرد
+ * موقع اتصال تند می‌چرخند، وقتی وصل است آرام، و وقتی قطع است خیلی آرام و کم‌نورتر.
+ * رنگ حلقه‌ها رنگ همان حالت است: هوشمند طلایی، گیمینگ سبز، ضد فیلتر آبی، DNS بنفش.
  */
 @Composable
 fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp, onClick: () -> Unit) {
-    val t = rememberInfiniteTransition(label = "orb")
-    val spinFast by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1300, easing = LinearEasing)), label = "sf")
-    val spinSlow by t.animateFloat(0f, 360f, infiniteRepeatable(tween(4200, easing = LinearEasing)), label = "ss")
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "pulse")
-    val breathe by t.animateFloat(.6f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "br")
     val on = ui.vstate == VState.ON
     val connecting = ui.vstate == VState.CONNECTING
+    // سرعت چرخش (دور در ثانیه) نرم عوض می‌شود تا با تغییر وضعیت حلقه‌ها نپرند
+    val speed by animateFloatAsState(if (connecting) .9f else if (on) .16f else .07f, tween(900), label = "spd")
+    var outerAngle by remember { mutableFloatStateOf(0f) }
+    var innerAngle by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last != 0L) {
+                    val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
+                    outerAngle = (outerAngle + 360f * speed * dt) % 360f
+                    innerAngle = (innerAngle - 360f * speed * 1.35f * dt) % 360f
+                }
+                last = now
+            }
+        }
+    }
+    val t = rememberInfiniteTransition(label = "orb")
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "pulse")
+    val breathe by t.animateFloat(.6f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "br")
     val ring by animateColorAsState(if (on || connecting) color else K.Gold, tween(500), label = "ring")
     val pad = 34.dp
 
@@ -287,22 +304,24 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp,
             val c = center
             val outer = this.size.minDimension / 2
             val r = outer * (diameter.value / (diameter.value + pad.value))
-            val sw = 2.6.dp.toPx()
+            val sw = 2.4.dp.toPx()
+            val strength = if (on) 1f else if (connecting) .85f else .55f
             // هاله
-            val glowA = (if (on) .40f else if (connecting) .30f else .16f) * breathe
+            val glowA = (if (on) .38f else if (connecting) .30f else .15f) * breathe
             drawCircle(Brush.radialGradient(listOf(ring.copy(alpha = glowA), Color.Transparent), c, outer), outer, c)
             // دیسک شیشه‌ای تیره
-            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Ink), c, r), r, c)
-            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .08f), Color.Transparent), startY = c.y - r, endY = c.y), r, c)
-            drawCircle(ring.copy(alpha = .16f), r * .84f, c, style = Stroke(1.dp.toPx()))
-            // حلقه‌ی نئونی
-            neonRing(ring, c, r, sw, if (on) 1f else if (connecting) .7f else .5f)
-            // قوس چرخان
-            if (connecting || on) {
-                val head = if (connecting) spinFast else spinSlow
-                neonComet(ring, head - 90f, if (connecting) 130f else 85f, c, r, sw * 1.1f)
-            }
-            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .45f), r * (1.03f + pulse * .15f), c, style = Stroke(1.5.dp.toPx()))
+            val disc = r * .86f
+            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Ink), c, disc), disc, c)
+            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .08f), Color.Transparent), startY = c.y - disc, endY = c.y), disc, c)
+            // حلقه‌ی بیرونی: مسیر کم‌رنگ + سه قوس روشن (ساعتگرد)
+            drawCircle(ring.copy(alpha = .14f * strength), r, c, style = Stroke(sw))
+            for (k in 0 until 3) neonArc(ring, outerAngle + k * 120f, 64f, c, r, sw, strength)
+            // حلقه‌ی درونی: نازک‌تر، دو قوس (پادساعتگرد)
+            val ri = r * .9f
+            drawCircle(ring.copy(alpha = .10f * strength), ri, c, style = Stroke(sw * .5f))
+            for (k in 0 until 2) neonArc(ring, innerAngle + k * 180f, 100f, c, ri, sw * .55f, strength * .9f)
+            // موج تپنده وقتی وصل است
+            if (on) drawCircle(ring.copy(alpha = (1f - pulse) * .4f), r * (1.04f + pulse * .14f), c, style = Stroke(1.4.dp.toPx()))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val dnsOn = ui.mode == KMode.DNS
@@ -319,6 +338,22 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 156.dp,
             }
         }
     }
+}
+
+/** یک قوس نئونی با لبه‌های محو (چند لایه‌ی درخشش، وسطش روشن‌تر) */
+private fun DrawScope.neonArc(color: Color, start: Float, sweep: Float, c: Offset, r: Float, w: Float, strength: Float) {
+    val tl = Offset(c.x - r, c.y - r)
+    val sz = Size(r * 2, r * 2)
+    val seg = 10
+    for (i in 0 until seg) {
+        // روشنایی از دو سر قوس به وسط بیشتر می‌شود
+        val f = 1f - kotlin.math.abs((i + .5f) / seg * 2f - 1f)
+        val a0 = start + sweep * i / seg
+        for ((m, a) in listOf(4.2f to .07f, 2.4f to .16f, 1.4f to .42f, 1f to 1f)) {
+            drawArc(color.copy(alpha = a * f * strength), a0, sweep / seg + .5f, false, tl, sz, style = Stroke(w * m, cap = StrokeCap.Butt))
+        }
+    }
+    drawArc(Color.White.copy(alpha = .5f * strength), start + sweep * .3f, sweep * .4f, false, tl, sz, style = Stroke(w * .35f, cap = StrokeCap.Round))
 }
 
 private fun elapsed(s: Long?): String {
