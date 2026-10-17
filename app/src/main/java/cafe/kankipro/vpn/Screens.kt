@@ -339,7 +339,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
                 )
             },
             pick = state.dnsPick,
-            active = state.dnsActive?.let { it.name.ifBlank { it.ip } },
+            active = state.dnsActive?.let { (if (it.role == "relay") it.exitName else "").ifBlank { it.name.ifBlank { it.ip } } },
             activeRoute = state.dnsRoute(state.dnsActive),
             sessionBytes = if (state.vstate == VState.ON && state.mode == KMode.DNS) session else null,
         ),

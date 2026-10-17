@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -99,7 +100,10 @@ fun WorldMap(
     val flow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "f")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "p")
 
-    Canvas(modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)) {
+    // لایه‌ی ثابت (پس‌زمینه‌ی تیره، کشورها و نور شهرها) یک بار در یک عکس کشیده می‌شود و فقط وقتی نما یا رنگ‌ها
+    // عوض شوند دوباره ساخته می‌شود؛ هر فریم فقط سنجاق‌ها و کمان متحرک کشیده می‌شوند (وگرنه ده‌ها هزار نقطه
+    // و مرز کشورها ۶۰ بار در ثانیه کشیده می‌شد و صفحه کند می‌شد)
+    androidx.compose.foundation.layout.Spacer(modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithCache {
         val w = size.width
         val h = size.height
         val aspect = (w / h).toDouble()
@@ -115,42 +119,50 @@ fun WorldMap(
         val selIso = sel?.iso
         val selColor = if (connected) K.Green else accent
         val border = 1f / sx
-        clipRect {
-            withTransform({
-                translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
-                scale(sx, sy, pivot = Offset.Zero)
-            }) {
-                countries?.forEach { c ->
-                    if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
-                    // خشکی تیره‌تر از آسمان پشتش تا قاره‌ها روی کهکشان دیده شوند
-                    drawPath(c.path, Color(0xFF070402).copy(alpha = .62f))
-                    val fill = when (c.iso) {
-                        selIso -> selColor.copy(alpha = .20f)
-                        userIso -> K.Gold.copy(alpha = .14f)
-                        else -> K.Gold.copy(alpha = .06f)
+        val bmp = ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
+            // پس‌زمینه‌ی تیره پشت نقشه تا روی کهکشان واضح دیده شود (لبه‌هایش با بقیه‌ی نقشه محو می‌شود)
+            drawRect(Color(0xFF020205).copy(alpha = .78f))
+            drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .06f), Color.Transparent), Offset(w * .5f, h * .45f), w * .7f))
+            clipRect {
+                withTransform({
+                    translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
+                    scale(sx, sy, pivot = Offset.Zero)
+                }) {
+                    countries?.forEach { c ->
+                        if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
+                        // خشکی تیره‌تر از آسمان پشتش تا قاره‌ها روی کهکشان دیده شوند
+                        drawPath(c.path, Color(0xFF070402).copy(alpha = .62f))
+                        val fill = when (c.iso) {
+                            selIso -> selColor.copy(alpha = .20f)
+                            userIso -> K.Gold.copy(alpha = .14f)
+                            else -> K.Gold.copy(alpha = .10f)
+                        }
+                        drawPath(c.path, fill)
+                        if (c.iso == selIso) {
+                            drawPath(c.path, selColor.copy(alpha = .18f), style = Stroke(border * 4f))
+                            drawPath(c.path, selColor.copy(alpha = .9f), style = Stroke(border * 1.6f))
+                        } else {
+                            drawPath(c.path, K.Gold.copy(alpha = .22f), style = Stroke(border * 4f))
+                            drawPath(c.path, K.GoldLight.copy(alpha = .88f), style = Stroke(border * 1.3f))
+                        }
                     }
-                    drawPath(c.path, fill)
-                    if (c.iso == selIso) {
-                        drawPath(c.path, selColor.copy(alpha = .18f), style = Stroke(border * 4f))
-                        drawPath(c.path, selColor.copy(alpha = .9f), style = Stroke(border * 1.6f))
-                    } else {
-                        drawPath(c.path, K.Gold.copy(alpha = .16f), style = Stroke(border * 3.6f))
-                        drawPath(c.path, K.GoldLight.copy(alpha = .70f), style = Stroke(border * 1.05f))
+                    // نور شهرها (مثل عکس شب زمین): نقطه‌های طلایی با هاله
+                    lights?.let { L ->
+                        val pm = androidx.compose.ui.graphics.PointMode.Points
+                        drawPoints(L.dim, pm, K.GoldLight.copy(alpha = .50f), border * 2f, StrokeCap.Round)
+                        drawPoints(L.mid, pm, K.Gold.copy(alpha = .16f), border * 5f, StrokeCap.Round)
+                        drawPoints(L.mid, pm, K.GoldLight.copy(alpha = .75f), border * 2.4f, StrokeCap.Round)
+                        drawPoints(L.bright, pm, K.Gold.copy(alpha = .14f), border * 11f, StrokeCap.Round)
+                        drawPoints(L.bright, pm, K.GoldLight.copy(alpha = .35f), border * 5.5f, StrokeCap.Round)
+                        drawPoints(L.bright, pm, Color(0xFFFFF3D0), border * 2.6f, StrokeCap.Round)
                     }
-                }
-                // نور شهرها (مثل عکس شب زمین): نقطه‌های طلایی با هاله
-                lights?.let { L ->
-                    val pm = androidx.compose.ui.graphics.PointMode.Points
-                    drawPoints(L.dim, pm, K.Gold.copy(alpha = .38f), border * 1.8f, StrokeCap.Round)
-                    drawPoints(L.mid, pm, K.Gold.copy(alpha = .16f), border * 5f, StrokeCap.Round)
-                    drawPoints(L.mid, pm, K.GoldLight.copy(alpha = .75f), border * 2.4f, StrokeCap.Round)
-                    drawPoints(L.bright, pm, K.Gold.copy(alpha = .14f), border * 11f, StrokeCap.Round)
-                    drawPoints(L.bright, pm, K.GoldLight.copy(alpha = .35f), border * 5.5f, StrokeCap.Round)
-                    drawPoints(L.bright, pm, Color(0xFFFFF3D0), border * 2.6f, StrokeCap.Round)
                 }
             }
         }
 
+        onDrawBehind {
+        drawImage(bmp)
         // پیش از اتصال: خط‌چین کم‌رنگ از شما تا سرور انتخابی
         if (user != null && sel != null && draw < 1f) {
             val a = proj(user)
@@ -224,7 +236,8 @@ fun WorldMap(
             Brush.horizontalGradient(0f to Color.Transparent, .09f to Color.Black, .91f to Color.Black, 1f to Color.Transparent),
             blendMode = BlendMode.DstIn,
         )
-    }
+        }
+    })
 }
 
 /** سنجاق کوچک با پرچم بالای یک نقطه */

@@ -255,7 +255,7 @@ private fun LocationChip(iso: String?, on: Boolean) {
     val c = if (on) K.Green else K.Gold
     val shape = RoundedCornerShape(50)
     Row(
-        Modifier.clip(shape).background(c.copy(alpha = .07f)).border(1.dp, c.copy(alpha = .5f), shape)
+        Modifier.goldGlass(shape, tint = c)
             .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

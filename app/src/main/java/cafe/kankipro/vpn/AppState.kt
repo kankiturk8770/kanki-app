@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -232,12 +233,30 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    /** اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN */
+    /** تلاش اتصالی که الان در جریان است (همیشه فقط یکی) */
+    private var connectJob: kotlinx.coroutines.Job? = null
+    private var attempt = 0
+
+    /**
+     * اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN.
+     * همیشه فقط یک تلاش: اگر تلاش قبلی (مثلاً KANKI MIX که تا ~۲۰ ثانیه منتظر سرور می‌ماند) هنوز تمام نشده،
+     * اول موتور قطع و صبر می‌شود تا کاملاً تمام شود؛ وگرنه شکست دیرهنگام آن تونل تازه را می‌بست و خطایش را نشان می‌داد.
+     */
     fun launchConnect(reconnect: Boolean = false, block: suspend () -> Unit) {
         val go: () -> Unit = {
-            bg.launch {
+            val prev = connectJob
+            val my = ++attempt
+            connectJob = bg.launch {
+                if (prev != null && prev.isActive) {
+                    wantTry = false
+                    withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+                    prev.cancelAndJoin()
+                    if (vstate == VState.CONNECTING) vstate = VState.OFF
+                }
+                if (my != attempt) return@launch
                 if (reconnect && vstate != VState.OFF) disconnect()
                 wantTry = true
+                error = null; errorDetail = null
                 block()
             }
         }
@@ -387,7 +406,7 @@ class AppState private constructor(context: Context) {
     /** مسیر یک سرور DNS برای نمایش: ریلی داخل ایران (از تانل پنل به خروجی) یا خروجی مستقیم */
     fun dnsRoute(s: DnsServer?): String? = when {
         s == null -> null
-        s.role == "relay" -> "از ریلی ایران"
+        s.role == "relay" -> "تانل"
         else -> "مستقیم"
     }
 
@@ -546,7 +565,16 @@ class AppState private constructor(context: Context) {
                 smartDone = 0; smartTotal = 0; smartCurrent = null
                 smartStatus = "سنجش پینگ همه‌ی سرورها…"
                 error = null; errorDetail = null
-                bg.launch { runSmart() }
+                val prev = connectJob
+                val my = ++attempt
+                connectJob = bg.launch {
+                    if (prev != null && prev.isActive) {
+                        wantTry = false
+                        withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+                        prev.cancelAndJoin()
+                    }
+                    if (my == attempt) runSmart()
+                }
             }
         }
         val ask = requestVpn

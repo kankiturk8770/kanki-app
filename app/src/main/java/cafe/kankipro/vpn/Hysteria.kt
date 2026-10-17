@@ -580,7 +580,8 @@ class KankiHyService : VpnService() {
     @Synchronized
     fun shutdown() {
         gen++   // هر تلاش در حال اجرا لغو می‌شود
-        if (HyEngine.kmix) { KmixCore.stop(); HyEngine.kmix = false }
+        // هسته‌ی KANKI MIX حتی وقتی هنوز منتظر جواب سرور است (kmix هنوز false) بسته می‌شود، تا آن تلاش فوراً تمام شود
+        KmixCore.stop(); HyEngine.kmix = false
         dnsFwd?.stop()
         dnsFwd = null
         HyEngine.dnsMode = false

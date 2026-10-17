@@ -294,22 +294,11 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        when (r.role) {
-                            "relay" -> {
-                                T("🇮🇷", size = 16.sp, weight = FontWeight.Normal)
-                                T(" ➜ ", size = 12.sp, color = mc, ltr = true)
-                                T(r.exitFlag, size = 16.sp, weight = FontWeight.Normal)
-                            }
-                            "auto" -> T("✨", size = 16.sp, weight = FontWeight.Normal)
-                            else -> T(r.flag, size = 16.sp, weight = FontWeight.Normal)
+                        Column(Modifier.weight(1f)) {
+                            AutoText(dnsRowTitle(r), size = 12.5.sp, color = if (sel) mc else K.Text)
+                            T(dnsRowTag(r), size = 10.sp, color = K.Sub, weight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(10.dp))
-                        AutoText(if (r.role == "relay") r.exitTitle.ifBlank { r.title } else r.title, size = 12.sp, color = if (sel) mc else K.Text, modifier = Modifier.weight(1f))
-                        val tag = when (r.role) { "relay" -> "تانل"; "auto" -> "سریع‌ترین"; else -> "مستقیم" }
-                        val ts = RoundedCornerShape(50)
-                        Box(Modifier.clip(ts).border(1.dp, mc.copy(alpha = .5f), ts).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                            T(tag, size = 10.sp, color = mc, weight = FontWeight.Bold)
-                        }
+                        if (sel) CheckMark(true, 18.dp, mc)
                     }
                 }
                 if (vstate == VState.ON) T("برای عوض کردن سرور، یک بار قطع و وصل کن", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
@@ -325,11 +314,16 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
     }
 }
 
-private fun dnsRowLabel(r: DnsRowUi): String = when (r.role) {
-    "relay" -> "🇮🇷 ➜ " + r.exitFlag + " " + r.exitTitle.ifBlank { r.title } + " · " + tr("تانل")
-    "auto" -> tr("خودکار") + " · " + tr("سریع‌ترین")
-    else -> r.flag + " " + r.title + " · " + tr("مستقیم")
+/** اسم سرور (برای تانل: اسم سرور خارجی که تانل به آن می‌رسد؛ بدون پرچم و اسم ایران) */
+private fun dnsRowTitle(r: DnsRowUi): String = when (r.role) {
+    "relay" -> r.exitTitle.ifBlank { r.title }
+    "auto" -> tr("خودکار")
+    else -> r.title
 }
+
+private fun dnsRowTag(r: DnsRowUi): String = tr(when (r.role) { "relay" -> "تانل"; "auto" -> "سریع‌ترین"; else -> "مستقیم" })
+
+private fun dnsRowLabel(r: DnsRowUi): String = dnsRowTitle(r) + " · " + dnsRowTag(r)
 
 /** چهار مربع (آیکون برنامه‌ها) */
 fun DrawScope.appsGridIcon(c: Color) {

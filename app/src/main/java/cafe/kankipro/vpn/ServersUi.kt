@@ -142,9 +142,7 @@ fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?
 private fun PingAllCard(p: PingAllUi, onStart: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
-            .border(1.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .55f), K.Gold.copy(alpha = .15f))), shape)
+        Modifier.fillMaxWidth().goldGlass(shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -187,9 +185,7 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions) {
     val shape = RoundedCornerShape(20.dp)
     val lit = c.expanded || c.selected
     Column(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
-            .border(if (lit) 1.3.dp else 1.dp, if (lit) K.Gold.copy(alpha = .75f) else K.Gold.copy(alpha = .2f), shape),
+        Modifier.fillMaxWidth().goldGlass(shape, selected = lit),
     ) {
         Row(
             Modifier.fillMaxWidth().clickable { act.toggle(c.id) }.padding(horizontal = 14.dp, vertical = 12.dp),

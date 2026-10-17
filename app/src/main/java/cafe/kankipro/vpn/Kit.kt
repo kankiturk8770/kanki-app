@@ -51,9 +51,7 @@ fun KCard(
     val shape = RoundedCornerShape(radius)
     Column(
         modifier
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
-            .border(1.dp, Brush.verticalGradient(listOf(border, border.copy(alpha = border.alpha * .35f))), shape)
+            .goldGlass(shape, tint = border.copy(alpha = 1f))
             .padding(padding),
         content = content,
     )
@@ -68,8 +66,7 @@ fun Segmented(items: List<SegItem>, selected: String, modifier: Modifier = Modif
     val shape = RoundedCornerShape(16.dp)
     Row(
         modifier.fillMaxWidth().height(44.dp).clip(shape)
-            .background(K.Panel.copy(alpha = .85f))
-            .border(1.dp, K.Gold.copy(alpha = .16f), shape)
+            .goldGlass(shape)
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {

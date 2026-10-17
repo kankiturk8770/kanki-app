@@ -214,9 +214,7 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
     val shape = RoundedCornerShape(22.dp)
     var showDetail by remember(alert.id) { mutableStateOf(false) }
     Row(
-        modifier.fillMaxWidth().clip(shape)
-            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.copy(alpha = .16f), K.Panel.copy(alpha = .92f))))
-            .border(1.dp, c.copy(alpha = .55f), shape)
+        modifier.fillMaxWidth().goldGlass(shape, tint = c)
             .padding(start = 8.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
