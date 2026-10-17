@@ -1,9 +1,14 @@
 package cafe.kankipro.vpn
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.compose.ui.graphics.Path
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /** داده‌ی نقشه از فایل countries.geojson (Natural Earth) */
 object MapData {
@@ -51,31 +56,62 @@ object MapData {
     }
 }
 
+/** موقعیت یک IP: مختصات، کد کشور و شهر */
+data class GeoHit(val geo: Geo, val iso: String, val city: String)
+
 /**
- * موقعیت یک IP یا دامنه (اگر خالی باشد: همین IP خودِ کاربر).
+ * پیدا کردن موقعیت از روی IP عمومی (فقط IP خودِ درخواست؛ هیچ‌وقت از روی IP یا اسم دامنه‌ی سرورها حدس زده نمی‌شود).
+ *   lookupSelf: موقعیت واقعی کاربر، از راه شبکه‌ی اصلی گوشی (حتی وقتی VPN روشن است، بیرون از VPN)
+ *   lookupExit: IP خروجی تونل، از راه خود VPN (همان IP که سایت‌ها می‌بینند = مقصد واقعی)
  * اول با HTTPS (ipinfo.io)؛ اگر جواب نداد، با ip-api.com که فقط HTTP دارد.
  */
-fun lookupGeo(target: String = ""): Pair<Geo, String>? {
-    val ip = if (target.isBlank()) "" else runCatching { java.net.InetAddress.getByName(target).hostAddress }.getOrNull() ?: target
-    return lookupGeoHttps(ip) ?: lookupGeoHttp(ip)
+object GeoLookup {
+    fun lookupSelf(ctx: Context): GeoHit? {
+        val n = network(ctx, vpn = false)
+        // شبکه‌ی اصلی پیدا نشد ولی VPN بالاست: درخواست معمولی از VPN می‌رود و کشور خروجی را می‌دهد، نه کاربر
+        if (n == null && network(ctx, vpn = true) != null) return null
+        return lookup(n)
+    }
+
+    /** null اگر VPN بالا نیست (تا نتیجه‌ی شبکه‌ی اصلی به‌جای خروجی تونل ذخیره نشود) */
+    fun lookupExit(ctx: Context): GeoHit? {
+        val n = network(ctx, vpn = true) ?: return null
+        return lookup(n)
+    }
+
+    /** شبکه‌ی VPN یا شبکه‌ی اصلی (وای‌فای/دیتا) که اینترنت دارد */
+    private fun network(ctx: Context, vpn: Boolean): Network? = runCatching {
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return@runCatching null
+        cm.allNetworks.firstOrNull { n ->
+            val c = cm.getNetworkCapabilities(n)
+            c != null && c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == vpn &&
+                c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+    }.getOrNull()
+
+    private fun lookup(net: Network?): GeoHit? = viaIpinfo(net) ?: viaIpApi(net)
+
+    private fun open(net: Network?, url: String, timeout: Int): HttpURLConnection {
+        val u = URL(url)
+        val c = (net?.openConnection(u) ?: u.openConnection()) as HttpURLConnection
+        c.connectTimeout = timeout; c.readTimeout = timeout; c.useCaches = false
+        return c
+    }
+
+    private fun viaIpinfo(net: Network?): GeoHit? = runCatching {
+        val c = open(net, "https://ipinfo.io/json", 5000)
+        val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
+        val loc = j.optString("loc").split(",")
+        val cc = j.optString("country")
+        if (loc.size != 2 || cc.length != 2) null
+        else GeoHit(Geo(loc[0].trim().toDouble(), loc[1].trim().toDouble()), cc.uppercase(), j.optString("city"))
+    }.getOrNull()
+
+    private fun viaIpApi(net: Network?): GeoHit? = runCatching {
+        val c = open(net, "http://ip-api.com/json/?fields=status,lat,lon,countryCode,city", 6000)
+        val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
+        val cc = j.optString("countryCode")
+        if (j.optString("status") != "success" || cc.length != 2) null
+        else GeoHit(Geo(j.optDouble("lat"), j.optDouble("lon")), cc.uppercase(), j.optString("city"))
+    }.getOrNull()
 }
-
-private fun lookupGeoHttps(ip: String): Pair<Geo, String>? = runCatching {
-    val path = if (ip.isBlank()) "json" else "$ip/json"
-    val c = java.net.URL("https://ipinfo.io/$path").openConnection() as java.net.HttpURLConnection
-    c.connectTimeout = 4000; c.readTimeout = 4000
-    val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
-    val loc = j.optString("loc").split(",")
-    val cc = j.optString("country")
-    if (loc.size != 2 || cc.length != 2) null
-    else Geo(loc[0].trim().toDouble(), loc[1].trim().toDouble()) to cc
-}.getOrNull()
-
-private fun lookupGeoHttp(target: String): Pair<Geo, String>? = runCatching {
-    val c = java.net.URL("http://ip-api.com/json/$target?fields=status,lat,lon,countryCode,city")
-        .openConnection() as java.net.HttpURLConnection
-    c.connectTimeout = 5000; c.readTimeout = 5000
-    val j = try { JSONObject(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
-    if (j.optString("status") != "success") null
-    else Geo(j.optDouble("lat"), j.optDouble("lon")) to j.optString("countryCode")
-}.getOrNull()

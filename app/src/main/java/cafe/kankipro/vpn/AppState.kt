@@ -471,7 +471,7 @@ class AppState private constructor(context: Context) {
         return cands.mapNotNull { (n, p, i) ->
             measured[Triple(i.host, i.transport, i.port)]?.let { (ping, jit) ->
                 pings["${n.node}/$p"] = ping
-                SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagOf(n.nodeName), ping, jit)
+                SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
             }
         }.sortedBy { it.ping + 2 * it.jitter }
     }
@@ -689,6 +689,7 @@ class AppState private constructor(context: Context) {
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
             if (vstate == VState.OFF) fixProto()
             prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
+            locate()
         }
     }
 
@@ -723,14 +724,22 @@ class AppState private constructor(context: Context) {
         val fresh = System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs
         val html = prefs.getString("subhtml_$c", null)
         val cached = if (fresh && html != null) runCatching { augment(SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)) }.getOrNull() else null
-        if (cached == null) { refresh(); return }
+        if (cached == null) {
+            refresh()
+            if (pingAfterLoad && account != null) { pingAfterLoad = false; startPingAll() }
+            return
+        }
         account = cached
         if (node == null || cached.configs.none { it.node == node }) node = cached.configs.firstOrNull()?.node
         loadInfos(cached, force = false)
         fixProto()
         refreshUsage()   // حجم مصرفی همیشه تازه است، حتی وقتی کانفیگ‌ها از حافظه خوانده شده‌اند
         locate()
+        if (pingAfterLoad) { pingAfterLoad = false; startPingAll() }
     }
+
+    /** تازه وارد شده: بعد از خواندن کانفیگ‌ها پینگ همه گرفته شود */
+    private var pingAfterLoad = false
 
     init {
         loadGames()
@@ -774,6 +783,8 @@ class AppState private constructor(context: Context) {
     val nodeGeo = mutableStateMapOf<String, Geo>()
     var userIso by mutableStateOf(prefs.getString("uiso", null))
     val nodeIso = mutableStateMapOf<String, String>()
+    /** شهر خروجی هر سرور (اگر معلوم باشد) */
+    val nodeCity = mutableStateMapOf<String, String>()
     /** کانفیگ‌هایی که لینکشان هست ولی کانفیگ معتبر ندارند */
     val badCfg = mutableStateMapOf<String, Boolean>()
 
@@ -906,47 +917,63 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    /** بعد از اتصال: IP خروجی از داخل تونل = مکان واقعی سرور */
+    /**
+     * بعد از اتصال: IP عمومی خروجی از داخل خود تونل (همان IP که سایت‌ها می‌بینند) = مکان واقعی مقصد.
+     * برای دفعه‌های بعد هم ذخیره می‌شود (برای پنل‌های قدیمی که exit_cc نمی‌دهند).
+     */
     suspend fun locateExit() {
         val n = node ?: return
+        exitIso = null
+        if (mode == KMode.DNS) return
         kotlinx.coroutines.delay(800)
-        withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, iso) ->
-            nodeGeo[n] = g
-            nodeIso[n] = iso.uppercase()
-            prefs.edit().putString("ngeo_$n", "${g.lat},${g.lon}").putString("niso_$n", iso.uppercase()).apply()
-        }
+        val hit = withContext(Dispatchers.IO) { GeoLookup.lookupExit(ctx) ?: run { Thread.sleep(1500); GeoLookup.lookupExit(ctx) } } ?: return
+        if (vstate != VState.ON || node != n) return
+        exitIso = hit.iso
+        // IP ایران از داخل تونل یعنی خروجی هنوز درست نیست (مثلاً فقط تا سرور ایران رسیده)؛ ذخیره نمی‌شود
+        if (hit.iso == "IR") return
+        nodeGeo[n] = hit.geo
+        nodeIso[n] = hit.iso
+        if (hit.city.isNotBlank()) nodeCity[n] = hit.city
+        prefs.edit().putString("ngeo_$n", "${hit.geo.lat},${hit.geo.lon}").putString("niso_$n", hit.iso)
+            .putString("ncity_$n", hit.city).apply()
     }
 
-    /** مکان کاربر و سرورها را پیدا می‌کند */
+    /** کشور IP فعلی وقتی وصل است (از داخل تونل گرفته می‌شود)؛ برای «IP شما: …» */
+    var exitIso by mutableStateOf<String?>(null)
+
+    /** کشور یک سرور برای نمایش: خروجی واقعی (پنل یا ذخیره از داخل تونل)، وگرنه از اسمی که ادمین گذاشته */
+    fun isoOfNode(id: String): String? =
+        nodeIso[id] ?: account?.configs?.firstOrNull { it.node == id }?.let { isoOfFlag(flagOf(it.nodeName)) }
+
+    /**
+     * مکان کاربر و سرورها.
+     * کاربر: از راه شبکه‌ی اصلی گوشی (بیرون از VPN)، پس حتی وقتی وصل است کشور واقعی خودش است.
+     * سرورها (هیچ‌وقت از روی IP یا اسم دامنه‌ی Endpoint، چون برای تانل‌ها سرور ایران است):
+     *   ۱) خروجی واقعی که پنل داده (exit_cc / exit_city / exit_lat,lon)
+     *   ۲) خروجی‌ای که قبلاً بعد از اتصال از داخل همان تونل گرفته و ذخیره شده
+     *   ۳) فقط کشور از روی اسمی که ادمین برای سرور گذاشته (مثلاً GERMANY)
+     */
     suspend fun locate() {
-        if (vstate == VState.OFF) {
-            withContext(Dispatchers.IO) { lookupGeo() }?.let { (g, iso) ->
-                userGeo = g
-                userIso = iso.uppercase()
-                prefs.edit().putString("ugeo", "${g.lat},${g.lon}").putString("uiso", userIso).apply()
-            }
+        withContext(Dispatchers.IO) { GeoLookup.lookupSelf(ctx) }?.let { hit ->
+            userGeo = hit.geo
+            userIso = hit.iso
+            prefs.edit().putString("ugeo", "${hit.geo.lat},${hit.geo.lon}").putString("uiso", hit.iso).apply()
         }
         val a = account ?: return
         for ((nodeId, links) in a.configs.groupBy { it.node }) {
-            if (!nodeIso.containsKey(nodeId)) {
-                (prefs.getString("niso_$nodeId", null) ?: isoOfFlag(flagOf(links.first().nodeName)))?.let { nodeIso[nodeId] = it }
+            val ex = a.exits[nodeId]
+            // خروجی ایران (از نسخه‌های قبل) معتبر نیست: یعنی فقط تا سرور ایران رسیده بوده
+            val savedIso = prefs.getString("niso_$nodeId", null)?.takeIf { it != "IR" }
+            val savedGeo = prefs.getString("ngeo_$nodeId", null)?.split(",")?.let { p ->
+                runCatching { Geo(p[0].toDouble(), p[1].toDouble()) }.getOrNull()
             }
-            if (nodeGeo.containsKey(nodeId)) continue
-            // ۱) مکان واقعی خروجی که قبلاً بعد از اتصال ذخیره شده
-            prefs.getString("ngeo_$nodeId", null)?.split(",")?.let { p ->
-                runCatching { nodeGeo[nodeId] = Geo(p[0].toDouble(), p[1].toDouble()) }
-            }
-            if (nodeGeo.containsKey(nodeId)) continue
-            // ۲) از روی اسم سرور (مثلاً GERMANY → فرانکفورت)
-            val byName = geoOfName(links.first().nodeName)
-            if (byName != null) { nodeGeo[nodeId] = byName; continue }
-            // ۳) در آخر از IP آدرس سرور
-            // اول میزبان «مستقیم» (دامنه‌ی خود کشور)، چون دامنه‌ی تانل ممکن است ایرانی باشد
-            val host = (listOf("amneziawg-direct") + links.map { it.protocol })
-                .firstNotNullOfOrNull { infos["$nodeId/$it"]?.host?.takeIf { h -> h != "—" } }
-            if (host != null && host != "—") {
-                withContext(Dispatchers.IO) { lookupGeo(host) }?.let { (g, _) -> nodeGeo[nodeId] = g }
-            }
+            val iso = ex?.iso ?: savedIso ?: isoOfFlag(flagOf(links.first().nodeName))
+            if (iso == null) { nodeIso.remove(nodeId); nodeGeo.remove(nodeId); continue }
+            nodeIso[nodeId] = iso
+            val geo = ex?.geo ?: savedGeo?.takeIf { savedIso == iso } ?: geoOfIso(iso)
+            if (geo != null) nodeGeo[nodeId] = geo else nodeGeo.remove(nodeId)
+            val city = ex?.city?.takeIf { it.isNotBlank() } ?: prefs.getString("ncity_$nodeId", null)?.takeIf { savedIso == iso && it.isNotBlank() }
+            if (city != null) nodeCity[nodeId] = city else nodeCity.remove(nodeId)
         }
     }
 
@@ -985,6 +1012,8 @@ class AppState private constructor(context: Context) {
             account = a
             node = a.configs.firstOrNull()?.node
             loading = false
+            // بعد از ورود (startupLoad) پینگ همه‌ی کانفیگ‌ها هم گرفته می‌شود؛ موقعیت خروجی‌ها از داده‌ی پنل می‌آید
+            pingAfterLoad = true
             true
         } catch (e: Exception) {
             loading = false
@@ -1087,7 +1116,7 @@ class AppState private constructor(context: Context) {
             if (!wantTry) throw IllegalStateException("cancelled")
             vstate = VState.ON
             wantOn = true
-            LastConfig.save(ctx, finalCfg, "${flagOf(link.nodeName)} ${link.nodeName} · ${protoTitle(link.protocol)}")
+            LastConfig.save(ctx, finalCfg, "${flagEmoji(isoOfNode(link.node)) ?: "🌐"} ${link.nodeName} · ${protoTitle(link.protocol)}")
             startNotif()
             measurePing()
             locateExit()
@@ -1317,6 +1346,7 @@ class AppState private constructor(context: Context) {
         wantTry = false
         dnsActive = null
         tryStep = null
+        exitIso = null
         withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
         KankiNotif.hide(ctx)
         vstate = VState.OFF
@@ -1334,7 +1364,7 @@ class AppState private constructor(context: Context) {
         disconnect()
         val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("ugeo").remove("uiso")
         prefs.all.keys
-            .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("ngeo_") || it.startsWith("niso_") }
+            .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("ngeo_") || it.startsWith("niso_") || it.startsWith("ncity_") }
             .forEach { e.remove(it) }
         e.apply()
         LastConfig.clear(ctx)
@@ -1344,7 +1374,7 @@ class AppState private constructor(context: Context) {
         base = null; code = null; account = null; node = null
         infos.clear(); badCfg.clear()
         pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()
-        nodeGeo.clear(); nodeIso.clear(); userGeo = null; userIso = null
+        nodeGeo.clear(); nodeIso.clear(); nodeCity.clear(); exitIso = null; userGeo = null; userIso = null
         smartRows.clear(); smartOpen = false
         pingHist.clear(); pingAllUi = PingAllUi()
         gameSheet = false; appsPicker = false; tab = KTab.HOME

@@ -137,3 +137,23 @@ fun cityName(iso: String?): String? {
 /** رقم‌های لاتین را در حالت فارسی به رقم فارسی تبدیل می‌کند (برای عددهای ساده مثل روز و گیگ) */
 fun faDigits(s: String): String =
     if (LangState.en) s else buildString { s.forEach { c -> append(if (c in '0'..'9') ('۰' + (c - '0')) else if (c == '.') '٫' else c) } }
+
+/** اسم فارسی چند شهر رایج مرکز داده (شهری که پنل یا ipinfo برای IP خروجی برمی‌گرداند) */
+private val cityFa = mapOf(
+    "frankfurt am main" to "فرانکفورت", "frankfurt" to "فرانکفورت", "berlin" to "برلین", "nuremberg" to "نورنبرگ",
+    "falkenstein" to "فالکن‌اشتاین", "munich" to "مونیخ", "dusseldorf" to "دوسلدورف", "hamburg" to "هامبورگ",
+    "istanbul" to "استانبول", "ankara" to "آنکارا", "izmir" to "ازمیر", "bursa" to "بورسا", "antalya" to "آنتالیا",
+    "amsterdam" to "آمستردام", "rotterdam" to "روتردام", "helsinki" to "هلسینکی", "paris" to "پاریس",
+    "london" to "لندن", "manchester" to "منچستر", "stockholm" to "استکهلم", "warsaw" to "ورشو", "vienna" to "وین",
+    "yerevan" to "ایروان", "moscow" to "مسکو", "dubai" to "دبی", "toronto" to "تورنتو", "singapore" to "سنگاپور",
+    "tokyo" to "توکیو", "milan" to "میلان", "madrid" to "مادرید", "zurich" to "زوریخ", "tbilisi" to "تفلیس",
+    "baku" to "باکو", "tehran" to "تهران",
+)
+
+/** شهر خروجی برای نمایش: شهری که از IP خروجی آمده (فارسی‌شده اگر شناخته‌شده است)، وگرنه شهر معمول آن کشور */
+fun exitCityName(iso: String?, exitCity: String?): String? {
+    val c = exitCity?.trim().orEmpty()
+    if (c.isEmpty()) return cityName(iso)
+    if (LangState.en) return c
+    return cityFa[c.lowercase()] ?: c
+}

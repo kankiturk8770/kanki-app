@@ -354,6 +354,8 @@ private val EN = mapOf(
     "اینجا می‌بینی کجایی و به کدوم کشور وصلی؛ سرعت و پینگ زنده‌ت هم پایین صفحه‌ست." to "See where you are and which country you're connected to; your live speed and ping are further down.",
     "«هوشمند» پینگ همه رو می‌گیره و به بهترین وصل می‌شه. «گیمینگ» پروتکل و کشور رو خودت انتخاب می‌کنی. «ضد فیلتر» با یه لمس خودش بهترین راه رو پیدا می‌کنه؛ دوباره بزنی، از سرورها دستی انتخاب می‌کنی. «DNS» فقط بازی‌ها و برنامه‌هایی که انتخاب کردی رو رفع تحریم می‌کنه." to "\"Smart\" pings everything and connects to the best. In \"Gaming\" you pick the protocol and country. \"Anti-filter\" finds the best way by itself in one tap; tap again to pick manually from the servers. \"DNS\" unblocks only the games and apps you chose.",
     "همه‌ی کشورها و کانفیگ‌ها؛ «تست پینگ همه» پینگ UDP و TCP همه رو با هم می‌گیره و با یه لمس روی هر کانفیگ وصل می‌شی." to "All countries and configs; \"Ping all\" measures UDP and TCP ping of everything at once, and one tap on a config connects you.",
+    // ---- نسخه‌ی ۱.۱۱.۱
+    "IP شما" to "Your IP",
     "این حباب گفتگو فقط برای وقتیه که اینترنت ملی شد. اون موقع از اینجا مستقیم با ادمین حرف می‌زنی، اسکرین‌شات می‌فرستی و کانفیگی که از فیلتر رد می‌شه رو می‌گیری. در حالت عادی لازمش نداری." to "This chat bubble is only for when the internet goes national-only. Then you talk to the admin here directly, send screenshots and get a config that gets through. Normally you won't need it.",
 )
 
