@@ -248,11 +248,14 @@ data class DnsCardUi(
     val activeRoute: String? = null,
     /** این گوشی می‌تواند بقیه‌ی برنامه‌ها را ببندد (اندروید ۱۰ به بالا) */
     val canBlock: Boolean = true,
+    /** بقیه‌ی برنامه‌ها بسته‌اند (پینگ برنامه‌های انتخابی بالاتر می‌رود) */
+    val block: Boolean = false,
 )
 
 class DnsActions(
     val pickApps: () -> Unit = {},
     val pickDns: (String) -> Unit = {},
+    val toggleBlock: () -> Unit = {},
 )
 
 @Composable
@@ -273,8 +276,8 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             T("⚠", size = 13.sp, color = K.Warn, weight = FontWeight.Normal)
             Spacer(Modifier.width(6.dp))
             T(
-                if (u.canBlock) "تا وقتی DNS روشن است، فقط بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید به اینترنت وصل‌اند و از DNS کانکی استفاده می‌کنند. بقیه‌ی برنامه‌ها تا خاموش کردن DNS اینترنت ندارند."
-                else "تا وقتی DNS روشن است، بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید از DNS کانکی استفاده می‌کنند.",
+                if (u.canBlock && u.block) "تا وقتی DNS روشن است، فقط بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید به اینترنت وصل‌اند و از DNS کانکی استفاده می‌کنند. بقیه‌ی برنامه‌ها تا خاموش کردن DNS اینترنت ندارند."
+                else "تا وقتی DNS روشن است، بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید از DNS کانکی استفاده می‌کنند؛ ترافیکشان مستقیم می‌رود.",
                 size = 11.5.sp, color = K.Text, weight = FontWeight.Normal, modifier = Modifier.weight(1f),
             )
         }
@@ -306,6 +309,21 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
                 Spacer(Modifier.width(6.dp))
             }
             Chevron(mc)
+        }
+        if (u.canBlock) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = vstate == VState.OFF, onClick = act.toggleBlock).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CheckMark(u.block, 20.dp, mc)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    T("بقیه‌ی برنامه‌ها اینترنت نداشته باشند", size = 12.sp, color = K.Text, weight = FontWeight.Bold)
+                    T("پینگ بازی بالاتر می‌رود؛ فقط اگر لازم است روشن کنید", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
+            }
         }
         if (u.servers.size > 2) {
             Spacer(Modifier.height(8.dp))

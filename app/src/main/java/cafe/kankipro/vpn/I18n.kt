@@ -356,6 +356,10 @@ private val EN = mapOf(
     "همه‌ی کشورها و کانفیگ‌ها؛ «تست پینگ همه» پینگ UDP و TCP همه رو با هم می‌گیره و با یه لمس روی هر کانفیگ وصل می‌شی." to "All countries and configs; \"Ping all\" measures UDP and TCP ping of everything at once, and one tap on a config connects you.",
     // ---- نسخه‌ی ۱.۱۱.۱
     "IP شما" to "Your IP",
+    // ---- نسخه‌ی ۱.۱۱.۳
+    "بقیه‌ی برنامه‌ها اینترنت نداشته باشند" to "Other apps have no internet",
+    "پینگ بازی بالاتر می‌رود؛ فقط اگر لازم است روشن کنید" to "Raises the game's ping; turn on only if needed",
+    "تا وقتی DNS روشن است، بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید از DNS کانکی استفاده می‌کنند؛ ترافیکشان مستقیم می‌رود." to "While DNS is on, the games and apps you picked use Kanki DNS; their traffic goes direct.",
     // ---- نسخه‌ی ۱.۱۱.۲
     "ضد فیلتر" to "Anti-filter",
     "اولویت Xray" to "Xray first",

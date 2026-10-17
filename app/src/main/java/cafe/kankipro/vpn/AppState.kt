@@ -145,6 +145,13 @@ class AppState private constructor(context: Context) {
     var dnsPick by mutableStateOf(prefs.getString("dnsPick", "") ?: "")
         private set
     fun changeDnsPick(id: String) { dnsPick = id; prefs.edit().putString("dnsPick", id).apply() }
+    /**
+     * DNS: بقیه‌ی برنامه‌ها اینترنت نداشته باشند. پیش‌فرض خاموش: برنامه‌های انتخابی فقط DNS کانکی را می‌گیرند
+     * و ترافیکشان مستقیم می‌رود (پینگ کم)؛ روشن کردنش ترافیک آن‌ها را از tun2socks داخل گوشی رد می‌کند.
+     */
+    var dnsBlock by mutableStateOf(prefs.getBoolean("dnsBlock", false))
+        private set
+    fun changeDnsBlock(v: Boolean) { dnsBlock = v; prefs.edit().putBoolean("dnsBlock", v).apply() }
     var dnsActive by mutableStateOf<DnsServer?>(null)
     /** اسم شبکه‌ی فعلی (Wi-Fi، ایرانسل …) */
     var netName by mutableStateOf("")
@@ -391,7 +398,7 @@ class AppState private constructor(context: Context) {
             val fallback = ranked + order.filter { it !in ranked }.sortedBy { if (it.role == "relay") 0 else 1 }
             // فقط بازی‌ها و برنامه‌های انتخابی اینترنت دارند (از راه DNS کانکی)؛ خالی = همه‌ی برنامه‌ها مثل قبل
             val apps = allowedAppsNow()
-            val text = applyExcluded(KankiDns.wrap(fallback, apps), excluded.toSet())
+            val text = applyExcluded(KankiDns.wrap(fallback, apps, dnsBlock), excluded.toSet())
             if (!wantTry) throw IllegalStateException("cancelled")
             withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
             val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }

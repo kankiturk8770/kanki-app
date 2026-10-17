@@ -43,11 +43,12 @@ object KankiDns {
      * apps: فقط این برنامه‌ها اینترنت دارند (از راه DNS کانکی)؛ بقیه‌ی برنامه‌ها تا خاموش شدن DNS بی‌اینترنت‌اند.
      * خالی یعنی مثل قبل: همه‌ی برنامه‌ها از DNS کانکی استفاده می‌کنند و چیزی بسته نمی‌شود.
      */
-    fun wrap(list: List<DnsServer>, apps: List<String> = emptyList()): String = buildString {
+    fun wrap(list: List<DnsServer>, apps: List<String> = emptyList(), block: Boolean = false): String = buildString {
         append("[Interface]\n[KankiDNS]\n")
         if (apps.isNotEmpty()) {
             append("IncludedApplications = ").append(apps.joinToString(", ")).append('\n')
-            append("BlockOthers = 1\n")
+            // بستن بقیه‌ی برنامه‌ها ترافیک برنامه‌های انتخابی را هم از tun2socks داخل گوشی رد می‌کند (پینگ بالاتر)
+            if (block) append("BlockOthers = 1\n")
         }
         list.filter { it.ip.isNotBlank() }.forEach { append("Server = ").append(it.ip).append(' ').append(it.registerHttp.ifBlank { "-" }).append('\n') }
     }
