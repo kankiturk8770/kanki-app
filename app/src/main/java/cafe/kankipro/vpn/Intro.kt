@@ -1,6 +1,9 @@
 package cafe.kankipro.vpn
 
-import android.media.MediaPlayer
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
+import android.os.SystemClock
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -29,20 +32,83 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * صفحه‌ی ورود: صدای آرام ورود پخش می‌شود و تصویرش (SplashVisual در IntroUi.kt) هم‌زمان جلو می‌رود.
- * صدا (res/raw/kanki_logo.mp3) و تصویر هر دو ۳.۸ ثانیه‌اند و لحظه‌ی ظاهر شدن لوگو (۱.۳ ثانیه) با اوج صدا یکی است.
+ * صداهای کوتاه برنامه با SoundPool.
+ * صدا یک بار از قبل بارگذاری می‌شود و خود SoundPool در این شیء نگه داشته می‌شود؛ پس (برخلاف
+ * MediaPlayer محلی که ممکن بود وسط پخش جمع‌آوری شود یا هنوز آماده نباشد) هر بار پخش می‌شود.
+ * اگر هنوز بارگذاری تمام نشده باشد، همان لحظه که آماده شد پخش می‌شود (اگر خیلی دیر نشده باشد).
+ * همه‌ی صدا زدن‌ها روی رشته‌ی اصلی است.
+ */
+object Sfx {
+    private var pool: SoundPool? = null
+    /** شناسه‌ی منبع ← شناسه‌ی صدا در SoundPool */
+    private val ids = HashMap<Int, Int>()
+    private val ready = HashSet<Int>()
+    /** صداهایی که قبل از آماده شدن درخواست شده‌اند: (بلندی، زمان درخواست) */
+    private val pending = HashMap<Int, Pair<Float, Long>>()
+
+    private fun pool(): SoundPool = pool ?: SoundPool.Builder()
+        .setMaxStreams(2)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        )
+        .build()
+        .also { p ->
+            p.setOnLoadCompleteListener { sp, id, status ->
+                if (status == 0) {
+                    ready.add(id)
+                    pending.remove(id)?.let { (v, at) ->
+                        if (SystemClock.uptimeMillis() - at < 1500) sp.play(id, v, v, 1, 0, 1f)
+                    }
+                }
+            }
+            pool = p
+        }
+
+    fun preload(ctx: Context, res: Int) {
+        runCatching {
+            if (!ids.containsKey(res)) {
+                val id = pool().load(ctx.applicationContext, res, 1)
+                if (id != 0) {
+                    ids[res] = id
+                }
+            }
+            Unit
+        }
+    }
+
+    fun play(ctx: Context, res: Int, volume: Float = 1f) {
+        runCatching {
+            preload(ctx, res)
+            val id = ids[res] ?: return
+            if (id in ready) {
+                pool?.play(id, volume, volume, 1, 0, 1f)
+            } else {
+                pending[id] = volume to SystemClock.uptimeMillis()
+            }
+            Unit
+        }
+    }
+
+    fun soundOn(ctx: Context) = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE).getBoolean("sound", true)
+}
+
+/**
+ * صفحه‌ی شروع (۴ ثانیه): لوگو با نور و بزرگ‌شدن نرم ظاهر می‌شود و یک نوار نور از رویش رد می‌شود
+ * (تصویر در SplashVisual، فایل IntroUi.kt). صدای خیلی آرام res/raw/kanki_splash.wav با بلندی کم پخش می‌شود.
  */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
     val ctx = LocalContext.current
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        val soundOn = ctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
-        val player = if (!soundOn) null else runCatching { MediaPlayer.create(ctx, R.raw.kanki_logo)?.apply { start() } }.getOrNull()
+        // صدای باز شدن قفل از همین حالا آماده می‌شود تا بعد از ورود حتماً پخش شود
+        Sfx.preload(ctx, R.raw.kanki_switch)
+        if (Sfx.soundOn(ctx)) Sfx.play(ctx, R.raw.kanki_splash, 0.35f)
         p.animateTo(1f, tween((SPLASH_SEC * 1000).toInt(), easing = LinearEasing))
         onDone()
-        delay(300)
-        runCatching { player?.release() }
     }
     SplashVisual(p.value)
 }
@@ -52,11 +118,10 @@ fun SplashScreen(onDone: () -> Unit) {
 fun UnlockScreen(onDone: () -> Unit) {
     val uctx = LocalContext.current
     LaunchedEffect(Unit) {
-        val on = uctx.getSharedPreferences("kanki", android.content.Context.MODE_PRIVATE).getBoolean("sound", true)
-        if (on) {
-            val mp = runCatching { MediaPlayer.create(uctx, R.raw.kanki_switch) }.getOrNull()
+        if (Sfx.soundOn(uctx)) {
+            Sfx.preload(uctx, R.raw.kanki_switch)
             delay(880) // لحظه‌ی چرخیدن کلید
-            runCatching { mp?.apply { setOnCompletionListener { it.release() }; start() } }
+            Sfx.play(uctx, R.raw.kanki_switch, 0.9f)
         }
     }
     val p = remember { Animatable(0f) }
@@ -75,7 +140,7 @@ fun UnlockScreen(onDone: () -> Unit) {
     val fadeOut = 1f - ((v - 0.92f) / 0.08f).coerceIn(0f, 1f)
     val lockAlpha = 1f - ((v - 0.66f) / 0.12f).coerceIn(0f, 1f)
 
-    KankiBackground(accent = if (open > 0.5f) K.Green else K.Gold) {
+    KankiBackground(accent = if (open > 0.5f) K.Green else K.Gold, calm = true) {
         Column(
             Modifier.fillMaxSize().alpha(fadeOut),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -144,7 +209,7 @@ fun UnlockScreen(onDone: () -> Unit) {
                     }
                 }
                 if (welcome > 0f) {
-                    Box(Modifier.alpha(welcome).scale(0.6f + 0.4f * welcome)) { Logo3D(140.dp) }
+                    Box(Modifier.alpha(welcome).scale(0.6f + 0.4f * welcome)) { Logo3D(140.dp, glow = welcome) }
                 }
             }
             Spacer(Modifier.height(10.dp))

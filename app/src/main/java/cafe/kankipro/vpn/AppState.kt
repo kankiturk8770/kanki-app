@@ -60,9 +60,11 @@ class AppState private constructor(context: Context) {
         private set
     fun changeMode(m: KMode) { mode = m; prefs.edit().putString("mode", m.key).apply() }
 
+    /** تب فعلی (برنامه هم می‌تواند تب را عوض کند، مثلاً لمس دوباره‌ی «ضد فیلتر» تب سرورها را باز می‌کند) */
+    var tab by mutableStateOf(KTab.HOME)
+
     /** پنل‌های باز صفحه‌ی اول؛ تا وقتی یکی باز است، دکمه‌ی اصلی اتصال کاری نمی‌کند (گیج‌کننده نباشد) */
     var gameSheet by mutableStateOf(false)
-    var filterSheet by mutableStateOf(false)
     var appsPicker by mutableStateOf(false)
 
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
@@ -149,7 +151,7 @@ class AppState private constructor(context: Context) {
 
     /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
     fun toggleMain() {
-        if (gameSheet || filterSheet || appsPicker) return
+        if (gameSheet || appsPicker) return
         // وسط سنجش «هوشمند»: لمس یعنی لغو
         if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
         when (vstate) {
@@ -163,13 +165,29 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    /** دکمه‌های حالت (لمس) */
+    /**
+     * کاشی‌های حالت (لمس):
+     *   هوشمند   همه را می‌سنجد و به بهترین وصل می‌شود (اگر همین حالا با هوشمند وصل است، کاری نمی‌کند)
+     *   گیمینگ   پنل گیمینگ باز می‌شود
+     *   ضد فیلتر  لمس اول: خودش بهترین راه را پیدا و وصل می‌کند (اول مستقیم، بعد تانل)؛
+     *             لمس دوباره (وقتی همین حالت انتخاب است): تب سرورها برای انتخاب دستی
+     *   DNS      انتخاب می‌شود؛ اگر VPN دیگری وصل است، به DNS سوییچ می‌کند
+     */
     fun tapMode(m: KMode) {
         if (vstate == VState.CONNECTING && m != KMode.GAME) return
         when (m) {
-            KMode.SMART -> { changeMode(m); smartConnect() }
+            KMode.SMART -> {
+                val already = mode == KMode.SMART && vstate == VState.ON
+                changeMode(m)
+                if (!already) smartConnect()
+            }
             KMode.GAME -> { changeMode(m); gameSheet = true }
-            KMode.FILTER -> { changeMode(m); launchConnect(reconnect = true) { connectFilter() } }
+            KMode.FILTER -> {
+                if (mode == KMode.FILTER) { tab = KTab.SERVERS; return }
+                changeMode(m)
+                setFilter(true, "", null)
+                launchConnect(reconnect = true) { connectFilter() }
+            }
             KMode.DNS -> {
                 val wasOther = mode != KMode.DNS && vstate == VState.ON
                 changeMode(m)
@@ -225,18 +243,21 @@ class AppState private constructor(context: Context) {
         return nodes.minByOrNull { nodePing(it)?.takeIf { p -> p > 0 } ?: 9999 }
     }
 
-    /** گیمینگ: پروتکل و کشور انتخابی (قفل)، یا با «انتخاب خودکار» کم‌پینگ‌ترین پروتکل همان کشور */
+    /**
+     * گیمینگ: پروتکل و کشور انتخابی (قفل؛ هیچ‌وقت بی‌صدا عوض نمی‌شود)، یا با «انتخاب هوشمند سرور»
+     * کم‌پینگ‌ترین کشور و پروتکل از بین همه‌ی کانفیگ‌های گیم (اگر وصل نشد، بعدی؛ حداکثر سه تلاش).
+     */
     suspend fun connectGame() {
         netName = Modes.networkName(ctx)
-        if (account == null) return
+        val a = account ?: return
         val n = gameNode?.takeIf { g -> Modes.GAME_PROTOS.any { hasCfg(g, it) } } ?: bestGameNode()
         if (n == null) { error = "کانفیگ مناسب گیم در اشتراک شما نیست."; return }
         val list = if (gameAuto) {
             tryStep = "سنجش پینگ…"
-            val protos = Modes.GAME_PROTOS.filter { hasCfg(n, it) }.map { n to it }
-            val m = pingMany(protos)
-            // پروتکلی که جواب پینگ نداد آخر می‌رود؛ حداکثر سه تلاش
-            protos.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }.take(3)
+            val all = a.configs.map { it.node }.distinct().flatMap { nd -> Modes.GAME_PROTOS.filter { hasCfg(nd, it) }.map { nd to it } }
+            val m = pingMany(all)
+            // کانفیگی که جواب پینگ نداد آخر می‌رود
+            all.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }.take(3)
         } else {
             if (!hasCfg(n, gameProto)) {
                 error = trf("%s روی این کشور نیست. از «گیمینگ» دوباره انتخاب کنید.", protoTitle(gameProto))
@@ -299,26 +320,61 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    /** حالت DNS: ثبت IP، انتخاب سرور (اول ریلی) و بالا آوردن VPN کوچکِ DNS */
+    /** «یک کلیک تا کانفیگ»: کانفیگ انتخابی قفل و (بعد از گرفتن اجازه‌ی VPN) به همان وصل می‌شود */
+    fun pickFromServers(id: String, p: String) {
+        if (vstate == VState.CONNECTING || smartBusy) return
+        lockFromServers(id, p)
+        error = null; errorDetail = null
+        tab = KTab.HOME
+        launchConnect(reconnect = true) { if (mode == KMode.FILTER) connectFilter() else connectGame() }
+    }
+
+    /** مسیر یک سرور DNS برای نمایش: ریلی داخل ایران (از تانل پنل به خروجی) یا خروجی مستقیم */
+    fun dnsRoute(s: DnsServer?): String? = when {
+        s == null -> null
+        s.role == "relay" -> "از ریلی ایران"
+        else -> "مستقیم"
+    }
+
+    /** موتور DNS اگر وسط کار به سرور دیگری رفت (ریلی ⇄ مستقیم)، همان نشان داده شود */
+    fun syncDnsActive() {
+        val ip = KankiDns.activeIp ?: return
+        val cur = dnsActive ?: return
+        if (cur.ip == ip) return
+        account?.dns?.servers?.firstOrNull { it.ip == ip }?.let { dnsActive = it }
+    }
+
+    /**
+     * حالت DNS: ثبت IP و بالا آوردن VPN کوچکِ DNS. هر دو نوع سرور پشتیبانی می‌شود:
+     * «relay» (سرور داخل ایران که از تانل مخفی پنل به خروجی خارج می‌رود) و «exit» (خارج، مستقیم).
+     * اول ریلی‌ها (به ترتیب سرعت)، بعد خروجی‌های مستقیم؛ موتور اگر سرور فعلی جواب نداد خودش سراغ بعدی می‌رود.
+     * اگر کاربر سرور خاصی انتخاب کرده باشد و جواب بدهد، همان اول است.
+     */
     suspend fun connectDns() {
         val info = account?.dns
-        if (info == null) { error = "رفع تحریم (DNS کانکی) در اشتراک شما فعال نیست. از پشتیبانی بخواهید."; return }
+        if (info == null) {
+            error = "اشتراک شما DNS ندارد"
+            errorDetail = null
+            return
+        }
         error = null
         vstate = VState.CONNECTING
         try {
             val order = KankiDns.ordered(info, dnsPick.ifBlank { null })
-            // همه همزمان ثبت می‌شوند؛ انتخابی/ریلی اگر جواب داد همان، وگرنه سریع‌ترین
+            // همه همزمان ثبت می‌شوند (آدرس ثبت HTTP روی خود IP هر سرور)
             val reg = withContext(Dispatchers.IO) {
                 kotlinx.coroutines.coroutineScope { order.map { s -> async { s to KankiDns.register(s.registerHttp) } }.awaitAll() }
             }
             val ok = reg.filter { it.second != null }
-            val best = ok.firstOrNull { it.first.id == dnsPick }?.first
-                ?: ok.firstOrNull { it.first.role == "relay" && dnsPick.isBlank() }?.first
-                ?: ok.minByOrNull { it.second ?: Long.MAX_VALUE }?.first
-                ?: throw IllegalStateException("no DNS server answered the registration")
+            fun fastest(l: List<Pair<DnsServer, Long?>>) = l.sortedBy { it.second ?: Long.MAX_VALUE }.map { it.first }
+            val ranked = (ok.filter { it.first.id == dnsPick && dnsPick.isNotBlank() }.map { it.first } +
+                fastest(ok.filter { it.first.role == "relay" }) + fastest(ok.filter { it.first.role != "relay" })).distinct()
+            val best = ranked.firstOrNull() ?: throw IllegalStateException("no DNS server answered the registration")
+            // بقیه‌ی سرورها (حتی آن‌هایی که الان ثبت نشدند) به ترتیب ریلی ← مستقیم برای جابه‌جایی خودکار می‌مانند
+            val fallback = ranked + order.filter { it !in ranked }.sortedBy { if (it.role == "relay") 0 else 1 }
             // فقط بازی‌ها و برنامه‌های انتخابی اینترنت دارند (از راه DNS کانکی)؛ خالی = همه‌ی برنامه‌ها مثل قبل
             val apps = allowedAppsNow()
-            val text = applyExcluded(KankiDns.wrap(listOf(best) + order.filter { it != best }, apps), excluded.toSet())
+            val text = applyExcluded(KankiDns.wrap(fallback, apps), excluded.toSet())
             if (!wantTry) throw IllegalStateException("cancelled")
             withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
             val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }
@@ -327,14 +383,15 @@ class AppState private constructor(context: Context) {
             dnsActive = best
             vstate = VState.ON
             wantOn = true
-            LastConfig.save(ctx, text, "🛡 " + best.name.ifBlank { "Kanki DNS" } + " · " + tr("رفع تحریم"))
+            LastConfig.save(ctx, text, "🛡 " + best.name.ifBlank { "Kanki DNS" } + " · " + tr(dnsRoute(best) ?: "رفع تحریم"))
             startNotif()
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             dnsActive = null
+            // پیشنهاد وصل شدن به VPN داده نمی‌شود؛ فقط پشتیبانی
             if (wantTry) {
-                error = "DNS کانکی وصل نشد. اینترنت را بررسی کنید یا از پشتیبانی بپرسید."
+                error = "DNS وصل نشد؛ مشکلی پیش آمده، با پشتیبانی تماس بگیرید"
                 errorDetail = "dns: ${e.message ?: e.javaClass.simpleName}"
             }
         }
@@ -389,9 +446,6 @@ class AppState private constructor(context: Context) {
     /** ردیفی که الان به آن وصل می‌شود («node|proto») */
     var smartCurrent by mutableStateOf<String?>(null)
 
-    /** Xray اگر پینگش تا این حد باشد «خوب» است و بر بقیه مقدم می‌شود */
-    private val xrayGoodMs = 250L
-
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
     private suspend fun smartMeasure(): List<SmartRow> {
         val a = account ?: return emptyList()
@@ -423,9 +477,9 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * «هوشمند»: پنل کوچکی باز می‌شود، پینگ همه‌ی سرورها و پروتکل‌ها گرفته می‌شود، به بهترین وصل می‌شود
-     * و بعد از اتصال موفق پنل خودش بسته می‌شود. اگر یک سرور Xray خوب جواب بدهد، Xray مقدم است؛
-     * وگرنه کمترین پینگ. اگر بهترین وصل نشد، بعدی امتحان می‌شود (فقط این حالت اجازه‌ی عوض کردن دارد).
+     * «هوشمند»: پنل کوچکی باز می‌شود، پینگ همه‌ی کانفیگ‌ها (Xray، AmneziaWG تانل و مستقیم، WireGuard،
+     * Hysteria2) گرفته می‌شود، به کمترین پینگ وصل می‌شود و بعد از اتصال موفق پنل خودش بسته می‌شود.
+     * اگر بهترین واقعاً وصل نشد، بعدی امتحان می‌شود (فقط حالت‌های خودکار اجازه‌ی عوض کردن دارند).
      */
     fun smartConnect() {
         if (smartBusy) return
@@ -457,8 +511,8 @@ class AppState private constructor(context: Context) {
                 error = "هیچ سروری جواب پینگ نداد. اینترنت را بررسی کنید."
                 return
             }
-            val xrayGood = rows.filter { it.proto == "xray" && it.ping in 1..xrayGoodMs }
-            val order = (xrayGood.take(2) + rows).distinctBy { it.node + "|" + it.proto }.take(4)
+            // کمترین پینگ اول؛ اتصال واقعاً آزمایش می‌شود (پاسخ از داخل تونل) و اگر نشد، بعدی
+            val order = rows.sortedBy { it.ping }.distinctBy { it.node + "|" + it.proto }.take(5)
             for ((i, r) in order.withIndex()) {
                 if (!wantTry) return
                 smartCurrent = r.node + "|" + r.proto
@@ -914,9 +968,14 @@ class AppState private constructor(context: Context) {
             .apply()
     }
 
-    suspend fun login(input: String): Boolean {
-        val r = SubscriptionApi.normalize(input)
-        if (r == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
+    /**
+     * ورود با کد اشتراک. baseHint: اگر کاربر لینک کامل جای‌گذاری کرده بود، آدرس پنل همان لینک
+     * (در کادر فقط کد نشان داده می‌شود)؛ وگرنه برنامه آدرس را خودش پیدا می‌کند.
+     */
+    suspend fun login(input: String, baseHint: String? = null): Boolean {
+        val n = SubscriptionApi.normalize(input)
+        if (n == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
+        val r = if (baseHint != null && n.first == SubscriptionApi.DEFAULT_HOST) baseHint to n.second else n
         loading = true; error = null
         return try {
             val a = augment(withContext(Dispatchers.IO) { loadAccount(r.first, r.second) })
@@ -1186,24 +1245,61 @@ class AppState private constructor(context: Context) {
         realTesting = false
     }
 
-    private var pingAllBusy = false
+    /** وضعیت «تست پینگ همه» در تب سرورها */
+    var pingAllUi by mutableStateOf(PingAllUi())
+        private set
 
-    /** پینگ واقعی همه‌ی سرورها (هر کدام با یکی از کانفیگ‌هایش)، همزمان؛ برای فهرست کشورها */
+    /** «تست پینگ همه» در محدوده‌ی خود برنامه (با عوض کردن تب قطع نمی‌شود) */
+    fun startPingAll() { bg.launch { pingAll() } }
+
+    /**
+     * پینگ همه‌ی کانفیگ‌ها (نه فقط یکی برای هر سرور)، حداکثر ۶ تا همزمان:
+     * UDP (AmneziaWG، WireGuard، Hysteria2) با پینگ ICMP خود سرور، TCP (Xray) با زمان اتصال به پورتش.
+     */
     suspend fun pingAll() {
         val a = account ?: return
-        if (pingAllBusy) return
-        pingAllBusy = true
+        if (pingAllUi.running) return
+        val targets = a.configs.mapNotNull { l ->
+            val k = "${l.node}/${l.protocol}"
+            if (badCfg[k] == true) null else infos[k]?.takeIf { i -> i.host != "—" }?.let { k to it }
+        }.distinctBy { it.first }
+        val udp = targets.count { it.second.transport != "TCP" }
+        pingAllUi = PingAllUi(running = true, done = 0, total = targets.size, udp = udp, tcp = targets.size - udp)
+        val gate = kotlinx.coroutines.sync.Semaphore(6)
         try {
-            val targets = a.configs.groupBy { it.node }.mapNotNull { (n, links) ->
-                links.map { it.protocol }.firstNotNullOfOrNull { p -> infos["$n/$p"]?.takeIf { i -> i.host != "—" }?.let { "$n/$p" to it } }
+            kotlinx.coroutines.coroutineScope {
+                targets.map { (k, info) ->
+                    async {
+                        gate.acquire()
+                        try {
+                            pinging[k] = true
+                            val r = withContext(Dispatchers.IO) { runCatching { Pinger.test(info) }.getOrNull() }
+                            pings[k] = r ?: -1L
+                        } finally {
+                            pinging[k] = false
+                            gate.release()
+                            pingAllUi = pingAllUi.copy(done = pingAllUi.done + 1)
+                        }
+                        Unit
+                    }
+                }.awaitAll()
             }
-            val res = kotlinx.coroutines.coroutineScope {
-                targets.map { (k, info) -> async(Dispatchers.IO) { k to (runCatching { Pinger.test(info) }.getOrNull() ?: -1L) } }.awaitAll()
-            }
-            res.forEach { (k, v) -> pings[k] = v }
         } finally {
-            pingAllBusy = false
+            pingAllUi = pingAllUi.copy(running = false, finished = true)
         }
+    }
+
+    /** چند پینگ آخر از داخل تونل (برای نمودار کوچک صفحه‌ی اول) */
+    val pingHist = androidx.compose.runtime.mutableStateListOf<Long>()
+
+    /** یک نمونه‌ی سبک پینگ (یک درخواست HTTP کوچک از داخل تونل) برای نمودار زنده */
+    suspend fun samplePing() {
+        val v = withContext(Dispatchers.IO) { RealPing.once() } ?: return
+        if (vstate != VState.ON) return
+        pingHist.add(v)
+        while (pingHist.size > 24) pingHist.removeAt(0)
+        // عدد نمایش داده‌شده: کمترین از چند نمونه‌ی آخر (مثل پینگ واقعی، بدون نوسان یک‌باره)
+        ping = pingHist.takeLast(3).minOrNull()
     }
 
     /** تست پینگ یک کانفیگ */
@@ -1225,6 +1321,7 @@ class AppState private constructor(context: Context) {
         KankiNotif.hide(ctx)
         vstate = VState.OFF
         ping = null
+        pingHist.clear()
     }
 
     /** پینگ واقعی از داخل تونل (HTTP روی اتصال زنده؛ نه HTTPS که چند رفت‌وبرگشت اضافه دارد) */
@@ -1249,7 +1346,8 @@ class AppState private constructor(context: Context) {
         pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()
         nodeGeo.clear(); nodeIso.clear(); userGeo = null; userIso = null
         smartRows.clear(); smartOpen = false
-        gameSheet = false; filterSheet = false; appsPicker = false
+        pingHist.clear(); pingAllUi = PingAllUi()
+        gameSheet = false; appsPicker = false; tab = KTab.HOME
         openNode = null; accountOpen = false
         error = null; errorDetail = null
     }

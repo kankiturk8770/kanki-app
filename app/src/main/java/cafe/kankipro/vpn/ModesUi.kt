@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -46,14 +47,14 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// چهار دکمه‌ی حالت، پنل هوشمند، کارت DNS، پنل‌های گیمینگ و ضد فیلتر، و انتخاب برنامه‌ها.
+// چهار کاشی حالت، پنل هوشمند، کارت DNS، پنل گیمینگ و انتخاب برنامه‌ها.
 
-/** رنگ اختصاصی هر حالت (دکمه‌ی اتصال هم همین رنگ را می‌گیرد) */
+/** رنگ اختصاصی هر حالت برای حلقه و نور دکمه‌ی اتصال (ملایم، نه جیغ) */
 fun modeColor(m: KMode): Color = when (m) {
     KMode.SMART -> K.Gold
-    KMode.GAME -> Color(0xFF3FD08A)
-    KMode.FILTER -> Color(0xFF4DA3FF)
-    KMode.DNS -> Color(0xFFA77BFF)
+    KMode.GAME -> Color(0xFF46D99A)
+    KMode.FILTER -> Color(0xFF58A6F0)
+    KMode.DNS -> Color(0xFF9E82EE)
 }
 
 /** آیکون هر حالت (کشیده‌شده، بدون فایل تصویر) */
@@ -61,9 +62,9 @@ fun modeColor(m: KMode): Color = when (m) {
 fun ModeIcon(m: KMode, color: Color, size: Dp = 22.dp) {
     if (m == KMode.DNS) {
         Box(
-            Modifier.size(size).clip(CircleShape).background(color.copy(alpha = .14f)).border(1.4.dp, color, CircleShape),
+            Modifier.size(size).clip(CircleShape).background(color.copy(alpha = .08f)).border(1.4.dp, color, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { T("DNS", size = (size.value * .27f).sp, color = color, font = Poppins, weight = FontWeight.Bold, ltr = true) }
+        ) { T("DNS", size = (size.value * .26f).sp, color = color, font = Poppins, weight = FontWeight.Bold, ltr = true) }
     } else {
         Canvas(Modifier.size(size)) { modeLogo(m, color) }
     }
@@ -71,22 +72,21 @@ fun ModeIcon(m: KMode, color: Color, size: Dp = 22.dp) {
 
 fun DrawScope.modeLogo(m: KMode, c: Color) {
     val w = size.width
-    val sw = w * .09f
+    val sw = w * .085f
     val st = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (m) {
         KMode.SMART -> {
-            // ستاره‌ی چهارپر بزرگ و دو ستاره‌ی کوچک (هوش)
+            // ستاره‌ی چهارپر بزرگ و یک ستاره‌ی کوچک (درخشش)
             fun star(cx: Float, cy: Float, r: Float) = Path().apply {
                 moveTo(cx, cy - r)
-                quadraticBezierTo(cx + r * .18f, cy - r * .18f, cx + r, cy)
-                quadraticBezierTo(cx + r * .18f, cy + r * .18f, cx, cy + r)
-                quadraticBezierTo(cx - r * .18f, cy + r * .18f, cx - r, cy)
-                quadraticBezierTo(cx - r * .18f, cy - r * .18f, cx, cy - r)
+                quadraticBezierTo(cx + r * .16f, cy - r * .16f, cx + r, cy)
+                quadraticBezierTo(cx + r * .16f, cy + r * .16f, cx, cy + r)
+                quadraticBezierTo(cx - r * .16f, cy + r * .16f, cx - r, cy)
+                quadraticBezierTo(cx - r * .16f, cy - r * .16f, cx, cy - r)
                 close()
             }
-            drawPath(star(w * .42f, w * .56f, w * .36f), c)
-            drawPath(star(w * .82f, w * .2f, w * .14f), c)
-            drawCircle(c, w * .06f, Offset(w * .84f, w * .72f))
+            drawPath(star(w * .42f, w * .42f, w * .36f), c)
+            drawPath(star(w * .80f, w * .80f, w * .16f), c)
         }
         KMode.GAME -> {
             // دسته‌ی بازی
@@ -98,7 +98,6 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
                 cubicTo(w * .28f, w * .82f, w * .16f, w * .86f, w * .1f, w * .76f)
                 cubicTo(w * .02f, w * .62f, w * .08f, w * .28f, w * .28f, w * .28f); close()
             }
-            drawPath(body, c.copy(alpha = .18f))
             drawPath(body, c, style = st)
             drawLine(c, Offset(w * .3f, w * .40f), Offset(w * .3f, w * .56f), sw, StrokeCap.Round)
             drawLine(c, Offset(w * .22f, w * .48f), Offset(w * .38f, w * .48f), sw, StrokeCap.Round)
@@ -106,17 +105,30 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
             drawCircle(c, w * .05f, Offset(w * .76f, w * .53f))
         }
         KMode.FILTER -> {
-            // سپر با فلش رو به بیرون (عبور از فیلتر)
+            // سپر با یک موشک کوچک داخلش (عبور از فیلتر)
             val sh = Path().apply {
-                moveTo(w * .5f, w * .06f); lineTo(w * .88f, w * .2f); lineTo(w * .88f, w * .48f)
+                moveTo(w * .5f, w * .05f); lineTo(w * .88f, w * .19f); lineTo(w * .88f, w * .48f)
                 cubicTo(w * .88f, w * .72f, w * .72f, w * .88f, w * .5f, w * .96f)
-                cubicTo(w * .28f, w * .88f, w * .12f, w * .72f, w * .12f, w * .48f); lineTo(w * .12f, w * .2f); close()
+                cubicTo(w * .28f, w * .88f, w * .12f, w * .72f, w * .12f, w * .48f); lineTo(w * .12f, w * .19f); close()
             }
-            drawPath(sh, c.copy(alpha = .16f))
             drawPath(sh, c, style = st)
-            drawLine(c, Offset(w * .34f, w * .68f), Offset(w * .66f, w * .36f), sw, StrokeCap.Round)
-            drawLine(c, Offset(w * .66f, w * .36f), Offset(w * .44f, w * .36f), sw, StrokeCap.Round)
-            drawLine(c, Offset(w * .66f, w * .36f), Offset(w * .66f, w * .58f), sw, StrokeCap.Round)
+            rotate(45f, Offset(w * .5f, w * .5f)) {
+                val cx = w * .5f
+                val rocket = Path().apply {
+                    moveTo(cx, w * .25f)
+                    quadraticBezierTo(cx + w * .10f, w * .34f, cx + w * .08f, w * .58f)
+                    lineTo(cx - w * .08f, w * .58f)
+                    quadraticBezierTo(cx - w * .10f, w * .34f, cx, w * .25f)
+                    close()
+                }
+                drawPath(rocket, c)
+                val finL = Path().apply { moveTo(cx - w * .08f, w * .48f); lineTo(cx - w * .15f, w * .62f); lineTo(cx - w * .08f, w * .58f); close() }
+                val finR = Path().apply { moveTo(cx + w * .08f, w * .48f); lineTo(cx + w * .15f, w * .62f); lineTo(cx + w * .08f, w * .58f); close() }
+                drawPath(finL, c)
+                drawPath(finR, c)
+                drawLine(c.copy(alpha = .7f), Offset(cx, w * .64f), Offset(cx, w * .72f), sw * .8f, StrokeCap.Round)
+                drawCircle(Color.Black.copy(alpha = .55f), w * .035f, Offset(cx, w * .40f))
+            }
         }
         KMode.DNS -> {
             drawCircle(c, w * .4f, Offset(w * .5f, w * .5f), style = st)
@@ -124,45 +136,58 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
     }
 }
 
-/** چهار دکمه‌ی کوچک مستطیلی حالت؛ «ضد فیلتر» با نگه‌داشتن، انتخاب دستی را باز می‌کند */
+/** چهار کاشی حالت (هوشمند، گیمینگ، ضد فیلتر، DNS)؛ گیمینگ با نگه‌داشتن هم پنلش را باز می‌کند */
 @Composable
 fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         KMode.entries.forEach { m ->
             val sel = m == selected
-            val mc = modeColor(m)
-            val bg by animateColorAsState(if (sel) mc.copy(alpha = .13f) else Color(0x0AFFFFFF), tween(220), label = "mode")
-            val shape = RoundedCornerShape(12.dp)
-            Column(
-                Modifier.weight(1f).height(58.dp).clip(shape).background(bg)
-                    .border(if (sel) 1.5.dp else 1.dp, if (sel) mc else Color(0x16FFFFFF), shape)
-                    .alpha(if (enabled) 1f else .5f)
-                    .pointerInput(m, enabled) {
-                        if (enabled) detectTapGestures(
-                            onTap = { tap(m) },
-                            onLongPress = { long(m) },
-                        )
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                ModeIcon(m, if (sel) mc else K.Sub, 22.dp)
-                Spacer(Modifier.height(4.dp))
-                T(m.title, size = 11.5.sp, color = if (sel) mc else K.Text, weight = if (sel) FontWeight.Black else FontWeight.Bold)
+            val bg by animateColorAsState(if (sel) K.Gold.copy(alpha = .10f) else Color(0x08FFFFFF), tween(220), label = "mode")
+            val shape = RoundedCornerShape(16.dp)
+            Box(Modifier.weight(1f).height(76.dp)) {
+                if (sel) {
+                    // نور طلایی ملایم پشت کاشی انتخاب‌شده
+                    Canvas(Modifier.matchParentSize()) {
+                        drawRoundRect(K.Gold.copy(alpha = .10f), cornerRadius = CornerRadius(18.dp.toPx()), style = Stroke(6.dp.toPx()))
+                    }
+                }
+                Column(
+                    Modifier.matchParentSize().clip(shape)
+                        .background(Brush.verticalGradient(listOf(bg, K.Panel.copy(alpha = .55f))))
+                        .border(if (sel) 1.5.dp else 1.dp, if (sel) K.Gold.copy(alpha = .9f) else K.Gold.copy(alpha = .22f), shape)
+                        .alpha(if (enabled) 1f else .5f)
+                        .pointerInput(m, enabled) {
+                            if (enabled) detectTapGestures(
+                                onTap = { tap(m) },
+                                onLongPress = { long(m) },
+                            )
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    ModeIcon(m, if (sel) K.GoldLight else K.Gold, 26.dp)
+                    Spacer(Modifier.height(6.dp))
+                    T(m.title, size = 12.5.sp, color = if (sel) K.Text else K.Text.copy(alpha = .85f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
+                }
             }
         }
     }
 }
 
-/** یک خط باریک زیر دکمه‌ها: این حالت چه می‌کند */
+/** یک خط باریک زیر کاشی‌ها: حالت انتخاب‌شده چه می‌کند */
 @Composable
-fun ModeHint(m: KMode) {
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        HDivider()
-        Spacer(Modifier.height(6.dp))
-        T(m.sub, size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+fun ModeHint(m: KMode, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier.fillMaxWidth().clip(shape).background(Color(0x08FFFFFF)).border(1.dp, K.Gold.copy(alpha = .16f), shape)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MiniIcon("spark", K.Gold, 12.dp)
+        Spacer(Modifier.width(7.dp))
+        T(tr(m.title) + " : " + tr(m.sub), size = 11.5.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
     }
 }
 
@@ -219,6 +244,8 @@ data class DnsCardUi(
     val servers: List<Triple<String, String, String>> = emptyList(),
     val pick: String = "",
     val active: String? = null,
+    /** مسیر سرور فعال: «از ریلی ایران» یا «مستقیم» */
+    val activeRoute: String? = null,
     /** این گوشی می‌تواند بقیه‌ی برنامه‌ها را ببندد (اندروید ۱۰ به بالا) */
     val canBlock: Boolean = true,
 )
@@ -239,7 +266,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             .padding(12.dp),
     ) {
         if (!u.hasDns) {
-            T("رفع تحریم در اشتراک شما فعال نیست.", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
+            T("اشتراک شما DNS ندارد", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
             return@Column
         }
         Row(verticalAlignment = Alignment.Top) {
@@ -301,7 +328,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
         }
         u.active?.let {
             Spacer(Modifier.height(6.dp))
-            T(trf("وصل به: %s", it), size = 10.sp, color = K.Green, weight = FontWeight.Bold)
+            T(trf("وصل به: %s", it) + (u.activeRoute?.let { r -> " · " + tr(r) } ?: ""), size = 10.sp, color = K.Green, weight = FontWeight.Bold)
         }
     }
 }
@@ -325,13 +352,17 @@ data class SheetOption(val key: String, val title: String, val tag: String? = nu
 /** یک کشور در پنل */
 data class SheetCountry(val id: String, val name: String, val flag: String, val ping: Long?)
 
-/** قاب پنل پایین با پرده‌ی تیره؛ با لمس بیرون بسته می‌شود */
+/** قاب پنل پایین با پرده‌ی تیره روی نقشه؛ با لمس بیرون بسته می‌شود */
 @Composable
-fun ModeSheet(visible: Boolean, mode: KMode, title: String, sub: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun ModeSheet(
+    visible: Boolean, mode: KMode, title: String, sub: String, onClose: () -> Unit,
+    trailing: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val mc = modeColor(mode)
     AnimatedVisibility(visible, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
         Box(
-            Modifier.fillMaxSize().background(Color(0x99000000))
+            Modifier.fillMaxSize().background(Color(0xA6000000))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
         )
     }
@@ -343,28 +374,27 @@ fun ModeSheet(visible: Boolean, mode: KMode, title: String, sub: String, onClose
         ) {
             val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 640.dp).clip(shape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFF151530), Color(0xFF0B0B1C))))
-                    .border(1.dp, Brush.verticalGradient(listOf(mc.copy(alpha = .45f), Color(0x22FFFFFF))), shape)
+                Modifier.fillMaxWidth().heightIn(max = 660.dp).clip(shape)
+                    .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
+                    .border(1.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .55f), K.Gold.copy(alpha = .08f))), shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
-                Box(Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(5.dp).clip(CircleShape).background(Color(0xFF3A3A5A)))
-                Spacer(Modifier.height(10.dp))
+                Box(Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(4.dp).clip(CircleShape).background(K.Gold.copy(alpha = .3f)))
+                Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(mc.copy(alpha = .14f)).border(1.dp, mc.copy(alpha = .5f), RoundedCornerShape(13.dp)),
+                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(mc.copy(alpha = .10f)).border(1.dp, K.Gold.copy(alpha = .5f), RoundedCornerShape(13.dp)),
                         contentAlignment = Alignment.Center,
                     ) { ModeIcon(mode, mc, 26.dp) }
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        T(title, size = 17.sp, color = K.Text, weight = FontWeight.Black)
+                        T(title, size = 19.sp, color = K.Text, weight = FontWeight.Black)
                         T(sub, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                     }
-                    Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
-                        T("✕", size = 13.sp, color = K.Sub, font = Poppins, ltr = true)
-                    }
+                    trailing()
                 }
+                Spacer(Modifier.height(6.dp))
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { content() }
             }
         }
@@ -379,60 +409,71 @@ private fun SheetLabel(text: String, trailing: @Composable RowScope.() -> Unit =
     }
 }
 
-/** گزینه‌ی رادیویی */
+/** گزینه‌ی رادیویی: دایره، اسم، پینگ و برچسب (مثل «تانل»، «مستقیم») */
 @Composable
 private fun OptionRow(o: SheetOption, selected: Boolean, color: Color, dim: Boolean, badge: String? = null, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(shape)
-            .background(if (selected) color.copy(alpha = .12f) else Color(0x0AFFFFFF))
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) color else Color(0x14FFFFFF), shape)
-            .alpha(if (!o.enabled) .4f else if (dim) .75f else 1f)
+            .background(if (selected) K.Gold.copy(alpha = .08f) else Color(0x08FFFFFF))
+            .border(if (selected) 1.3.dp else 1.dp, if (selected) K.Gold.copy(alpha = .75f) else K.Gold.copy(alpha = .16f), shape)
+            .alpha(if (!o.enabled) .4f else if (dim) .8f else 1f)
             .clickable(enabled = o.enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Radio(selected, color)
         Spacer(Modifier.width(10.dp))
         AutoText(o.title, size = 13.5.sp, color = K.Text, modifier = Modifier.weight(1f, fill = false))
-        badge?.let {
-            Spacer(Modifier.width(6.dp))
-            T(it, size = 9.5.sp, color = color, weight = FontWeight.Black, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = .14f)).padding(horizontal = 6.dp, vertical = 2.dp))
-        }
         Spacer(Modifier.weight(1f))
-        o.tag?.let {
-            T(it, size = 9.5.sp, color = Color(0xFFCCCCDD), weight = FontWeight.Normal, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 7.dp, vertical = 2.dp))
-            Spacer(Modifier.width(6.dp))
+        o.ping?.let { p ->
+            T(if (p < 0) "✕" else "$p ms", size = 10.5.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+            Spacer(Modifier.width(8.dp))
         }
-        PingChip(o.ping)
+        badge?.let {
+            Tag(it, K.GoldLight, strong = true)
+            Spacer(Modifier.width(5.dp))
+        }
+        o.tag?.let { Tag(it, K.Gold) }
     }
+}
+
+/** برچسب کوچک گرد */
+@Composable
+private fun Tag(text: String, c: Color, strong: Boolean = false) {
+    val sh = RoundedCornerShape(8.dp)
+    T(
+        text, size = 9.5.sp, color = c, weight = if (strong) FontWeight.Black else FontWeight.Bold, maxLines = 1,
+        modifier = Modifier.clip(sh).background(c.copy(alpha = if (strong) .18f else .10f)).border(1.dp, c.copy(alpha = .35f), sh)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    )
 }
 
 @Composable
 private fun Radio(on: Boolean, c: Color) {
     Box(
-        Modifier.size(17.dp).clip(CircleShape).border(2.dp, if (on) c else Color(0xFF555566), CircleShape),
+        Modifier.size(18.dp).clip(CircleShape).border(1.6.dp, if (on) c else K.Sub.copy(alpha = .6f), CircleShape),
         contentAlignment = Alignment.Center,
-    ) { if (on) Box(Modifier.size(8.dp).clip(CircleShape).background(c)) }
+    ) { if (on) Box(Modifier.size(9.dp).clip(CircleShape).background(c)) }
 }
 
 /** شبکه‌ی دوستونی کشورها */
 @Composable
-private fun CountryGrid(list: List<SheetCountry>, selected: String?, color: Color, onPick: (String) -> Unit) {
+private fun CountryGrid(list: List<SheetCountry>, selected: String?, color: Color, enabled: Boolean = true, onPick: (String) -> Unit) {
     if (list.isEmpty()) {
         T("کشوری برای این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
         return
     }
     list.chunked(2).forEach { row ->
-        Row(Modifier.fillMaxWidth().padding(bottom = 7.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 7.dp).alpha(if (enabled) 1f else .55f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             row.forEach { c ->
                 val sel = c.id == selected
                 val shape = RoundedCornerShape(14.dp)
                 Row(
                     Modifier.weight(1f).clip(shape)
-                        .background(if (sel) color.copy(alpha = .12f) else Color(0x0AFFFFFF))
-                        .border(if (sel) 1.5.dp else 1.dp, if (sel) color else Color(0x14FFFFFF), shape)
-                        .clickable { onPick(c.id) }
+                        .background(if (sel) K.Gold.copy(alpha = .08f) else Color(0x08FFFFFF))
+                        .border(if (sel) 1.3.dp else 1.dp, if (sel) K.Gold.copy(alpha = .75f) else K.Gold.copy(alpha = .16f), shape)
+                        .clickable(enabled = enabled) { onPick(c.id) }
                         .padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -456,39 +497,40 @@ private fun CountryGrid(list: List<SheetCountry>, selected: String?, color: Colo
     }
 }
 
-/** دکمه‌ی بزرگ «اتصال» پایین پنل */
+/** دکمه‌ی بزرگ طلایی «اتصال» پایین پنل */
 @Composable
-private fun SheetConnect(color: Color, enabled: Boolean, onClick: () -> Unit) {
+private fun SheetConnect(enabled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Box(
-        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp).height(50.dp).clip(shape)
-            .background(Brush.horizontalGradient(listOf(color, color.copy(alpha = .55f), Color(0xFFEFFFF6))))
+        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp).height(54.dp).clip(shape)
+            .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
+            .border(1.dp, K.GoldLight.copy(alpha = .7f), shape)
             .alpha(if (enabled) 1f else .45f)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { T("اتصال", size = 16.sp, color = Color(0xFF06140C), weight = FontWeight.Black) }
+    ) { T("اتصال", size = 17.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
 
-/** چک‌باکس کوچک «انتخاب خودکار» */
+/** چک‌باکس کوچک (مثل «انتخاب هوشمند سرور») */
 @Composable
-private fun AutoCheck(on: Boolean, color: Color, onToggle: () -> Unit) {
+private fun AutoCheck(on: Boolean, color: Color, label: String, onToggle: () -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(horizontal = 6.dp, vertical = 3.dp),
+        Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val shape = RoundedCornerShape(5.dp)
         Box(
-            Modifier.size(16.dp).clip(shape).background(if (on) color else Color.Transparent).border(1.5.dp, if (on) color else Color(0xFF666677), shape),
+            Modifier.size(16.dp).clip(shape).background(if (on) color else Color.Transparent).border(1.5.dp, if (on) color else K.Sub.copy(alpha = .7f), shape),
             contentAlignment = Alignment.Center,
         ) {
             if (on) Canvas(Modifier.size(10.dp)) {
                 val w = size.width
-                drawLine(Color(0xFF06140C), Offset(w * .1f, w * .52f), Offset(w * .4f, w * .82f), w * .2f, StrokeCap.Round)
-                drawLine(Color(0xFF06140C), Offset(w * .4f, w * .82f), Offset(w * .92f, w * .18f), w * .2f, StrokeCap.Round)
+                drawLine(K.OnGold, Offset(w * .1f, w * .52f), Offset(w * .4f, w * .82f), w * .2f, StrokeCap.Round)
+                drawLine(K.OnGold, Offset(w * .4f, w * .82f), Offset(w * .92f, w * .18f), w * .2f, StrokeCap.Round)
             }
         }
         Spacer(Modifier.width(5.dp))
-        T("انتخاب خودکار", size = 11.sp, color = if (on) color else K.Sub, weight = FontWeight.Bold)
+        T(label, size = 11.sp, color = if (on) K.GoldLight else K.Sub, weight = FontWeight.Bold)
     }
 }
 
@@ -501,20 +543,37 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
         }
         Switch(
             checked = on, onCheckedChange = onChange, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = color, uncheckedTrackColor = K.Panel),
+            colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = color, uncheckedTrackColor = K.Panel),
         )
     }
 }
 
+/** آیکون چرخ‌دنده (تنظیمات پیشرفته) */
+fun DrawScope.gearIcon(c: Color) {
+    val w = size.width
+    val sw = w * .1f
+    for (i in 0 until 8) {
+        val a = Math.toRadians(i * 45.0)
+        drawLine(
+            c, Offset(w / 2 + w * .28f * kotlin.math.cos(a).toFloat(), w / 2 + w * .28f * kotlin.math.sin(a).toFloat()),
+            Offset(w / 2 + w * .44f * kotlin.math.cos(a).toFloat(), w / 2 + w * .44f * kotlin.math.sin(a).toFloat()), sw * 1.4f, StrokeCap.Round,
+        )
+    }
+    drawCircle(c, w * .30f, Offset(w / 2, w / 2), style = Stroke(sw))
+    drawCircle(c, w * .10f, Offset(w / 2, w / 2), style = Stroke(sw))
+}
+
 /**
- * پنل گیمینگ: «پروتکل را انتخاب کنید» (+ انتخاب خودکار)، «کشور را انتخاب کنید»، تنظیمات پیشرفته و «اتصال».
- * options(node): پروتکل‌های همان کشور با پینگ.
+ * پنل گیمینگ: «انتخاب هوشمند سرور»، فهرست پروتکل‌ها با برچسب، انتخاب کشور، تنظیمات پیشرفته
+ * (با پیشنهاد ربات) و دکمه‌ی طلایی «اتصال». options(node): پروتکل‌های همان کشور با پینگ.
+ * با «انتخاب هوشمند سرور»، کم‌پینگ‌ترین کشور و پروتکل خودکار برداشته می‌شود (bestNode).
  */
 @Composable
 fun GameSheet(
     visible: Boolean,
     countries: List<SheetCountry>,
     options: (String?) -> List<SheetOption>,
+    bestNode: String?,
     initAuto: Boolean,
     initProto: String,
     initNode: String?,
@@ -532,36 +591,58 @@ fun GameSheet(
     val mc = modeColor(KMode.GAME)
     var auto by remember(visible) { mutableStateOf(initAuto) }
     var proto by remember(visible) { mutableStateOf(initProto) }
-    var node by remember(visible) { mutableStateOf(initNode?.takeIf { n -> countries.any { it.id == n } } ?: countries.firstOrNull()?.id) }
+    var picked by remember(visible) { mutableStateOf(initNode?.takeIf { n -> countries.any { it.id == n } } ?: countries.firstOrNull()?.id) }
     var advanced by remember(visible) { mutableStateOf(false) }
+    // با «انتخاب هوشمند» کشوری که نشان داده می‌شود همان کم‌پینگ‌ترین است
+    val node = if (auto) (bestNode?.takeIf { b -> countries.any { it.id == b } } ?: picked) else picked
     LaunchedEffect(visible, node) { if (visible) node?.let { onNodeShown(it) } }
-    ModeSheet(visible, KMode.GAME, "گیمینگ", "کمترین پینگ برای بازی", onClose) {
+    ModeSheet(
+        visible, KMode.GAME, "گیمینگ", "سریع‌ترین سرورها برای بازی", onClose,
+        trailing = { AutoCheck(auto, K.Gold, "انتخاب هوشمند سرور") { auto = !auto } },
+    ) {
         val opts = options(node)
         val best = opts.filter { it.enabled }.minByOrNull { it.ping?.takeIf { p -> p > 0 } ?: 99_999L }?.key
-        SheetLabel("پروتکل را انتخاب کنید") { AutoCheck(auto, mc) { auto = !auto } }
+        SheetLabel("پروتکل")
         opts.forEach { o ->
             val sel = if (auto) o.key == best else o.key == proto
-            OptionRow(o, sel, mc, dim = auto, badge = if (auto && o.key == best) "پیشنهاد" else null) { proto = o.key; auto = false }
+            OptionRow(o, sel, K.Gold, dim = auto, badge = if (o.key == best && opts.size > 1) "پیشنهادی" else null) { proto = o.key; auto = false }
         }
-        SheetLabel("کشور را انتخاب کنید")
-        CountryGrid(countries, node, mc) { node = it }
-        // تنظیمات پیشرفته
+        SheetLabel("کشور")
+        CountryGrid(countries, node, K.Gold, enabled = true) { picked = it; auto = false }
+
+        // پیشنهاد ربات: تنظیم پیشرفته‌ی «فقط بازی‌ها» (پیش‌فرض خاموش است)
+        if (!gamesOnly && !advanced) {
+            Spacer(Modifier.height(6.dp))
+            RobotSays(
+                "اینجا رو ببین ⭐ توی «تنظیمات پیشرفته» گزینه‌ی «فقط بازی‌ها اینترنت داشته باشند» رو روشن کن؛ اینترنت فقط به بازی می‌رسه و پینگت بهتر میشه.",
+                robotSize = 56.dp, robotAtStart = false, onClick = { advanced = true },
+            )
+        }
+        // دکمه‌ی تنظیمات پیشرفته
+        val ash = RoundedCornerShape(16.dp)
+        val cyan = Color(0xFF6FD3F0)
         Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).clickable { advanced = !advanced }.padding(vertical = 6.dp, horizontal = 2.dp),
+            Modifier.fillMaxWidth().padding(top = 10.dp).clip(ash)
+                .background(cyan.copy(alpha = .05f))
+                .border(1.2.dp, Brush.horizontalGradient(listOf(cyan.copy(alpha = .75f), K.Gold.copy(alpha = .45f))), ash)
+                .clickable { advanced = !advanced }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            T("تنظیمات پیشرفته", size = 12.sp, color = mc, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            T(if (advanced) "▲" else "▼", size = 10.sp, color = mc, font = Poppins, ltr = true)
+            Canvas(Modifier.size(18.dp)) { gearIcon(K.GoldLight) }
+            Spacer(Modifier.width(10.dp))
+            T("تنظیمات پیشرفته", size = 14.sp, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            T(if (advanced) "▲" else "▼", size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
         }
         AnimatedVisibility(advanced, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column {
-                SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, mc, onChange = onAutoGames)
+            Column(Modifier.padding(top = 6.dp)) {
                 SwitchRow(
                     "فقط بازی‌ها اینترنت داشته باشند",
                     if (appCount > 0) trf("%d برنامه مجاز است؛ بقیه تا قطع اتصال اینترنت ندارند", appCount) else "اول بازی یا برنامه‌ای انتخاب کنید",
                     gamesOnly, mc, enabled = appCount > 0 || gamesOnly, onChange = onGamesOnly,
                 )
-                SmallLine("انتخاب برنامه‌ها", Modifier.fillMaxWidth(), color = mc, onClick = onPickApps)
+                SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, mc, onChange = onAutoGames)
+                SmallLine("انتخاب برنامه‌ها", Modifier.fillMaxWidth(), color = K.Gold, onClick = onPickApps)
                 if (gamesOnly) {
                     Spacer(Modifier.height(6.dp))
                     T(
@@ -573,42 +654,9 @@ fun GameSheet(
             }
         }
         val chosen = if (auto) best else proto.takeIf { p -> opts.any { it.key == p && it.enabled } }
-        SheetConnect(mc, enabled = node != null && chosen != null) {
+        SheetConnect(enabled = node != null && (auto || chosen != null)) {
             onConnect(auto, chosen ?: proto, node)
         }
-    }
-}
-
-/**
- * پنل ضد فیلتر (با نگه‌داشتن دکمه): اینباندهای Xray (فقط اسم) و AmneziaWG؛ برای AmneziaWG کشور هم انتخاب می‌شود.
- */
-@Composable
-fun FilterSheet(
-    visible: Boolean,
-    options: List<SheetOption>,
-    countries: List<SheetCountry>,
-    initAuto: Boolean,
-    initProto: String,
-    initNode: String?,
-    onConnect: (Boolean, String, String?) -> Unit,
-    onClose: () -> Unit,
-) {
-    val mc = modeColor(KMode.FILTER)
-    var auto by remember(visible) { mutableStateOf(initAuto) }
-    var proto by remember(visible) { mutableStateOf(initProto.takeIf { p -> options.any { it.key == p } } ?: options.firstOrNull()?.key ?: "") }
-    var node by remember(visible) { mutableStateOf(initNode?.takeIf { n -> countries.any { it.id == n } } ?: countries.firstOrNull()?.id) }
-    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "عبور از فیلتر سخت", onClose) {
-        SheetLabel("پروتکل را انتخاب کنید") { AutoCheck(auto, mc) { auto = !auto } }
-        if (auto) T("اول راه‌های مستقیم امتحان می‌شوند، اگر جواب ندادند تانل.", size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = 6.dp, start = 2.dp))
-        options.forEach { o ->
-            OptionRow(o, !auto && o.key == proto, mc, dim = auto) { proto = o.key; auto = false }
-        }
-        if (!auto && proto == "amneziawg") {
-            SheetLabel("کشور را انتخاب کنید")
-            CountryGrid(countries, node, mc) { node = it }
-        }
-        val ready = auto || (proto.startsWith("xray-")) || (proto == "amneziawg" && node != null)
-        SheetConnect(mc, enabled = ready && options.isNotEmpty()) { onConnect(auto, proto, node) }
     }
 }
 

@@ -26,105 +26,67 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
 
-// صفحه‌ی ورود (فقط تصویر؛ پخش صدا و زمان‌بندی در Intro.kt است)
+// صفحه‌ی شروع (فقط تصویر؛ پخش صدا و زمان‌بندی در Intro.kt است)
 
-/** طول صفحه‌ی ورود به ثانیه (هماهنگ با res/raw/kanki_logo.mp3) */
-const val SPLASH_SEC = 3.8f
+/** طول صفحه‌ی شروع به ثانیه */
+const val SPLASH_SEC = 4f
 
 private val SoftOut = CubicBezierEasing(.16f, 1f, .3f, 1f)        // آرام نشستن
-private val BackOut = CubicBezierEasing(.34f, 1.36f, .64f, 1f)    // کمی جلوتر رفتن و برگشتن
+private val BackOut = CubicBezierEasing(.34f, 1.30f, .64f, 1f)    // کمی جلوتر رفتن و برگشتن
 
 /**
- * صفحه‌ی ورود آرام و ساده (v از ۰ تا ۱):
- *  ۰ تا ۱.۳ ثانیه  نور ملایم وسط صفحه روشن می‌شود، ذرات طلایی آهسته جمع می‌شوند و
- *                  یک حلقه‌ی نازک طلایی دور خودش کامل می‌شود (یعنی «اتصال امن در حال آماده شدن»)
- *  ۱.۳ ثانیه       حلقه کامل شد ← لوگو با چرخش نرم ظاهر می‌شود و یک موج نور آرام پخش می‌شود
- *  ۱.۷ تا ۲.۷      حرف‌های KANKI VPN یکی‌یکی بالا می‌آیند، خط زیرش باز می‌شود، شعار ظاهر می‌شود
- *  ۳.۲ تا ۳.۸      همه‌چیز آرام محو می‌شود و برنامه باز می‌شود
+ * صفحه‌ی شروع آرام (v از ۰ تا ۱، کل آن ۴ ثانیه):
+ *  ۰ تا ۱.۳ ثانیه   هاله‌ی طلایی ملایم روشن می‌شود و سپر K با محو و بزرگ‌شدن نرم ظاهر می‌شود
+ *  ۱.۳ تا ۲.۳       یک نوار نور از روی سپر رد می‌شود و یک موج نور خیلی آرام پخش می‌شود
+ *  ۱.۷ تا ۳.۰       حرف‌های KANKI VPN یکی‌یکی بالا می‌آیند، خط زیرش باز می‌شود، شعار ظاهر می‌شود
+ *  ۳.۴ تا ۴.۰       همه‌چیز آرام محو می‌شود و برنامه باز می‌شود
  */
 @Composable
 fun SplashVisual(v: Float) {
     val t = v * SPLASH_SEC
     fun seg(a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f, 1f)
 
-    val glow = SoftOut.transform(seg(0f, 1.2f))
-    val trace = FastOutSlowInEasing.transform(seg(.15f, 1.3f))
-    val gather = SoftOut.transform(seg(0f, 1.35f))
-    val logo = seg(1.2f, 1.95f)
-    val logoA = SoftOut.transform(logo)
+    val halo = SoftOut.transform(seg(0f, 1.4f))
+    val logo = seg(.25f, 1.3f)
+    val logoA = SoftOut.transform(seg(.25f, 1.0f))
     val logoS = BackOut.transform(logo)
-    val wave = seg(1.3f, 2.6f)
-    val line = SoftOut.transform(seg(2.25f, 2.9f))
+    val sweepP = seg(1.35f, 2.3f)
+    val wave = seg(1.25f, 2.6f)
+    val line = SoftOut.transform(seg(2.3f, 2.9f))
     val tag = SoftOut.transform(seg(2.45f, 3.05f))
-    val exit = FastOutSlowInEasing.transform(seg(3.2f, 3.8f))
+    val exit = FastOutSlowInEasing.transform(seg(3.4f, 4f))
     val title = "KANKI VPN"
 
-    KankiBackground {
+    KankiBackground(calm = true) {
         Box(
             Modifier.fillMaxSize().graphicsLayer {
                 alpha = 1f - exit
-                scaleX = 1f + .05f * exit; scaleY = 1f + .05f * exit
+                scaleX = 1f + .04f * exit; scaleY = 1f + .04f * exit
             },
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(150.dp), contentAlignment = Alignment.Center) {
-                    // حلقه، نور و ذرات دور لوگو (بزرگ‌تر از کادر لوگو کشیده می‌شود)
-                    Canvas(Modifier.requiredSize(560.dp)) {
+                    // هاله و موج نور دور لوگو (بزرگ‌تر از کادر لوگو کشیده می‌شود)
+                    Canvas(Modifier.requiredSize(460.dp)) {
                         val c = center
                         val u = 1.dp.toPx()
-                        // نور نرم وسط که بعد از ظاهر شدن لوگو کمی آرام می‌شود
-                        val ga = .30f * glow + .14f * (1f - wave) * logoA
-                        drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = ga), Color.Transparent), c, 210 * u), 210 * u, c)
-
-                        // ذرات طلایی که آهسته به سمت حلقه می‌آیند و محو می‌شوند
-                        for (i in 0 until 34) {
-                            val ang = i * 137.508 * Math.PI / 180
-                            val start = 170f + (i % 5) * 22f
-                            val r = (start - (start - 100f) * gather) * u
-                            val a = (1f - gather) * .55f * (if (i % 3 == 0) 1f else .6f)
-                            if (a > .01f) {
-                                val p = Offset(c.x + r * cos(ang).toFloat(), c.y + r * sin(ang).toFloat())
-                                drawCircle(K.Gold.copy(alpha = a * .35f), 5f * u, p)
-                                drawCircle(K.GoldLight.copy(alpha = a), 1.6f * u, p)
-                            }
-                        }
-
-                        // حلقه‌ی نازک: مسیر کم‌رنگ + قوسی که کامل می‌شود
-                        val rr = (98f + 8f * logoA) * u
-                        val tl = Offset(c.x - rr, c.y - rr)
-                        val sz = Size(rr * 2, rr * 2)
-                        val ringA = 1f - .55f * logoA
-                        drawCircle(K.Gold.copy(alpha = .10f * glow), rr, c, style = Stroke(1.2f * u))
-                        if (trace > 0f) {
-                            drawArc(K.Gold.copy(alpha = .18f * ringA), -90f, 360f * trace, false, tl, sz, style = Stroke(6f * u, cap = StrokeCap.Round))
-                            drawArc(K.GoldLight.copy(alpha = .9f * ringA), -90f, 360f * trace, false, tl, sz, style = Stroke(1.8f * u, cap = StrokeCap.Round))
-                            if (trace < 1f) {
-                                val hr = Math.toRadians((-90.0 + 360.0 * trace))
-                                val hp = Offset(c.x + rr * cos(hr).toFloat(), c.y + rr * sin(hr).toFloat())
-                                drawCircle(K.Gold.copy(alpha = .25f), 9f * u, hp)
-                                drawCircle(Color.White.copy(alpha = .95f), 2.6f * u, hp)
-                            }
-                        }
-
-                        // موج نور آرام بعد از ظاهر شدن لوگو
+                        val ga = .26f * halo
+                        drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = ga), Color.Transparent), c, 190 * u), 190 * u, c)
                         if (wave > 0f && wave < 1f) {
-                            val wr = (100f + 105f * SoftOut.transform(wave)) * u
-                            val wa = (1f - wave) * .28f
-                            drawCircle(K.Gold.copy(alpha = wa * .35f), wr, c, style = Stroke(10f * u))
-                            drawCircle(K.GoldLight.copy(alpha = wa), wr, c, style = Stroke(1.4f * u))
+                            val wr = (88f + 110f * SoftOut.transform(wave)) * u
+                            val wa = (1f - wave) * .26f
+                            drawCircle(K.Gold.copy(alpha = wa * .35f), wr, c, style = Stroke(9f * u))
+                            drawCircle(K.GoldLight.copy(alpha = wa), wr, c, style = Stroke(1.3f * u))
                         }
                     }
-                    // لوگو: محو، کمی بزرگ شدن و چرخیدن نرم تا رو به رو
                     Box(
                         Modifier.graphicsLayer {
                             alpha = logoA
-                            val s = .82f + .18f * logoS
+                            val s = .62f + .38f * logoS
                             scaleX = s; scaleY = s
-                            rotationY = -30f * (1f - logoA)
-                            cameraDistance = 14f * density
                         },
-                    ) { Logo3D(140.dp, animate = false) }
+                    ) { Logo3D(136.dp, sweep = if (sweepP > 0f && sweepP < 1f) sweepP * 1.6f - .3f else -1f, glow = halo) }
                 }
 
                 Spacer(Modifier.height(26.dp))
@@ -135,7 +97,7 @@ fun SplashVisual(v: Float) {
                         title.forEachIndexed { i, ch ->
                             val k = SoftOut.transform(seg(1.7f + i * .07f, 2.15f + i * .07f))
                             Box(Modifier.graphicsLayer { alpha = k; translationY = (1f - k) * 14.dp.toPx() }) {
-                                T(ch.toString(), size = 33.sp, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 22f * k), ltr = true)
+                                T(ch.toString(), size = 31.sp, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 18f * k), ltr = true)
                             }
                         }
                     }

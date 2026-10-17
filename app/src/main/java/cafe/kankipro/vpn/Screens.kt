@@ -53,38 +53,46 @@ fun LoginScreen(state: AppState) {
     val clip = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
+    // اگر لینک کامل جای‌گذاری شود، در کادر فقط کد دیده می‌شود و آدرس پنل همین‌جا نگه داشته می‌شود
+    var baseHint by remember { mutableStateOf<String?>(null) }
+    fun accept(raw: String) {
+        val t = raw.trim()
+        val n = if (t.contains("/sub/")) SubscriptionApi.normalize(t) else null
+        if (n != null) { text = n.second; baseHint = n.first } else { text = raw; if (raw.isBlank()) baseHint = null }
+        state.error = null
+    }
+    LaunchedEffect(Unit) { Sfx.preload(ctx, R.raw.kanki_switch) }
 
-    Box(Modifier.fillMaxSize()) {
-    EmergencyBox(Modifier.align(Alignment.TopEnd).padding(12.dp)) { state.emergencyOpen = true }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(20.dp))
-        Logo3D(124.dp)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(28.dp))
+        Logo3D(132.dp, animate = true, glow = 1f)
+        Spacer(Modifier.height(18.dp))
         BrandTitle(32.sp)
+        Spacer(Modifier.height(4.dp))
         T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(30.dp))
 
-        KCard(Modifier.fillMaxWidth(), padding = 18.dp, border = K.Gold.copy(alpha = .45f)) {
+        KCard(Modifier.fillMaxWidth(), padding = 18.dp, border = K.Gold.copy(alpha = .30f)) {
             T("ورود به حساب", size = 22.sp, weight = FontWeight.Black)
-            Spacer(Modifier.height(6.dp))
-            T("لینک یا کد اشتراکی که از ربات گرفتید را وارد کنید", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(4.dp))
+            T("لذت اینترنتی ایمن، سریع و آزاد", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
+            Spacer(Modifier.height(16.dp))
 
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it; state.error = null },
+                    onValueChange = { accept(it) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = K.Text),
-                    placeholder = { T("kanki-4-84956546746714973", size = 14.sp, color = K.Sub.copy(alpha = .5f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
-                    shape = RoundedCornerShape(18.dp),
+                    textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
+                    placeholder = { T("kanki-1-xY7q2", size = 16.sp, color = K.Sub.copy(alpha = .45f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
+                    shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line,
+                        focusedBorderColor = K.Gold, unfocusedBorderColor = K.Gold.copy(alpha = .35f),
                         focusedContainerColor = Color(0x66000000), unfocusedContainerColor = Color(0x66000000),
                         cursorColor = K.Gold,
                     ),
@@ -99,19 +107,22 @@ fun LoginScreen(state: AppState) {
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 GoldButton("ورود", Modifier.weight(1f), loading = state.loading) {
-                    scope.launch { state.login(text) }
+                    scope.launch { state.login(text, baseHint) }
                 }
                 LineButton("جای‌گذاری", Modifier.weight(1f)) {
-                    clip.getText()?.text?.let { text = it.trim() }
+                    clip.getText()?.text?.let { accept(it) }
                 }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
-        T("اشتراک ندارید؟", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
-        Spacer(Modifier.height(8.dp))
-        RobotMascot { openBot(ctx) }
-    }
+        Spacer(Modifier.height(22.dp))
+        T(
+            "اشتراک نداری؟ از ربات بگیر", size = 14.sp, color = K.Gold, weight = FontWeight.Bold,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { openBot(ctx) }.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+        Spacer(Modifier.height(18.dp))
+        RobotSays("سلام رفیق! کدت رو بزن، مهمون ما شو 😉", robotSize = 70.dp, robotAtStart = false, onClick = { openBot(ctx) })
+        Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -122,7 +133,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     val ctx = LocalContext.current
     val clip = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableStateOf(KTab.HOME) }
+    val tab = state.tab
     var showSplit by remember { mutableStateOf(false) }
 
     // نقشه‌ی کشورها (یک بار از فایل خوانده می‌شود)
@@ -133,18 +144,18 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     LaunchedEffect(state.account != null) {
         if (state.account != null && !state.guideDone && !Guide.active) {
             delay(900)
-            tab = KTab.HOME
+            state.tab = KTab.HOME
             Guide.start()
         }
     }
     // وقتی آموزش در حال اجراست، صفحه‌ی خانه نشان داده شود
     LaunchedEffect(Guide.step) {
-        if (Guide.active) { tab = KTab.HOME; state.gameSheet = false; state.filterSheet = false; state.appsPicker = false; state.accountOpen = false }
+        if (Guide.active) { state.tab = KTab.HOME; state.gameSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false }
     }
 
-    fun startGuide() { tab = KTab.HOME; Guide.start() }
+    fun startGuide() { state.tab = KTab.HOME; Guide.start() }
 
-    MainFrame(tab, onTab = { tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
+    MainFrame(tab, onTab = { state.tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
         when (tab) {
             KTab.HOME -> HomeTab(state, countries, onToggle)
             KTab.SERVERS -> ServersTab(state)
@@ -191,17 +202,18 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     val a = state.account
 
-    // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد
-    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.filterSheet || state.accountOpen) {
+    // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد، بعد به تب خانه برمی‌گردد
+    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
         when {
             state.appsPicker -> state.appsPicker = false
+            showSplit -> showSplit = false
             state.gameSheet -> state.gameSheet = false
-            state.filterSheet -> state.filterSheet = false
-            else -> state.accountOpen = false
+            state.accountOpen -> state.accountOpen = false
+            else -> state.tab = KTab.HOME
         }
     }
 
-    // پنل‌های حالت‌ها (روی همه‌ی صفحه)
+    // پنل گیمینگ (روی همه‌ی صفحه، روی نقشه‌ی کم‌رنگ‌شده)
     if (tab == KTab.HOME) ModeSheets(state)
     AccountSheet(
         state.accountOpen, a,
@@ -237,7 +249,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     val scope = rememberCoroutineScope()
     val a = state.account
 
-    // سرعت لحظه‌ای و زمان اتصال
+    // سرعت لحظه‌ای، زمان اتصال و پینگ زنده
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var rx by remember { mutableLongStateOf(0L) }
     var tx by remember { mutableLongStateOf(0L) }
@@ -251,8 +263,9 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
                 last?.let { p -> rx = (s.first - p.first).coerceAtLeast(0); tx = (s.second - p.second).coerceAtLeast(0) }
                 last = s
             }
+            if (tick % 3 == 0) launch { state.samplePing() }   // نمودار زنده‌ی پینگ (هر ۳ ثانیه یک نمونه‌ی سبک)
+            if (state.mode == KMode.DNS) state.syncDnsActive()
             tick++
-            if (tick % 15 == 0) state.measurePing()
             if (tick % 30 == 0) state.refreshUsage()   // حجم مصرفی هر ۳۰ ثانیه بروز می‌شود
             delay(1000)
         }
@@ -265,7 +278,6 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     LaunchedEffect(Unit) { state.netName = Modes.networkName(ctx); state.loadGames() }
     val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
-    val link = a?.configs?.firstOrNull { it.node == state.node }
     val dnsInfo = a?.dns
     // سروری که روی نقشه نشان داده می‌شود: وقتی وصل است همان سرور، وگرنه انتخاب همین حالت
     val shownNode = when {
@@ -274,6 +286,10 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         state.mode == KMode.FILTER && !state.filterAuto -> if (state.filterProto.startsWith("xray-")) state.filterProto else state.filterNode
         else -> state.node
     }
+    val link = a?.configs?.firstOrNull { it.node == shownNode }
+    fun isoOf(l: ConfigLink) = isoOfFlag(flagOf(l.nodeName)) ?: state.nodeIso[l.node]
+    // «موقعیت شما»: وقتی با VPN وصل است کشور سرور، وگرنه (یا در حالت DNS) کشور خود کاربر
+    val locIso = if (state.vstate == VState.ON && state.mode != KMode.DNS) link?.let { state.nodeIso[it.node] ?: isoOf(it) } ?: state.userIso else state.userIso
 
     // نام چند برنامه‌ی مجاز برای کارت DNS
     val allowed = (state.detectedGames.filter { state.autoGames && it !in state.appsRemoved } + state.appsAdded).distinct()
@@ -284,21 +300,20 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         hasAccount = a != null,
         loading = state.loading,
         mode = state.mode,
-        serverName = link?.nodeName ?: "—",
-        serverFlag = link?.let { flagOf(it.nodeName) } ?: "🌐",
         livePing = state.ping,
+        pingHist = state.pingHist.toList(),
         rx = rx, tx = tx,
         elapsedSec = if (state.vstate == VState.ON && VpnEngine.connectedAt > 0) ((now - VpnEngine.connectedAt) / 1000).coerceAtLeast(0) else null,
-        tryStep = state.tryStep,
         sub = a?.let { subUi(it, now) },
         alert = alert,
         countries = countries,
         pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
-            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, state.nodeIso[l.node] ?: isoOfFlag(flagOf(l.nodeName)), l.node == shownNode) }
-        } ?: emptyList(),
+            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, state.nodeIso[l.node] ?: isoOf(l), l.node == shownNode) }
+        }?.distinctBy { it.geo to it.selected } ?: emptyList(),
         userGeo = state.userGeo,
         userIso = state.userIso,
-        sheetOpen = state.gameSheet || state.filterSheet || state.appsPicker,
+        locationIso = locIso,
+        sheetOpen = state.gameSheet || state.appsPicker,
         smart = SmartPanelUi(
             open = state.smartOpen,
             done = state.smartDone,
@@ -316,6 +331,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             },
             pick = state.dnsPick,
             active = state.dnsActive?.let { it.name.ifBlank { it.ip } },
+            activeRoute = state.dnsRoute(state.dnsActive),
             canBlock = AppGate.supported,
         ),
     )
@@ -327,8 +343,8 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             tapMode = { m -> state.tapMode(m) },
             longMode = { m ->
                 when (m) {
-                    KMode.FILTER -> if (state.vstate != VState.CONNECTING) { state.changeMode(m); state.filterSheet = true }
                     KMode.GAME -> { state.changeMode(m); state.gameSheet = true }
+                    KMode.FILTER -> state.tab = KTab.SERVERS
                     else -> state.tapMode(m)
                 }
             },
@@ -368,7 +384,7 @@ private fun subUi(a: Account, now: Long): SubUi {
     return SubUi(gb, days, a.status)
 }
 
-/** پنل‌های گیمینگ و ضد فیلتر */
+/** پنل گیمینگ */
 @Composable
 private fun ModeSheets(state: AppState) {
     val scope = rememberCoroutineScope()
@@ -376,15 +392,21 @@ private fun ModeSheets(state: AppState) {
     val nodes = a.configs.distinctBy { it.node }
 
     fun country(n: ConfigLink, protos: List<String>) = SheetCountry(
-        n.node, n.nodeName, flagOf(n.nodeName),
+        n.node, countryName(isoOfFlag(flagOf(n.nodeName)))?.let { c -> if (nodes.count { flagOf(it.nodeName) == flagOf(n.nodeName) } > 1) "$c · ${n.nodeName}" else c } ?: n.nodeName,
+        flagOf(n.nodeName),
         protos.mapNotNull { p -> state.protoPing(n.node, p) }.filter { it > 0 }.minOrNull()
             ?: protos.mapNotNull { p -> state.protoPing(n.node, p) }.firstOrNull(),
     )
 
-    // پینگ واقعی همه‌ی کشورها با باز شدن پنل
-    LaunchedEffect(state.gameSheet || state.filterSheet) { if (state.gameSheet || state.filterSheet) state.pingAll() }
+    // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
+    LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
-    val gameCountries = nodes.filter { n -> Modes.GAME_PROTOS.any { state.hasCfg(n.node, it) } }.map { country(it, Modes.GAME_PROTOS) }
+    val gameNodes = nodes.filter { n -> Modes.GAME_PROTOS.any { state.hasCfg(n.node, it) } }
+    val gameCountries = gameNodes.map { country(it, Modes.GAME_PROTOS) }
+    // کم‌پینگ‌ترین کشور (برای «انتخاب هوشمند سرور»)
+    val bestNode = gameNodes.minByOrNull { n ->
+        Modes.GAME_PROTOS.filter { state.hasCfg(n.node, it) }.mapNotNull { p -> state.protoPing(n.node, p)?.takeIf { it > 0 } }.minOrNull() ?: 99_999L
+    }?.node
     GameSheet(
         visible = state.gameSheet,
         countries = gameCountries,
@@ -392,13 +414,19 @@ private fun ModeSheets(state: AppState) {
             Modes.GAME_PROTOS.filter { p -> p != "amneziawg-direct" || (node != null && state.hasCfg(node, p)) }.map { p ->
                 SheetOption(
                     key = p,
-                    title = if (p.startsWith("amneziawg")) "AmneziaWG" else protoTitle(p),
-                    tag = if (p == "amneziawg-direct") tr("مستقیم · بدون تانل") else tr("از تانل"),
+                    title = protoShort(p).let { if (it == "Amnezia") "AmneziaWG" else it },
+                    tag = when (p) {
+                        "amneziawg" -> tr("تانل")
+                        "amneziawg-direct" -> tr("مستقیم")
+                        "wireguard" -> tr("سریع")
+                        else -> tr("پایدار")
+                    },
                     ping = state.protoPing(node, p),
                     enabled = node != null && state.hasCfg(node, p),
                 )
             }
         },
+        bestNode = bestNode,
         initAuto = state.gameAuto,
         initProto = state.gameProto,
         initNode = state.gameNode ?: state.node,
@@ -413,77 +441,65 @@ private fun ModeSheets(state: AppState) {
         onConnect = { auto, p, n ->
             state.setGame(auto, p, n)
             state.gameSheet = false
+            state.error = null; state.errorDetail = null
             state.launchConnect(reconnect = true) { state.connectGame() }
         },
         onClose = { state.gameSheet = false },
-    )
-
-    val xray = nodes.filter { state.hasCfg(it.node, "xray") }
-    val awgCountries = nodes.filter { n -> state.hasCfg(n.node, "amneziawg") || state.hasCfg(n.node, "amneziawg-direct") }
-    FilterSheet(
-        visible = state.filterSheet,
-        options = xray.map { SheetOption(it.node, it.nodeName, ping = state.protoPing(it.node, "xray")) } +
-            (if (awgCountries.isNotEmpty()) listOf(SheetOption("amneziawg", "AmneziaWG")) else emptyList()),
-        countries = awgCountries.map { country(it, listOf("amneziawg-direct", "amneziawg")) },
-        initAuto = state.filterAuto,
-        initProto = state.filterProto,
-        initNode = state.filterNode ?: state.node,
-        onConnect = { auto, p, n ->
-            state.setFilter(auto, p, n)
-            state.filterSheet = false
-            state.launchConnect(reconnect = true) { state.connectFilter() }
-        },
-        onClose = { state.filterSheet = false },
     )
 }
 
 // ================================================================== تب سرورها
 
+/** عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»)؛ Xray با اسم خودش در پنل */
+private fun cfgTitle(l: ConfigLink, multi: Boolean): String {
+    val base = when (l.protocol) {
+        "amneziawg" -> "AmneziaWG - " + tr("تانل")
+        "amneziawg-direct" -> "AmneziaWG - " + tr("مستقیم")
+        "xray" -> l.nodeName
+        else -> protoTitle(l.protocol)
+    }
+    return if (multi && l.protocol != "xray") base + " · " + l.nodeName else base
+}
+
 @Composable
 private fun ServersTab(state: AppState) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val a = state.account
-    val locked = state.vstate != VState.OFF
-    val all = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
-    val cards = a?.configs?.groupBy { it.node }?.map { (nodeId, links) ->
-        val name = links.first().nodeName
-        val protos = all.filter { p -> state.hasCfg(nodeId, p) && links.any { it.protocol == p } }.map { p ->
-            val k = "$nodeId/$p"
-            ProtoRowUi(
-                key = p,
-                selected = state.node == nodeId && state.protoKey() == p,
-                udp = state.udpPings[k], udpBusy = state.busyTests["udp:$k"] == true,
-                tcp = state.tcpPings[k], tcpBusy = state.busyTests["tcp:$k"] == true,
+    val order = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
+    val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
+    // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
+    val groups = usable.groupBy { l -> isoOfFlag(flagOf(l.nodeName)) ?: state.nodeIso[l.node] ?: ("node:" + l.node) }
+    val selKey = "${state.node}/${state.protoKey()}"
+    val cards = groups.map { (key, links) ->
+        val iso = key.takeIf { !it.startsWith("node:") }
+        val multi = links.filter { it.protocol != "xray" }.map { it.node }.distinct().size > 1
+        val rows = links.sortedBy { order.indexOf(it.protocol) }.map { l ->
+            val k = "${l.node}/${l.protocol}"
+            CfgRowUi(
+                node = l.node, proto = l.protocol, title = cfgTitle(l, multi),
+                ping = state.protoPing(l.node, l.protocol), busy = state.pinging[k] == true,
+                selected = k == selKey,
                 host = state.infos[k]?.host?.takeIf { it.isNotBlank() && it != "—" },
             )
         }
-        ServerCardUi(nodeId, name, flagOf(name), state.node == nodeId, state.openNode == nodeId, state.nodePing(nodeId), protos)
-    } ?: emptyList()
+        CountryCardUi(
+            id = key,
+            name = countryName(iso) ?: links.first().nodeName,
+            city = cityName(iso) ?: links.first().nodeName,
+            flag = flagEmoji(iso) ?: "🌐",
+            best = rows.mapNotNull { it.ping }.filter { it > 0 }.minOrNull() ?: rows.mapNotNull { it.ping }.firstOrNull(),
+            expanded = state.openNode == key,
+            selected = rows.any { it.selected },
+            rows = rows,
+        )
+    }.sortedBy { c -> c.best?.takeIf { it > 0 } ?: 99_999L }
 
     ServersContent(
-        cards, locked,
-        tip = if (state.tipsSeen["servers"] == true) null else RobotAlert("tip_servers", 0, "روی هر سرور بزن تا پروتکل‌هاش باز بشه. UDP پینگ واقعی داخل تونله و TCP پینگ خود سرور. با ⚙ هم MTU رو تنظیم می‌کنی."),
+        cards, state.pingAllUi,
+        tip = if (state.tipsSeen["servers"] == true) null else RobotAlert("tip_servers", 0, "روی هر کشور بزن تا کانفیگ‌هاش باز بشه؛ با یه لمس روی هر کانفیگ وصل می‌شی. «شروع» پینگ همه رو با هم می‌گیره."),
         act = ServersActions(
             toggle = { id -> state.openNode = if (state.openNode == id) null else id },
-            select = { id, p ->
-                if (locked) toast(ctx, "برای تغییر، اول اتصال را قطع کنید")
-                else {
-                    state.lockFromServers(id, p)
-                    toast(ctx, trf("انتخاب شد: %s", (a?.configs?.firstOrNull { it.node == id }?.nodeName ?: id) + " · " + protoTitle(p)))
-                }
-            },
-            udp = { id, p ->
-                if (state.vstate != VState.OFF) toast(ctx, "برای تست واقعی UDP، اول اتصال را قطع کنید")
-                else state.requestVpn?.invoke { scope.launch { state.realTest(id, p) } }
-            },
-            tcp = { id, p -> scope.launch { state.tcpTest(id, p) } },
-            testAll = { id ->
-                val list = cards.firstOrNull { it.id == id }?.protos?.map { it.key } ?: emptyList()
-                if (state.vstate != VState.OFF) scope.launch { list.forEach { state.tcpTest(id, it) } }
-                else state.requestVpn?.invoke { scope.launch { list.forEach { state.realTest(id, it) } } }
-            },
-            refresh = { id -> scope.launch { state.refreshNode(id); toast(ctx, "کانفیگ‌ها بروز شد") } },
+            pick = { id, p -> state.pickFromServers(id, p) },
+            pingAll = { state.startPingAll() },
             mtu = { p -> state.mtuFor(p) },
             setMtu = { p, v -> state.setMtu(p, v) },
             closeTip = { state.markTip("servers") },
