@@ -28,6 +28,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -51,10 +52,10 @@ class Palette(
 val Themes: List<Palette> = listOf(
     // طلایی کانکی
     Palette(
-        "gold", Color(0xFFF5C451), Color(0xFFFFE9A6), Color(0xFFB8862B), Color(0xFFFFE08A),
-        Color(0xFF060504), Color(0xFFF7F1E3), Color(0xFFA89C82),
-        Color(0xFF0C0A06), Color(0xFF17110A), Color(0xFF050403),
-        Color(0xE81C170E), Color(0xF00C0A06), Color(0xFF0E0B07), Color(0xFF1A1206), Color(0xFF6FE7FF),
+        "gold", Color(0xFFE8B64C), Color(0xFFFFD97A), Color(0xFF9E701F), Color(0xFFFFE6A6),
+        Color(0xFF070504), Color(0xFFF6EEDC), Color(0xFFA3967C),
+        Color(0xFF0B0805), Color(0xFF110C07), Color(0xFF050403),
+        Color(0xE0181209), Color(0xEC0C0906), Color(0xFF0E0A06), Color(0xFF1C1305), Color(0xFF5CC8FF),
         Color(0xFF35E39B),
     ),
     // گرافیت نئونی (مشکی، نقره‌ای، یخی)
@@ -130,10 +131,13 @@ fun T(
     shadow: Shadow? = null,
     modifier: Modifier = Modifier,
     ltr: Boolean = false,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val s = tr(text)
     Text(
         s, modifier = modifier,
+        maxLines = maxLines,
+        overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
         style = TextStyle(
             fontFamily = font, fontWeight = weight, fontSize = size, color = color, shadow = shadow,
             // جمله‌ی فارسی که با کلمه‌ی لاتین شروع می‌شود (مثل «Amnezia برای …») هم راست‌به‌چپ بماند
@@ -148,84 +152,47 @@ fun T(
 
 // ------------------------------------------------------------------ پس‌زمینه‌ی متحرک
 
-private class Star(val x: Float, val y: Float, val r: Float, val phase: Float, val ci: Int)
+/** ذره‌ی طلایی کم‌رنگ پس‌زمینه */
+private class Mote(val x: Float, val y: Float, val r: Float, val phase: Float, val speed: Float)
 
-private val stars: List<Star> = run {
+/** فقط چند ذره‌ی کم‌نور (نه آسمان پرستاره)؛ speed عدد صحیح است تا چشمک‌زدن در پایان هر دور نپرد */
+private val motes: List<Mote> = run {
     val rnd = java.util.Random(77)
-    List(70) { Star(rnd.nextFloat(), rnd.nextFloat(), 0.8f + rnd.nextFloat() * 1.8f, rnd.nextFloat(), rnd.nextInt(4)) }
+    List(16) { Mote(.04f + rnd.nextFloat() * .92f, .03f + rnd.nextFloat() * .94f, .6f + rnd.nextFloat() * .9f, rnd.nextFloat(), (1 + rnd.nextInt(2)).toFloat()) }
 }
 
+/**
+ * پس‌زمینه‌ی آرام: مشکی گرم، یک هاله‌ی طلایی خیلی کم‌رنگ و چند ذره‌ی طلایی که آهسته چشمک می‌زنند.
+ * calm: صفحه‌ی ورود و صفحه‌های آرام (ذره‌های کمتر).
+ */
 @Composable
-fun KankiBackground(accent: Color = K.Gold, content: @Composable BoxScope.() -> Unit) {
+fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     val t = rememberInfiniteTransition(label = "bg")
-    val shift by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "s")
-    val breathe by t.animateFloat(.22f, .34f, infiniteRepeatable(tween(3000), RepeatMode.Reverse), label = "b")
-    val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(5000, easing = LinearEasing)), label = "tw")
+    val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "tw")
+    val breathe by t.animateFloat(0f, 1f, infiniteRepeatable(tween(6000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
+    val count = if (calm) 7 else motes.size
 
     Box(Modifier.fillMaxSize().background(K.Ink)) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            val c = Offset(w / 2, h * 0.30f)
             drawRect(Brush.verticalGradient(listOf(ThemeState.current.bgTop, ThemeState.current.bgMid, ThemeState.current.bgBottom)))
-            // سحابی‌های کهکشانی ملایم (بنفش بالا، آبی راست، ارغوانی پایین) با رنگ تم
-            val neb = listOf(
-                Triple(Offset(w * .18f, h * .10f), w * .85f, Color(0xFF2A1A55)),
-                Triple(Offset(w * .92f, h * .58f), w * .80f, Color(0xFF0F2F55)),
-                Triple(Offset(w * .28f, h * .96f), w * .75f, Color(0xFF3A1340)),
-            )
-            neb.forEach { (o, r, col) -> drawCircle(Brush.radialGradient(listOf(col.copy(alpha = .75f), Color.Transparent), o, r), r, o) }
-            drawCircle(
-                Brush.radialGradient(listOf(accent.copy(alpha = breathe * .6f), Color.Transparent), c, w * 0.95f),
-                w * 0.95f, c,
-            )
-            for (i in 0 until 8) {
-                drawCircle(
-                    K.Gold.copy(alpha = (0.07f - i * 0.008f).coerceAtLeast(0.012f)),
-                    w * (0.34f + i * 0.09f), c, style = Stroke(1.1f),
-                )
-            }
-            val hy = h * 0.70f
-            drawLine(
-                Brush.horizontalGradient(listOf(Color.Transparent, K.Gold.copy(alpha = .7f), Color.Transparent)),
-                Offset(0f, hy), Offset(w, hy), 2.5f,
-            )
-            val cx = w / 2
-            for (i in -12..12) {
-                drawLine(K.Gold.copy(alpha = .07f), Offset(cx + i * w * 0.03f, hy), Offset(cx + i * w * 0.32f, h), 1.1f)
-            }
-            for (k in 0 until 10) {
-                val p = (k + shift) / 10f
-                val y = hy + (h - hy) * p * p
-                drawLine(K.Gold.copy(alpha = .02f + .09f * p), Offset(0f, y), Offset(w, y), 1.1f)
-            }
-            // شهاب‌ها
-            for (k in 0 until 2) {
-                val ph = ((twinkle * 2f + k * .5f) % 1f)
-                if (ph < .22f) {
-                    val q = ph / .22f
-                    val sx = w * (.15f + .5f * k) + q * w * .45f
-                    val sy = hy * (.10f + .18f * k) + q * hy * .22f
-                    val tail = Offset(sx - w * .16f, sy - hy * .08f)
-                    drawLine(
-                        Brush.linearGradient(listOf(Color.Transparent, K.Accent.copy(alpha = .8f * (1f - q))), start = tail, end = Offset(sx, sy)),
-                        tail, Offset(sx, sy), 2.5f, cap = StrokeCap.Round,
-                    )
-                    drawCircle(Color.White.copy(alpha = 1f - q), 2.6f, Offset(sx, sy))
-                }
-            }
-            // ستاره‌های نئونی چشمک‌زن
-            stars.forEach { st ->
-                val tw = ((sin((twinkle + st.phase) * 6.2832f) + 1f) / 2f).coerceIn(0f, 1f)
-                val pos = Offset(st.x * w, st.y * h)
-                val col = when (st.ci) { 0 -> K.Gold; 1 -> K.Green; 2 -> K.Accent; else -> K.GoldLight }
-                drawCircle(col.copy(alpha = .10f * tw), st.r * 5f, pos)
-                drawCircle(col.copy(alpha = .30f * tw), st.r * 2.2f, pos)
-                drawCircle(Color.White.copy(alpha = .35f + .65f * tw), st.r, pos)
-                if (st.r > 2.2f) {
-                    drawLine(col.copy(alpha = .5f * tw), Offset(pos.x - st.r * 4, pos.y), Offset(pos.x + st.r * 4, pos.y), 1.2f)
-                    drawLine(col.copy(alpha = .5f * tw), Offset(pos.x, pos.y - st.r * 4), Offset(pos.x, pos.y + st.r * 4), 1.2f)
-                }
+            // هاله‌ی خیلی کم‌رنگ بالا و گوشه‌ی پایین
+            val g = Offset(w * .5f, h * .16f)
+            val gr = w * .95f
+            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .06f + .03f * breathe), Color.Transparent), g, gr), gr, g)
+            val g2 = Offset(w * .9f, h * .96f)
+            val gr2 = w * .7f
+            drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .035f), Color.Transparent), g2, gr2), gr2, g2)
+            // ذره‌های طلایی کم‌نور
+            val u = 1.dp.toPx()
+            for (i in 0 until count) {
+                val m = motes[i]
+                val tw = (sin((twinkle * m.speed + m.phase) * 6.2832f) + 1f) / 2f
+                val pos = Offset(m.x * w, m.y * h)
+                val a = (if (calm) .20f else .28f) * tw
+                drawCircle(K.Gold.copy(alpha = a * .22f), m.r * 4f * u, pos)
+                drawCircle(K.GoldLight.copy(alpha = a), m.r * u, pos)
             }
         }
         content()
@@ -253,52 +220,48 @@ private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().a
     lineTo(w * .45f + dx, h * .69f + dy); lineTo(w * .35f + dx, h * .69f + dy); close()
 }
 
-/** لوگوی سه‌بعدی کانکی: سپر دو لبه با نیم‌رخ نورخورده، حرف K برجسته و درخشش */
+/**
+ * لوگوی کانکی: سپر طلایی با لبه‌ی برجسته، داخل تیره و حرف K طلایی.
+ * sweep: جای نوار نور روی سپر (۰ تا ۱؛ منفی یعنی بدون نوار). animate: نوار نور آرام و پیوسته.
+ * glow: هاله‌ی طلایی پشت سپر (۰ تا ۱).
+ */
 @Composable
-fun Logo3D(size: Dp, animate: Boolean = true) {
+fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float = 0f) {
     val t = rememberInfiniteTransition(label = "logo")
-    val rot by t.animateFloat(-22f, 22f, infiniteRepeatable(tween(3600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "r")
-    val shine by t.animateFloat(-0.6f, 1.6f, infiniteRepeatable(tween(3200, easing = LinearEasing)), label = "s")
-    Canvas(
-        Modifier.size(size).graphicsLayer {
-            rotationY = if (animate) rot else 0f
-            cameraDistance = 14f * density
-        }
-    ) {
+    val loop by t.animateFloat(0f, 1f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "s")
+    Canvas(Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
-        // عمق
-        for (i in 8 downTo 1) {
-            val k = 1f - i * .06f
-            drawPath(shieldPath(w, h, i * w * .005f, i * h * .006f), K.GoldDeep.copy(red = K.GoldDeep.red * .5f * k, green = K.GoldDeep.green * .5f * k, blue = K.GoldDeep.blue * .5f * k))
+        val sw = if (sweep >= 0f) sweep else if (animate) loop * 2.4f - .4f else -1f
+        if (glow > 0f) {
+            val gr = w * .8f
+            drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .32f * glow), Color.Transparent), center, gr), gr, center)
         }
+        // سایه برای عمق
+        drawPath(shieldPath(w, h, w * .012f, h * .02f), Color.Black.copy(alpha = .45f))
         val face = shieldPath(w, h)
-        drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep, K.GoldDeep.copy(red = K.GoldDeep.red * .7f, green = K.GoldDeep.green * .7f, blue = K.GoldDeep.blue * .7f)), Offset(0f, 0f), Offset(w, h)))
-        // صفحه‌ی تیره‌ی داخلی با دو نیمه‌ی نورخورده
-        val inner = shieldPath(w, h, inset = .07f)
-        clipPath(inner) {
-            drawRect(K.Surface.copy(alpha = 1f), size = Size(w / 2, h))
-            drawRect(K.Panel, topLeft = Offset(w / 2, 0f), size = Size(w / 2, h))
-            // نوار درخشش در حال حرکت
-            val x = shine * w
-            drawRect(
-                Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .16f), Color.Transparent), Offset(x - w * .25f, 0f), Offset(x + w * .25f, h)),
-                size = Size(w, h),
-            )
-        }
-        drawPath(inner, K.Gold.copy(alpha = .9f), style = Stroke(w * .018f, join = StrokeJoin.Round))
+        drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep), Offset(0f, 0f), Offset(w, h)))
+        // داخل تیره
+        val inner = shieldPath(w, h, inset = .075f)
+        drawPath(inner, Brush.verticalGradient(listOf(K.Surface2.copy(alpha = 1f), K.Ink)))
+        drawPath(inner, K.GoldDeep.copy(alpha = .95f), style = Stroke(w * .014f, join = StrokeJoin.Round))
         // حرف K
-        drawPath(kPath(w, h, w * .014f, h * .016f), K.OnGold)
+        drawPath(kPath(w, h, w * .01f, h * .012f), Color.Black.copy(alpha = .55f))
         drawPath(kPath(w, h), Brush.verticalGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep)))
-        // براقی بالای سپر
+        // براقی لبه‌ی بالا
         clipPath(face) {
-            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent)), size = Size(w, h * .30f))
+            drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent)), size = Size(w, h * .22f))
         }
-        // ستاره‌ی درخشان گوشه
-        val sp = Offset(w * .80f, h * .13f)
-        drawLine(Color.White.copy(alpha = .9f), Offset(sp.x - w * .07f, sp.y), Offset(sp.x + w * .07f, sp.y), w * .012f, cap = StrokeCap.Round)
-        drawLine(Color.White.copy(alpha = .9f), Offset(sp.x, sp.y - w * .07f), Offset(sp.x, sp.y + w * .07f), w * .012f, cap = StrokeCap.Round)
-        drawCircle(Color.White.copy(alpha = .5f), w * .03f, sp)
+        // نوار نور
+        if (sw > -.4f && sw < 1.4f) {
+            clipPath(face) {
+                val x = sw * w
+                drawRect(
+                    Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .36f), Color.Transparent), Offset(x - w * .22f, 0f), Offset(x + w * .22f, h * .5f)),
+                    size = Size(w, h),
+                )
+            }
+        }
     }
 }
 
@@ -342,79 +305,6 @@ fun DrawScope.neonRing(color: Color, c: Offset, r: Float, w: Float, strength: Fl
 // ------------------------------------------------------------------ دکمه‌ی اتصال
 
 enum class VState { OFF, CONNECTING, ON }
-
-@Composable
-fun ConnectButton(state: VState, size: Dp = 230.dp, onClick: () -> Unit) {
-    val t = rememberInfiniteTransition(label = "cb")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "a")
-    val chase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "c")
-    val breathe by t.animateFloat(.55f, 1f, infiniteRepeatable(tween(1500), RepeatMode.Reverse), label = "b")
-    val on = state == VState.ON
-    val acc = if (on) K.Ok else K.Gold
-
-    Box(
-        Modifier.size(size).clickable(
-            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
-        ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val c = center
-            val r = this.size.minDimension / 2
-            // هاله‌ی نرم
-            drawCircle(Brush.radialGradient(listOf(acc.copy(alpha = (if (on) .32f else .18f) * breathe), Color.Transparent), c, r), r, c)
-            // حلقه‌ی درجه‌دار (مثل صفحه‌ی ساعت)؛ وصل: همه روشن، در حال اتصال: تعقیب
-            val ticks = 60
-            for (i in 0 until ticks) {
-                val ang = Math.toRadians(i * 6.0 - 90)
-                val lit = when (state) {
-                    VState.ON -> 1f
-                    VState.CONNECTING -> {
-                        val d = ((i / ticks.toFloat()) - chase + 1f) % 1f
-                        (1f - d * 3f).coerceIn(0f, 1f)
-                    }
-                    VState.OFF -> if (i % 5 == 0) .55f else .18f
-                }
-                val r1 = r * .86f
-                val r2 = r * (if (i % 5 == 0) .95f else .92f)
-                val p1 = Offset(c.x + r1 * cos(ang).toFloat(), c.y + r1 * sin(ang).toFloat())
-                val p2 = Offset(c.x + r2 * cos(ang).toFloat(), c.y + r2 * sin(ang).toFloat())
-                val col = if (state == VState.OFF) K.Gold else acc
-                if (lit > .5f && state != VState.OFF) drawLine(col.copy(alpha = .25f * lit), p1, p2, 7.dp.toPx(), cap = StrokeCap.Round)
-                drawLine(col.copy(alpha = .25f + .75f * lit), p1, p2, 2.2.dp.toPx(), cap = StrokeCap.Round)
-            }
-            // قوس چرخان نازک
-            if (state != VState.OFF) {
-                rotate(spin, c) {
-                    drawArc(
-                        Brush.sweepGradient(0f to Color.Transparent, .25f to acc, .26f to Color.Transparent, 1f to Color.Transparent, center = c),
-                        0f, 90f, false, Offset(c.x - r * .80f, c.y - r * .80f), Size(r * 1.6f, r * 1.6f),
-                        style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round),
-                    )
-                }
-            }
-            // حلقه‌ی فلزی
-            drawCircle(
-                Brush.sweepGradient(listOf(K.GoldDeep, K.GoldLight, K.Gold, K.GoldDeep, K.GoldLight, K.GoldDeep), c),
-                r * .74f, c, style = Stroke(5.dp.toPx()),
-            )
-            // دیسک شیشه‌ای
-            drawCircle(Brush.radialGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel), c, r * .70f), r * .70f, c)
-            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .10f), Color.Transparent), startY = c.y - r * .7f, endY = c.y), r * .70f, c)
-            drawCircle(acc.copy(alpha = .35f), r * .70f, c, style = Stroke(1.dp.toPx()))
-            // نماد پاور با درخشش
-            val pr = r * .20f
-            val sw = 6.dp.toPx()
-            val tl = Offset(c.x - pr, c.y - pr)
-            val sz = Size(pr * 2, pr * 2)
-            for ((m, a) in neonLayers) {
-                val al = a * (if (state == VState.OFF) .65f else 1f)
-                drawArc(acc.copy(alpha = al), -60f, 300f, false, tl, sz, style = Stroke(sw * m, cap = StrokeCap.Round))
-                drawLine(acc.copy(alpha = al), Offset(c.x, c.y - pr * 1.3f), Offset(c.x, c.y - pr * .15f), sw * m, cap = StrokeCap.Round)
-            }
-        }
-    }
-}
 
 // ------------------------------------------------------------------ اجزای مشترک
 
@@ -576,151 +466,106 @@ fun DrawScope.accountIcon(c: Color) {
     drawArc(c, 180f, 180f, true, topLeft = Offset(w * .14f, w * .60f), size = Size(w * .72f, w * .72f))
 }
 
-/** نشان UDP / TCP برای دکمه‌های تست پینگ */
+// ------------------------------------------------------------------ ربات کانکی
+
+/** رنگ چشم‌های ربات (در همه‌ی تم‌ها آبی) */
+private val RobotEye = Color(0xFF5CC8FF)
+
+/** ربات بامزه‌ی طلایی با چشم‌های آبی؛ animate=false برای جاهای کوچک (مثل دکمه‌ی سربرگ) */
 @Composable
-fun ProtoBadge(kind: String, result: Long?, busy: Boolean, onClick: () -> Unit) {
-    val t = rememberInfiniteTransition(label = "pb")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "s")
-    val col = when {
-        result == null -> K.Gold
-        result < 0 -> K.Red
-        result < 90 -> K.Green
-        result < 200 -> K.Gold
-        else -> K.Red
-    }
-    val shape = RoundedCornerShape(14.dp)
-    Column(
-        Modifier.width(46.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(col.copy(alpha = .22f), Color(0x22000000))))
-            .border(1.2.dp, col.copy(alpha = .8f), shape)
-            .clickable(enabled = !busy, onClick = onClick)
-            .padding(vertical = 3.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Canvas(Modifier.size(16.dp)) {
-            val w = size.width
-            if (busy) {
-                rotate(spin) { drawArc(col, 0f, 270f, false, style = Stroke(w * .12f, cap = StrokeCap.Round)) }
-            } else if (kind == "UDP") {
-                // امواج (ارسال بدون اتصال)
-                drawCircle(col, w * .10f, Offset(w * .2f, w * .8f))
-                for (i in 1..3) {
-                    val r = w * .22f * i
-                    drawArc(col, 270f, 90f, false, topLeft = Offset(w * .2f - r, w * .8f - r), size = Size(r * 2, r * 2), style = Stroke(w * .10f, cap = StrokeCap.Round))
-                }
-            } else {
-                // دو حلقه‌ی زنجیر (اتصال دست‌دادنی)
-                drawRoundRect(col, topLeft = Offset(w * .05f, w * .30f), size = Size(w * .52f, w * .40f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .2f), style = Stroke(w * .11f))
-                drawRoundRect(col, topLeft = Offset(w * .43f, w * .30f), size = Size(w * .52f, w * .40f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .2f), style = Stroke(w * .11f))
-            }
-        }
-        T(
-            when { busy -> kind; result == null -> kind; result < 0 -> "✕"; else -> "${result}ms" },
-            size = 9.sp, color = col, font = Poppins, weight = FontWeight.Bold, ltr = true,
-        )
-    }
-}
-
-// ------------------------------------------------------------------ ربات تلگرام
-
-private val robotLines = listOf(
-    "سلام! چطوری؟ 👋",
-    "امروز روز خوبیه ☀️",
-    "برای خرید کانفیگ روی من بزن",
-    "تست رایگان هم داریم 🎁",
-    "اینترنت آزاد حق همه‌ست 🌍",
-    "تانل بسته شد؟ برو روی مستقیم ⚡",
-    "اینترنت بی‌مرز، زندگی بی‌دغدغه 🚀",
-    "پینگت رو از تب سرورها چک کن 📡",
-    "امروز با کدوم سرور حال می‌کنی؟ 🌍",
-    "وصل شو، آزاد باش ✨",
-    "پینگ پایین، گیم بدون لگ 🎮",
-    "امنزیا فیلتر رو دور می‌زنه 🛡",
-    "یوتیوب و اینستا بدون قطعی 📺",
-    "حریم خصوصیت با ما امنه 🔐",
-    "سرورهای پرسرعت آلمان 🇩🇪",
-    "تمدید سریع از ربات 🚀",
-    "پشتیبانی ۲۴ ساعته 💬",
-)
-
-/** خود ربات: سر طلایی با چشم‌های نئونی، لوگوی کانکی روی پیشانی و تلگرام روی سینه */
-@Composable
-fun RobotFace(size: Dp, highlight: Float = 1f) {
+fun RobotFace(size: Dp, highlight: Float = 1f, animate: Boolean = true) {
     val t = rememberInfiniteTransition(label = "robot")
-    val bob by t.animateFloat(-3f, 3f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
-    val blink by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3400, easing = LinearEasing)), label = "k")
-    val wave by t.animateFloat(-18f, 18f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "w")
-    Canvas(Modifier.size(size).graphicsLayer { translationY = bob; alpha = highlight }) {
-        val w = this.size.width
-        val cr = androidx.compose.ui.geometry.CornerRadius(w * .22f)
-        // آنتن با چراغ
-        drawLine(K.Gold, Offset(w * .5f, w * .06f), Offset(w * .5f, w * .18f), w * .045f, cap = StrokeCap.Round)
-        drawCircle(K.Accent.copy(alpha = .3f), w * .1f, Offset(w * .5f, w * .06f))
-        drawCircle(K.Accent, w * .045f, Offset(w * .5f, w * .06f))
-        // دست تکان‌دهنده
-        rotate(wave, Offset(w * .86f, w * .62f)) {
-            drawLine(K.GoldDeep, Offset(w * .86f, w * .62f), Offset(w * .98f, w * .44f), w * .07f, cap = StrokeCap.Round)
-            drawCircle(K.Gold, w * .05f, Offset(w * .98f, w * .44f))
-        }
-        // سر (سایه برای عمق + بدنه‌ی طلایی)
-        drawRoundRect(K.GoldDeep.copy(red = K.GoldDeep.red * .6f, green = K.GoldDeep.green * .6f, blue = K.GoldDeep.blue * .6f), topLeft = Offset(w * .17f, w * .21f), size = Size(w * .70f, w * .56f), cornerRadius = cr)
-        drawRoundRect(
-            Brush.verticalGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep)),
-            topLeft = Offset(w * .13f, w * .18f), size = Size(w * .70f, w * .56f), cornerRadius = cr,
-        )
-        drawRoundRect(Color.White.copy(alpha = .25f), topLeft = Offset(w * .19f, w * .21f), size = Size(w * .58f, w * .07f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .05f))
-        // صفحه‌ی صورت
-        drawRoundRect(K.Panel, topLeft = Offset(w * .20f, w * .33f), size = Size(w * .56f, w * .30f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .12f))
-        val eyeH = if (blink > .95f) w * .02f else w * .085f
-        for (ex in listOf(.36f, .60f)) {
-            drawRoundRect(K.Accent.copy(alpha = .3f), topLeft = Offset(w * ex - w * .07f, w * .48f - eyeH / 2 - w * .03f), size = Size(w * .14f, eyeH + w * .06f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .05f))
-            drawRoundRect(K.Accent, topLeft = Offset(w * ex - w * .04f, w * .48f - eyeH / 2), size = Size(w * .08f, eyeH), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .04f))
-        }
-        // لبخند
-        drawArc(K.Accent, 20f, 140f, false, topLeft = Offset(w * .40f, w * .50f), size = Size(w * .16f, w * .08f), style = Stroke(w * .02f, cap = StrokeCap.Round))
-        // لوگوی کانکی روی پیشانی (سپر کوچک)
-        val sx = w * .43f; val sy = w * .215f; val ss = w * .10f
-        val sh = Path().apply {
-            moveTo(sx + ss * .5f, sy); lineTo(sx + ss, sy + ss * .18f); lineTo(sx + ss, sy + ss * .55f)
-            quadraticBezierTo(sx + ss, sy + ss * .85f, sx + ss * .5f, sy + ss * 1.05f)
-            quadraticBezierTo(sx, sy + ss * .85f, sx, sy + ss * .55f); lineTo(sx, sy + ss * .18f); close()
-        }
-        drawPath(sh, K.OnGold)
-        drawPath(sh, K.GoldLight, style = Stroke(w * .012f))
-        // بدن کوچک + لوگوی تلگرام روی سینه
-        drawRoundRect(Brush.verticalGradient(listOf(K.Gold, K.GoldDeep)), topLeft = Offset(w * .30f, w * .76f), size = Size(w * .36f, w * .20f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .08f))
-        val cx = w * .48f; val cy = w * .86f
-        drawCircle(Color(0xFF29A9EB), w * .085f, Offset(cx, cy))
-        val plane = Path().apply {
-            moveTo(cx - w * .05f, cy); lineTo(cx + w * .05f, cy - w * .04f); lineTo(cx + w * .02f, cy + w * .05f)
-            lineTo(cx + w * .005f, cy + w * .01f); close()
-        }
-        drawPath(plane, Color.White)
+    val bob by t.animateFloat(-2.5f, 2.5f, infiniteRepeatable(tween(1300, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
+    val blink by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = LinearEasing)), label = "k")
+    val wave by t.animateFloat(-14f, 14f, infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "w")
+    Canvas(Modifier.size(size).graphicsLayer { translationY = if (animate) bob else 0f; alpha = highlight }) {
+        drawRobot(if (animate) blink else 0f, if (animate) wave else 0f, body = true)
     }
 }
 
-/** حباب گفتگوی ربات؛ هر جمله ۳.۵ ثانیه */
-@Composable
-fun RobotBubble(small: Boolean = false) {
-    var idx by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3500); idx = (idx + 1) % robotLines.size } }
-    val shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp)
-    Box(
-        Modifier.clip(shape).background(K.Surface).border(1.dp, K.Gold.copy(alpha = .6f), shape)
-            .padding(horizontal = if (small) 8.dp else 10.dp, vertical = if (small) 4.dp else 6.dp),
-    ) { T(robotLines[idx], size = if (small) 10.sp else 11.sp, color = K.Text) }
+/**
+ * کشیدن ربات داخل بوم مربعی. body=false فقط سر را بزرگ‌تر می‌کشد (آیکون سربرگ).
+ */
+fun DrawScope.drawRobot(blink: Float = 0f, wave: Float = 0f, body: Boolean = true) {
+    val w = size.width
+    val deep = K.GoldDeep
+    val hx = if (body) w * .15f else w * .10f
+    val hy = if (body) w * .20f else w * .28f
+    val hw = if (body) w * .66f else w * .80f
+    val hh = if (body) w * .48f else w * .56f
+    val cx = hx + hw / 2
+    // آنتن
+    drawLine(deep, Offset(cx, hy), Offset(cx, hy - w * .09f), w * .035f, StrokeCap.Round)
+    drawCircle(K.GoldLight, w * .045f, Offset(cx, hy - w * .11f))
+    // گوش‌ها
+    drawRoundRect(deep, Offset(hx - w * .05f, hy + hh * .30f), Size(w * .07f, hh * .38f), CornerRadius(w * .03f))
+    drawRoundRect(deep, Offset(hx + hw - w * .02f, hy + hh * .30f), Size(w * .07f, hh * .38f), CornerRadius(w * .03f))
+    if (body) {
+        // دست تکان‌دهنده
+        val sh = Offset(hx + hw - w * .04f, hy + hh + w * .10f)
+        rotate(wave, sh) {
+            drawLine(deep, sh, Offset(w * .96f, hy + hh - w * .02f), w * .06f, StrokeCap.Round)
+            drawCircle(K.Gold, w * .045f, Offset(w * .96f, hy + hh - w * .02f))
+        }
+        // بدن کوچک با دکمه‌ی آبی
+        drawRoundRect(Brush.verticalGradient(listOf(K.Gold, deep)), Offset(cx - w * .17f, hy + hh + w * .03f), Size(w * .34f, w * .20f), CornerRadius(w * .08f))
+        val bc = Offset(cx, hy + hh + w * .13f)
+        drawCircle(Color(0xFF14202C), w * .055f, bc)
+        drawCircle(RobotEye, w * .036f, bc)
+    }
+    // سر
+    drawRoundRect(Brush.verticalGradient(listOf(K.GoldLight, K.Gold, deep)), Offset(hx, hy), Size(hw, hh), CornerRadius(hw * .30f))
+    drawRoundRect(Color.White.copy(alpha = .22f), Offset(hx + hw * .14f, hy + hh * .06f), Size(hw * .72f, hh * .11f), CornerRadius(hh * .06f))
+    // صفحه‌ی صورت
+    val vx = hx + hw * .12f
+    val vy = hy + hh * .25f
+    val vw = hw * .76f
+    val vh = hh * .58f
+    drawRoundRect(Color(0xFF15100A), Offset(vx, vy), Size(vw, vh), CornerRadius(vh * .45f))
+    // چشم‌ها
+    val er = vh * .25f
+    val eyeY = vy + vh * .44f
+    for (ex in listOf(vx + vw * .30f, vx + vw * .70f)) {
+        drawCircle(RobotEye.copy(alpha = .22f), er * 1.5f, Offset(ex, eyeY))
+        if (blink > .95f) {
+            drawLine(RobotEye, Offset(ex - er, eyeY), Offset(ex + er, eyeY), er * .4f, StrokeCap.Round)
+        } else {
+            drawCircle(RobotEye, er, Offset(ex, eyeY))
+            drawCircle(Color.White.copy(alpha = .85f), er * .32f, Offset(ex - er * .3f, eyeY - er * .32f))
+        }
+    }
+    // لبخند
+    drawArc(
+        RobotEye.copy(alpha = .9f), 20f, 140f, false,
+        topLeft = Offset(cx - vw * .10f, vy + vh * .66f), size = Size(vw * .20f, vh * .16f),
+        style = Stroke(w * .018f, cap = StrokeCap.Round),
+    )
 }
 
-/** ربات با حباب گفتگو (صفحه‌ی ورود و تنظیمات) */
+/** رنگ حباب گفتگوی ربات (کرم روشن مثل طرح) */
+val BubbleBg = Color(0xFFF3E8CF)
+val BubbleText = Color(0xFF2A2116)
+
+/** حباب گفتگو؛ گوشه‌ی تیز سمت ربات است (robotAtStart: ربات در ابتدای ردیف) */
 @Composable
-fun RobotMascot(onClick: () -> Unit) {
-    Row(
-        Modifier.clip(RoundedCornerShape(24.dp)).clickable { onClick() }.padding(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RobotFace(60.dp)
-        Spacer(Modifier.width(4.dp))
-        RobotBubble()
+fun SpeechBubble(text: String, robotAtStart: Boolean, modifier: Modifier = Modifier, size: TextUnit = 12.sp) {
+    val shape = if (robotAtStart) RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+    else RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+    Box(
+        modifier.clip(shape).background(BubbleBg).border(1.dp, K.Gold.copy(alpha = .55f), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) { T(text, size = size, color = BubbleText, weight = FontWeight.Bold) }
+}
+
+/** ربات با حباب گفتگو */
+@Composable
+fun RobotSays(text: String, modifier: Modifier = Modifier, robotSize: Dp = 62.dp, robotAtStart: Boolean = true, onClick: (() -> Unit)? = null) {
+    var m = modifier.clip(RoundedCornerShape(18.dp))
+    if (onClick != null) m = m.clickable(onClick = onClick)
+    Row(m.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (robotAtStart) { RobotFace(robotSize); Spacer(Modifier.width(6.dp)) }
+        SpeechBubble(text, robotAtStart, Modifier.weight(1f, fill = false))
+        if (!robotAtStart) { Spacer(Modifier.width(6.dp)); RobotFace(robotSize) }
     }
 }
 
@@ -729,34 +574,38 @@ fun RobotMascot(onClick: () -> Unit) {
 
 fun DrawScope.navIcon(kind: Int, c: Color) {
     val w = size.width
-    val sw = w * .09f
+    val sw = w * .075f
+    val st = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (kind) {
         0 -> { // خانه
             val p = Path().apply {
-                moveTo(w * .14f, w * .48f); lineTo(w * .5f, w * .16f); lineTo(w * .86f, w * .48f)
-                moveTo(w * .24f, w * .40f); lineTo(w * .24f, w * .84f); lineTo(w * .76f, w * .84f); lineTo(w * .76f, w * .40f)
+                moveTo(w * .12f, w * .48f); lineTo(w * .5f, w * .14f); lineTo(w * .88f, w * .48f)
+                moveTo(w * .22f, w * .40f); lineTo(w * .22f, w * .86f); lineTo(w * .78f, w * .86f); lineTo(w * .78f, w * .40f)
+                moveTo(w * .41f, w * .86f); lineTo(w * .41f, w * .62f); lineTo(w * .59f, w * .62f); lineTo(w * .59f, w * .86f)
             }
-            drawPath(p, c, style = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            drawRoundRect(c, topLeft = Offset(w * .42f, w * .60f), size = Size(w * .16f, w * .24f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * .04f))
+            drawPath(p, c, style = st)
         }
         1 -> { // سرورها (کره‌ی زمین)
-            drawCircle(c, w * .36f, center, style = Stroke(sw))
-            drawOval(c, topLeft = Offset(w * .33f, w * .14f), size = Size(w * .34f, w * .72f), style = Stroke(sw * .8f))
-            drawLine(c, Offset(w * .14f, w * .5f), Offset(w * .86f, w * .5f), sw * .8f)
+            drawCircle(c, w * .38f, center, style = st)
+            drawOval(c, topLeft = Offset(w * .32f, w * .12f), size = Size(w * .36f, w * .76f), style = Stroke(sw * .85f))
+            drawLine(c, Offset(w * .13f, w * .5f), Offset(w * .87f, w * .5f), sw * .85f)
+            drawLine(c, Offset(w * .20f, w * .32f), Offset(w * .80f, w * .32f), sw * .7f)
+            drawLine(c, Offset(w * .20f, w * .68f), Offset(w * .80f, w * .68f), sw * .7f)
         }
-        2 -> { // تست (سرعت‌سنج)
-            drawArc(c, 150f, 240f, false, topLeft = Offset(w * .12f, w * .16f), size = Size(w * .76f, w * .76f), style = Stroke(sw, cap = StrokeCap.Round))
-            drawLine(c, Offset(w * .5f, w * .54f), Offset(w * .70f, w * .34f), sw, cap = StrokeCap.Round)
-            drawCircle(c, w * .07f, Offset(w * .5f, w * .54f))
+        2 -> { // تست سرعت (سرعت‌سنج)
+            drawArc(c, 160f, 220f, false, topLeft = Offset(w * .10f, w * .16f), size = Size(w * .80f, w * .80f), style = st)
+            drawLine(c, Offset(w * .5f, w * .56f), Offset(w * .68f, w * .36f), sw, cap = StrokeCap.Round)
+            drawCircle(c, w * .06f, Offset(w * .5f, w * .56f))
         }
-        else -> { // تنظیمات (چرخ‌دنده)
+        else -> { // تنظیمات (خورشید/چرخ‌دنده)
             for (i in 0 until 8) {
                 val a = Math.toRadians(i * 45.0)
-                drawLine(c, Offset(w / 2 + w * .26f * cos(a).toFloat(), w / 2 + w * .26f * sin(a).toFloat()),
-                    Offset(w / 2 + w * .40f * cos(a).toFloat(), w / 2 + w * .40f * sin(a).toFloat()), sw * 1.3f, cap = StrokeCap.Round)
+                drawLine(
+                    c, Offset(w / 2 + w * .31f * cos(a).toFloat(), w / 2 + w * .31f * sin(a).toFloat()),
+                    Offset(w / 2 + w * .43f * cos(a).toFloat(), w / 2 + w * .43f * sin(a).toFloat()), sw, cap = StrokeCap.Round,
+                )
             }
-            drawCircle(c, w * .27f, center, style = Stroke(sw))
-            drawCircle(c, w * .09f, center)
+            drawCircle(c, w * .20f, center, style = st)
         }
     }
 }

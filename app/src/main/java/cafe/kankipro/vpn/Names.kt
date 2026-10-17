@@ -108,3 +108,32 @@ fun protoShort(p: String) = when (p) {
     "ikev2", "ikev2-direct" -> "IKEv2"
     else -> p
 }
+
+/** اسم کشور از روی کد ISO (فارسی، یا انگلیسی وقتی زبان انگلیسی است)؛ null اگر ناشناخته باشد */
+fun countryName(iso: String?): String? {
+    val f = flagEmoji(iso) ?: return null
+    val keys = flagTable.firstOrNull { it.second == f }?.first ?: return null
+    return if (LangState.en) {
+        keys.firstOrNull { k -> k.length > 3 && k.all { it in 'A'..'Z' } }?.lowercase()?.replaceFirstChar { it.uppercase() }
+    } else {
+        keys.lastOrNull { k -> k.any { it in '؀'..'ۿ' } }
+    }
+}
+
+/** شهر مرکز داده‌ی معمول هر کشور (همان نقطه‌ای که روی نقشه نشان داده می‌شود) */
+fun cityName(iso: String?): String? {
+    val fa = when (iso?.uppercase()) {
+        "DE" -> "فرانکفورت" to "Frankfurt"; "TR" -> "استانبول" to "Istanbul"; "NL" -> "آمستردام" to "Amsterdam"
+        "FI" -> "هلسینکی" to "Helsinki"; "FR" -> "پاریس" to "Paris"; "GB" -> "لندن" to "London"
+        "US" -> "واشنگتن" to "Washington"; "AE" -> "دبی" to "Dubai"; "RU" -> "مسکو" to "Moscow"
+        "SE" -> "استکهلم" to "Stockholm"; "CA" -> "تورنتو" to "Toronto"; "PL" -> "ورشو" to "Warsaw"
+        "AT" -> "وین" to "Vienna"; "AM" -> "ایروان" to "Yerevan"; "SG" -> "سنگاپور" to "Singapore"
+        "JP" -> "توکیو" to "Tokyo"; "IR" -> "تهران" to "Tehran"
+        else -> return null
+    }
+    return if (LangState.en) fa.second else fa.first
+}
+
+/** رقم‌های لاتین را در حالت فارسی به رقم فارسی تبدیل می‌کند (برای عددهای ساده مثل روز و گیگ) */
+fun faDigits(s: String): String =
+    if (LangState.en) s else buildString { s.forEach { c -> append(if (c in '0'..'9') ('۰' + (c - '0')) else if (c == '.') '٫' else c) } }

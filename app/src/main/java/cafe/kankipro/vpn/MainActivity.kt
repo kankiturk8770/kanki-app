@@ -89,7 +89,7 @@ fun App() {
         state.emergencyOpen -> KankiBackground(accent = K.Red) {
             Box(Modifier.systemBarsPadding()) { EmergencyScreen(state) { state.emergencyOpen = false } }
         }
-        else -> KankiBackground(accent = if (state.vstate == VState.ON) K.Green else K.Gold) {
+        else -> KankiBackground(accent = if (state.vstate == VState.ON) modeColor(state.mode) else K.Gold, calm = !state.loggedIn) {
             Box(Modifier.systemBarsPadding()) {
                 if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }
             }
