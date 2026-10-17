@@ -3,9 +3,9 @@ on:
   push:
   workflow_dispatch:
 
-# فقط خواندن مخزن؛ کلید امضا فقط از Secrets می‌آید
+# نوشتن مخزن فقط برای گذاشتن فایل نصبی در Releases؛ کلید امضا فقط از Secrets می‌آید
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -166,7 +166,23 @@ jobs:
       - name: حجم فایل‌ها
         run: ls -la app/build/outputs/apk/release/
 
+      # فایل نصبی در Releases هم گذاشته می‌شود (یک نسخه‌ی پیش‌انتشار برای هر شاخه که هر بار جایگزین می‌شود).
+      # فضای Releases جدا از فضای Artifacts است؛ اگر سهمیه‌ی Artifacts پر باشد، فایل نصبی باز هم از اینجا در دسترس است.
+      - name: انتشار فایل نصبی در Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          tag="build-${GITHUB_REF_NAME//\//-}"
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" app/build/outputs/apk/release/*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Kanki VPN · $GITHUB_REF_NAME · #$GITHUB_RUN_NUMBER" --notes "ساخت خودکار از $GITHUB_SHA"
+
+      # اگر سهمیه‌ی فضای Artifacts حساب پر باشد، فقط همین مرحله رد می‌شود و ساخت قرمز نمی‌شود
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: KankiVPN-apk
           path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
