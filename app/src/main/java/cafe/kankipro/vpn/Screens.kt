@@ -507,7 +507,10 @@ private fun ServersTab(state: AppState) {
             mtu = { p -> state.mtuFor(p) },
             setMtu = { p, v -> state.setMtu(p, v) },
             closeTip = { state.markTip("servers") },
+            filterAuto = { state.changeFilterAuto(it) },
+            filterXray = { state.changeFilterXray(it) },
         ),
+        filter = if (state.mode == KMode.FILTER) FilterOptsUi(state.filterAuto, state.filterXray) else null,
     )
 }
 

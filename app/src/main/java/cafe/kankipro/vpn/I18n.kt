@@ -356,6 +356,15 @@ private val EN = mapOf(
     "همه‌ی کشورها و کانفیگ‌ها؛ «تست پینگ همه» پینگ UDP و TCP همه رو با هم می‌گیره و با یه لمس روی هر کانفیگ وصل می‌شی." to "All countries and configs; \"Ping all\" measures UDP and TCP ping of everything at once, and one tap on a config connects you.",
     // ---- نسخه‌ی ۱.۱۱.۱
     "IP شما" to "Your IP",
+    // ---- نسخه‌ی ۱.۱۱.۲
+    "ضد فیلتر" to "Anti-filter",
+    "اولویت Xray" to "Xray first",
+    "بهترین راه را خودش پیدا و وصل می‌کند؛ با لمس یک کانفیگ، همان دستی انتخاب می‌شود" to "Finds and connects the best route by itself; tapping a config picks it by hand",
+    "فقط اینباندهای Xray امتحان می‌شوند" to "Only Xray inbounds are tried",
+    "Xray، AmneziaWG مستقیم و تانل، همه با هم به ترتیب پینگ" to "Xray, AmneziaWG direct and tunnel, all together by ping",
+    "سنجش راه‌ها…" to "Checking routes…",
+    "اشتراک شما Xray ندارد. در تب سرورها تیک «اولویت Xray» را بردارید تا AmneziaWG هم امتحان شود." to "Your subscription has no Xray. Untick \"Xray first\" in the Servers tab so AmneziaWG is tried too.",
+    "هیچ اینباند Xray وصل نشد. تیک «اولویت Xray» را در تب سرورها بردارید یا «هوشمند» را بزنید." to "No Xray inbound connected. Untick \"Xray first\" in the Servers tab, or tap Smart.",
     "این حباب گفتگو فقط برای وقتیه که اینترنت ملی شد. اون موقع از اینجا مستقیم با ادمین حرف می‌زنی، اسکرین‌شات می‌فرستی و کانفیگی که از فیلتر رد می‌شه رو می‌گیری. در حالت عادی لازمش نداری." to "This chat bubble is only for when the internet goes national-only. Then you talk to the admin here directly, send screenshots and get a config that gets through. Normally you won't need it.",
 )
 

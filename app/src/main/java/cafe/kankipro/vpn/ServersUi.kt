@@ -63,7 +63,45 @@ class ServersActions(
     val mtu: (String) -> String = { "" },
     val setMtu: (String, String) -> Unit = { _, _ -> },
     val closeTip: () -> Unit = {},
+    val filterAuto: (Boolean) -> Unit = {},
+    val filterXray: (Boolean) -> Unit = {},
 )
+
+/** گزینه‌های ضد فیلتر (فقط وقتی حالت ضد فیلتر انتخاب است در تب سرورها دیده می‌شود) */
+data class FilterOptsUi(val auto: Boolean, val xrayFirst: Boolean)
+
+@Composable
+private fun FilterOptsCard(u: FilterOptsUi, act: ServersActions) {
+    val mc = modeColor(KMode.FILTER)
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(Brush.verticalGradient(listOf(mc.copy(alpha = .10f), mc.copy(alpha = .03f))))
+            .border(1.dp, mc.copy(alpha = .45f), shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        T("ضد فیلتر", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+        Spacer(Modifier.height(6.dp))
+        FilterCheck("خودکار", "بهترین راه را خودش پیدا و وصل می‌کند؛ با لمس یک کانفیگ، همان دستی انتخاب می‌شود", u.auto, mc) { act.filterAuto(!u.auto) }
+        Spacer(Modifier.height(4.dp))
+        FilterCheck("اولویت Xray", if (u.xrayFirst) "فقط اینباندهای Xray امتحان می‌شوند" else "Xray، AmneziaWG مستقیم و تانل، همه با هم به ترتیب پینگ", u.xrayFirst, mc) { act.filterXray(!u.xrayFirst) }
+    }
+}
+
+@Composable
+private fun FilterCheck(title: String, sub: String, on: Boolean, c: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CheckMark(on, 22.dp, c)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            T(title, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
+            T(sub, size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal)
+        }
+    }
+}
 
 /** توضیح کوتاه هر پروتکل */
 fun protoDesc(p: String) = when (p) {
@@ -77,12 +115,13 @@ fun protoDesc(p: String) = when (p) {
 }
 
 @Composable
-fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions) {
+fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions, filter: FilterOptsUi? = null) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(6.dp))
         T("سرورها", size = 24.sp, color = K.Text, weight = FontWeight.Black)
         T("یک کلیک تا کانفیگ", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
         tip?.let { Spacer(Modifier.height(10.dp)); RobotBanner(it, onClose = act.closeTip) }
+        filter?.let { Spacer(Modifier.height(12.dp)); FilterOptsCard(it, act) }
         Spacer(Modifier.height(12.dp))
         PingAllCard(ping, act.pingAll)
         Spacer(Modifier.height(12.dp))

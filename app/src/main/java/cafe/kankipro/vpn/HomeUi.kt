@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -194,63 +193,50 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
 fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
     val mc = modeColor(ui.mode)
     val on = ui.vstate == VState.ON
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    // ارتفاع بخش پایین (حالت‌ها، کارت‌ها، آمار و نوار اشتراک) اندازه گرفته می‌شود و نقشه هر چه جا ماند
-    // را می‌گیرد؛ پس همه‌چیز در صفحه جا می‌شود و چیزی زیر نوار پایین نمی‌رود. اگر باز هم جا نشد
-    // (مثلاً گوشی خیلی کوتاه)، صفحه اسکرول می‌خورد.
-    var belowPx by remember { mutableIntStateOf(0) }
-    var chipPx by remember { mutableIntStateOf(0) }
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val free = with(density) { maxHeight - (belowPx + chipPx).toDp() }
-        val mapBox = free.coerceIn(214.dp, 334.dp)
-        val orb = if (mapBox < 290.dp) 132.dp else 156.dp
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp).onSizeChanged { chipPx = it.height }) {
-                LocationChip(ui.locationIso, ui.locationIsExit)
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+            LocationChip(ui.locationIso, ui.locationIsExit)
+        }
+        // نقشه‌ی بزرگ بدون قاب؛ دکمه‌ی گرد اتصال روی لبه‌ی محوشده‌ی پایین نقشه
+        Box(Modifier.fillMaxWidth().height(334.dp)) {
+            WorldMap(
+                ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(276.dp).guideTarget("map"),
+                accent = if (ui.vstate == VState.OFF) K.Gold else mc,
+            )
+            Box(Modifier.align(Alignment.BottomCenter).guideTarget("connect")) {
+                OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, onClick = act.toggle)
             }
-            // نقشه‌ی بزرگ بدون قاب؛ دکمه‌ی گرد اتصال روی لبه‌ی محوشده‌ی پایین نقشه
-            Box(Modifier.fillMaxWidth().height(mapBox)) {
-                WorldMap(
-                    ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
-                    Modifier.align(Alignment.TopCenter).fillMaxWidth().height(mapBox - orb * .37f).guideTarget("map"),
-                    accent = if (ui.vstate == VState.OFF) K.Gold else mc,
-                )
-                Box(Modifier.align(Alignment.BottomCenter).guideTarget("connect")) {
-                    OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = orb, onClick = act.toggle)
+        }
+        Spacer(Modifier.height(10.dp))
+
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (!ui.hasAccount) {
+                if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
+            } else {
+                ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), onTap = act.tapMode, onLong = act.longMode)
+                Spacer(Modifier.height(8.dp))
+                ModeHint(ui.mode)
+                AnimatedVisibility(ui.smart.open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                    SmartPanel(ui.smart, Modifier.padding(top = 8.dp))
                 }
+                if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns, Modifier.padding(top = 8.dp))
             }
 
-            Column(
-                Modifier.fillMaxWidth().onSizeChanged { belowPx = it.height }.padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (!ui.hasAccount) {
-                    if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
-                } else {
-                    ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), onTap = act.tapMode, onLong = act.longMode)
-                    Spacer(Modifier.height(8.dp))
-                    // در حالت DNS کارت DNS خودش توضیح می‌دهد؛ خط راهنما جا نمی‌گیرد
-                    if (ui.mode != KMode.DNS) ModeHint(ui.mode)
-                    AnimatedVisibility(ui.smart.open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                        SmartPanel(ui.smart, Modifier.padding(top = 8.dp))
-                    }
-                    if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
-                }
-
-                AnimatedVisibility(visible = ui.alert != null) {
-                    ui.alert?.let { al ->
-                        RobotBanner(al, Modifier.padding(top = 8.dp), onAction = act.alertAction, onClose = act.dismissAlert)
-                    }
-                }
-                if (ui.hasAccount) {
-                    Spacer(Modifier.height(8.dp))
-                    StatsRow(ui)
-                }
-                ui.sub?.let {
-                    Spacer(Modifier.height(8.dp))
-                    UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount)
+            AnimatedVisibility(visible = ui.alert != null) {
+                ui.alert?.let { al ->
+                    RobotBanner(al, Modifier.padding(top = 8.dp), onAction = act.alertAction, onClose = act.dismissAlert)
                 }
             }
+            if (ui.hasAccount) {
+                Spacer(Modifier.height(8.dp))
+                StatsRow(ui)
+            }
+            ui.sub?.let {
+                Spacer(Modifier.height(8.dp))
+                UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount)
+            }
+            Spacer(Modifier.height(10.dp))
         }
     }
 }
@@ -403,7 +389,7 @@ private fun StatsRow(ui: HomeUi) {
 private fun StatCard(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Column(
-        modifier.height(80.dp).clip(shape)
+        modifier.height(88.dp).clip(shape)
             .background(Brush.verticalGradient(listOf(K.Surface, K.Surface2)))
             .border(1.dp, K.Gold.copy(alpha = .22f), shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),

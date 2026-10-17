@@ -89,6 +89,13 @@ class AppState private constructor(context: Context) {
         private set
     var filterNode by mutableStateOf(prefs.getString("filterNode", null))
         private set
+    /** ضد فیلتر خودکار: فقط Xray (پیش‌فرض)، یا همه‌ی راه‌ها (Xray، AmneziaWG مستقیم و تانل) به ترتیب پینگ */
+    var filterXray by mutableStateOf(prefs.getBoolean("filterXray", true))
+        private set
+    fun changeFilterXray(v: Boolean) { filterXray = v; prefs.edit().putBoolean("filterXray", v).apply() }
+    /** «خودکار» در تب سرورها: ضد فیلتر خودش بهترین را انتخاب کند (انتخاب دستی کنار می‌رود) */
+    fun changeFilterAuto(v: Boolean) { if (v) setFilter(true, "", null) else setFilter(false, filterProto, filterNode) }
+
     fun setFilter(auto: Boolean, p: String, n: String?) {
         filterAuto = auto; filterProto = p; filterNode = n
         prefs.edit().putBoolean("filterAuto", auto).putString("filterProto", p).putString("filterNode", n).apply()
@@ -272,8 +279,9 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * ضد فیلتر. خودکار: اول راه‌های مستقیم (اینباندهای Xray و AmneziaWG مستقیم)، اگر هیچ‌کدام وصل نشد
-     * راه‌های تانل. آخرین راهی که روی همین اینترنت وصل شد، دفعه‌ی بعد اول امتحان می‌شود.
+     * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
+     * همه‌ی راه‌ها (Xray، AmneziaWG مستقیم و تانل، …) با هم به ترتیب پینگ. آخرین راهی که روی همین
+     * اینترنت وصل شد، دفعه‌ی بعد اول امتحان می‌شود.
      * دستی: فقط همان اینباند Xray، یا AmneziaWG همان کشور (اول مستقیم، بعد تانل).
      */
     suspend fun connectFilter() {
@@ -293,30 +301,39 @@ class AppState private constructor(context: Context) {
             return
         }
         val nodes = a.configs.map { it.node }.distinct()
-        val direct = nodes.filter { hasCfg(it, "xray") }.map { it to "xray" } +
-            nodes.filter { hasCfg(it, "amneziawg-direct") }.map { it to "amneziawg-direct" }
+        val xray = nodes.filter { hasCfg(it, "xray") }.map { it to "xray" }
+        val direct = nodes.filter { hasCfg(it, "amneziawg-direct") }.map { it to "amneziawg-direct" }
         val tunnel = listOf("amneziawg", "hysteria2", "wireguard").flatMap { p -> nodes.filter { hasCfg(it, p) }.map { it to p } }
-        if (direct.isEmpty() && tunnel.isEmpty()) { error = "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."; return }
-        tryStep = "سنجش راه‌های مستقیم…"
-        val m = pingMany(direct + tunnel)
+        // «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray؛ برداشته شود: همه‌ی راه‌ها با هم، کمترین پینگ اول
+        val pool = if (filterXray) xray else xray + direct + tunnel
+        if (pool.isEmpty()) {
+            error = if (filterXray && (direct + tunnel).isNotEmpty())
+                "اشتراک شما Xray ندارد. در تب سرورها تیک «اولویت Xray» را بردارید تا AmneziaWG هم امتحان شود."
+            else "کانفیگی برای اتصال پیدا نشد. اشتراک را بروز کنید."
+            return
+        }
+        tryStep = "سنجش راه‌ها…"
+        val m = pingMany(pool)
         fun ok(c: Pair<String, String>) = (m[c] ?: -1L) > 0
-        fun order(l: List<Pair<String, String>>) = l.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }
+        val ranked = pool.filter { ok(it) }.sortedBy { m[it] ?: 99_999L }
         val remembered = prefs.getString(memKey(KMode.FILTER), null)?.split("|")?.takeIf { it.size == 2 }
-            ?.let { it[0] to it[1] }?.takeIf { it in direct || it in tunnel }
-        val list = (listOfNotNull(remembered) + order(direct).filter { ok(it) }.take(3) + order(tunnel).filter { ok(it) }.take(3) +
-            direct.filter { !ok(it) }.take(1) + tunnel.filter { !ok(it) }.take(1)).distinct().take(7)
+            ?.let { it[0] to it[1] }?.takeIf { it in pool && ok(it) }
+        val list = (listOfNotNull(remembered) + ranked.take(5) + pool.filter { !ok(it) }.take(2)).distinct().take(7)
         val done = connectChain(list) { c -> if (c.second == "xray") nodeName(c.first) else nodeName(c.first) + " · " + protoTitle(c.second) }
         if (done) prefs.edit().putString(memKey(KMode.FILTER), node + "|" + proto).apply()
-        else if (wantTry) error = "هیچ راهی وصل نشد. اینترنت را بررسی کنید یا «هوشمند» را بزنید."
+        else if (wantTry) error = if (filterXray) "هیچ اینباند Xray وصل نشد. تیک «اولویت Xray» را در تب سرورها بردارید یا «هوشمند» را بزنید."
+            else "هیچ راهی وصل نشد. اینترنت را بررسی کنید یا «هوشمند» را بزنید."
     }
 
     /** انتخاب در تب سرورها: همان سرور و پروتکل در حالت مناسبش قفل می‌شود */
     fun lockFromServers(id: String, p: String) {
         node = id
         selectProto(p)
-        when (p) {
-            "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
-            in Modes.GAME_PROTOS -> { setGame(false, p, id); changeMode(KMode.GAME) }
+        when {
+            p == "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
+            // در حالت ضد فیلتر، AmneziaWG (مستقیم/تانل) هم انتخاب دستی همین حالت است
+            mode == KMode.FILTER && p.startsWith("amneziawg") -> setFilter(false, "", id)
+            p in Modes.GAME_PROTOS -> { setGame(false, p, id); changeMode(KMode.GAME) }
         }
     }
 
