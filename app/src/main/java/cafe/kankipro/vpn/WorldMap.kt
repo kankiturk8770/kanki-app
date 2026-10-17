@@ -37,18 +37,27 @@ fun isoOfFlag(flag: String): String? {
     return "${'A' + a}${'A' + b}"
 }
 
-/** مختصات تقریبی کشورها (اگر مکان دقیق سرور پیدا نشد) */
-fun geoOfName(name: String): Geo? {
-    val f = flagOf(name)
-    return when (f) {
-        "🇩🇪" -> Geo(50.1, 8.7); "🇹🇷" -> Geo(41.0, 29.0); "🇮🇷" -> Geo(35.7, 51.4)
-        "🇳🇱" -> Geo(52.4, 4.9); "🇫🇮" -> Geo(60.2, 24.9); "🇫🇷" -> Geo(48.9, 2.35)
-        "🇬🇧" -> Geo(51.5, -0.1); "🇺🇸" -> Geo(39.0, -77.0); "🇦🇪" -> Geo(25.2, 55.3)
-        "🇷🇺" -> Geo(55.8, 37.6); "🇸🇪" -> Geo(59.3, 18.1); "🇨🇦" -> Geo(43.7, -79.4)
-        "🇵🇱" -> Geo(52.2, 21.0); "🇦🇹" -> Geo(48.2, 16.4); "🇦🇲" -> Geo(40.2, 44.5)
-        "🇸🇬" -> Geo(1.35, 103.8); "🇯🇵" -> Geo(35.7, 139.7)
-        else -> null
-    }
+/** مختصات تقریبی پایتخت/شهر اصلی هر کشور (وقتی کشور خروجی معلوم است ولی مختصات دقیقش نه) */
+fun geoOfIso(iso: String?): Geo? = when (iso?.uppercase()) {
+    "DE" -> Geo(50.1, 8.7); "TR" -> Geo(41.0, 29.0); "IR" -> Geo(35.7, 51.4)
+    "NL" -> Geo(52.4, 4.9); "FI" -> Geo(60.2, 24.9); "FR" -> Geo(48.9, 2.35)
+    "GB" -> Geo(51.5, -0.1); "US" -> Geo(39.0, -77.0); "AE" -> Geo(25.2, 55.3)
+    "RU" -> Geo(55.8, 37.6); "SE" -> Geo(59.3, 18.1); "CA" -> Geo(43.7, -79.4)
+    "PL" -> Geo(52.2, 21.0); "AT" -> Geo(48.2, 16.4); "AM" -> Geo(40.2, 44.5)
+    "SG" -> Geo(1.35, 103.8); "JP" -> Geo(35.7, 139.7); "IT" -> Geo(45.5, 9.2)
+    "ES" -> Geo(40.4, -3.7); "CH" -> Geo(47.4, 8.5); "BE" -> Geo(50.8, 4.35)
+    "CZ" -> Geo(50.1, 14.4); "RO" -> Geo(44.4, 26.1); "BG" -> Geo(42.7, 23.3)
+    "UA" -> Geo(50.45, 30.5); "KZ" -> Geo(43.2, 76.9); "GE" -> Geo(41.7, 44.8)
+    "AZ" -> Geo(40.4, 49.9); "IN" -> Geo(19.1, 72.9); "KR" -> Geo(37.6, 127.0)
+    "HK" -> Geo(22.3, 114.2); "AU" -> Geo(-33.9, 151.2); "BR" -> Geo(-23.5, -46.6)
+    "IE" -> Geo(53.35, -6.26); "NO" -> Geo(59.9, 10.75); "DK" -> Geo(55.7, 12.6)
+    "LT" -> Geo(54.7, 25.3); "LV" -> Geo(56.95, 24.1); "EE" -> Geo(59.4, 24.75)
+    "PT" -> Geo(38.7, -9.1); "GR" -> Geo(37.98, 23.7); "HU" -> Geo(47.5, 19.04)
+    "RS" -> Geo(44.8, 20.5); "SA" -> Geo(24.7, 46.7); "QA" -> Geo(25.3, 51.5)
+    "KW" -> Geo(29.4, 48.0); "IQ" -> Geo(33.3, 44.4); "TH" -> Geo(13.75, 100.5)
+    "VN" -> Geo(21.0, 105.8); "ID" -> Geo(-6.2, 106.8); "MY" -> Geo(3.1, 101.7)
+    "MD" -> Geo(47.0, 28.85); "LU" -> Geo(49.6, 6.13); "CY" -> Geo(35.17, 33.36)
+    else -> null
 }
 
 data class MapPin(val geo: Geo, val iso: String?, val selected: Boolean)
@@ -167,7 +176,8 @@ fun WorldMap(
 
         val pr = w / 34f
         // بقیه‌ی سرورها: نقطه‌ی درخشان طلایی با سنجاق کوچک پرچم
-        pins.filter { !it.selected }.forEach { p ->
+        // (سروری که در کشور خود کاربر است جدا کشیده نمی‌شود تا دو سنجاق روی هم نیفتند)
+        pins.filter { !it.selected && (user == null || it.iso != userIso) }.forEach { p ->
             val o = proj(p.geo)
             neonDot(K.Gold.copy(alpha = .85f), o, w / 170f)
             flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f), pr * .78f)
@@ -186,7 +196,8 @@ fun WorldMap(
             val o = proj(it)
             drawCircle(K.GoldLight.copy(alpha = (1 - pulse) * .5f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
             neonDot(K.GoldLight, o, w / 125f)
-            flagPin(tm, o, userIso, K.GoldLight, pr * .85f)
+            // اگر سرور انتخابی در همین کشور است، سنجاق پرچم همان سرور کافی است
+            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, K.GoldLight, pr * .85f)
             val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 34f).toSp(), color = K.Text))
             drawText(layout, topLeft = Offset(o.x + pr * 1.1f, o.y - pr * 2.2f - layout.size.height / 2f))
         }

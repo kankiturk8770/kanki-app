@@ -37,7 +37,12 @@ data class Account(
     val dns: DnsInfo? = null,
     /** لینک‌های Xray این کاربر (vless:// vmess:// trojan:// ss://) */
     val xray: List<XrayLink> = emptyList(),
+    /** خروجی واقعی هر سرور (شناسه‌ی نود ← IP، کشور، شهر) که پنل ۳.۵.۷ به بعد می‌دهد؛ خالی یعنی پنل قدیمی */
+    val exits: Map<String, ExitInfo> = emptyMap(),
 )
+
+/** جایی که ترافیک یک سرور واقعاً از آن به اینترنت می‌رود (برای کانفیگ تانل، سرور خارج؛ نه سرور ایران) */
+data class ExitInfo(val ip: String, val iso: String, val city: String, val geo: Geo?)
 
 /** یک سرور DNS کانکی. role: relay (داخل ایران) یا exit (خارج) */
 data class DnsServer(
@@ -221,8 +226,19 @@ object SubscriptionApi {
                     .map { XrayLink(it.optString("name"), it.optString("link").trim()) }
                     .filter { XrayCfg.supported(it.link) }
             } ?: emptyList(),
+            exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
         )
     }
+
+    private fun parseExits(a: org.json.JSONArray): Map<String, ExitInfo> =
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
+            val id = n.optString("id")
+            val cc = n.optString("exit_cc").trim().uppercase()
+            if (id.isBlank() || cc.length != 2) return@mapNotNull null
+            val geo = if (n.has("exit_lat") && n.has("exit_lon")) Geo(n.optDouble("exit_lat"), n.optDouble("exit_lon"))
+                .takeIf { !it.lat.isNaN() && !it.lon.isNaN() } else null
+            id to ExitInfo(n.optString("exit_ip"), cc, n.optString("exit_city"), geo)
+        }.toMap()
 
     private fun parseDns(o: org.json.JSONObject): DnsInfo? {
         val arr = o.optJSONArray("servers") ?: return null

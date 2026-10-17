@@ -96,8 +96,8 @@ object Sfx {
 }
 
 /**
- * صفحه‌ی شروع (۴ ثانیه): لوگو با نور و بزرگ‌شدن نرم ظاهر می‌شود و یک نوار نور از رویش رد می‌شود
- * (تصویر در SplashVisual، فایل IntroUi.kt). صدای خیلی آرام res/raw/kanki_splash.wav با بلندی کم پخش می‌شود.
+ * صفحه‌ی شروع (۴ ثانیه، بی‌صدا): حلقه‌ی طلایی کامل می‌شود، لوگو ظاهر می‌شود و KANKI VPN بالا می‌آید
+ * (تصویر در SplashVisual، فایل IntroUi.kt).
  */
 @Composable
 fun SplashScreen(onDone: () -> Unit) {
@@ -106,7 +106,6 @@ fun SplashScreen(onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         // صدای باز شدن قفل از همین حالا آماده می‌شود تا بعد از ورود حتماً پخش شود
         Sfx.preload(ctx, R.raw.kanki_switch)
-        if (Sfx.soundOn(ctx)) Sfx.play(ctx, R.raw.kanki_splash, 0.35f)
         p.animateTo(1f, tween((SPLASH_SEC * 1000).toInt(), easing = LinearEasing))
         onDone()
     }

@@ -263,7 +263,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
         modifier.fillMaxWidth().clip(shape)
             .background(Brush.verticalGradient(listOf(mc.copy(alpha = .10f), mc.copy(alpha = .04f))))
             .border(1.dp, mc.copy(alpha = .38f), shape)
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (!u.hasDns) {
             T("اشتراک شما DNS ندارد", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
@@ -275,10 +275,10 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             T(
                 if (u.canBlock) "تا وقتی DNS روشن است، فقط بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید به اینترنت وصل‌اند و از DNS کانکی استفاده می‌کنند. بقیه‌ی برنامه‌ها تا خاموش کردن DNS اینترنت ندارند."
                 else "تا وقتی DNS روشن است، بازی‌ها و برنامه‌هایی که انتخاب کرده‌اید از DNS کانکی استفاده می‌کنند.",
-                size = 12.sp, color = K.Text, weight = FontWeight.Normal, modifier = Modifier.weight(1f),
+                size = 11.5.sp, color = K.Text, weight = FontWeight.Normal, modifier = Modifier.weight(1f),
             )
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         // دکمه‌ی انتخاب برنامه‌ها
         val bs = RoundedCornerShape(14.dp)
         Row(
@@ -286,7 +286,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
                 .background(Brush.horizontalGradient(listOf(mc.copy(alpha = .28f), mc.copy(alpha = .12f))))
                 .border(1.dp, mc.copy(alpha = .7f), bs)
                 .clickable(enabled = vstate != VState.CONNECTING, onClick = act.pickApps)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Canvas(Modifier.size(20.dp)) { appsGridIcon(mc) }

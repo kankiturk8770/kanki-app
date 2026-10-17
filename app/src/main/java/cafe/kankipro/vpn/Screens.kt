@@ -286,10 +286,10 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         state.mode == KMode.FILTER && !state.filterAuto -> if (state.filterProto.startsWith("xray-")) state.filterProto else state.filterNode
         else -> state.node
     }
-    val link = a?.configs?.firstOrNull { it.node == shownNode }
-    fun isoOf(l: ConfigLink) = isoOfFlag(flagOf(l.nodeName)) ?: state.nodeIso[l.node]
-    // «موقعیت شما»: وقتی با VPN وصل است کشور سرور، وگرنه (یا در حالت DNS) کشور خود کاربر
-    val locIso = if (state.vstate == VState.ON && state.mode != KMode.DNS) link?.let { state.nodeIso[it.node] ?: isoOf(it) } ?: state.userIso else state.userIso
+    // چیپ بالای نقشه: قبل از اتصال (و در حالت DNS) کشور واقعی کاربر؛ بعد از اتصال کشور IP خروجی
+    // (که از داخل تونل گرفته می‌شود؛ تا آن موقع کشور خروجی همان سرور)
+    val viaExit = state.vstate == VState.ON && state.mode != KMode.DNS
+    val locIso = if (viaExit) state.exitIso ?: state.node?.let { state.isoOfNode(it) } else state.userIso
 
     // نام چند برنامه‌ی مجاز برای کارت DNS
     val allowed = (state.detectedGames.filter { state.autoGames && it !in state.appsRemoved } + state.appsAdded).distinct()
@@ -307,12 +307,15 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         sub = a?.let { subUi(it, now) },
         alert = alert,
         countries = countries,
-        pins = a?.configs?.distinctBy { it.node }?.mapNotNull { l ->
-            (state.nodeGeo[l.node] ?: geoOfName(l.nodeName))?.let { MapPin(it, state.nodeIso[l.node] ?: isoOf(l), l.node == shownNode) }
-        }?.distinctBy { it.geo to it.selected } ?: emptyList(),
+        // یک سنجاق برای هر کشور خروجی؛ بدون سنجاق خالی (کشور نامعلوم) و بدون سنجاق ایران (ایران فقط «شما» است)
+        pins = a?.configs?.map { it.node }?.distinct()?.mapNotNull { id ->
+            val iso = state.nodeIso[id]?.takeIf { it != "IR" } ?: return@mapNotNull null
+            state.nodeGeo[id]?.let { MapPin(it, iso, id == shownNode) }
+        }?.sortedByDescending { it.selected }?.distinctBy { it.iso } ?: emptyList(),
         userGeo = state.userGeo,
         userIso = state.userIso,
         locationIso = locIso,
+        locationIsExit = viaExit,
         sheetOpen = state.gameSheet || state.appsPicker,
         smart = SmartPanelUi(
             open = state.smartOpen,
@@ -392,8 +395,8 @@ private fun ModeSheets(state: AppState) {
     val nodes = a.configs.distinctBy { it.node }
 
     fun country(n: ConfigLink, protos: List<String>) = SheetCountry(
-        n.node, countryName(isoOfFlag(flagOf(n.nodeName)))?.let { c -> if (nodes.count { flagOf(it.nodeName) == flagOf(n.nodeName) } > 1) "$c · ${n.nodeName}" else c } ?: n.nodeName,
-        flagOf(n.nodeName),
+        n.node, countryName(state.isoOfNode(n.node))?.let { c -> if (nodes.count { state.isoOfNode(it.node) == state.isoOfNode(n.node) } > 1) "$c · ${n.nodeName}" else c } ?: n.nodeName,
+        flagEmoji(state.isoOfNode(n.node)) ?: "🌐",
         protos.mapNotNull { p -> state.protoPing(n.node, p) }.filter { it > 0 }.minOrNull()
             ?: protos.mapNotNull { p -> state.protoPing(n.node, p) }.firstOrNull(),
     )
@@ -467,7 +470,8 @@ private fun ServersTab(state: AppState) {
     val order = listOf("amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
     val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
     // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
-    val groups = usable.groupBy { l -> isoOfFlag(flagOf(l.nodeName)) ?: state.nodeIso[l.node] ?: ("node:" + l.node) }
+    // کشور هر کانفیگ = کشور خروجی واقعی سرورش (از پنل یا از داخل تونل)، نه کشور Endpoint
+    val groups = usable.groupBy { l -> state.isoOfNode(l.node) ?: ("node:" + l.node) }
     val selKey = "${state.node}/${state.protoKey()}"
     val cards = groups.map { (key, links) ->
         val iso = key.takeIf { !it.startsWith("node:") }
@@ -484,7 +488,7 @@ private fun ServersTab(state: AppState) {
         CountryCardUi(
             id = key,
             name = countryName(iso) ?: links.first().nodeName,
-            city = cityName(iso) ?: links.first().nodeName,
+            city = exitCityName(iso, links.firstNotNullOfOrNull { state.nodeCity[it.node] }) ?: links.first().nodeName,
             flag = flagEmoji(iso) ?: "🌐",
             best = rows.mapNotNull { it.ping }.filter { it > 0 }.minOrNull() ?: rows.mapNotNull { it.ping }.firstOrNull(),
             expanded = state.openNode == key,
