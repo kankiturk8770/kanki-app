@@ -292,7 +292,7 @@ private val orbStars: List<OrbStar> = run {
  * (color) قاطی‌اش می‌شود. موقع اتصال کهکشان تند می‌چرخد.
  */
 @Composable
-fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp, onClick: () -> Unit) {
+fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp, onClick: () -> Unit) {
     val on = ui.vstate == VState.ON
     val connecting = ui.vstate == VState.CONNECTING
     // سرعت (نرم عوض می‌شود تا سیاره‌ها با تغییر وضعیت نپرند)
@@ -310,10 +310,12 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
     val t = rememberInfiniteTransition(label = "orb")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "pulse")
     val breathe by t.animateFloat(.7f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "br")
+    // هاله‌ی طلایی تپنده پشت دکمه (مثل طرح)
+    val glowA by t.animateFloat(.18f, .52f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "gl")
     val lit by animateFloatAsState(if (on) 1f else if (connecting) .8f else .55f, tween(700), label = "lit")
     // طلایی کهکشانی؛ وصل: روشن‌تر با ۲۰٪ رنگ پروتکل
     val gold by animateColorAsState(if (on) androidx.compose.ui.graphics.lerp(K.GoldLight, color, .2f) else K.Gold, tween(700), label = "g")
-    val halo = 96.dp
+    val halo = 78.dp
     val galaxy = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.galaxy_halo)
 
     Box(
@@ -327,7 +329,10 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
             val c = center
             val outer = this.size.minDimension / 2
             val r = outer * (diameter.value / (diameter.value + halo.value))
-            // ---- کهکشان چرخان (کمی کج، مثل سه‌بعدی)
+            // ---- هاله‌ی طلایی تپنده
+            val gr = outer * 1.02f
+            drawCircle(Brush.radialGradient(listOf(gold.copy(alpha = glowA * (.6f + .4f * lit)), gold.copy(alpha = .12f), Color.Transparent), c, gr), gr, c)
+            // ---- کهکشان چرخان (کمی کج، مثل سه‌بعدی)، آرام پشت هاله
             val gs = outer * 2.05f
             withTransform({
                 rotate(-16f, c)
@@ -336,7 +341,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
             }) {
                 drawImage(
                     galaxy, dstOffset = androidx.compose.ui.unit.IntOffset((c.x - gs / 2).toInt(), (c.y - gs / 2).toInt()),
-                    dstSize = androidx.compose.ui.unit.IntSize(gs.toInt(), gs.toInt()), alpha = .55f + .45f * lit,
+                    dstSize = androidx.compose.ui.unit.IntSize(gs.toInt(), gs.toInt()), alpha = .35f + .30f * lit,
                     filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
                 )
             }
@@ -353,31 +358,33 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
                 drawCircle(col.copy(alpha = (.35f + .65f * tw) * lit), sz, o)
             }
 
-            // ---- دیسک شیشه‌ای براق
+            // ---- دیسک تیره با حلقه‌ی ضخیم طلایی (مثل طرح)
             val disc = r
-            drawCircle(Color.Black.copy(alpha = .5f), disc * 1.04f, Offset(c.x, c.y + disc * .05f))
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF2A1E0E), K.Ink), Offset(c.x, c.y - disc * .3f), disc * 1.2f), disc, c)
-            // لبه‌ی طلایی با نور چرخان
+            drawCircle(Color.Black.copy(alpha = .55f), disc * 1.06f, Offset(c.x, c.y + disc * .06f))
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF42300D), Color(0xFF15110A), Color(0xFF050505)), c, disc), disc, c)
+            // حلقه‌ی بیرونی کم‌رنگ و درخشش لبه
+            drawCircle(gold.copy(alpha = .16f), disc - 4.dp.toPx(), c, style = Stroke(8.dp.toPx()))
+            for ((m, al) in listOf(6f to .07f, 3.5f to .14f)) {
+                drawCircle(gold.copy(alpha = al * (.6f + .4f * lit)), disc, c, style = Stroke(3.dp.toPx() * m))
+            }
+            // لبه‌ی اصلی طلایی با نور چرخان
             drawCircle(
                 Brush.sweepGradient(listOf(K.GoldDeep, gold, K.Shine, gold, K.GoldDeep, gold, K.GoldDeep), c),
-                disc, c, style = Stroke(2.6.dp.toPx()),
+                disc - 1.5.dp.toPx(), c, style = Stroke(3.dp.toPx()),
             )
-            for ((m, al) in listOf(5f to .08f, 3f to .16f, 1.8f to .32f)) {
-                drawCircle(gold.copy(alpha = al * lit), disc, c, style = Stroke(2.6.dp.toPx() * m))
-            }
-            drawCircle(gold.copy(alpha = .25f), disc * .88f, c, style = Stroke(.8.dp.toPx()))
+            drawCircle(gold.copy(alpha = .30f), disc * .86f, c, style = Stroke(.8.dp.toPx()))
             // براقی شیشه‌ای بالای دیسک
             drawOval(
-                Brush.verticalGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), startY = c.y - disc * .92f, endY = c.y - disc * .1f),
-                Offset(c.x - disc * .68f, c.y - disc * .92f), Size(disc * 1.36f, disc * .8f),
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), startY = c.y - disc * .9f, endY = c.y - disc * .15f),
+                Offset(c.x - disc * .62f, c.y - disc * .88f), Size(disc * 1.24f, disc * .7f),
             )
             // موج تپنده وقتی وصل است
             if (on) drawCircle(gold.copy(alpha = (1f - pulse) * .5f), disc * (1.04f + pulse * .22f), c, style = Stroke(1.4.dp.toPx()))
 
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Logo3D(26.dp, animate = on)
-            Spacer(Modifier.height(3.dp))
+            Logo3D(34.dp, animate = on)
+            Spacer(Modifier.height(4.dp))
             val dnsOn = ui.mode == KMode.DNS
             val (title, sub) = when (ui.vstate) {
                 VState.ON -> (if (dnsOn) "DNS فعال" else "اتصال فعال") to
@@ -385,10 +392,10 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 104.dp,
                 VState.CONNECTING -> "در حال اتصال" to "لمس: لغو"
                 VState.OFF -> "اتصال" to ui.mode.title
             }
-            T(title, size = 12.sp, color = if (on) Color.White else K.GoldLight, weight = FontWeight.Black, shadow = glow(gold, 12f), maxLines = 1)
+            T(title, size = if (ui.vstate == VState.OFF) 20.sp else 15.sp, color = if (on) Color.White else K.GoldLight, weight = FontWeight.Black, shadow = glow(gold, 14f), maxLines = 1)
             if (sub.isNotBlank()) {
                 val num = on && !dnsOn
-                T(sub, size = if (num) 12.sp else 9.sp, color = if (num) gold else K.Text.copy(alpha = .8f), font = if (num) Poppins else Vazir,
+                T(sub, size = if (num) 13.sp else 10.sp, color = if (num) gold else K.Text.copy(alpha = .8f), font = if (num) Poppins else Vazir,
                     weight = FontWeight.Bold, ltr = num, maxLines = 1)
             }
         }

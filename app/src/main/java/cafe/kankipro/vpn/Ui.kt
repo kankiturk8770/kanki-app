@@ -59,8 +59,8 @@ val Themes: List<Palette> = listOf(
         "gold", Color(0xFFE8B64C), Color(0xFFFFD97A), Color(0xFF9E701F), Color(0xFFFFE6A6),
         Color(0xFF070504), Color(0xFFF6EEDC), Color(0xFFA3967C),
         Color(0xFF0B0805), Color(0xFF110C07), Color(0xFF050403),
-        // کارت‌ها: شیشه‌ی تیره‌ی کهکشانی (کمی سرمه‌ای) تا با آبی و بنفش عکس پس‌زمینه جور باشد
-        Color(0xB80E0F1E), Color(0xD007080F), Color(0xF20B0C16), Color(0xFF1C1305), Color(0xFF5CC8FF),
+        // کارت‌ها: شیشه‌ی تیره‌ی خنثی (مثل طرح) تا طلایی رویش بدرخشد
+        Color(0xC91A1A1A), Color(0xB8090A0D), Color(0xF2101012), Color(0xFF1C1305), Color(0xFF5CC8FF),
         Color(0xFF35E39B),
     ),
     // گرافیت نئونی (مشکی، نقره‌ای، یخی)
@@ -186,9 +186,10 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
         // لایه‌ی تیره: بالا (نقشه) و پایین (کارت‌ها) کمی تیره‌تر تا نقشه و دکمه‌ها روی کهکشان دیده شوند
         Box(
             Modifier.fillMaxSize().graphicsLayer().background(
+                // مثل طرح: پرده‌ی تیره روی کل کهکشان تا طلایی‌ها برجسته شوند
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = .30f), .45f to Color.Black.copy(alpha = .18f),
-                    .62f to Color.Black.copy(alpha = .28f), 1f to Color.Black.copy(alpha = .55f),
+                    0f to Color.Black.copy(alpha = .52f), .45f to Color.Black.copy(alpha = .46f),
+                    .62f to Color.Black.copy(alpha = .55f), 1f to Color.Black.copy(alpha = .66f),
                 ),
             ),
         )
@@ -332,39 +333,33 @@ enum class VState { OFF, CONNECTING, ON }
 
 // ------------------------------------------------------------------ اجزای مشترک
 
-/** آبی-بنفش ابرهای عکس کهکشان؛ پایین لبه‌ی کارت‌ها به این رنگ محو می‌شود */
-val Nebula = Color(0xFF7C7BFF)
+/** آبی ملایم انتهای لبه‌ی کارت‌ها (با آبی ابرهای کهکشان جور است) */
+val Nebula = Color(0xFF3E4568)
 
 /**
- * ظاهر شیشه‌ای کهکشانی برای کارت‌ها و کاشی‌ها (مثل طرح): شیشه‌ی تیره و نیمه‌شفاف که کهکشان از پشتش پیداست،
- * براقی روشن بالای کارت، لبه‌ای که بالایش طلایی است و پایینش به آبی-بنفش ابرهای کهکشان محو می‌شود،
- * و وقتی selected است درخشش طلایی بیرون لبه و ته‌رنگ طلایی داخل.
+ * پنل شیشه‌ای تیره (مثل طرح): گرادیان خاکستری‌مشکی نیمه‌شفاف، لبه‌ای که از طلایی به tint و بعد آبی تیره می‌رود،
+ * کمی براقی بالای کارت و درخشش طلایی ملایم بیرون لبه؛ selected پررنگ‌تر و با ته‌رنگ طلایی.
  */
 fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier = this
     .drawBehind {
         val o = shape.createOutline(size, layoutDirection, this)
-        val layers = if (selected) listOf(10f to .07f, 6f to .13f, 3f to .24f) else listOf(6f to .05f, 3f to .08f)
+        val layers = if (selected) listOf(10f to .08f, 6f to .14f, 3f to .26f) else listOf(7f to .04f, 3.5f to .07f)
         for ((m, a) in layers) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
     }
     .clip(shape)
     .background(
-        Brush.verticalGradient(
-            listOf(
-                tint.copy(alpha = if (selected) .24f else .10f),
-                K.Surface,
-                androidx.compose.ui.graphics.lerp(K.Surface2, Nebula.copy(alpha = .9f), .06f),
-            ),
-        ),
+        if (selected) Brush.linearGradient(listOf(tint.copy(alpha = .22f), Color(0xC9161309), Color(0xC91A160D)))
+        else Brush.linearGradient(listOf(K.Surface, K.Surface2, Color(0xC91A160D))),
     )
     .drawWithContent {
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .16f else .09f), Color.Transparent), endY = size.height * .45f))
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .12f else .06f), Color.Transparent), endY = size.height * .45f))
         drawContent()
     }
     .border(
-        if (selected) 1.6.dp else 1.2.dp,
-        Brush.verticalGradient(
-            if (selected) listOf(K.Shine, tint, Nebula.copy(alpha = .55f))
-            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .35f), Nebula.copy(alpha = .35f)),
+        if (selected) 1.5.dp else 1.dp,
+        Brush.linearGradient(
+            if (selected) listOf(K.Shine, tint, tint.copy(alpha = .55f))
+            else listOf(tint.copy(alpha = .72f), tint.copy(alpha = .34f), Nebula.copy(alpha = .4f)),
         ),
         shape,
     )
@@ -384,7 +379,13 @@ fun Glass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
 fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
     Box(
-        modifier.height(58.dp).clip(shape)
+        modifier.height(58.dp)
+            // درخشش طلایی دور دکمه (مثل طرح)
+            .drawBehind {
+                val o = shape.createOutline(size, layoutDirection, this)
+                for ((m, a) in listOf(9f to .08f, 5f to .16f)) drawOutline(o, K.Gold.copy(alpha = a), style = Stroke(m.dp.toPx()))
+            }
+            .clip(shape)
             .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
             .border(1.dp, K.GoldLight.copy(alpha = .7f), shape)
             .clickable(enabled = !loading, onClick = onClick),
