@@ -270,7 +270,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             if (tick % 3 == 0) launch { state.samplePing() }   // نمودار زنده‌ی پینگ (هر ۳ ثانیه یک نمونه‌ی سبک)
             if (state.mode == KMode.DNS) state.syncDnsActive()
             tick++
-            if (tick % 30 == 0) state.refreshUsage()   // حجم مصرفی هر ۳۰ ثانیه بروز می‌شود
+            if (tick % 30 == 0) launch { state.refreshUsage() }   // حجم مصرفی هر ۳۰ ثانیه (بدون نگه داشتن شمارنده)
             delay(1000)
         }
         rx = 0; tx = 0; session = 0
@@ -279,7 +279,13 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۳۰ ثانیه‌ای بالا آن را می‌آورد)
     LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage() } }
-    LaunchedEffect(Unit) { state.netName = Modes.networkName(ctx); state.loadGames() }
+    // فقط بار اول (نه هر بار که به خانه برمی‌گردی): فهرست برنامه‌ها سنگین است
+    LaunchedEffect(Unit) {
+        if (!state.gamesLoaded) {
+            state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
+            state.loadGames()
+        }
+    }
     val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
     val dnsInfo = a?.dns
@@ -380,9 +386,10 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             },
             dismissAlert = {
                 alert?.let { al ->
-                    state.dismissed.add(al.id)
-                    if (al.id.startsWith("msg:")) state.closeNotice(al.id.removePrefix("msg:"))
+                    // خطای اتصال فقط پاک می‌شود (اگر همان خطا دوباره آمد، دوباره نشان داده شود)
                     if (al.id.startsWith("err:")) { state.error = null; state.errorDetail = null }
+                    else state.dismissed.add(al.id)
+                    if (al.id.startsWith("msg:")) state.closeNotice(al.id.removePrefix("msg:"))
                 }
             },
             retry = { scope.launch { state.refresh() } },
@@ -407,6 +414,8 @@ private fun subUi(a: Account, now: Long): SubUi {
 @Composable
 private fun ModeSheets(state: AppState) {
     val scope = rememberCoroutineScope()
+    // بسته‌اند: هیچ چیز ساخته نمی‌شود (وگرنه با هر نتیجه‌ی پینگ کل صفحه‌ی خانه دوباره حساب می‌شد)
+    if (!state.gameSheet && !state.filterSheet) return
     val a = state.account ?: return
     val nodes = a.configs.distinctBy { it.node }
     fun nodeOf(id: String) = nodes.firstOrNull { it.node == id }
@@ -462,7 +471,8 @@ private fun ModeSheets(state: AppState) {
         onGamesOnly = { state.changeGamesOnly(it) },
         onAutoGames = { state.changeAutoGames(it) },
         onPickApps = { state.appsPicker = true },
-        onFamilyShown = { f -> scope.launch { state.gameConfigs(f).forEach { (n, p) -> launch { state.pingTest(n, p) } } } },
+        // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
+        onFamilyShown = { },
         onConnect = { n, p ->
             state.setGame(false, p, n)
             state.gameSheet = false

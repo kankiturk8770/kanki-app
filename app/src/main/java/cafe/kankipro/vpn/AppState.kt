@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -137,7 +137,17 @@ class AppState private constructor(context: Context) {
     /** بازی‌های نصب‌شده روی گوشی (در پس‌زمینه پیدا می‌شوند) */
     var detectedGames by mutableStateOf<List<String>>(emptyList())
 
-    fun loadGames() { bg.launch { detectedGames = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) } } }
+    /** فهرست بازی‌ها یک بار خوانده شده (دوباره فقط از پنل انتخاب برنامه‌ها) */
+    var gamesLoaded = false
+        private set
+
+    fun loadGames() {
+        gamesLoaded = true
+        bg.launch {
+            val list = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) }
+            if (list != detectedGames) detectedGames = list
+        }
+    }
 
     fun isAllowedApp(pkg: String): Boolean =
         pkg in appsAdded || (autoGames && pkg in detectedGames && pkg !in appsRemoved)
@@ -187,11 +197,10 @@ class AppState private constructor(context: Context) {
     /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
     fun toggleMain() {
         if (gameSheet || appsPicker || filterSheet) return
-        userTaps++
         // وسط سنجش «هوشمند»: لمس یعنی لغو
         if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
         when (vstate) {
-            VState.ON, VState.CONNECTING -> bg.launch { disconnect() }
+            VState.ON, VState.CONNECTING -> userDisconnect()
             VState.OFF -> when (mode) {
                 KMode.SMART -> smartConnect()
                 KMode.GAME -> if (!gameSet) gameSheet = true else launchConnect { connectGame() }
@@ -217,7 +226,11 @@ class AppState private constructor(context: Context) {
                 changeMode(m)
                 if (!already) smartConnect()
             }
-            KMode.GAME -> { changeMode(m); gameSheet = true }
+            KMode.GAME -> {
+                // DNS وصل است و کاربر گیمینگ را می‌زند: DNS قطع می‌شود تا صفحه چیزی جز واقعیت نشان ندهد
+                if (mode == KMode.DNS && vstate != VState.OFF) userDisconnect()
+                changeMode(m); gameSheet = true
+            }
             KMode.FILTER -> {
                 // لمس دوباره: پنل ضد فیلتر (فقط Xray و Amnezia)، نه همه‌ی سرورها
                 if (mode == KMode.FILTER) { filterSheet = true; return }
@@ -235,25 +248,45 @@ class AppState private constructor(context: Context) {
 
     /** تلاش اتصالی که الان در جریان است (همیشه فقط یکی) */
     private var connectJob: kotlinx.coroutines.Job? = null
-    private var attempt = 0
+    @Volatile private var attempt = 0
+    private val connectLock = kotlinx.coroutines.sync.Mutex()
 
     /**
-     * اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN.
-     * همیشه فقط یک تلاش: اگر تلاش قبلی (مثلاً KANKI MIX که تا ~۲۰ ثانیه منتظر سرور می‌ماند) هنوز تمام نشده،
-     * اول موتور قطع و صبر می‌شود تا کاملاً تمام شود؛ وگرنه شکست دیرهنگام آن تونل تازه را می‌بست و خطایش را نشان می‌داد.
+     * همه‌ی اتصال‌ها (دستی، هوشمند، اتصال دوباره‌ی خودکار) از همین‌جا می‌گذرند تا همیشه فقط یکی در جریان باشد.
+     * تلاش قبلی (مثلاً KANKI MIX که تا ~۲۰ ثانیه منتظر سرور می‌ماند) اول قطع می‌شود و تا کاملاً تمام نشود
+     * تلاش تازه شروع نمی‌شود؛ وگرنه شکست دیرهنگام آن، تونل تازه را می‌بست و خطایش را نشان می‌داد.
+     * block شماره‌ی همین تلاش را می‌گیرد؛ stale(my) یعنی تلاش تازه‌تری (یا قطع کاربر) آمده.
      */
+    private fun runExclusive(block: suspend (Int) -> Unit) {
+        val prev = connectJob
+        val my = ++attempt
+        connectJob = bg.launch {
+            if (prev != null && prev.isActive) {
+                wantTry = false
+                withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+                prev.cancel()
+            }
+            connectLock.withLock {
+                if (stale(my)) return@withLock
+                if (vstate == VState.CONNECTING) vstate = VState.OFF
+                block(my)
+            }
+        }
+    }
+
+    private fun stale(my: Int) = my != attempt
+
+    /** قطع به دست کاربر: هر تلاش در جریان (و اتصال دوباره‌ی خودکار) متوقف می‌شود */
+    fun userDisconnect() {
+        attempt++
+        connectJob?.cancel()
+        bg.launch { disconnect() }
+    }
+
+    /** اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN */
     fun launchConnect(reconnect: Boolean = false, block: suspend () -> Unit) {
         val go: () -> Unit = {
-            val prev = connectJob
-            val my = ++attempt
-            connectJob = bg.launch {
-                if (prev != null && prev.isActive) {
-                    wantTry = false
-                    withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
-                    prev.cancelAndJoin()
-                    if (vstate == VState.CONNECTING) vstate = VState.OFF
-                }
-                if (my != attempt) return@launch
+            runExclusive {
                 if (reconnect && vstate != VState.OFF) disconnect()
                 wantTry = true
                 error = null; errorDetail = null
@@ -565,16 +598,7 @@ class AppState private constructor(context: Context) {
                 smartDone = 0; smartTotal = 0; smartCurrent = null
                 smartStatus = "سنجش پینگ همه‌ی سرورها…"
                 error = null; errorDetail = null
-                val prev = connectJob
-                val my = ++attempt
-                connectJob = bg.launch {
-                    if (prev != null && prev.isActive) {
-                        wantTry = false
-                        withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
-                        prev.cancelAndJoin()
-                    }
-                    if (my == attempt) runSmart()
-                }
+                runExclusive { runSmart() }
             }
         }
         val ask = requestVpn
@@ -651,7 +675,7 @@ class AppState private constructor(context: Context) {
                     if (HyEngine.crashed && wantOn && autoRetries < 3) {
                         HyEngine.crashed = false
                         autoRetries++
-                        connect()
+                        runExclusive { wantTry = true; connect() }
                     }
                 }
                 else if (vstate == VState.OFF && up) {
@@ -689,6 +713,8 @@ class AppState private constructor(context: Context) {
 
                 // شبکه‌ی فعلی قطع شد (مثلاً وای‌فای رفت و دیتا ماند): بعد از چند ثانیه سلامت تونل بررسی می‌شود
                 override fun onLost(network: android.net.Network) {
+                    // شبکه‌ی دوم (مثلاً دیتا وقتی وای‌فای وصل است) رفت: تونل روی آن نبود
+                    if (lastNet != null && network != lastNet) return
                     bg.launch {
                         kotlinx.coroutines.delay(3500)
                         if (vstate != VState.ON || !hasUnderlyingNet()) return@launch
@@ -700,28 +726,29 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    private var reviving = false
-    /** هر لمس دکمه‌ی اصلی؛ اتصال دوباره‌ی خودکار اگر کاربر وسطش دکمه را زد، ادامه نمی‌دهد */
-    @Volatile private var userTaps = 0
+    @Volatile private var reviving = false
 
-    /** قطع و وصل دوباره‌ی تونل؛ همزمان فقط یک بار اجرا می‌شود */
-    private suspend fun revive() {
+    /**
+     * قطع و وصل دوباره‌ی تونل (همان سرور و پروتکل)؛ همزمان فقط یک بار، و مثل بقیه‌ی اتصال‌ها از runExclusive،
+     * پس اگر کاربر وسطش سرور یا حالت دیگری زد یا قطع کرد، فوراً کنار می‌رود.
+     */
+    private fun revive() {
         if (reviving || vstate != VState.ON) return
         reviving = true
-        try {
-            // همان سرور و پروتکل قبلی (قفل)، فقط دوباره وصل می‌شود
-            val wasDns = dnsActive != null
-            val taps = userTaps
-            disconnect()
-            // تا سه بار (شبکه‌ی تازه گاهی چند ثانیه طول می‌کشد تا واقعاً اینترنت بدهد)؛ فقط تلاش آخر خطا نشان می‌دهد
-            for (k in 1..3) {
-                wantTry = true
-                if (wasDns) connectDns() else connect(quiet = k < 3)
-                if (vstate == VState.ON || !wantTry || userTaps != taps) break
-                kotlinx.coroutines.delay(2000L * k)
-                if (userTaps != taps) break
-            }
-        } finally { reviving = false }
+        val wasDns = dnsActive != null
+        runExclusive { my ->
+            try {
+                disconnect()
+                // تا سه بار (شبکه‌ی تازه گاهی چند ثانیه طول می‌کشد تا واقعاً اینترنت بدهد)؛ فقط تلاش آخر خطا نشان می‌دهد
+                for (k in 1..3) {
+                    if (stale(my)) break
+                    wantTry = true
+                    if (wasDns) connectDns() else connect(quiet = k < 3)
+                    if (vstate == VState.ON || !wantTry || stale(my)) break
+                    kotlinx.coroutines.delay(2000L * k)
+                }
+            } finally { reviving = false }
+        }
     }
 
     private fun screenOn(): Boolean =
@@ -1218,8 +1245,8 @@ class AppState private constructor(context: Context) {
             wantOn = true
             LastConfig.save(ctx, finalCfg, "${flagEmoji(isoOfNode(link.node)) ?: "🌐"} ${link.nodeName} · ${protoTitle(link.protocol)}")
             startNotif()
-            measurePing()
-            locateExit()
+            // در کار جدا، تا قطع و وصل دوباره منتظر این درخواست‌ها نماند
+            bg.launch { measurePing(); locateExit() }
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
@@ -1339,44 +1366,6 @@ class AppState private constructor(context: Context) {
         busyTests[key] = false
     }
 
-    /**
-     * پینگ واقعی UDP مثل v2rayNG: تونل با همین کانفیگ بالا می‌آید،
-     * زمان پاسخ از داخل تونل اندازه گرفته می‌شود و بعد اتصال قبلی برمی‌گردد.
-     */
-    suspend fun realTest(nodeId: String, p: String) {
-        // وقتی وصل هستی، تست واقعی تونل را قطع و وصل می‌کند (وسط بازی مشکل‌ساز است)؛ پس فقط وقتی قطعی
-        if (realTesting || vstate != VState.OFF) return
-        if (p.startsWith("openvpn")) { tcpTest(nodeId, p); return }
-        val a = account ?: return
-        val link = a.configs.firstOrNull { it.node == nodeId && it.protocol == p } ?: return
-        val key = "udp:$nodeId/$p"
-        realTesting = true
-        busyTests[key] = true
-        val wasOn = vstate == VState.ON
-        val prevLink = if (wasOn) a.configs.firstOrNull { it.node == node && it.protocol == protoKey() } else null
-        val result = withContext(Dispatchers.IO) {
-            try {
-                val cfg = applyKeepalive(applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(p)), 25)
-                VpnEngine.up(ctx, cfg, resetTimer = false)
-                Thread.sleep(700)
-                RealPing.measure()
-            } catch (e: Exception) {
-                null
-            } finally {
-                runCatching {
-                    if (wasOn && prevLink != null) {
-                        val back = applyKeepalive(applyMtu(DnsOptions.apply(fetchConfig(prevLink), dns), mtuFor(proto)), 25)
-                        VpnEngine.up(ctx, back, resetTimer = false)
-                    } else if (!wasOn) {
-                        VpnEngine.down(ctx)
-                    }
-                }
-            }
-        }
-        udpPings["$nodeId/$p"] = result ?: -1L
-        busyTests[key] = false
-        realTesting = false
-    }
 
     /** وضعیت «تست پینگ همه» در تب سرورها */
     var pingAllUi by mutableStateOf(PingAllUi())

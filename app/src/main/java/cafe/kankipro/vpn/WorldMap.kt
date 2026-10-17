@@ -4,7 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -103,7 +103,8 @@ fun WorldMap(
     // لایه‌ی ثابت (پس‌زمینه‌ی تیره، کشورها و نور شهرها) یک بار در یک عکس کشیده می‌شود و فقط وقتی نما یا رنگ‌ها
     // عوض شوند دوباره ساخته می‌شود؛ هر فریم فقط سنجاق‌ها و کمان متحرک کشیده می‌شوند (وگرنه ده‌ها هزار نقطه
     // و مرز کشورها ۶۰ بار در ثانیه کشیده می‌شد و صفحه کند می‌شد)
-    androidx.compose.foundation.layout.Spacer(modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithCache {
+    val cache = remember { MapCache() }
+    androidx.compose.foundation.layout.Spacer(modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawBehind {
         val w = size.width
         val h = size.height
         val aspect = (w / h).toDouble()
@@ -119,8 +120,15 @@ fun WorldMap(
         val selIso = sel?.iso
         val selColor = if (connected) K.Green else accent
         val border = 1f / sx
-        val bmp = ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
+        val key = listOf(size, zoom, pins, user, userIso, connected, accent, countries?.size, lights?.bright?.size, ThemeState.current.id)
+        val old = cache.bmp
+        val bmp = if (old != null && old.width == w.toInt().coerceAtLeast(1) && old.height == h.toInt().coerceAtLeast(1)) old
+            else ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
+        if (cache.key != key || cache.bmp !== bmp) {
+        cache.key = key
+        cache.bmp = bmp
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
+            drawRect(Color.Black, blendMode = BlendMode.Clear)
             // پس‌زمینه‌ی تیره پشت نقشه تا روی کهکشان واضح دیده شود (لبه‌هایش با بقیه‌ی نقشه محو می‌شود)
             drawRect(Color(0xFF020205).copy(alpha = .78f))
             drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .06f), Color.Transparent), Offset(w * .5f, h * .45f), w * .7f))
@@ -160,8 +168,8 @@ fun WorldMap(
                 }
             }
         }
+        }
 
-        onDrawBehind {
         drawImage(bmp)
         // پیش از اتصال: خط‌چین کم‌رنگ از شما تا سرور انتخابی
         if (user != null && sel != null && draw < 1f) {
@@ -236,8 +244,13 @@ fun WorldMap(
             Brush.horizontalGradient(0f to Color.Transparent, .09f to Color.Black, .91f to Color.Black, 1f to Color.Transparent),
             blendMode = BlendMode.DstIn,
         )
-        }
     })
+}
+
+/** عکس لایه‌ی ثابت نقشه و چیزهایی که با آن کشیده شده (فقط وقتی این‌ها عوض شوند دوباره کشیده می‌شود) */
+private class MapCache {
+    var key: Any? = null
+    var bmp: ImageBitmap? = null
 }
 
 /** سنجاق کوچک با پرچم بالای یک نقطه */

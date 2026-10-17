@@ -193,6 +193,13 @@ object KmixCore {
         }
     }
 
+    /** stop در پس‌زمینه (برای رشته‌ی اصلی)؛ اگر تا آن موقع هسته‌ی تازه‌ای اجرا شده باشد، به آن دست نمی‌زند */
+    fun stopAsync() {
+        val p = proc ?: return
+        stopping = true
+        Thread({ if (proc === p) stop() }, "kanki-kmix-stop").start()
+    }
+
     fun running(): Boolean = proc?.isAlive == true && sock != null
 
     /** آخرین (دریافت، ارسال، پینگ) که رشته‌ی پس‌زمینه خوانده */

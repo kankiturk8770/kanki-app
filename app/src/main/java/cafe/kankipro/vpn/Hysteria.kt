@@ -125,6 +125,8 @@ object HyEngine {
             when (state) {
                 UP -> return
                 FAILED -> { val e = lastError; down(ctx); throw IllegalStateException(e ?: "hysteria2 failed") }
+                // down() از جای دیگر (قطع کاربر یا تلاش تازه): فوراً تمام، نه ۲۵ ثانیه انتظار
+                IDLE -> throw IllegalStateException("cancelled")
             }
             Thread.sleep(150)
         }
@@ -133,6 +135,8 @@ object HyEngine {
     }
 
     fun down(ctx: Context) {
+        // سرویسی که هنوز onStartCommand نگرفته، با pending خالی خودش کنار می‌رود (VPN بی‌صاحب بالا نمی‌آید)
+        pending = null
         service?.shutdown()
         service = null
         state = IDLE
@@ -189,9 +193,10 @@ class KankiHyService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == START) {
             val my = synchronized(this) { ++gen }
+            val text = HyEngine.pending
+            if (text == null) { runCatching { stopSelf() }; return START_NOT_STICKY }
             HyEngine.crashed = false
             HyEngine.service = this
-            val text = HyEngine.pending
             Thread({ doStart(text, my) }, "kanki-hy2").start()
         } else if (intent?.action == VpnService.SERVICE_INTERFACE) {
             // اندروید خودش («همیشه‌روشن») این سرویس را بالا آورده
@@ -581,7 +586,10 @@ class KankiHyService : VpnService() {
     fun shutdown() {
         gen++   // هر تلاش در حال اجرا لغو می‌شود
         // هسته‌ی KANKI MIX حتی وقتی هنوز منتظر جواب سرور است (kmix هنوز false) بسته می‌شود، تا آن تلاش فوراً تمام شود
-        KmixCore.stop(); HyEngine.kmix = false
+        // روی رشته‌ی اصلی (onRevoke / onDestroy) نه: stop تا چند ثانیه منتظر جواب هسته می‌ماند
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) KmixCore.stopAsync()
+        else KmixCore.stop()
+        HyEngine.kmix = false
         dnsFwd?.stop()
         dnsFwd = null
         HyEngine.dnsMode = false
