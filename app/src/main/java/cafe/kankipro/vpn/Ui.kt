@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -179,7 +180,7 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
     val drift by t.animateFloat(0f, 1f, infiniteRepeatable(tween(60000, easing = LinearEasing), RepeatMode.Reverse), label = "dr")
     val breathe by t.animateFloat(0f, 1f, infiniteRepeatable(tween(6000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
     val count = if (calm) 18 else motes.size
-    val sky = androidx.compose.ui.res.imageResource(R.drawable.galaxy_bg)
+    val sky = ImageBitmap.imageResource(R.drawable.galaxy_bg)
 
     Box(Modifier.fillMaxSize().background(K.Ink)) {
         Canvas(Modifier.fillMaxSize()) {
