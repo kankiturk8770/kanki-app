@@ -211,6 +211,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
                     Modifier.fillMaxWidth().height(206.dp).guideTarget("map"),
                     accent = if (ui.vstate == VState.OFF) K.Gold else mc,
+                    dns = ui.mode == KMode.DNS,
                 )
                 Spacer(Modifier.weight(1f).heightIn(min = 4.dp))
                 Box(Modifier.align(Alignment.CenterHorizontally).guideTarget("connect")) {

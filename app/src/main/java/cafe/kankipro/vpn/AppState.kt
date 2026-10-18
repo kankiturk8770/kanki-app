@@ -311,7 +311,7 @@ class AppState private constructor(context: Context) {
         return false
     }
 
-    private fun nodeName(n: String) = account?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
+    private fun nodeName(n: String) = placeName(n)
 
     /** پینگ چند کانفیگ با هم (با روش درست هر پروتکل)؛ نتیجه در pings هم ذخیره می‌شود */
     private suspend fun pingMany(list: List<Pair<String, String>>): Map<Pair<String, String>, Long?> {
@@ -408,7 +408,7 @@ class AppState private constructor(context: Context) {
         val remembered = prefs.getString(memKey(KMode.FILTER), null)?.split("|")?.takeIf { it.size == 2 }
             ?.let { it[0] to it[1] }?.takeIf { it in pool && ok(it) }
         val list = (listOfNotNull(remembered) + ranked.take(5) + pool.filter { !ok(it) }.take(2)).distinct().take(7)
-        val done = connectChain(list) { c -> if (c.second == "xray") nodeName(c.first) else nodeName(c.first) + " · " + protoTitle(c.second) }
+        val done = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
         if (done) prefs.edit().putString(memKey(KMode.FILTER), node + "|" + proto).apply()
         else if (wantTry) error = if (filterXray) "هیچ اینباند Xray وصل نشد. «ضد فیلتر» را نگه دارید و تیک Amnezia را بزنید یا «هوشمند» را بزنید."
             else "هیچ راهی وصل نشد. اینترنت را بررسی کنید یا «هوشمند» را بزنید."
@@ -577,7 +577,7 @@ class AppState private constructor(context: Context) {
         return cands.mapNotNull { (n, p, i) ->
             measured[Triple(i.host, i.transport, i.port)]?.let { (ping, jit) ->
                 pings["${n.node}/$p"] = ping
-                SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
+                SmartRow(n.node, p, "${placeName(n.node)} · ${protoTitle(p)}", flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
             }
         }.sortedBy { it.ping + 2 * it.jitter }
     }
@@ -928,11 +928,14 @@ class AppState private constructor(context: Context) {
         val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
             directHost(l)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
         }
-        // هر لینک Xray یک «سرور» جدا با پروتکل xray (اسمش همان نام اینباند در پنل)
+        // هر لینک Xray یک «سرور» جدا با پروتکل xray؛ مکانش (اگر پنل داده) کنار خروجی‌های بقیه‌ی سرورها
+        val xrayExits = mutableMapOf<String, ExitInfo>()
         val xray = a.xray.mapIndexed { i, x ->
-            ConfigLink(protocol = "xray", node = "xray-" + Emergency.sha256Hex(x.link.toByteArray()).take(8), nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
+            val id = "xray-" + Emergency.sha256Hex(x.link.toByteArray()).take(8)
+            x.exit?.let { xrayExits[id] = it }
+            ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
-        return a.copy(configs = base + direct + xray)
+        return a.copy(configs = base + direct + xray, exits = a.exits + xrayExits)
     }
 
     /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
@@ -1079,11 +1082,16 @@ class AppState private constructor(context: Context) {
      *   ۳) فقط کشور از روی اسمی که ادمین برای سرور گذاشته (مثلاً GERMANY)
      */
     suspend fun locate() {
+        // اول سرورها (بدون شبکه)، تا همه‌ی سنجاق‌ها همان لحظه روی نقشه بیایند
+        locateNodes()
         withContext(Dispatchers.IO) { GeoLookup.lookupSelf(ctx) }?.let { hit ->
             userGeo = hit.geo
             userIso = hit.iso
             prefs.edit().putString("ugeo", "${hit.geo.lat},${hit.geo.lon}").putString("uiso", hit.iso).apply()
         }
+    }
+
+    private fun locateNodes() {
         val a = account ?: return
         for ((nodeId, links) in a.configs.groupBy { it.node }) {
             val ex = a.exits[nodeId]
@@ -1100,6 +1108,31 @@ class AppState private constructor(context: Context) {
             val city = ex?.city?.takeIf { it.isNotBlank() } ?: prefs.getString("ncity_$nodeId", null)?.takeIf { savedIso == iso && it.isNotBlank() }
             if (city != null) nodeCity[nodeId] = city else nodeCity.remove(nodeId)
         }
+    }
+
+    /**
+     * شهر یک سرور برای نمایش. دو سرور جدا در یک شهر شماره می‌خورند (استکهلم ۲)؛ کانفیگ‌هایی که
+     * از یک IP خارج می‌شوند (مثلاً WireGuard و Xray روی یک سرور) یک سرورند و یک اسم دارند.
+     */
+    fun placeCity(id: String): String? {
+        val iso = isoOfNode(id) ?: return null
+        val city = exitCityName(iso, nodeCity[id]) ?: return null
+        val a = account ?: return city
+        fun who(n: String) = a.exits[n]?.ip?.takeIf { it.isNotBlank() } ?: n
+        val same = a.configs.map { it.node }.distinct()
+            .filter { isoOfNode(it) == iso && exitCityName(iso, nodeCity[it]) == city }
+            .map { who(it) }.distinct()
+        if (same.size < 2) return city
+        return city + " " + faDigits((same.indexOf(who(id)) + 1).toString())
+    }
+
+    /**
+     * اسم یک سرور: از روی جایی که ترافیکش واقعاً به اینترنت می‌رود (کشور · شهر)، نه اسمی که
+     * ادمین در پنل گذاشته (مثل TeST). اگر کشورش معلوم نیست، همان اسم پنل.
+     */
+    fun placeName(id: String): String {
+        val c = countryName(isoOfNode(id)) ?: return account?.configs?.firstOrNull { it.node == id }?.nodeName ?: id
+        return placeCity(id)?.let { "$c · $it" } ?: c
     }
 
     fun mtuFor(p: String): String = prefs.getString("mtu_$p", "") ?: ""
@@ -1243,7 +1276,7 @@ class AppState private constructor(context: Context) {
             if (!wantTry) throw IllegalStateException("cancelled")
             vstate = VState.ON
             wantOn = true
-            LastConfig.save(ctx, finalCfg, "${flagEmoji(isoOfNode(link.node)) ?: "🌐"} ${link.nodeName} · ${protoTitle(link.protocol)}")
+            LastConfig.save(ctx, finalCfg, "${flagEmoji(isoOfNode(link.node)) ?: "🌐"} ${placeName(link.node)} · ${protoTitle(link.protocol)}")
             startNotif()
             // در کار جدا، تا قطع و وصل دوباره منتظر این درخواست‌ها نماند
             bg.launch { measurePing(); locateExit() }

@@ -357,8 +357,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         },
         server = if (state.vstate == VState.ON && state.mode != KMode.DNS) state.node?.let { n ->
             val iso = state.isoOfNode(n)
-            val name = a?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
-            ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: name, exitCityName(iso, state.nodeCity[n]), state.proto)
+            ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: state.placeName(n), state.placeCity(n), state.proto)
         } else null,
     )
 
@@ -418,20 +417,10 @@ private fun ModeSheets(state: AppState) {
     if (!state.gameSheet && !state.filterSheet) return
     val a = state.account ?: return
     val nodes = a.configs.distinctBy { it.node }
-    fun nodeOf(id: String) = nodes.firstOrNull { it.node == id }
 
-    /** اسم کشور (و اگر یک کشور چند سرور دارد، اسم سرور) */
-    fun place(id: String): Pair<String, String> {
-        val iso = state.isoOfNode(id)
-        val n = nodeOf(id)?.nodeName ?: id
-        val c = countryName(iso)
-        val name = when {
-            c == null -> n
-            nodes.count { state.isoOfNode(it.node) == iso } > 1 -> "$c · $n"
-            else -> exitCityName(iso, state.nodeCity[id])?.let { "$c · $it" } ?: c
-        }
-        return (flagEmoji(iso) ?: "🌐") to name
-    }
+    /** پرچم و اسم سرور از روی مکان واقعی خروجی‌اش (کشور · شهر) */
+    fun place(id: String): Pair<String, String> =
+        (flagEmoji(state.isoOfNode(id)) ?: "🌐") to state.placeName(id)
     fun server(id: String, p: String, tag: String?): SheetServer {
         val (flag, name) = place(id)
         return SheetServer(id, p, flag, name, tag, state.protoPing(id, p))
@@ -490,7 +479,7 @@ private fun ModeSheets(state: AppState) {
 
     // ضد فیلتر: فقط Xray و Amnezia
     val xrayRows = a.configs.filter { it.protocol == "xray" && state.hasCfg(it.node, "xray") }
-        .map { SheetServer(it.node, "xray", "🛡", it.nodeName, null, state.protoPing(it.node, "xray")) }
+        .map { server(it.node, "xray", XrayCfg.protoName(it.url.removePrefix("xray:"))) }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
     val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, awgTag(p)) } }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
@@ -529,15 +518,18 @@ private fun ModeSheets(state: AppState) {
 
 // ================================================================== تب سرورها
 
-/** عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»)؛ Xray با اسم خودش در پنل */
-private fun cfgTitle(l: ConfigLink, multi: Boolean): String {
+/**
+ * عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل» یا «Xray · VLESS»)؛ اگر کشور چند سرور
+ * دارد، شهر سرور هم (از روی مکان خروجی، نه اسمی که در پنل گذاشته شده)
+ */
+private fun cfgTitle(state: AppState, l: ConfigLink, multi: Boolean): String {
     val base = when (l.protocol) {
         "amneziawg" -> "AmneziaWG - " + tr("تانل")
         "amneziawg-direct" -> "AmneziaWG - " + tr("مستقیم")
-        "xray" -> l.nodeName
+        "xray" -> "Xray · " + XrayCfg.protoName(l.url.removePrefix("xray:"))
         else -> protoTitle(l.protocol)
     }
-    return if (multi && l.protocol != "xray") base + " · " + l.nodeName else base
+    return if (multi) base + " · " + (state.placeCity(l.node) ?: l.nodeName) else base
 }
 
 @Composable
@@ -551,11 +543,12 @@ private fun ServersTab(state: AppState) {
     val selKey = "${state.node}/${state.protoKey()}"
     val cards = groups.map { (key, links) ->
         val iso = key.takeIf { !it.startsWith("node:") }
-        val multi = links.filter { it.protocol != "xray" }.map { it.node }.distinct().size > 1
+        // چند سرور جدا در یک کشور (کانفیگ‌هایی که از یک IP خارج می‌شوند یک سرورند)
+        val multi = links.map { state.placeCity(it.node) ?: it.node }.distinct().size > 1
         val rows = links.sortedBy { order.indexOf(it.protocol) }.map { l ->
             val k = "${l.node}/${l.protocol}"
             CfgRowUi(
-                node = l.node, proto = l.protocol, title = cfgTitle(l, multi),
+                node = l.node, proto = l.protocol, title = cfgTitle(state, l, multi),
                 ping = state.protoPing(l.node, l.protocol), busy = state.pinging[k] == true,
                 selected = k == selKey,
                 host = state.infos[k]?.host?.takeIf { it.isNotBlank() && it != "—" },
@@ -564,7 +557,8 @@ private fun ServersTab(state: AppState) {
         CountryCardUi(
             id = key,
             name = countryName(iso) ?: links.first().nodeName,
-            city = exitCityName(iso, links.firstNotNullOfOrNull { state.nodeCity[it.node] }) ?: links.first().nodeName,
+            // شهرهای سرورهای این کشور (از روی IP خروجی)
+            city = links.mapNotNull { exitCityName(iso, state.nodeCity[it.node]) }.distinct().joinToString(" · ").ifBlank { links.first().nodeName },
             flag = flagEmoji(iso) ?: "🌐",
             best = rows.mapNotNull { it.ping }.filter { it > 0 }.minOrNull() ?: rows.mapNotNull { it.ping }.firstOrNull(),
             expanded = state.openNode == key,

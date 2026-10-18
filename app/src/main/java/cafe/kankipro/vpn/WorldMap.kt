@@ -93,10 +93,15 @@ fun WorldMap(
     countries: List<Country>?, pins: List<MapPin>, user: Geo?, userIso: String?, connected: Boolean, modifier: Modifier = Modifier,
     /** رنگ سرور انتخابی و خط پیش‌نمایش پیش از اتصال */
     accent: Color = K.Gold,
+    /**
+     * حالت DNS: آی‌پی عوض نمی‌شود و ترافیک به هیچ سروری نمی‌رود، پس نه سرور انتخابی هست نه مسیر؛
+     * وقتی وصل است، سپر DNS دور خود شما (موج‌ها و درخواست‌هایی که دورتان می‌چرخند)
+     */
+    dns: Boolean = false,
 ) {
     val tm = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 24)
 
-    val sel = pins.firstOrNull { it.selected }
+    val sel = if (dns) null else pins.firstOrNull { it.selected }
     val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
     val draw by animateFloatAsState(if (connected) 1f else 0f, tween(if (connected) 1400 else 150, delayMillis = if (connected) 700 else 0), label = "d")
     val t = rememberInfiniteTransition(label = "map")
@@ -114,7 +119,7 @@ fun WorldMap(
         // نمای عادی: همه‌ی سرورها و شما ؛ نمای اتصال: کمی نزدیک‌تر روی مسیر
         val all = (pins.map { it.geo } + listOfNotNull(user)).ifEmpty { listOf(Geo(45.0, 20.0)) }
         val far = fitView(all, aspect, 40.0)
-        val near = fitView(listOfNotNull(user, sel?.geo).ifEmpty { all }, aspect, 40.0)
+        val near = fitView(listOfNotNull(user, sel?.geo).ifEmpty { all }, aspect, if (dns) 26.0 else 40.0)
         val v = View(lerp(far.lon0, near.lon0, zoom), lerp(far.lon1, near.lon1, zoom), lerp(far.lat0, near.lat0, zoom), lerp(far.lat1, near.lat1, zoom))
         val sx = (w / (v.lon1 - v.lon0)).toFloat()
         val sy = (h / (v.lat0 - v.lat1)).toFloat()
@@ -123,7 +128,9 @@ fun WorldMap(
         val selIso = sel?.iso
         val selColor = if (connected) K.Green else accent
         val border = 1f / sx
-        val key = listOf(size, zoom, pins, user, userIso, connected, accent, countries?.size, ThemeState.current.id)
+        // کشور شما: فیروزه‌ای؛ با DNS وصل، رنگ DNS
+        val youColor = if (dns && connected) accent else K.Accent
+        val key = listOf(size, zoom, pins, user, userIso, connected, accent, dns, countries?.size, ThemeState.current.id)
         val old = cache.bmp
         val bmp = if (old != null && old.width == w.toInt().coerceAtLeast(1) && old.height == h.toInt().coerceAtLeast(1)) old
             else ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
@@ -150,8 +157,8 @@ fun WorldMap(
                                 drawPath(c.path, selColor, style = Stroke(border * 1.8f))
                             }
                             userIso -> {
-                                drawPath(c.path, K.Accent.copy(alpha = .20f))
-                                drawPath(c.path, K.Accent.copy(alpha = .6f), style = Stroke(border * 1.2f))
+                                drawPath(c.path, youColor.copy(alpha = .20f))
+                                drawPath(c.path, youColor.copy(alpha = .6f), style = Stroke(border * 1.2f))
                             }
                             else -> {
                                 drawPath(c.path, K.Gold.copy(alpha = .10f), style = Stroke(border * 3f))
@@ -204,10 +211,12 @@ fun WorldMap(
         val pr = w / 34f
         // بقیه‌ی سرورها: نقطه‌ی درخشان طلایی با سنجاق کوچک پرچم
         // (سروری که در کشور خود کاربر است جدا کشیده نمی‌شود تا دو سنجاق روی هم نیفتند)
-        pins.filter { !it.selected && (user == null || it.iso != userIso) }.forEach { p ->
+        // (با DNS وصل کم‌رنگ‌اند: ترافیک به هیچ‌کدام نمی‌رود)
+        val pinAlpha = if (dns) 1f - .5f * draw else 1f
+        pins.filter { (dns || !it.selected) && (user == null || it.iso != userIso) }.forEach { p ->
             val o = proj(p.geo)
-            neonDot(K.Gold.copy(alpha = .85f), o, w / 170f)
-            flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f), pr * .78f)
+            neonDot(K.Gold.copy(alpha = .85f * pinAlpha), o, w / 170f)
+            flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f * pinAlpha), pr * .78f)
         }
         // سرور انتخابی: هاله، موج تپنده و سنجاق بزرگ‌تر
         sel?.let {
@@ -218,13 +227,39 @@ fun WorldMap(
             neonDot(selColor, o, w / 110f)
             flagPin(tm, o, it.iso, selColor, pr)
         }
+        // DNS وصل: سپر دور شما (سه موج پشت هم، مدار خط‌چین و سه درخواست که دورتان می‌چرخند)
+        if (dns && user != null && draw > 0f) {
+            val o = proj(user)
+            val r = w / 8.5f * eased(draw)
+            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .22f * draw), accent.copy(alpha = .06f * draw), Color.Transparent), o, r * 1.25f), r * 1.25f, o)
+            for (k in 0 until 3) {
+                val q = (pulse + k / 3f) % 1f
+                drawCircle(accent.copy(alpha = (1 - q) * .6f * draw), r * (.22f + q), o, style = Stroke(w / 330f))
+            }
+            val orbit = r * .62f
+            val sw = w / 420f
+            drawCircle(
+                accent.copy(alpha = .45f * draw), orbit, o,
+                style = Stroke(sw, pathEffect = PathEffect.dashPathEffect(floatArrayOf(sw * 5f, sw * 5f), -flow * sw * 10f)),
+            )
+            for (k in 0 until 3) {
+                val ang = (flow + k / 3f) * 2f * Math.PI.toFloat()
+                neonDot(accent.copy(alpha = draw), Offset(o.x + orbit * kotlin.math.cos(ang), o.y + orbit * kotlin.math.sin(ang)), w / 260f)
+            }
+            val tag = tm.measure(
+                tr("DNS فعال · آی‌پی همان آی‌پی خودتان"),
+                androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 38f).toSp(), color = accent.copy(alpha = draw)),
+            )
+            val ty = (o.y + r * .95f).coerceAtMost(h * .80f - tag.size.height)
+            drawText(tag, topLeft = Offset((o.x - tag.size.width / 2f).coerceIn(w * .08f, (w * .92f - tag.size.width).coerceAtLeast(w * .08f)), ty))
+        }
         // شما: نقطه‌ی تپنده، سنجاق با پرچم و برچسب
         user?.let {
             val o = proj(it)
-            drawCircle(K.Accent.copy(alpha = (1 - pulse) * .55f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
-            neonDot(K.Accent, o, w / 125f)
+            drawCircle(youColor.copy(alpha = (1 - pulse) * .55f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
+            neonDot(youColor, o, w / 125f)
             // اگر سرور انتخابی در همین کشور است، سنجاق پرچم همان سرور کافی است
-            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, K.Accent, pr * .85f)
+            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, youColor, pr * .85f)
             val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 34f).toSp(), color = K.Text))
             drawText(layout, topLeft = Offset(o.x + pr * 1.1f, o.y - pr * 2.2f - layout.size.height / 2f))
         }
@@ -272,3 +307,6 @@ private fun DrawScope.neonDot(c: Color, o: Offset, r: Float) {
     drawCircle(c, r, o)
     drawCircle(Color.White, r * .45f, o)
 }
+
+/** پایان نرم (برای باز شدن سپر DNS) */
+private fun eased(x: Float) = 1f - (1f - x) * (1f - x)
