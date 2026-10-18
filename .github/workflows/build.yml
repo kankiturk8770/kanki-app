@@ -175,6 +175,15 @@ jobs:
         run: |
           set -e
           tag="build-${GITHUB_REF_NAME//\//-}"
+          # اسم فایل‌ها با نسخه و نوع گوشی (KankiVPN-1.15.1-arm64.apk)؛ پنل نسخه و نوع را از همین اسم می‌خواند
+          ver=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          mkdir -p out
+          for f in app/build/outputs/apk/release/*.apk; do
+            n=$(basename "$f" .apk); n=${n#app-}; n=${n%-release}
+            case "$n" in arm64-v8a) a=arm64;; armeabi-v7a) a=armv7;; *) a=$n;; esac
+            cp "$f" "out/KankiVPN-$ver-$a.apk"
+          done
+          ls -la out
           gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$tag" app/build/outputs/apk/release/*.apk --prerelease --target "$GITHUB_SHA" \
+          gh release create "$tag" out/*.apk --prerelease --target "$GITHUB_SHA" \
             --title "Kanki VPN · $GITHUB_REF_NAME · #$GITHUB_RUN_NUMBER" --notes "ساخت خودکار از $GITHUB_SHA"
