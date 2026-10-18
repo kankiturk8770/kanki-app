@@ -1,0 +1,31 @@
+name: پاک کردن فایل‌های قدیمی Actions
+
+# فایل‌های بیلدهای قبلی (Artifacts) فضای Actions را پر می‌کنند؛ فایل نصبی حالا در Releases است،
+# پس همه‌ی Artifactها پاک می‌شوند. از تب Actions با «Run workflow» هم اجرا می‌شود.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/cleanup.yml
+
+permissions:
+  actions: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: پاک کردن همه‌ی Artifactها
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ids=$(gh api --paginate "repos/$GH_REPO/actions/artifacts?per_page=100" --jq '.artifacts[].id')
+          n=0
+          for id in $ids; do
+            gh api -X DELETE "repos/$GH_REPO/actions/artifacts/$id" && n=$((n+1))
+          done
+          echo "پاک شد: $n"
+          left=$(gh api "repos/$GH_REPO/actions/artifacts" --jq '.total_count')
+          echo "باقی‌مانده: $left"
+          test "$left" = "0"
