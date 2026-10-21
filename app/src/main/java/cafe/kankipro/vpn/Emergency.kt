@@ -122,9 +122,25 @@ object Emergency {
     private fun post(ctx: Context, path: String, code: String, body: ByteArray, type: String): JSONObject =
         JSONObject(String(call(ctx, "POST", path, code, body, type), Charsets.UTF_8))
 
+    /** یک بار خواندن: نام کاربری، پیام‌های بعد از after، و تا کدام پیام کاربر را ادمین خوانده (تیک آبی) */
+    data class Page(val user: String, val msgs: List<EMsg>, val readUpto: Long)
+
+    fun page(ctx: Context, code: String, after: Long): Page {
+        val raw = String(call(ctx, "GET", "/api/e/messages?after=$after", code), Charsets.UTF_8)
+        val (u, list) = parseMessages(ctx, JSONObject(raw))
+        return Page(u, list, JSONObject(raw).optLong("read_upto"))
+    }
+
+    /** کاربر پیام‌های ادمین تا upto را روی صفحه دید (ادمین در پنل تیک آبی می‌بیند) */
+    fun markRead(ctx: Context, code: String, upto: Long) {
+        post(ctx, "/api/e/read", code, JSONObject().put("upto", upto).toString().toByteArray(Charsets.UTF_8), "application/json")
+    }
+
     /** پیام‌های بعد از after؛ (نام کاربری، پیام‌ها) */
-    fun messages(ctx: Context, code: String, after: Long): Pair<String, List<EMsg>> {
-        val o = JSONObject(String(call(ctx, "GET", "/api/e/messages?after=$after", code), Charsets.UTF_8))
+    fun messages(ctx: Context, code: String, after: Long): Pair<String, List<EMsg>> =
+        parseMessages(ctx, JSONObject(String(call(ctx, "GET", "/api/e/messages?after=$after", code), Charsets.UTF_8)))
+
+    private fun parseMessages(ctx: Context, o: JSONObject): Pair<String, List<EMsg>> {
         val user = o.optString("user")
         val arr = o.optJSONArray("messages") ?: JSONArray()
         val pub = key(ctx)

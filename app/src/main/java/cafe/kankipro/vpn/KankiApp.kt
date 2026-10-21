@@ -15,6 +15,8 @@ class KankiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AbstractBackend.setAlwaysOnCallback { AlwaysOn.start(this) }
+        // پیام تازه‌ی پشتیبانی در چت اضطراری: بررسی دوره‌ای و اعلان
+        EmergencyStore.schedule(this)
     }
 }
 

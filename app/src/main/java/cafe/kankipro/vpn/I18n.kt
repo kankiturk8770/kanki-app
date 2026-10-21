@@ -23,11 +23,16 @@ fun tr(fa: String): String {
 fun trf(fa: String, vararg args: Any): String = String.format(java.util.Locale.US, tr(fa), *args)
 
 private val EN = mapOf(
+    "پیام‌های پشتیبانی" to "Support messages",
+    "پیام‌های ادمین در چت اضطراری" to "Admin messages in the emergency chat",
+    "پیام تازه از پشتیبانی کانکی" to "New message from Kanki support",
+    "%d پیام تازه از پشتیبانی کانکی" to "%d new messages from Kanki support",
+    "یک عکس فرستاد" to "Sent a photo",
+    "یک کانفیگ تازه فرستاد" to "Sent a new config",
     "دکمه‌ی شناور روی بازی‌ها" to "Floating button over games",
     "دکمه‌ی کوچک کنار صفحه؛ با یک لمس اتصال هوشمند یا قطع، بدون بیرون آمدن از بازی" to "A small button at the screen edge: smart connect or disconnect in one tap, without leaving the game",
     "«Kanki VPN» را پیدا کنید و «اجازه‌ی نمایش روی برنامه‌های دیگر» را روشن کنید" to "Find «Kanki VPN» and allow «Display over other apps»",
     "باز کردن برنامه" to "Open the app",
-    "پنهان کردن این دکمه" to "Hide this button",
     "اتصال هوشمند" to "Smart connect",
     "قطع اتصال" to "Disconnect",
     "لغو" to "Cancel",

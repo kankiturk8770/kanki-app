@@ -122,6 +122,16 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
     val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
     val list = rememberLazyListState()
+    /** پیام‌های خود کاربر تا این شماره را ادمین خوانده (✓✓ آبی) */
+    var readUpto by remember { mutableStateOf(0L) }
+    /** آخرین پیام ادمین که «دیده شد» برایش فرستاده شده */
+    var readSent by remember { mutableStateOf(0L) }
+    // چت باز است: اعلان پیام تازه لازم نیست، و اعلان قبلی برداشته می‌شود
+    DisposableEffect(Unit) {
+        EmergencyStore.chatOpen = true
+        EmergencyStore.clearNotification(ctx)
+        onDispose { EmergencyStore.chatOpen = false }
+    }
 
     fun errText(e: Throwable): String = when {
         e is EmergencyException && e.code == Emergency.NO_ADDRESS -> "آدرس سرور اضطراری هنوز از پنل نیامده. یک بار وقتی اینترنت وصل است برنامه را باز کنید تا اشتراک بروز شود."
@@ -135,12 +145,21 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         val c = code ?: return
         try {
             val after = msgs.lastOrNull()?.id ?: 0L
-            val (u, fresh) = withContext(Dispatchers.IO) { Emergency.messages(ctx, c, after) }
+            val page = withContext(Dispatchers.IO) { Emergency.page(ctx, c, after) }
+            val (u, fresh) = page.user to page.msgs
             user = u
             status = null
+            readUpto = maxOf(readUpto, page.readUpto)
+            withContext(Dispatchers.IO) { EmergencyStore.save(ctx, c, u, fresh, page.readUpto) }
             if (fresh.isNotEmpty()) {
                 msgs.addAll(fresh.filter { f -> msgs.none { it.id == f.id } })
                 helpOpen = false
+            }
+            // پیام‌های ادمین روی صفحه است: «خوانده شد» (ادمین در پنل تیک آبی می‌بیند)
+            val lastAdmin = msgs.filter { it.admin }.maxOfOrNull { it.id } ?: 0L
+            if (lastAdmin > readSent) {
+                runCatching { withContext(Dispatchers.IO) { Emergency.markRead(ctx, c, lastAdmin) } }.onSuccess { readSent = lastAdmin }
+                EmergencyStore.setNotified(ctx, lastAdmin)
             }
             // عکس‌های تازه
             fresh.filter { it.img && it.id !in images }.forEach { m ->
@@ -157,6 +176,13 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 
     LaunchedEffect(code) {
         msgs.clear()
+        // اول پیام‌های ذخیره‌شده روی گوشی (۲ روز اخیر)، تا حتی بدون اینترنت دیده شوند
+        code?.let { c ->
+            val saved = withContext(Dispatchers.IO) { EmergencyStore.load(ctx, c) }
+            msgs.addAll(saved.msgs)
+            readUpto = saved.readUpto
+            if (saved.msgs.isNotEmpty()) helpOpen = false
+        }
         while (code != null) {
             load()
             delay(5000)
@@ -245,7 +271,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 item { T("هنوز پیامی نیست. مشکل را بنویسید تا ادمین جواب بدهد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(8.dp)) }
             }
             items(msgs, key = { it.id }) { m ->
-                Bubble(m, images[m.id], if (m.img) imageOk[m.id] ?: false else m.verified) { clip.setText(AnnotatedString(it)); toast(ctx, "کانفیگ کپی شد") }
+                Bubble(m, images[m.id], if (m.img) imageOk[m.id] ?: false else m.verified, read = !m.admin && m.id <= readUpto) { clip.setText(AnnotatedString(it)); toast(ctx, "کانفیگ کپی شد") }
             }
         }
 
@@ -287,7 +313,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, onCopy: (String) -> Unit) {
+private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, read: Boolean = false, onCopy: (String) -> Unit) {
     val mine = !m.admin
     val shape = RoundedCornerShape(16.dp)
     val bg = if (mine) K.Gold.copy(alpha = .14f) else if (ok) K.Green.copy(alpha = .10f) else K.Red.copy(alpha = .10f)
@@ -316,7 +342,14 @@ private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, onCopy: (String) -> 
                 else -> T(m.body, size = 14.sp, color = K.Text, weight = FontWeight.Normal)
             }
             Spacer(Modifier.height(4.dp))
-            T(PanelTime.jalali(m.ts * 1000), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(PanelTime.jalali(m.ts * 1000), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                // پیام خود کاربر: ✓ رسید به سرور، ✓✓ آبی ادمین خواند
+                if (mine) {
+                    Spacer(Modifier.width(6.dp))
+                    T(if (read) "✓✓" else "✓", size = 11.sp, color = if (read) Color(0xFF4FC3F7) else K.Sub, weight = FontWeight.Black)
+                }
+            }
         }
     }
 }

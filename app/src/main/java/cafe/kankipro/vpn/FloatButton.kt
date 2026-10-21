@@ -118,7 +118,7 @@ class KankiFloatService : Service() {
     // ------------------------------------------------------------ دکمه‌ی کوچک
     @SuppressLint("ClickableViewAccessibility")
     private fun addTab() {
-        val size = dp(46)
+        val size = dp(38)
         val box = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -129,10 +129,10 @@ class KankiFloatService : Service() {
             elevation = dp(6).toFloat()
         }
         box.addView(TextView(this).apply {
-            text = "K"; setTextColor(gold); textSize = 19f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+            text = "K"; setTextColor(gold); textSize = 16f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
         }, FrameLayout.LayoutParams(size, size))
         val d = View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(grey); setStroke(dp(1), Color.BLACK) } }
-        box.addView(d, FrameLayout.LayoutParams(dp(11), dp(11), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(3), dp(3)) })
+        box.addView(d, FrameLayout.LayoutParams(dp(9), dp(9), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(2), dp(2)) })
         dot = d
 
         val p = params(size, size)
@@ -185,32 +185,31 @@ class KankiFloatService : Service() {
         val tp = t.layoutParams as WindowManager.LayoutParams
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            setPadding(dp(10), dp(8), dp(10), dp(10))
             background = GradientDrawable().apply {
-                cornerRadius = dp(18).toFloat()
+                cornerRadius = dp(14).toFloat()
                 setColor(Color.argb(240, 16, 15, 22))
                 setStroke(dp(1), Color.argb(150, 0xE8, 0xB8, 0x4A))
             }
             elevation = dp(10).toFloat()
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        box.addView(TextView(this).apply { text = "Kanki VPN"; setTextColor(gold); textSize = 14f; typeface = Typeface.DEFAULT_BOLD })
-        val st = TextView(this).apply { setTextColor(Color.WHITE); textSize = 12.5f; setPadding(0, dp(4), 0, dp(10)); maxLines = 2 }
+        // فقط وضعیت و یک دکمه‌ی هوشمند؛ لمس وضعیت، خود برنامه را باز می‌کند (خاموش کردن دکمه: تنظیمات برنامه)
+        val st = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 11.5f; setPadding(dp(2), 0, dp(2), dp(7)); maxLines = 2
+            setOnClickListener { openApp(); closePanel() }
+        }
         box.addView(st)
         status = st
         val main = button("", gold, Color.rgb(26, 18, 6)) { mainAction() }
         box.addView(main)
         mainBtn = main
-        box.addView(button(tr("باز کردن برنامه"), Color.argb(40, 255, 255, 255), Color.WHITE) { openApp(); closePanel() }, lp(top = 8))
-        box.addView(button(tr("پنهان کردن این دکمه"), Color.TRANSPARENT, grey) {
-            setEnabled(this, false)
-        }, lp(top = 4))
         box.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) closePanel(); false }
 
         val m = resources.displayMetrics
-        val pw = dp(230)
+        val pw = dp(176)
         val p = params(pw, WindowManager.LayoutParams.WRAP_CONTENT)
-        val tabW = t.width.takeIf { it > 0 } ?: dp(46)
+        val tabW = t.width.takeIf { it > 0 } ?: dp(38)
         // کنار دکمه، به سمت وسط صفحه
         p.x = if (tp.x + tabW / 2 > m.widthPixels / 2) (tp.x - pw - dp(8)).coerceAtLeast(0) else (tp.x + tabW + dp(8)).coerceAtMost(m.widthPixels - pw)
         p.y = (if (tp.y < dp(20)) tp.y + tabW + dp(8) else tp.y - dp(10)).coerceIn(0, (m.heightPixels - dp(200)).coerceAtLeast(0))
@@ -224,11 +223,10 @@ class KankiFloatService : Service() {
         panel = null; status = null; mainBtn = null
     }
 
-    private fun lp(top: Int) = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(top) }
 
     private fun button(label: String, bg: Int, fg: Int, onClick: () -> Unit) = TextView(this).apply {
-        text = label; setTextColor(fg); textSize = 13.5f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
-        setPadding(dp(10), dp(9), dp(10), dp(9))
+        text = label; setTextColor(fg); textSize = 12.5f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+        setPadding(dp(8), dp(7), dp(8), dp(7))
         background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(bg) }
         setOnClickListener { onClick() }
     }

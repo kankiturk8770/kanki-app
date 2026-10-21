@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        openFromNotification(intent)
         setContent {
             CompositionLocalProvider(
                 LocalLayoutDirection provides if (LangState.en) LayoutDirection.Ltr else LayoutDirection.Rtl,
@@ -35,6 +36,19 @@ class MainActivity : ComponentActivity() {
                     App()
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        openFromNotification(intent)
+    }
+
+    /** لمس اعلان «پیام تازه از پشتیبانی»: چت اضطراری باز می‌شود */
+    private fun openFromNotification(i: android.content.Intent?) {
+        if (i?.getBooleanExtra(EmergencyStore.EXTRA_OPEN, false) == true) {
+            AppState.from(this).emergencyOpen = true
+            i.removeExtra(EmergencyStore.EXTRA_OPEN)
         }
     }
 
