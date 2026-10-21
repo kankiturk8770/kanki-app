@@ -166,12 +166,20 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 onCloseTip = { state.markTip("test") },
             )
             KTab.SETTINGS -> SettingsContent(
-                SettingsUi(state.dns, state.autoConnect, state.sounds, LangState.lang, state.excluded.size, appVersion(ctx)),
+                SettingsUi(state.dns, state.autoConnect, state.sounds, LangState.lang, state.excluded.size, appVersion(ctx), KankiFloatService.on.value),
                 tip = if (state.tipsSeen["settings"] == true) null else RobotAlert("tip_settings", 0, "اگه برنامه‌ای (مثل بانک) با VPN کار نکرد، از «تونل‌زنی انتخابی» بیرونش بذار. راهنمای کامل هم همین پایینه 👇"),
                 act = SettingsActions(
                     setDns = { state.dns = it; state.save() },
                     setAuto = { state.autoConnect = it; state.save() },
                     setSounds = { state.sounds = it; state.save() },
+                    setFloat = { on ->
+                        KankiFloatService.setEnabled(ctx, on)
+                        // اجازه‌ی «نمایش روی برنامه‌های دیگر» نیست: صفحه‌اش باز می‌شود؛ با برگشتن به برنامه روشن می‌شود
+                        if (on && !KankiFloatService.canDraw(ctx)) {
+                            runCatching { ctx.startActivity(KankiFloatService.permissionIntent(ctx)) }
+                            toast(ctx, ("«Kanki VPN» را پیدا کنید و «اجازه‌ی نمایش روی برنامه‌های دیگر» را روشن کنید"))
+                        }
+                    },
                     setTheme = { state.setTheme(it) },
                     setLang = { state.setLang(it); scope.launch { state.refresh() } },
                     openSplit = { showSplit = true },
@@ -270,7 +278,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             if (tick % 3 == 0) launch { state.samplePing() }   // نمودار زنده‌ی پینگ (هر ۳ ثانیه یک نمونه‌ی سبک)
             if (state.mode == KMode.DNS) state.syncDnsActive()
             tick++
-            if (tick % 30 == 0) launch { state.refreshUsage() }   // حجم مصرفی هر ۳۰ ثانیه (بدون نگه داشتن شمارنده)
+            if (tick % 30 == 0) launch { state.refreshUsage(5 * 60_000L) }   // حجم مصرفی وقتی وصل است: هر ۵ دقیقه یک درخواست
             delay(1000)
         }
         rx = 0; tx = 0; session = 0
@@ -358,7 +366,9 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         server = if (state.vstate == VState.ON && state.mode != KMode.DNS) state.node?.let { n ->
             val iso = state.isoOfNode(n)
             val name = a?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
-            ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: name, exitCityName(iso, state.nodeCity[n]), state.proto)
+            val tag = if (state.proto == "kankimix") state.kmixTag(n) else null
+            val city = exitCityName(iso, state.cityOf(n))
+            ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: name, listOfNotNull(city, tag).joinToString(" · ").ifBlank { null }, state.proto)
         } else null,
     )
 
@@ -423,12 +433,13 @@ private fun ModeSheets(state: AppState) {
     /** اسم کشور (و اگر یک کشور چند سرور دارد، اسم سرور) */
     fun place(id: String): Pair<String, String> {
         val iso = state.isoOfNode(id)
-        val n = nodeOf(id)?.nodeName ?: id
+        // کانفیگ تانل KANKI MIX با اسم و شهر سرور اصلی‌اش؛ «تانل» در برچسب ردیف می‌آید
+        val n = nodeOf(state.parentOf(id))?.nodeName ?: nodeOf(id)?.nodeName ?: id
         val c = countryName(iso)
         val name = when {
             c == null -> n
-            nodes.count { state.isoOfNode(it.node) == iso } > 1 -> "$c · $n"
-            else -> exitCityName(iso, state.nodeCity[id])?.let { "$c · $it" } ?: c
+            nodes.map { state.parentOf(it.node) }.distinct().count { state.isoOfNode(it) == iso } > 1 -> "$c · $n"
+            else -> exitCityName(iso, state.cityOf(id))?.let { "$c · $it" } ?: c
         }
         return (flagEmoji(iso) ?: "🌐") to name
     }
@@ -442,7 +453,7 @@ private fun ModeSheets(state: AppState) {
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
     val families = Modes.GAME_FAMILIES.map { (key, _) ->
-        val list = state.gameConfigs(key).map { (id, p) -> server(id, p, if (key == "amnezia") awgTag(p) else null) }
+        val list = state.gameConfigs(key).map { (id, p) -> server(id, p, when { key == "amnezia" -> awgTag(p); p == "kankimix" -> state.kmixTag(id); else -> null }) }
             .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
         GameFamilyUi(
             key, state.familyTitle(key),
@@ -530,14 +541,15 @@ private fun ModeSheets(state: AppState) {
 // ================================================================== تب سرورها
 
 /** عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»)؛ Xray با اسم خودش در پنل */
-private fun cfgTitle(l: ConfigLink, multi: Boolean): String {
+private fun cfgTitle(l: ConfigLink, multi: Boolean, kmixTag: String?, serverName: String): String {
     val base = when (l.protocol) {
         "amneziawg" -> "AmneziaWG - " + tr("تانل")
         "amneziawg-direct" -> "AmneziaWG - " + tr("مستقیم")
+        "kankimix" -> protoTitle(l.protocol) + (kmixTag?.let { " - $it" } ?: "")
         "xray" -> l.nodeName
         else -> protoTitle(l.protocol)
     }
-    return if (multi && l.protocol != "xray") base + " · " + l.nodeName else base
+    return if (multi && l.protocol != "xray") "$base · $serverName" else base
 }
 
 @Composable
@@ -551,11 +563,12 @@ private fun ServersTab(state: AppState) {
     val selKey = "${state.node}/${state.protoKey()}"
     val cards = groups.map { (key, links) ->
         val iso = key.takeIf { !it.startsWith("node:") }
-        val multi = links.filter { it.protocol != "xray" }.map { it.node }.distinct().size > 1
+        val multi = links.filter { it.protocol != "xray" }.map { state.parentOf(it.node) }.distinct().size > 1
+        fun serverName(id: String) = links.firstOrNull { it.node == state.parentOf(id) }?.nodeName ?: links.first { it.node == id }.nodeName
         val rows = links.sortedBy { order.indexOf(it.protocol) }.map { l ->
             val k = "${l.node}/${l.protocol}"
             CfgRowUi(
-                node = l.node, proto = l.protocol, title = cfgTitle(l, multi),
+                node = l.node, proto = l.protocol, title = cfgTitle(l, multi, if (l.protocol == "kankimix") state.kmixTag(l.node) else null, serverName(l.node)),
                 ping = state.protoPing(l.node, l.protocol), busy = state.pinging[k] == true,
                 selected = k == selKey,
                 host = state.infos[k]?.host?.takeIf { it.isNotBlank() && it != "—" },
@@ -564,7 +577,7 @@ private fun ServersTab(state: AppState) {
         CountryCardUi(
             id = key,
             name = countryName(iso) ?: links.first().nodeName,
-            city = exitCityName(iso, links.firstNotNullOfOrNull { state.nodeCity[it.node] }) ?: links.first().nodeName,
+            city = exitCityName(iso, links.firstNotNullOfOrNull { state.cityOf(it.node) }) ?: links.first().nodeName,
             flag = flagEmoji(iso) ?: "🌐",
             best = rows.mapNotNull { it.ping }.filter { it > 0 }.minOrNull() ?: rows.mapNotNull { it.ping }.firstOrNull(),
             expanded = state.openNode == key,

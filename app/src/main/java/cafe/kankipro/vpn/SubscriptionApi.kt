@@ -74,32 +74,63 @@ object SubscriptionApi {
     /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود (سرور ایران) */
     const val DEFAULT_HOST = "https://sub.kanki.pro:2053"
 
-    /** آدرس قدیمی؛ اگر آدرس اصلی جواب نداد از این خوانده می‌شود */
+    /** آدرس اصلی پنل (خارج) */
     const val FALLBACK_HOST = "https://fi.kankipro.cafe:2053"
 
+    /** لینک ساب روی سرور ایران (پنل › تنظیمات › لینک ساب روی سرور ایران): وقتی دامنه‌های خارج فیلترند */
+    const val IRAN_HOST = "https://s1s.polimax.shop:2053"
+
+    /** همه‌ی آدرس‌های اشتراک کانکی؛ هر کدام همان صفحه‌ی اشتراک و همان لینک کانفیگ‌ها را می‌دهد */
+    val KANKI_HOSTS = listOf(FALLBACK_HOST, IRAN_HOST, DEFAULT_HOST)
+
+    /** آدرسی که آخرین بار زودتر از همه جواب داد (اول همان امتحان می‌شود) */
+    @Volatile var preferred: String? = null
+
     /**
-     * آدرس‌هایی که به ترتیب امتحان می‌شوند. اگر پنل کاربر یکی از دو آدرس کانکی باشد،
-     * اول آدرس اصلی (ایران) و بعد آدرس قدیمی؛ پنل‌های دیگر فقط خودشان.
+     * آدرس‌هایی که امتحان می‌شوند. پنل کانکی: همه‌ی آدرس‌هایش، اول آنکه آخرین بار جواب داد؛
+     * پنل‌های دیگر فقط خودشان.
      */
     fun hosts(base: String): List<String> {
         val b = base.trimEnd('/')
-        return if (b == DEFAULT_HOST || b == FALLBACK_HOST) listOf(DEFAULT_HOST, FALLBACK_HOST) else listOf(b)
+        if (b !in KANKI_HOSTS) return listOf(b)
+        val p = preferred?.takeIf { it in KANKI_HOSTS }
+        return (listOfNotNull(p) + KANKI_HOSTS).distinct()
     }
 
     /** همان آدرس روی میزبان‌های جایگزین (برای لینک کانفیگ‌ها وقتی میزبان اصلی در دسترس نیست) */
     fun alternates(url: String): List<String> {
-        val h = listOf(DEFAULT_HOST, FALLBACK_HOST).firstOrNull { url.startsWith("$it/") } ?: return listOf(url)
+        val h = KANKI_HOSTS.firstOrNull { url.startsWith("$it/") } ?: return listOf(url)
         val path = url.removePrefix(h)
-        return listOf(url) + listOf(DEFAULT_HOST, FALLBACK_HOST).filter { it != h }.map { it + path }
+        return (listOf(url) + hosts(h).map { it + path }).distinct()
     }
 
-    /** مثل fetch، ولی اگر میزبان جواب نداد، میزبان جایگزین امتحان می‌شود */
-    fun fetchAny(url: String): String {
-        var last: Exception? = null
-        for (u in alternates(url)) {
-            try { return fetch(u) } catch (e: Exception) { last = e }
+    /** مثل fetch، ولی همه‌ی میزبان‌ها با هم امتحان می‌شوند و اولین جواب سالم برمی‌گردد */
+    fun fetchAny(url: String): String = race(alternates(url)).second
+
+    /**
+     * همه‌ی آدرس‌ها با هم (نه یکی‌یکی با ۱۵ ثانیه انتظار برای هر کدام): اولین جواب سالم برنده است و بقیه
+     * رها می‌شوند. آدرس ترجیحی ۳۰۰ میلی‌ثانیه زودتر شروع می‌کند تا اگر سالم است، همیشه همان بماند
+     * (یک آدرس ثابت، بدون پریدن بین سرورها). (آدرس برنده، متن)
+     */
+    fun race(urls: List<String>): Pair<String, String> {
+        if (urls.size == 1) return urls[0] to fetch(urls[0])
+        val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
+        val threads = urls.mapIndexed { i, u ->
+            Thread {
+                if (i > 0) runCatching { Thread.sleep(300) }
+                done.put(runCatching { u to fetch(u) })
+            }.apply { isDaemon = true; start() }
         }
-        throw last ?: IOException("no host")
+        var last: Throwable? = null
+        repeat(urls.size) {
+            val r = done.poll(40, java.util.concurrent.TimeUnit.SECONDS) ?: return@repeat
+            r.onSuccess { ok ->
+                threads.forEach { it.interrupt() }
+                KANKI_HOSTS.firstOrNull { ok.first.startsWith("$it/") }?.let { preferred = it }
+                return ok
+            }.onFailure { last = it }
+        }
+        throw (last as? Exception) ?: IOException("no host answered")
     }
 
     /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */

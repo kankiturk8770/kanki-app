@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- دکمه‌ی شناور روی بازی‌ها (فقط وقتی کاربر در تنظیمات روشنش کند) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
         <intent>
@@ -13,6 +15,23 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/x-openvpn-profile" />
+        </intent>
+        <!-- «فقط بازی‌ها»: سرویس‌های گوگل، مرورگر و WebView که ورود به حساب بازی‌ها لازم دارد -->
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.google.android.gsf" />
+        <package android:name="com.android.vending" />
+        <package android:name="com.google.android.play.games" />
+        <package android:name="com.google.android.webview" />
+        <package android:name="com.android.webview" />
+        <package android:name="com.android.chrome" />
+        <package android:name="com.google.android.apps.chrome" />
+        <package android:name="com.android.providers.downloads" />
+        <package android:name="com.google.android.packageinstaller" />
+        <package android:name="com.google.android.apps.games" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
         </intent>
         <package android:name="net.openvpn.openvpn" />
         <package android:name="de.blinkt.openvpn" />
@@ -68,6 +87,10 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <service
+            android:name="cafe.kankipro.vpn.KankiFloatService"
+            android:exported="false" />
 
         <receiver
             android:name="cafe.kankipro.vpn.KankiActionReceiver"

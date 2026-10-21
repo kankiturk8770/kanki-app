@@ -34,12 +34,14 @@ data class SettingsUi(
     val lang: String,
     val excludedCount: Int,
     val version: String,
+    val floatBtn: Boolean = false,
 )
 
 class SettingsActions(
     val setDns: (String) -> Unit = {},
     val setAuto: (Boolean) -> Unit = {},
     val setSounds: (Boolean) -> Unit = {},
+    val setFloat: (Boolean) -> Unit = {},
     val setTheme: (String) -> Unit = {},
     val setLang: (String) -> Unit = {},
     val openSplit: () -> Unit = {},
@@ -64,6 +66,8 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
             AnimatedVisibility(visible = dnsOpen) { DnsPicker(ui.dns, act.setDns) }
             HDivider()
             SwitchRow("auto", "اتصال خودکار", "با باز کردن اپ، خودکار وصل شود", ui.autoConnect, act.setAuto)
+            HDivider()
+            SwitchRow("bolt", "دکمه‌ی شناور روی بازی‌ها", "دکمه‌ی کوچک کنار صفحه؛ با یک لمس اتصال هوشمند یا قطع، بدون بیرون آمدن از بازی", ui.floatBtn, act.setFloat)
             HDivider()
             MenuRow("kill", "کیل‌سوییچ و همیشه‌روشن", "جلوگیری از نشت اینترنت هنگام قطعی", false, arrow = true, tint = K.Green, onClick = act.openKill)
             HDivider()

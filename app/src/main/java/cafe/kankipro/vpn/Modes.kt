@@ -103,6 +103,29 @@ object Modes {
         }.map { it.packageName }.filter { it != ctx.packageName }.sorted()
     }.getOrDefault(emptyList())
 
+    /**
+     * برنامه‌هایی که بازی‌ها برای ورود به حساب لازم دارند: ورود با گوگل و Play Games (سرویس‌های گوگل)،
+     * صفحه‌ی تأیید ایمیل/سایت (مرورگر پیش‌فرض، Chrome، WebView) و دانلود منیجر اندروید. در «فقط بازی‌ها»
+     * این‌ها همیشه همراه بازی‌ها از VPN رد می‌شوند؛ بدونشان ورود پابجی و بقیه باز نمی‌شود (سرویس‌های
+     * گوگل با IP ایران بسته‌اند، و در Hysteria2/Xray برنامه‌ی بیرون از فهرست اصلاً اینترنت ندارد).
+     */
+    private val gameHelpers = listOf(
+        "com.google.android.gms", "com.google.android.gsf", "com.android.vending", "com.google.android.play.games",
+        "com.google.android.webview", "com.android.webview", "com.android.chrome", "com.google.android.apps.chrome",
+        "com.android.providers.downloads", "com.google.android.packageinstaller", "com.google.android.apps.games",
+    )
+
+    /** همان برنامه‌های کمکی که روی این گوشی نصب‌اند، به‌اضافه‌ی مرورگر پیش‌فرض */
+    fun helperPackages(ctx: Context): List<String> = runCatching {
+        val pm = ctx.packageManager
+        val installed = gameHelpers.filter { p -> runCatching { pm.getApplicationInfo(p, 0) }.isSuccess }
+        val browser = runCatching {
+            pm.resolveActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com")), PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName?.takeIf { it != "android" }
+        }.getOrNull()
+        (installed + listOfNotNull(browser)).distinct()
+    }.getOrDefault(emptyList())
+
     /** اسم نمایشی یک برنامه */
     fun label(ctx: Context, pkg: String): String = runCatching {
         val pm = ctx.packageManager

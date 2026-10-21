@@ -113,7 +113,8 @@ class AppGate(
                 map[key] = u
             }
         }
-        return uid in allowed
+        // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) همیشه رد می‌شوند
+        return uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID)
     }
 
     /** صاحب اتصال؛ -1 اگر معلوم نشد */

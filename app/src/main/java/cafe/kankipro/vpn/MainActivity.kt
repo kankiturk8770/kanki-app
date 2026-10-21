@@ -37,6 +37,18 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // دکمه‌ی شناور فقط روی برنامه‌های دیگر دیده می‌شود، نه روی خود کانکی
+    override fun onResume() {
+        super.onResume()
+        KankiFloatService.appVisible = true
+        KankiFloatService.sync(this)
+    }
+
+    override fun onPause() {
+        KankiFloatService.appVisible = false
+        super.onPause()
+    }
 }
 
 @Composable

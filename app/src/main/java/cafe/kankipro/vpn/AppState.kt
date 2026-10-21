@@ -16,12 +16,15 @@ import java.net.URL
 
 const val BOT_URL = "https://t.me/kankivpn_bot"
 const val SUPPORT_URL = "https://t.me/KANKI_VPN_ADMIN"
+/** پسوند شناسه‌ی کانفیگ دوم KANKI MIX (از راه تانل) در اشتراک؛ همان TUNNEL_SUFFIX پنل */
+const val TUNNEL_TWIN = "@tunnel"
 
 /**
  * همه‌ی وضعیت اپ در یک جا.
  * فقط یک نمونه از آن برای کل برنامه ساخته می‌شود (AppState.from)؛ پس با چرخش صفحه
  * یا ساخته‌شدن دوباره‌ی صفحه، حلقه‌ها و شنودگر شبکه دوباره و چندباره راه نمی‌افتند.
  */
+
 class AppState private constructor(context: Context) {
     companion object {
         @Volatile
@@ -167,7 +170,9 @@ class AppState private constructor(context: Context) {
     private suspend fun allowedAppsNow(): List<String> {
         val games = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) }
         detectedGames = games
-        return ((if (autoGames) games.filter { it !in appsRemoved } else emptyList()) + appsAdded).distinct()
+        val picked = ((if (autoGames) games.filter { it !in appsRemoved } else emptyList()) + appsAdded).distinct()
+        // ورود به حساب بازی‌ها از راه سرویس‌های گوگل و مرورگر است: همیشه همراهشان
+        return if (picked.isEmpty()) picked else (picked + withContext(Dispatchers.IO) { Modes.helperPackages(ctx) }).distinct()
     }
 
     fun allowedCount(): Int = (detectedGames.filter { autoGames && it !in appsRemoved } + appsAdded).distinct().size
@@ -312,6 +317,29 @@ class AppState private constructor(context: Context) {
     }
 
     private fun nodeName(n: String) = account?.configs?.firstOrNull { it.node == n }?.nodeName ?: n
+
+    // ---------------- کانفیگ دوم KANKI MIX (از راه تانل ایران)
+    // پنل ۳.۷ به بعد برای هر سرور یک کانفیگ دوم KANKI MIX از راه تانل ایران هم می‌دهد، به شکل یک سرور
+    // جدا با شناسه‌ی «<شناسه‌ی سرور>@tunnel». کشور و شهرش همان سرور اصلی است؛ فقط برچسبش فرق دارد.
+    /** شناسه‌ی سرور اصلیِ کانفیگ تانل (برای بقیه همان شناسه) */
+    fun parentOf(id: String) = id.removeSuffix(TUNNEL_TWIN)
+    fun isTunnelTwin(id: String?) = id?.endsWith(TUNNEL_TWIN) == true
+    private fun hasTwin(id: String) = account?.configs?.any { it.node == id + TUNNEL_TWIN } == true
+    /**
+     * برچسب ردیف KANKI MIX: کانفیگ تانل «تانل» (یا اسمی که ادمین در پنل برایش گذاشته)، کانفیگ اصلیِ
+     * سروری که تانل هم دارد «مستقیم»؛ null اگر آن سرور فقط یکی دارد.
+     */
+    fun kmixTag(id: String): String? = when {
+        isTunnelTwin(id) -> {
+            val n = nodeName(id).trim()
+            val p = nodeName(parentOf(id)).trim()
+            n.takeIf { it.isNotBlank() && it != id && it != p && it != "$p (تانل)" } ?: tr("تانل")
+        }
+        hasTwin(id) -> tr("مستقیم")
+        else -> null
+    }
+    /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
+    fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
     /** پینگ چند کانفیگ با هم (با روش درست هر پروتکل)؛ نتیجه در pings هم ذخیره می‌شود */
     private suspend fun pingMany(list: List<Pair<String, String>>): Map<Pair<String, String>, Long?> {
@@ -577,7 +605,7 @@ class AppState private constructor(context: Context) {
         return cands.mapNotNull { (n, p, i) ->
             measured[Triple(i.host, i.transport, i.port)]?.let { (ping, jit) ->
                 pings["${n.node}/$p"] = ping
-                SmartRow(n.node, p, "${n.nodeName} · ${protoTitle(p)}", flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
+                SmartRow(n.node, p, "${nodeName(parentOf(n.node))} · ${protoTitle(p)}" + (if (p == "kankimix") kmixTag(n.node)?.let { " · $it" } ?: "" else ""), flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
             }
         }.sortedBy { it.ping + 2 * it.jitter }
     }
@@ -819,14 +847,17 @@ class AppState private constructor(context: Context) {
      * فقط حجم مصرفی، زمان باقی‌مانده و وضعیت حساب را از صفحه‌ی اشتراک می‌گیرد (یک درخواست کوچک).
      * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۳ ساعت یا با بروزرسانی دستی بروز می‌شوند.
      */
-    suspend fun refreshUsage() {
+    suspend fun refreshUsage(minAgeMs: Long = 30 * 60 * 1000L) {
         val b = base ?: return
         val c = code ?: return
         if (usageBusy || loading) return
+        // با هر بار باز کردن برنامه درخواست نمی‌رود: حجم و زمان حداکثر هر ۳۰ دقیقه یک بار
+        if (System.currentTimeMillis() - prefs.getLong("last_usage", 0L) < minAgeMs) return
         usageBusy = true
         try {
             val fresh = runCatching { augment(withContext(Dispatchers.IO) { loadAccount(b, c) }) }.getOrNull()
             if (fresh == null || lastFromCache) return
+            prefs.edit().putLong("last_usage", System.currentTimeMillis()).apply()
             val cur = account
             account = if (cur != null) fresh.copy(configs = cur.configs) else fresh
         } finally {
@@ -985,14 +1016,14 @@ class AppState private constructor(context: Context) {
     private fun loadAccount(b: String, c: String): Account {
         lastFromCache = false
         var err: Exception? = null
-        for (h in SubscriptionApi.hosts(b)) {
-            try {
-                val html = SubscriptionApi.fetch("$h/sub/$c")
-                prefs.edit().putString("subhtml_$c", html).putString("subhost_$c", h).apply()
-                return SubscriptionApi.parse(html, h)
-            } catch (e: Exception) {
-                err = e
-            }
+        if (SubscriptionApi.preferred == null) SubscriptionApi.preferred = prefs.getString("subhost_$c", null)
+        try {
+            val (url, html) = SubscriptionApi.race(SubscriptionApi.hosts(b).map { "$it/sub/$c" })
+            val h = url.removeSuffix("/sub/$c")
+            prefs.edit().putString("subhtml_$c", html).putString("subhost_$c", h).apply()
+            return SubscriptionApi.parse(html, h)
+        } catch (e: Exception) {
+            err = e
         }
         lastFromCache = true
         val html = prefs.getString("subhtml_$c", null) ?: throw (err ?: java.io.IOException("subscription not reachable"))
@@ -1068,7 +1099,7 @@ class AppState private constructor(context: Context) {
 
     /** کشور یک سرور برای نمایش: خروجی واقعی (پنل یا ذخیره از داخل تونل)، وگرنه از اسمی که ادمین گذاشته */
     fun isoOfNode(id: String): String? =
-        nodeIso[id] ?: account?.configs?.firstOrNull { it.node == id }?.let { isoOfFlag(flagOf(it.nodeName)) }
+        nodeIso[id] ?: nodeIso[parentOf(id)] ?: account?.configs?.firstOrNull { it.node == id }?.let { isoOfFlag(flagOf(it.nodeName)) }
 
     /**
      * مکان کاربر و سرورها.
