@@ -1,7 +1,5 @@
 package cafe.kankipro.vpn
 
-import kotlinx.coroutines.launch
-
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -16,6 +14,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.launch
 
 // ------------------------------------------------------------------ آخرین کانفیگ وصل‌شده (برای دکمه‌ی منوی کشویی)
 

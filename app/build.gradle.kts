@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 44
-        versionName = "1.16.1"
+        versionCode = 45
+        versionName = "1.16.2"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.

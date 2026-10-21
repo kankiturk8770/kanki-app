@@ -15,6 +15,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -118,6 +119,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     var status by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var stickersOpen by remember { mutableStateOf(false) }
     var helpOpen by remember { mutableStateOf(true) }
     val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
     val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
@@ -228,7 +230,8 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
+    // مثل تلگرام: با باز شدن کیبورد، کادر نوشتن بالای کیبورد می‌ماند و متن دیده می‌شود
+    Column(Modifier.fillMaxSize().imePadding().padding(horizontal = 14.dp)) {
         // سربرگ
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             RoundIcon(40.dp, onClick = onClose) { Canvas(Modifier.size(18.dp)) { backArrow(K.Gold) } }
@@ -299,7 +302,25 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 
         // نوشتن
         if (code != null) {
+            // استیکرهای کانکی
+            if (stickersOpen) {
+                LazyRow(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(Stickers.all, key = { it.key }) { s ->
+                        val bmp = remember(s.key) { Stickers.bitmap(ctx, s, 160).asImageBitmap() }
+                        Image(bmp, s.text, Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).clickable {
+                            stickersOpen = false
+                            scope.launch {
+                                withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, Stickers.jpeg(ctx, s)) }
+                                refreshPending()
+                                load()
+                            }
+                        })
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundIcon(44.dp, onClick = { stickersOpen = !stickersOpen }) { T("😊", size = 18.sp) }
+                Spacer(Modifier.width(6.dp))
                 RoundIcon(44.dp, onClick = { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     Canvas(Modifier.size(20.dp)) { pictureIcon(K.Gold) }
                 }

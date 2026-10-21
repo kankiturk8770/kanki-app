@@ -96,6 +96,7 @@ class KankiFloatService : Service() {
         ui.removeCallbacksAndMessages(null)
         scope.cancel()
         closePanel()
+        hideTrash()
         tab?.let { runCatching { wm.removeView(it) } }
         tab = null
         super.onDestroy()
@@ -151,18 +152,25 @@ class KankiFloatService : Service() {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = p.x; startY = p.y; moved = false; v.alpha = 1f }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
-                    if (!moved && (abs(dx) > dp(6) || abs(dy) > dp(6))) { moved = true; closePanel() }
+                    if (!moved && (abs(dx) > dp(6) || abs(dy) > dp(6))) { moved = true; closePanel(); showTrash() }
                     if (moved) {
                         val m = resources.displayMetrics
                         p.x = (startX + dx.toInt()).coerceIn(0, m.widthPixels - v.width)
                         p.y = (startY + dy.toInt()).coerceIn(0, m.heightPixels - v.height)
                         runCatching { wm.updateViewLayout(v, p) }
+                        trashHover(overTrash(e.rawX, e.rawY))
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     v.alpha = 0.88f
-                    if (!moved) { if (panel == null) openPanel() else closePanel() }
-                    else snap(v, p)
+                    val drop = moved && overTrash(e.rawX, e.rawY)
+                    hideTrash()
+                    when {
+                        // انداختن در سطل: دکمه تا باز شدن دوباره‌ی برنامه کنار می‌رود (تنظیمش خاموش نمی‌شود)
+                        drop -> stopSelf()
+                        !moved -> if (panel == null) openPanel() else closePanel()
+                        else -> snap(v, p)
+                    }
                 }
             }
             true
@@ -260,11 +268,50 @@ class KankiFloatService : Service() {
         wm.addView(box, p)
         panel = box
         refresh()
+        armAutoClose()
     }
 
     private fun closePanel() {
+        ui.removeCallbacks(autoClose)
         panel?.let { runCatching { wm.removeView(it) } }
         panel = null; status = null; mainBtn = null
+    }
+
+    /** منو بی‌کار ماند: خودش بسته می‌شود (لازم نیست جای دیگری از صفحه را لمس کرد) */
+    private val autoClose = Runnable { closePanel() }
+    private fun armAutoClose(ms: Long = 5000) { ui.removeCallbacks(autoClose); ui.postDelayed(autoClose, ms) }
+
+    // ------------------------------------------------------------ سطل (کشیدن دکمه به پایین صفحه = کنار گذاشتن)
+    private var trash: FrameLayout? = null
+
+    private fun showTrash() {
+        if (trash != null) return
+        val size = dp(58)
+        val t = FrameLayout(this).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(210, 40, 12, 14)); setStroke(dp(2), Color.argb(200, 255, 90, 90)) }
+            alpha = 0.95f
+        }
+        t.addView(TextView(this).apply { text = "🗑"; textSize = 24f; gravity = Gravity.CENTER }, FrameLayout.LayoutParams(size, size))
+        val m = resources.displayMetrics
+        val p = params(size, size)
+        p.x = (m.widthPixels - size) / 2
+        p.y = m.heightPixels - size - dp(48)
+        runCatching { wm.addView(t, p) }
+        trash = t
+    }
+
+    private fun hideTrash() { trash?.let { runCatching { wm.removeView(it) } }; trash = null }
+
+    private fun overTrash(x: Float, y: Float): Boolean {
+        val t = trash ?: return false
+        val a = IntArray(2); t.getLocationOnScreen(a)
+        val r = dp(46)
+        val cx = a[0] + t.width / 2f; val cy = a[1] + t.height / 2f
+        return (x - cx) * (x - cx) + (y - cy) * (y - cy) < r * r
+    }
+
+    private fun trashHover(on: Boolean) {
+        trash?.let { it.scaleX = if (on) 1.25f else 1f; it.scaleY = it.scaleX }
     }
 
 
@@ -281,6 +328,7 @@ class KankiFloatService : Service() {
 
     /** وصل: حالت هوشمند (همان دکمه‌ی هوشمند خانه)؛ وصل یا در حال اتصال: قطع */
     private fun mainAction() {
+        armAutoClose(60_000)   // وسط اتصال بسته نشود؛ بعد از وصل شدن خودش بسته می‌شود
         val s = AppState.from(this)
         if (s.vstate != VState.OFF || s.smartBusy) { closeWhenOn = false; s.userDisconnect(); refresh(); return }
         // اجازه‌ی VPN هنوز داده نشده (یا اشتراکی نیست): خود برنامه باز می‌شود

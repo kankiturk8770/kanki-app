@@ -187,3 +187,21 @@ jobs:
           gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$tag" out/*.apk --prerelease --target "$GITHUB_SHA" \
             --title "Kanki VPN · $GITHUB_REF_NAME · #$GITHUB_RUN_NUMBER" --notes "ساخت خودکار از $GITHUB_SHA"
+
+      # فایل‌های نصبی main در پیوی تلگرام ادمین (ربات Kanki_github_bot)؛ از ایران دانلود از گیت‌هاب کامل نمی‌شود.
+      # توکن ربات و آیدی عددی فقط در GitHub Secrets: TG_BOT_TOKEN و TG_CHAT_ID (اگر نباشند، این مرحله رد می‌شود)
+      - name: فرستادن فایل نصبی به تلگرام
+        if: github.ref_name == 'main'
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then echo "Secrets TG_BOT_TOKEN / TG_CHAT_ID not set: skipped"; exit 0; fi
+          ver=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          msg=$(git log -1 --pretty=%s | head -c 900)
+          for f in out/*.apk; do
+            case "$f" in *arm64*) kind="arm64 · بیشتر گوشی‌ها";; *armv7*) kind="armv7 · گوشی‌های قدیمی";; *) kind="";; esac
+            curl -sS --retry 3 --max-time 300 -F chat_id="$TG_CHAT_ID" -F document=@"$f" \
+              -F caption="🔐 Kanki VPN $ver · $kind
+          $msg" "https://api.telegram.org/bot$TG_BOT_TOKEN/sendDocument" | head -c 300; echo
+          done
