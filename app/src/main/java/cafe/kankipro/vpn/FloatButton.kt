@@ -107,7 +107,8 @@ class KankiFloatService : Service() {
         w, h,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         (if (focus) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.TOP or Gravity.START
@@ -118,28 +119,31 @@ class KankiFloatService : Service() {
     // ------------------------------------------------------------ دکمه‌ی کوچک
     @SuppressLint("ClickableViewAccessibility")
     private fun addTab() {
-        val size = dp(38)
+        val size = dp(40)
+        // حلقه‌ی رنگ وضعیت (سبز وصل، طلایی در حال اتصال، خاکستری قطع) دور لوگوی کانکی
         val box = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.argb(215, 18, 16, 24))
-                setStroke(dp(2), gold)
+                setColor(Color.argb(225, 14, 13, 20))
+                setStroke(dp(2), grey)
             }
-            alpha = 0.88f
+            alpha = 0.92f
             elevation = dp(6).toFloat()
         }
-        box.addView(TextView(this).apply {
-            text = "K"; setTextColor(gold); textSize = 16f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
-        }, FrameLayout.LayoutParams(size, size))
-        val d = View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(grey); setStroke(dp(1), Color.BLACK) } }
-        box.addView(d, FrameLayout.LayoutParams(dp(9), dp(9), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(2), dp(2)) })
-        dot = d
+        box.addView(android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.ic_launcher)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, o: android.graphics.Outline) { o.setOval(0, 0, view.width, view.height) }
+            }
+        }, FrameLayout.LayoutParams(size - dp(8), size - dp(8), Gravity.CENTER))
+        dot = box
 
         val p = params(size, size)
         val sp = getSharedPreferences("kanki", MODE_PRIVATE)
-        val sw = resources.displayMetrics.widthPixels
-        p.x = sp.getInt("floatX", sw - size)
-        p.y = sp.getInt("floatY", dp(140))
+        // جای دکمه: کدام لبه و چه ارتفاعی (درصد)، تا با چرخیدن گوشی هم سر جایش بماند
+        place(p, size, sp.getBoolean("floatLeft", false), sp.getFloat("floatYf", 0.22f), sp.getBoolean("floatTop", false))
 
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         box.setOnTouchListener { v, e ->
@@ -148,7 +152,12 @@ class KankiFloatService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
                     if (!moved && (abs(dx) > dp(6) || abs(dy) > dp(6))) { moved = true; closePanel() }
-                    if (moved) { p.x = startX + dx.toInt(); p.y = startY + dy.toInt(); runCatching { wm.updateViewLayout(v, p) } }
+                    if (moved) {
+                        val m = resources.displayMetrics
+                        p.x = (startX + dx.toInt()).coerceIn(0, m.widthPixels - v.width)
+                        p.y = (startY + dy.toInt()).coerceIn(0, m.heightPixels - v.height)
+                        runCatching { wm.updateViewLayout(v, p) }
+                    }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     v.alpha = 0.88f
@@ -162,19 +171,47 @@ class KankiFloatService : Service() {
         tab = box
     }
 
-    /** به نزدیک‌ترین لبه می‌چسبد: چپ، راست یا بالا */
+    /** جای دکمه از روی لبه و ارتفاع ذخیره‌شده */
+    private fun place(p: WindowManager.LayoutParams, s: Int, left: Boolean, yf: Float, top: Boolean) {
+        val m = resources.displayMetrics
+        if (top) { p.y = 0; p.x = ((m.widthPixels - s) * yf).toInt() }
+        else { p.x = if (left) 0 else m.widthPixels - s; p.y = ((m.heightPixels - s) * yf).toInt() }
+    }
+
+    /**
+     * رها کردن: به لبه‌ی چپ یا راست (هر کدام نزدیک‌تر) با یک حرکت نرم می‌چسبد و ارتفاعش همان‌جا می‌ماند؛
+     * اگر نزدیک بالای صفحه رها شود (کنار دوربین)، به بالا می‌چسبد.
+     */
     private fun snap(v: View, p: WindowManager.LayoutParams) {
         val m = resources.displayMetrics
         val w = m.widthPixels; val h = m.heightPixels; val s = v.width
-        val toLeft = p.x; val toRight = w - (p.x + s); val toTop = p.y
-        when (minOf(toLeft, toRight, toTop)) {
-            toTop -> p.y = 0
-            toLeft -> p.x = 0
-            else -> p.x = w - s
+        val top = p.y < dp(28)
+        val left = p.x + s / 2 < w / 2
+        val toX = if (top) p.x.coerceIn(0, w - s) else if (left) 0 else w - s
+        val toY = if (top) 0 else p.y.coerceIn(0, h - s)
+        val fromX = p.x; val fromY = p.y
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 180
+            addUpdateListener { a ->
+                val f = a.animatedValue as Float
+                p.x = (fromX + (toX - fromX) * f).toInt(); p.y = (fromY + (toY - fromY) * f).toInt()
+                if (tab != null) runCatching { wm.updateViewLayout(v, p) }
+            }
+            start()
         }
-        p.x = p.x.coerceIn(0, w - s); p.y = p.y.coerceIn(0, h - s)
-        runCatching { wm.updateViewLayout(v, p) }
-        getSharedPreferences("kanki", MODE_PRIVATE).edit().putInt("floatX", p.x).putInt("floatY", p.y).apply()
+        val yf = if (top) toX.toFloat() / (w - s).coerceAtLeast(1) else toY.toFloat() / (h - s).coerceAtLeast(1)
+        getSharedPreferences("kanki", MODE_PRIVATE).edit().putBoolean("floatLeft", left).putBoolean("floatTop", top).putFloat("floatYf", yf).apply()
+    }
+
+    /** گوشی چرخید (بازی افقی): دکمه روی همان لبه و همان ارتفاع نسبی */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val t = tab ?: return
+        closePanel()
+        val p = t.layoutParams as WindowManager.LayoutParams
+        val sp = getSharedPreferences("kanki", MODE_PRIVATE)
+        place(p, p.width, sp.getBoolean("floatLeft", false), sp.getFloat("floatYf", 0.22f), sp.getBoolean("floatTop", false))
+        runCatching { wm.updateViewLayout(t, p) }
     }
 
     // ------------------------------------------------------------ پنل کوچک
@@ -204,12 +241,19 @@ class KankiFloatService : Service() {
         val main = button("", gold, Color.rgb(26, 18, 6)) { mainAction() }
         box.addView(main)
         mainBtn = main
-        box.setOnTouchListener { _, e -> if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) closePanel(); false }
+        box.setOnTouchListener { _, e ->
+            if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                val tl = tab?.let { IntArray(2).also { a -> it.getLocationOnScreen(a) } to it.width }
+                val onTab = tl != null && e.rawX >= tl.first[0] && e.rawX <= tl.first[0] + tl.second && e.rawY >= tl.first[1] && e.rawY <= tl.first[1] + tl.second
+                if (!onTab) closePanel()
+            }
+            false
+        }
 
         val m = resources.displayMetrics
         val pw = dp(176)
         val p = params(pw, WindowManager.LayoutParams.WRAP_CONTENT)
-        val tabW = t.width.takeIf { it > 0 } ?: dp(38)
+        val tabW = t.width.takeIf { it > 0 } ?: dp(40)
         // کنار دکمه، به سمت وسط صفحه
         p.x = if (tp.x + tabW / 2 > m.widthPixels / 2) (tp.x - pw - dp(8)).coerceAtLeast(0) else (tp.x + tabW + dp(8)).coerceAtMost(m.widthPixels - pw)
         p.y = (if (tp.y < dp(20)) tp.y + tabW + dp(8) else tp.y - dp(10)).coerceIn(0, (m.heightPixels - dp(200)).coerceAtLeast(0))
@@ -238,16 +282,20 @@ class KankiFloatService : Service() {
     /** وصل: حالت هوشمند (همان دکمه‌ی هوشمند خانه)؛ وصل یا در حال اتصال: قطع */
     private fun mainAction() {
         val s = AppState.from(this)
-        if (s.vstate != VState.OFF || s.smartBusy) { s.userDisconnect(); refresh(); return }
+        if (s.vstate != VState.OFF || s.smartBusy) { closeWhenOn = false; s.userDisconnect(); refresh(); return }
         // اجازه‌ی VPN هنوز داده نشده (یا اشتراکی نیست): خود برنامه باز می‌شود
         if (VpnService.prepare(this) != null || !s.loggedIn) { openApp(); closePanel(); return }
         scope.launch {
             if (s.account == null) runCatching { s.startupLoad() }
             if (s.account == null) { openApp(); closePanel(); return@launch }
             s.tapMode(KMode.SMART)
+            closeWhenOn = true
             refresh()
         }
     }
+
+    /** بعد از «اتصال هوشمند»: وقتی وصل شد، پنل خودش بسته می‌شود */
+    private var closeWhenOn = false
 
     private fun tick() {
         refresh()
@@ -262,12 +310,15 @@ class KankiFloatService : Service() {
         val s = AppState.from(this)
         val busy = s.vstate == VState.CONNECTING || s.smartBusy
         val on = s.vstate == VState.ON
-        (dot?.background as? GradientDrawable)?.setColor(if (on) green else if (busy) gold else grey)
+        (dot?.background as? GradientDrawable)?.setStroke(dp(if (on || busy) 3 else 2), if (on) green else if (busy) gold else grey)
         status?.text = when {
             on -> tr("متصل") + " · " + LastConfig.title(this)
+            s.smartBusy && s.smartTotal > 0 && s.vstate == VState.OFF -> trf("پیدا کردن بهترین سرور… %d از %d", s.smartDone, s.smartTotal)
             busy -> (s.tryStep ?: s.smartStatus).ifBlank { tr("در حال اتصال…") }
             else -> tr("قطع")
         }
+        if (on && closeWhenOn && panel != null) { closeWhenOn = false; ui.postDelayed({ closePanel() }, 1400) }
+
         mainBtn?.text = when {
             on -> tr("قطع اتصال")
             busy -> tr("لغو")

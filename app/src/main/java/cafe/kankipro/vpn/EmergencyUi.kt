@@ -122,6 +122,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
     val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
     val list = rememberLazyListState()
+    /** پیام‌های صف ارسال (هنوز به سرور نرسیده‌اند؛ 🕓) */
+    val pending = remember { mutableStateListOf<EmergencyStore.Out>() }
+    fun refreshPending() { pending.clear(); pending.addAll(EmergencyStore.outbox(ctx)) }
     /** پیام‌های خود کاربر تا این شماره را ادمین خوانده (✓✓ آبی) */
     var readUpto by remember { mutableStateOf(0L) }
     /** آخرین پیام ادمین که «دیده شد» برایش فرستاده شده */
@@ -143,7 +146,10 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 
     suspend fun load() {
         val c = code ?: return
+        refreshPending()
         try {
+            // اول صف ارسال (پیام‌هایی که بی‌اینترنت نوشته شده‌اند)
+            if (pending.isNotEmpty()) { withContext(Dispatchers.IO) { EmergencyStore.flush(ctx, c) }; refreshPending() }
             val after = msgs.lastOrNull()?.id ?: 0L
             val page = withContext(Dispatchers.IO) { Emergency.page(ctx, c, after) }
             val (u, fresh) = page.user to page.msgs
@@ -161,12 +167,13 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 runCatching { withContext(Dispatchers.IO) { Emergency.markRead(ctx, c, lastAdmin) } }.onSuccess { readSent = lastAdmin }
                 EmergencyStore.setNotified(ctx, lastAdmin)
             }
-            // عکس‌های تازه
-            fresh.filter { it.img && it.id !in images }.forEach { m ->
+            // عکس‌ها: همه‌ی پیام‌های عکس‌دار، نه فقط تازه‌ها (از حافظه‌ی گوشی، وگرنه از سرور)
+            msgs.filter { it.img && it.id !in images }.forEach { m ->
                 runCatching {
-                    val bytes = withContext(Dispatchers.IO) { Emergency.image(ctx, c, m.id) }
+                    val bytes = EmergencyStore.savedImage(ctx, m.id)
+                        ?: withContext(Dispatchers.IO) { Emergency.image(ctx, c, m.id) }.also { EmergencyStore.saveImage(ctx, m.id, it) }
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { images[m.id] = it.asImageBitmap() }
-                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, u, bytes)
+                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, user.ifBlank { u }, bytes)
                 }
             }
         } catch (e: Exception) {
@@ -181,7 +188,16 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
             val saved = withContext(Dispatchers.IO) { EmergencyStore.load(ctx, c) }
             msgs.addAll(saved.msgs)
             readUpto = saved.readUpto
+            if (saved.user.isNotBlank()) user = saved.user
             if (saved.msgs.isNotEmpty()) helpOpen = false
+            refreshPending()
+            // عکس‌های ذخیره‌شده، بدون اینترنت
+            saved.msgs.filter { it.img }.forEach { m ->
+                EmergencyStore.savedImage(ctx, m.id)?.let { b ->
+                    BitmapFactory.decodeByteArray(b, 0, b.size)?.let { images[m.id] = it.asImageBitmap() }
+                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, saved.user, b)
+                }
+            }
         }
         while (code != null) {
             load()
@@ -199,7 +215,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     val jpeg = withContext(Dispatchers.Default) { shrink(ctx, uri) }
                     if (jpeg == null) status = "این عکس خوانده نشد."
                     else {
-                        withContext(Dispatchers.IO) { Emergency.sendImage(ctx, c, jpeg) }
+                        // اول در صف، بعد فرستادن: بی‌اینترنت هم گم نمی‌شود
+                        withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, jpeg) }
+                        refreshPending()
                         load()
                     }
                 } catch (e: Exception) {
@@ -271,7 +289,11 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 item { T("هنوز پیامی نیست. مشکل را بنویسید تا ادمین جواب بدهد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(8.dp)) }
             }
             items(msgs, key = { it.id }) { m ->
-                Bubble(m, images[m.id], if (m.img) imageOk[m.id] ?: false else m.verified, read = !m.admin && m.id <= readUpto) { clip.setText(AnnotatedString(it)); toast(ctx, "کانفیگ کپی شد") }
+                // عکس ادمین تا دانلود نشده «در حال بررسی» است، نه «امضا تأیید نشد»
+                Bubble(m, images[m.id], if (m.img) imageOk[m.id] else m.verified, read = !m.admin && m.id <= readUpto) { clip.setText(AnnotatedString(it)); toast(ctx, "کانفیگ کپی شد") }
+            }
+            items(pending, key = { "out" + it.lid }) { o ->
+                Bubble(EMsg(-o.lid, false, if (o.kind == "image") "image" else "text", if (o.kind == "image") "🖼 عکس" else o.text, o.ts, "", false, false), null, true, waiting = true) {}
             }
         }
 
@@ -294,17 +316,11 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     val c = code
                     val t = text.trim()
                     if (t.isNotEmpty() && c != null && !sending) {
-                        sending = true
-                        scope.launch {
-                            try {
-                                withContext(Dispatchers.IO) { Emergency.send(ctx, c, t) }
-                                text = ""
-                                load()
-                            } catch (e: Exception) {
-                                status = errText(e)
-                            }
-                            sending = false
-                        }
+                        // مثل تلگرام: پیام فوراً در صف و روی صفحه (🕓)، و هر وقت سرور در دسترس بود فرستاده می‌شود
+                        EmergencyStore.queueText(ctx, t)
+                        text = ""
+                        refreshPending()
+                        scope.launch { load() }
                     }
                 }) { Canvas(Modifier.size(20.dp)) { sendArrow(if (sending) K.Sub else K.Gold) } }
             }
@@ -313,14 +329,16 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, read: Boolean = false, onCopy: (String) -> Unit) {
+private fun Bubble(m: EMsg, img: ImageBitmap?, okOrNull: Boolean?, read: Boolean = false, waiting: Boolean = false, onCopy: (String) -> Unit) {
+    val ok = okOrNull ?: true
+    val checking = m.admin && okOrNull == null
     val mine = !m.admin
     val shape = RoundedCornerShape(16.dp)
     val bg = if (mine) K.Gold.copy(alpha = .14f) else if (ok) K.Green.copy(alpha = .10f) else K.Red.copy(alpha = .10f)
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterStart else Alignment.CenterEnd) {
         Column(Modifier.widthIn(max = 300.dp).clip(shape).background(bg).padding(10.dp)) {
             if (m.admin) {
-                T(if (ok) "✓ از طرف ادمین" else "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید", size = 11.sp, color = if (ok) K.Green else K.Red, weight = FontWeight.Black)
+                T(when { checking -> "از طرف ادمین · در حال دریافت…"; ok -> "✓ از طرف ادمین"; else -> "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید" }, size = 11.sp, color = if (checking) K.Sub else if (ok) K.Green else K.Red, weight = FontWeight.Black)
                 Spacer(Modifier.height(4.dp))
             }
             when {
@@ -347,7 +365,8 @@ private fun Bubble(m: EMsg, img: ImageBitmap?, ok: Boolean, read: Boolean = fals
                 // پیام خود کاربر: ✓ رسید به سرور، ✓✓ آبی ادمین خواند
                 if (mine) {
                     Spacer(Modifier.width(6.dp))
-                    T(if (read) "✓✓" else "✓", size = 11.sp, color = if (read) Color(0xFF4FC3F7) else K.Sub, weight = FontWeight.Black)
+                    // 🕓 در صف (هنوز به سرور نرسیده)، ✓ رسید، ✓✓ آبی ادمین خواند
+                    T(if (waiting) "🕓" else if (read) "✓✓" else "✓", size = 11.sp, color = if (read && !waiting) Color(0xFF4FC3F7) else K.Sub, weight = FontWeight.Black)
                 }
             }
         }

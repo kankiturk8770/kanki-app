@@ -64,9 +64,81 @@ object EmergencyStore {
             a.put(JSONObject().put("id", m.id).put("admin", m.admin).put("kind", m.kind).put("body", m.body).put("ts", m.ts)
                 .put("sig", m.sig).put("img", m.img).put("ok", m.verified))
         }
+        pruneImages(ctx)
         runCatching {
             file(ctx, code).writeText(JSONObject().put("user", user.ifBlank { cur.user }).put("read", maxOf(readUpto, cur.readUpto)).put("m", a).toString())
         }
+    }
+
+    // ------------------------------------------------------------ عکس‌ها روی گوشی (همان ۲ روز)
+    private fun imgDir(ctx: Context) = File(ctx.filesDir, "emergency-img").apply { mkdirs() }
+    fun savedImage(ctx: Context, id: Long): ByteArray? = runCatching { File(imgDir(ctx), "$id.jpg").takeIf { it.exists() }?.readBytes() }.getOrNull()
+    fun saveImage(ctx: Context, id: Long, bytes: ByteArray) { runCatching { File(imgDir(ctx), "$id.jpg").writeBytes(bytes) } }
+    private fun pruneImages(ctx: Context) {
+        val min = System.currentTimeMillis() - KEEP_SEC * 1000
+        imgDir(ctx).listFiles()?.forEach { if (it.lastModified() < min) it.delete() }
+    }
+
+    // ------------------------------------------------------------ صف ارسال (مثل تلگرام)
+    // پیامی که کاربر بی‌اینترنت می‌نویسد گم نمی‌شود: در صف می‌ماند (🕓) و هر وقت سرور در دسترس شد
+    // خودش فرستاده می‌شود، چه چت باز باشد چه نه (بررسی پس‌زمینه هم صف را خالی می‌کند).
+    data class Out(val lid: Long, val kind: String, val text: String, val ts: Long)
+    private fun outFile(ctx: Context) = File(ctx.filesDir, "emergency-outbox.json")
+    private fun outImg(ctx: Context, lid: Long) = File(ctx.filesDir, "emergency-out-$lid.jpg")
+
+    @Synchronized
+    fun outbox(ctx: Context): List<Out> = runCatching {
+        val a = JSONArray(outFile(ctx).readText())
+        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Out(it.optLong("lid"), it.optString("kind"), it.optString("text"), it.optLong("ts")) }
+    }.getOrDefault(emptyList())
+
+    @Synchronized
+    private fun writeOut(ctx: Context, list: List<Out>) {
+        val a = JSONArray()
+        list.forEach { a.put(JSONObject().put("lid", it.lid).put("kind", it.kind).put("text", it.text).put("ts", it.ts)) }
+        runCatching { outFile(ctx).writeText(a.toString()) }
+    }
+
+    @Synchronized
+    fun queueText(ctx: Context, text: String) {
+        writeOut(ctx, outbox(ctx) + Out(System.currentTimeMillis(), "text", text, System.currentTimeMillis() / 1000))
+        kick(ctx)
+    }
+
+    @Synchronized
+    fun queueImage(ctx: Context, jpeg: ByteArray) {
+        val lid = System.currentTimeMillis()
+        runCatching { outImg(ctx, lid).writeBytes(jpeg) }
+        writeOut(ctx, outbox(ctx) + Out(lid, "image", "", lid / 1000))
+        kick(ctx)
+    }
+
+    /** صف پر است: به محض وصل شدن اینترنت، حتی با چت بسته، یک بار بفرست */
+    fun kick(ctx: Context) {
+        val req = androidx.work.OneTimeWorkRequestBuilder<EmergencyWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        runCatching { WorkManager.getInstance(ctx).enqueueUniqueWork("kanki-emergency-send", androidx.work.ExistingWorkPolicy.REPLACE, req) }
+    }
+
+    fun outImage(ctx: Context, lid: Long): ByteArray? = runCatching { outImg(ctx, lid).readBytes() }.getOrNull()
+
+    /** صف را به ترتیب می‌فرستد؛ با اولین خطا می‌ایستد تا ترتیب پیام‌ها حفظ شود. true = چیزی فرستاده شد */
+    fun flush(ctx: Context, code: String): Boolean {
+        var sent = false
+        for (o in outbox(ctx)) {
+            val ok = runCatching {
+                if (o.kind == "image") outImage(ctx, o.lid)?.let { Emergency.sendImage(ctx, code, it) }
+                else Emergency.send(ctx, code, o.text)
+            }
+            // خطای خود سرور (مثلاً پیام نامعتبر): از صف بیرون می‌رود تا بقیه گیر نکنند
+            val drop = ok.exceptionOrNull().let { it is EmergencyException && it.code in 400..499 && it.code != 429 && it.code != 403 }
+            if (ok.isFailure && !drop) break
+            synchronized(this) { writeOut(ctx, outbox(ctx).filter { it.lid != o.lid }) }
+            outImg(ctx, o.lid).delete()
+            sent = true
+        }
+        return sent
     }
 
     /** آخرین شماره‌ی پیامی که روی گوشی هست (پیام‌های بعد از آن از سرور گرفته می‌شود) */
@@ -133,6 +205,7 @@ object EmergencyStore {
     fun check(ctx: Context): List<EMsg> {
         val code = AppState.from(ctx).code ?: Emergency.savedCode(ctx) ?: return emptyList()
         if (Emergency.base(ctx) == null) return emptyList()
+        flush(ctx, code)
         val page = Emergency.page(ctx, code, lastId(ctx, code))
         save(ctx, code, page.user, page.msgs, page.readUpto)
         return page.msgs.filter { it.admin && it.id > notified(ctx) }

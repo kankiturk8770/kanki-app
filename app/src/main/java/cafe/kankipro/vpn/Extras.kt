@@ -1,5 +1,7 @@
 package cafe.kankipro.vpn
 
+import kotlinx.coroutines.launch
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -112,6 +114,18 @@ class KankiTileService : TileService() {
             return
         }
         qsTile?.apply { state = Tile.STATE_UNAVAILABLE; updateTile() }
+        val st = AppState.from(ctx)
+        // وصل نیست و اشتراک هست: «اتصال هوشمند» (پینگ همه و بهترین)، مثل دکمه‌ی شناور؛ بی‌اشتراک: آخرین کانفیگ
+        if (!up && st.loggedIn) {
+            kotlinx.coroutines.MainScope().launch {
+                if (st.account == null) runCatching { st.startupLoad() }
+                if (st.account != null) st.tapMode(KMode.SMART)
+                else runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { VpnEngine.up(ctx, cfg!!) } }
+                refresh()
+            }
+            return
+        }
+        if (up && st.vstate != VState.OFF) { st.userDisconnect(); refresh(); return }
         Thread {
             runCatching {
                 if (up) { VpnEngine.down(ctx); KankiNotif.hide(ctx) }
