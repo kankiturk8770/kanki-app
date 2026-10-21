@@ -82,35 +82,54 @@ object EmergencyStore {
     // ------------------------------------------------------------ صف ارسال (مثل تلگرام)
     // پیامی که کاربر بی‌اینترنت می‌نویسد گم نمی‌شود: در صف می‌ماند (🕓) و هر وقت سرور در دسترس شد
     // خودش فرستاده می‌شود، چه چت باز باشد چه نه (بررسی پس‌زمینه هم صف را خالی می‌کند).
-    data class Out(val lid: Long, val kind: String, val text: String, val ts: Long)
+    /** who: کاربر صاحب پیام (هش کد اشتراک)، تا پیام یک حساب با حساب دیگری فرستاده نشود */
+    data class Out(val lid: Long, val kind: String, val text: String, val ts: Long, val who: String = "")
     private fun outFile(ctx: Context) = File(ctx.filesDir, "emergency-outbox.json")
     private fun outImg(ctx: Context, lid: Long) = File(ctx.filesDir, "emergency-out-$lid.jpg")
 
     @Synchronized
-    fun outbox(ctx: Context): List<Out> = runCatching {
+    private fun outboxAll(ctx: Context): List<Out> = runCatching {
         val a = JSONArray(outFile(ctx).readText())
-        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Out(it.optLong("lid"), it.optString("kind"), it.optString("text"), it.optLong("ts")) }
+        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Out(it.optLong("lid"), it.optString("kind"), it.optString("text"), it.optLong("ts"), it.optString("who")) }
     }.getOrDefault(emptyList())
+
+    /** صف همین حساب */
+    fun outbox(ctx: Context, code: String): List<Out> { val w = Emergency.userId(code); return outboxAll(ctx).filter { it.who.isEmpty() || it.who == w } }
 
     @Synchronized
     private fun writeOut(ctx: Context, list: List<Out>) {
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("lid", it.lid).put("kind", it.kind).put("text", it.text).put("ts", it.ts)) }
+        list.forEach { a.put(JSONObject().put("lid", it.lid).put("kind", it.kind).put("text", it.text).put("ts", it.ts).put("who", it.who)) }
         runCatching { outFile(ctx).writeText(a.toString()) }
     }
 
+    /** شماره‌ی تازه، همیشه بزرگ‌تر از قبلی‌ها (دو پیام در یک میلی‌ثانیه هم یکی نمی‌شوند) */
+    private fun nextLid(ctx: Context) = maxOf(System.currentTimeMillis(), (outboxAll(ctx).maxOfOrNull { it.lid } ?: 0L) + 1)
+
     @Synchronized
-    fun queueText(ctx: Context, text: String) {
-        writeOut(ctx, outbox(ctx) + Out(System.currentTimeMillis(), "text", text, System.currentTimeMillis() / 1000))
+    fun queueText(ctx: Context, code: String, text: String) {
+        val lid = nextLid(ctx)
+        writeOut(ctx, outboxAll(ctx) + Out(lid, "text", text, System.currentTimeMillis() / 1000, Emergency.userId(code)))
         kick(ctx)
     }
 
     @Synchronized
-    fun queueImage(ctx: Context, jpeg: ByteArray) {
-        val lid = System.currentTimeMillis()
+    fun queueImage(ctx: Context, code: String, jpeg: ByteArray) {
+        val lid = nextLid(ctx)
         runCatching { outImg(ctx, lid).writeBytes(jpeg) }
-        writeOut(ctx, outbox(ctx) + Out(lid, "image", "", lid / 1000))
+        writeOut(ctx, outboxAll(ctx) + Out(lid, "image", "", System.currentTimeMillis() / 1000, Emergency.userId(code)))
         kick(ctx)
+    }
+
+    /** خروج از حساب: پیام‌ها، عکس‌ها و صف ارسال روی گوشی پاک می‌شوند (روی سرور می‌مانند) */
+    @Synchronized
+    fun clearAll(ctx: Context) {
+        runCatching {
+            ctx.filesDir.listFiles()?.forEach { f -> if (f.name.startsWith("emergency-") && f.isFile) f.delete() }
+            File(ctx.filesDir, "emergency-img").deleteRecursively()
+        }
+        prefs(ctx).edit().remove("emer_notified").remove("emergency_code").apply()
+        clearNotification(ctx)
     }
 
     /** صف پر است: به محض وصل شدن اینترنت، حتی با چت بسته، یک بار بفرست */
@@ -124,21 +143,26 @@ object EmergencyStore {
     fun outImage(ctx: Context, lid: Long): ByteArray? = runCatching { outImg(ctx, lid).readBytes() }.getOrNull()
 
     /** صف را به ترتیب می‌فرستد؛ با اولین خطا می‌ایستد تا ترتیب پیام‌ها حفظ شود. true = چیزی فرستاده شد */
-    fun flush(ctx: Context, code: String): Boolean {
+    // یک ارسال در هر لحظه: صفحه‌ی چت (هر ۵ ثانیه و با دکمه‌ی ارسال) و کار پس‌زمینه هم‌زمان صف را
+    // می‌فرستادند و هر پیام دو بار می‌رفت. قفل جدا (نه قفل خود EmergencyStore) تا خواندن صف برای نمایش
+    // روی صفحه، پشت یک ارسال کند منتظر نماند.
+    private val flushLock = Any()
+
+    fun flush(ctx: Context, code: String): Boolean = synchronized(flushLock) {
         var sent = false
-        for (o in outbox(ctx)) {
+        for (o in outbox(ctx, code)) {
             val ok = runCatching {
-                if (o.kind == "image") outImage(ctx, o.lid)?.let { Emergency.sendImage(ctx, code, it) }
-                else Emergency.send(ctx, code, o.text)
+                if (o.kind == "image") outImage(ctx, o.lid)?.let { Emergency.sendImage(ctx, code, it, o.lid) }
+                else Emergency.send(ctx, code, o.text, o.lid)
             }
             // خطای خود سرور (مثلاً پیام نامعتبر): از صف بیرون می‌رود تا بقیه گیر نکنند
             val drop = ok.exceptionOrNull().let { it is EmergencyException && it.code in 400..499 && it.code != 429 && it.code != 403 }
             if (ok.isFailure && !drop) break
-            synchronized(this) { writeOut(ctx, outbox(ctx).filter { it.lid != o.lid }) }
+            synchronized(this) { writeOut(ctx, outboxAll(ctx).filter { it.lid != o.lid }) }
             outImg(ctx, o.lid).delete()
             sent = true
         }
-        return sent
+        sent
     }
 
     /** آخرین شماره‌ی پیامی که روی گوشی هست (پیام‌های بعد از آن از سرور گرفته می‌شود) */
@@ -203,12 +227,17 @@ object EmergencyStore {
 
     /** پیام‌های تازه را از سرور می‌گیرد و ذخیره می‌کند؛ پیام‌های تازه‌ی ادمین (برای اعلان) برمی‌گردد */
     fun check(ctx: Context): List<EMsg> {
-        val code = AppState.from(ctx).code ?: Emergency.savedCode(ctx) ?: return emptyList()
+        // فقط تنظیمات ذخیره‌شده (نه AppState): کار پس‌زمینه نباید کل برنامه را در پروسه‌ی سرد راه بیندازد
+        val code = prefs(ctx).getString("code", null) ?: Emergency.savedCode(ctx) ?: return emptyList()
         if (Emergency.base(ctx) == null) return emptyList()
         flush(ctx, code)
+        val first = notified(ctx) == 0L && load(ctx, code).msgs.isEmpty()
         val page = Emergency.page(ctx, code, lastId(ctx, code))
         save(ctx, code, page.user, page.msgs, page.readUpto)
-        return page.msgs.filter { it.admin && it.id > notified(ctx) }
+        val admin = page.msgs.filter { it.admin }
+        // بار اول بعد از نصب این نسخه: تاریخچه‌ی قبلی «پیام تازه» نیست، فقط نقطه‌ی شروع ثبت می‌شود
+        if (first) { admin.maxOfOrNull { it.id }?.let { setNotified(ctx, it) }; return emptyList() }
+        return admin.filter { it.id > notified(ctx) }
     }
 }
 

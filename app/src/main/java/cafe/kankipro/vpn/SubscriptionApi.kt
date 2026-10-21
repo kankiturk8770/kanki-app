@@ -81,8 +81,11 @@ object SubscriptionApi {
     /** لینک ساب روی سرور ایران (پنل › تنظیمات › لینک ساب روی سرور ایران): وقتی دامنه‌های خارج فیلترند */
     const val IRAN_HOST = "https://s1s.polimax.shop:2053"
 
+    /** آدرس لینک ساب سرور ایران که خود پنل در صفحه‌ی اشتراک داده (sub_base)؛ اگر ادمین دامنه را عوض کند، برنامه هم */
+    @Volatile var panelSubBase: String? = null
+
     /** همه‌ی آدرس‌های اشتراک کانکی؛ هر کدام همان صفحه‌ی اشتراک و همان لینک کانفیگ‌ها را می‌دهد */
-    val KANKI_HOSTS = listOf(FALLBACK_HOST, IRAN_HOST, DEFAULT_HOST)
+    val KANKI_HOSTS: List<String> get() = (listOf(FALLBACK_HOST, IRAN_HOST) + listOfNotNull(panelSubBase) + DEFAULT_HOST).distinct()
 
     /** آدرسی که آخرین بار زودتر از همه جواب داد (اول همان امتحان می‌شود) */
     @Volatile var preferred: String? = null
@@ -265,7 +268,11 @@ object SubscriptionApi {
                     .filter { XrayCfg.supported(it.link) }
             } ?: emptyList(),
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
-        )
+        ).also {
+            dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
+                ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
+                ?.let { b -> panelSubBase = b }
+        }
     }
 
     private fun parseExits(a: org.json.JSONArray): Map<String, ExitInfo> =

@@ -26,7 +26,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        openFromNotification(intent)
+        // فقط بار اول (نه با چرخیدن صفحه، که اندروید همان intent قدیمی را دوباره می‌دهد)
+        if (savedInstanceState == null) openFromNotification(intent)
         setContent {
             CompositionLocalProvider(
                 LocalLayoutDirection provides if (LangState.en) LayoutDirection.Ltr else LayoutDirection.Rtl,
@@ -52,17 +53,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // دکمه‌ی شناور فقط روی برنامه‌های دیگر دیده می‌شود، نه روی خود کانکی
-    override fun onResume() {
-        super.onResume()
-        KankiFloatService.appVisible = true
-        KankiFloatService.sync(this)
-    }
-
-    override fun onPause() {
-        KankiFloatService.appVisible = false
-        super.onPause()
-    }
 }
 
 @Composable

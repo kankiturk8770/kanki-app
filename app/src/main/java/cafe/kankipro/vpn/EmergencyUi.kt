@@ -120,22 +120,38 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var stickersOpen by remember { mutableStateOf(false) }
+    val loadLock = remember { kotlinx.coroutines.sync.Mutex() }
     var helpOpen by remember { mutableStateOf(true) }
     val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
     val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
     val list = rememberLazyListState()
     /** پیام‌های صف ارسال (هنوز به سرور نرسیده‌اند؛ 🕓) */
     val pending = remember { mutableStateListOf<EmergencyStore.Out>() }
-    fun refreshPending() { pending.clear(); pending.addAll(EmergencyStore.outbox(ctx)) }
+    fun refreshPending() { pending.clear(); code?.let { pending.addAll(EmergencyStore.outbox(ctx, it)) } }
+    /** کد اشتراک در سرور اضطراری پیدا نشد (۴۰۳): دکمه‌ی «عوض کردن کد» نشان داده می‌شود */
+    var badCode by remember { mutableStateOf(false) }
+    /** عکس‌هایی که چند بار گرفته نشدند (مثلاً از سرور پاک شده‌اند): دیگر هر ۵ ثانیه دوباره خواسته نمی‌شوند */
+    val imgFails = remember { mutableStateMapOf<Long, Int>() }
     /** پیام‌های خود کاربر تا این شماره را ادمین خوانده (✓✓ آبی) */
     var readUpto by remember { mutableStateOf(0L) }
     /** آخرین پیام ادمین که «دیده شد» برایش فرستاده شده */
     var readSent by remember { mutableStateOf(0L) }
     // چت باز است: اعلان پیام تازه لازم نیست، و اعلان قبلی برداشته می‌شود
-    DisposableEffect(Unit) {
-        EmergencyStore.chatOpen = true
-        EmergencyStore.clearNotification(ctx)
-        onDispose { EmergencyStore.chatOpen = false }
+    // فقط وقتی صفحه واقعاً جلوی چشم است (نه وقتی برنامه به پس‌زمینه رفته): وگرنه پیام ادمین بی‌آنکه کاربر
+    // ببیند «خوانده شد» می‌خورد و اعلانش هم نمی‌آمد
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    var visible by remember { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) }
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            when (e) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> { visible = true; EmergencyStore.chatOpen = true; EmergencyStore.clearNotification(ctx) }
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> { visible = false; EmergencyStore.chatOpen = false }
+                else -> {}
+            }
+        }
+        lifecycle.addObserver(obs)
+        if (visible) { EmergencyStore.chatOpen = true; EmergencyStore.clearNotification(ctx) }
+        onDispose { lifecycle.removeObserver(obs); EmergencyStore.chatOpen = false }
     }
 
     fun errText(e: Throwable): String = when {
@@ -149,6 +165,8 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     suspend fun load() {
         val c = code ?: return
         refreshPending()
+        // یک خواندن در هر لحظه (حلقه‌ی ۵ ثانیه‌ای و دکمه‌ی ارسال با هم صدا می‌زنند)
+        if (!loadLock.tryLock()) return
         try {
             // اول صف ارسال (پیام‌هایی که بی‌اینترنت نوشته شده‌اند)
             if (pending.isNotEmpty()) { withContext(Dispatchers.IO) { EmergencyStore.flush(ctx, c) }; refreshPending() }
@@ -157,10 +175,11 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
             val (u, fresh) = page.user to page.msgs
             user = u
             status = null
+            badCode = false
             readUpto = maxOf(readUpto, page.readUpto)
             withContext(Dispatchers.IO) { EmergencyStore.save(ctx, c, u, fresh, page.readUpto) }
             if (fresh.isNotEmpty()) {
-                msgs.addAll(fresh.filter { f -> msgs.none { it.id == f.id } })
+                msgs.addAll(fresh.filter { f -> msgs.none { it.id == f.id } }.distinctBy { it.id })
                 helpOpen = false
             }
             // پیام‌های ادمین روی صفحه است: «خوانده شد» (ادمین در پنل تیک آبی می‌بیند)
@@ -170,16 +189,23 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 EmergencyStore.setNotified(ctx, lastAdmin)
             }
             // عکس‌ها: همه‌ی پیام‌های عکس‌دار، نه فقط تازه‌ها (از حافظه‌ی گوشی، وگرنه از سرور)
-            msgs.filter { it.img && it.id !in images }.forEach { m ->
+            msgs.filter { it.img && it.id !in images && (imgFails[it.id] ?: 0) < 3 }.forEach { m ->
                 runCatching {
-                    val bytes = EmergencyStore.savedImage(ctx, m.id)
-                        ?: withContext(Dispatchers.IO) { Emergency.image(ctx, c, m.id) }.also { EmergencyStore.saveImage(ctx, m.id, it) }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { images[m.id] = it.asImageBitmap() }
-                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, user.ifBlank { u }, bytes)
-                }
+                    val who = user.ifBlank { u }
+                    // خواندن، ذخیره و باز کردن عکس بیرون از رشته‌ی صفحه، و کوچک‌شده (عکس کامل حافظه را پر می‌کرد)
+                    val (bmp, ok) = withContext(Dispatchers.IO) {
+                        val bytes = EmergencyStore.savedImage(ctx, m.id) ?: Emergency.image(ctx, c, m.id).also { EmergencyStore.saveImage(ctx, m.id, it) }
+                        decodeSmall(bytes) to (if (m.admin) Emergency.verifyImage(ctx, m, who, bytes) else true)
+                    }
+                    bmp?.let { images[m.id] = it.asImageBitmap() }
+                    if (m.admin) imageOk[m.id] = ok
+                }.onFailure { imgFails[m.id] = (imgFails[m.id] ?: 0) + 1 }
             }
         } catch (e: Exception) {
             status = errText(e)
+            if (e is EmergencyException && e.code == 403) badCode = true
+        } finally {
+            loadLock.unlock()
         }
     }
 
@@ -188,21 +214,23 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         // اول پیام‌های ذخیره‌شده روی گوشی (۲ روز اخیر)، تا حتی بدون اینترنت دیده شوند
         code?.let { c ->
             val saved = withContext(Dispatchers.IO) { EmergencyStore.load(ctx, c) }
-            msgs.addAll(saved.msgs)
+            msgs.addAll(saved.msgs.filter { s -> msgs.none { it.id == s.id } })
             readUpto = saved.readUpto
             if (saved.user.isNotBlank()) user = saved.user
             if (saved.msgs.isNotEmpty()) helpOpen = false
             refreshPending()
             // عکس‌های ذخیره‌شده، بدون اینترنت
             saved.msgs.filter { it.img }.forEach { m ->
-                EmergencyStore.savedImage(ctx, m.id)?.let { b ->
-                    BitmapFactory.decodeByteArray(b, 0, b.size)?.let { images[m.id] = it.asImageBitmap() }
-                    if (m.admin) imageOk[m.id] = Emergency.verifyImage(ctx, m, saved.user, b)
+                val r = withContext(Dispatchers.IO) {
+                    EmergencyStore.savedImage(ctx, m.id)?.let { b -> decodeSmall(b) to (if (m.admin) Emergency.verifyImage(ctx, m, saved.user, b) else true) }
                 }
+                r?.first?.let { images[m.id] = it.asImageBitmap() }
+                if (m.admin && r != null) imageOk[m.id] = r.second
             }
         }
+        // هر ۵ ثانیه، فقط وقتی صفحه جلوی چشم است (در پس‌زمینه کار پس‌زمینه‌ی ۱۵ دقیقه‌ای و اعلان)
         while (code != null) {
-            load()
+            if (visible) load()
             delay(5000)
         }
     }
@@ -218,7 +246,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     if (jpeg == null) status = "این عکس خوانده نشد."
                     else {
                         // اول در صف، بعد فرستادن: بی‌اینترنت هم گم نمی‌شود
-                        withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, jpeg) }
+                        withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, c, jpeg) }
                         refreshPending()
                         load()
                     }
@@ -284,6 +312,13 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         status?.let {
             Spacer(Modifier.height(6.dp))
             T(it, size = 12.sp, color = K.Red, weight = FontWeight.Normal)
+            // کد اشتباه بود: بشود دوباره نوشت (فقط وقتی کد از خود حساب نیامده)
+            if (badCode && state.code == null) {
+                Spacer(Modifier.height(6.dp))
+                LineButton("عوض کردن کد", Modifier.fillMaxWidth()) {
+                    Emergency.saveCode(ctx, ""); code = null; badCode = false; status = null; msgs.clear(); pending.clear()
+                }
+            }
         }
 
         // پیام‌ها
@@ -309,8 +344,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                         val bmp = remember(s.key) { Stickers.bitmap(ctx, s, 160).asImageBitmap() }
                         Image(bmp, s.text, Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).clickable {
                             stickersOpen = false
-                            scope.launch {
-                                withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, Stickers.jpeg(ctx, s)) }
+                            val c = code
+                            if (c != null) scope.launch {
+                                withContext(Dispatchers.IO) { EmergencyStore.queueImage(ctx, c, Stickers.jpeg(ctx, s)) }
                                 refreshPending()
                                 load()
                             }
@@ -338,7 +374,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     val t = text.trim()
                     if (t.isNotEmpty() && c != null && !sending) {
                         // مثل تلگرام: پیام فوراً در صف و روی صفحه (🕓)، و هر وقت سرور در دسترس بود فرستاده می‌شود
-                        EmergencyStore.queueText(ctx, t)
+                        EmergencyStore.queueText(ctx, c, t)
                         text = ""
                         refreshPending()
                         scope.launch { load() }
@@ -454,4 +490,13 @@ private fun shrink(ctx: Context, uri: Uri): ByteArray? {
         if (q <= 32) return null
         q -= 15
     }
+}
+
+/** عکس چت، کوچک‌شده تا حداکثر حدود ۹۰۰ پیکسل (برای نمایش کافی است و حافظه را پر نمی‌کند) */
+private fun decodeSmall(b: ByteArray): Bitmap? {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(b, 0, b.size, o)
+    var s = 1
+    while (maxOf(o.outWidth, o.outHeight) / (s * 2) >= 900) s *= 2
+    return BitmapFactory.decodeByteArray(b, 0, b.size, BitmapFactory.Options().apply { inSampleSize = s })
 }

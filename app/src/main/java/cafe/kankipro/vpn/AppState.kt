@@ -331,8 +331,10 @@ class AppState private constructor(context: Context) {
      */
     fun kmixTag(id: String): String? = when {
         isTunnelTwin(id) -> {
-            val n = nodeName(id).trim()
-            val p = nodeName(parentOf(id)).trim()
+            // اسم‌هایی که خود پنل داده (nodeName حالا «کشور · شهر» است و برای هر دو یکی است)
+            fun panelName(x: String) = account?.configs?.firstOrNull { it.node == x }?.nodeName?.trim().orEmpty()
+            val n = panelName(id)
+            val p = panelName(parentOf(id))
             n.takeIf { it.isNotBlank() && it != id && it != p && it != "$p (تانل)" } ?: tr("تانل")
         }
         hasTwin(id) -> tr("مستقیم")
@@ -510,7 +512,7 @@ class AppState private constructor(context: Context) {
             // DNS برای همه‌ی برنامه‌هاست (انتخاب برنامه در حالت DNS برداشته شد)
             val text = applyExcluded(KankiDns.wrap(fallback), excluded.toSet())
             if (!wantTry) throw IllegalStateException("cancelled")
-            withContext(Dispatchers.IO) { VpnEngine.up(ctx, text) }
+            withContext(Dispatchers.IO) { VpnEngine.up(ctx, text); if (!wantTry) { VpnEngine.down(ctx); throw IllegalStateException("cancelled") } }
             val alive = withContext(Dispatchers.IO) { awaitHandshake(6000) }
             if (!alive) throw IllegalStateException("no internet after DNS mode")
             if (!wantTry) throw IllegalStateException("cancelled")
@@ -520,7 +522,8 @@ class AppState private constructor(context: Context) {
             LastConfig.save(ctx, text, "🛡 " + best.name.ifBlank { "Kanki DNS" } + " · " + tr(dnsRoute(best) ?: "رفع تحریم"))
             startNotif()
         } catch (e: Exception) {
-            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+            // «قطع» وسط اتصال: کار لغو شده، پس بدون NonCancellable همین down هم اجرا نمی‌شد و VPN وصل می‌ماند
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             dnsActive = null
             // پیشنهاد وصل شدن به VPN داده نمی‌شود؛ فقط پشتیبانی
@@ -836,7 +839,7 @@ class AppState private constructor(context: Context) {
             account = a
             if (node == null || a.configs.none { it.node == node }) node = a.configs.firstOrNull()?.node
             if (vstate == VState.OFF) fixProto()
-            prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
+            prefs.edit().putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
             locate()
         }
     }
@@ -1020,11 +1023,14 @@ class AppState private constructor(context: Context) {
         lastFromCache = false
         var err: Exception? = null
         if (SubscriptionApi.preferred == null) SubscriptionApi.preferred = prefs.getString("subhost_$c", null)
+        if (SubscriptionApi.panelSubBase == null) SubscriptionApi.panelSubBase = prefs.getString("sub_base", null)
         try {
             val (url, html) = SubscriptionApi.race(SubscriptionApi.hosts(b).map { "$it/sub/$c" })
             val h = url.removeSuffix("/sub/$c")
-            prefs.edit().putString("subhtml_$c", html).putString("subhost_$c", h).apply()
-            return SubscriptionApi.parse(html, h)
+            val acc = SubscriptionApi.parse(html, h)
+            prefs.edit().putString("subhtml_$c", html).putString("subhost_$c", h)
+                .apply { SubscriptionApi.panelSubBase?.let { putString("sub_base", it) } }.apply()
+            return acc
         } catch (e: Exception) {
             err = e
         }
@@ -1198,7 +1204,7 @@ class AppState private constructor(context: Context) {
             val a = augment(withContext(Dispatchers.IO) { loadAccount(r.first, r.second) })
             unlocking = true
             base = r.first; code = r.second
-            prefs.edit().putString("base", base).putString("code", code).putLong("last_sync", System.currentTimeMillis()).apply()
+            prefs.edit().putString("base", base).putString("code", code).putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
             account = a
             node = a.configs.firstOrNull()?.node
             loading = false
@@ -1229,7 +1235,7 @@ class AppState private constructor(context: Context) {
             if (node == null || aug.configs.none { it.node == node }) node = aug.configs.firstOrNull()?.node
             // بروزرسانی کامل: همه‌ی کانفیگ‌ها دوباره از پنل خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل جا نماند
             loadInfos(aug, force = true)
-            if (!lastFromCache) prefs.edit().putLong("last_sync", System.currentTimeMillis()).apply()
+            if (!lastFromCache) prefs.edit().putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
             if (vstate == VState.OFF) fixProto()
             locate()
         } catch (e: Exception) {
@@ -1299,6 +1305,8 @@ class AppState private constructor(context: Context) {
                 }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
+                // کاربر وسط بالا آمدن «قطع» زد: همین‌جا پایین بیاید، نه اینکه بعداً «متصل» دیده شود
+                if (!wantTry) { VpnEngine.down(ctx); throw IllegalStateException("cancelled") }
                 cfg
             }
             // تا وقتی واقعاً از داخل تونل جواب نیاید، «متصل» نشان داده نمی‌شود
@@ -1313,7 +1321,8 @@ class AppState private constructor(context: Context) {
             // در کار جدا، تا قطع و وصل دوباره منتظر این درخواست‌ها نماند
             bg.launch { measurePing(); locateExit() }
         } catch (e: Exception) {
-            withContext(Dispatchers.IO) { VpnEngine.down(ctx) }
+            // «قطع» وسط اتصال: کار لغو شده، پس بدون NonCancellable همین down هم اجرا نمی‌شد و VPN وصل می‌ماند
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
@@ -1520,13 +1529,15 @@ class AppState private constructor(context: Context) {
     /** خروج کامل: اشتراک و همه‌ی چیزهایی که از آن ذخیره شده (کانفیگ‌ها و کلیدها) از گوشی پاک می‌شود */
     suspend fun logout() {
         disconnect()
-        val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("ugeo").remove("uiso")
+        val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("last_usage").remove("ugeo").remove("uiso")
         prefs.all.keys
-            .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("ngeo_") || it.startsWith("niso_") || it.startsWith("ncity_") }
+            .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("subhost_") || it.startsWith("ngeo_") || it.startsWith("niso_") || it.startsWith("ncity_") }
             .forEach { e.remove(it) }
         e.apply()
         LastConfig.clear(ctx)
         runCatching { java.io.File(ctx.filesDir, "hy2.yaml").delete() }
+        // چت اضطراری این حساب (پیام‌ها، عکس‌ها، صف ارسال) از گوشی پاک می‌شود؛ روی سرور می‌ماند
+        EmergencyStore.clearAll(ctx)
         dismissed.clear()
         speed = SpeedUi()
         base = null; code = null; account = null; node = null

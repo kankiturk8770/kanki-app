@@ -166,20 +166,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 onCloseTip = { state.markTip("test") },
             )
             KTab.SETTINGS -> SettingsContent(
-                SettingsUi(state.dns, state.autoConnect, state.sounds, LangState.lang, state.excluded.size, appVersion(ctx), KankiFloatService.on.value),
+                SettingsUi(state.dns, state.autoConnect, state.sounds, LangState.lang, state.excluded.size, appVersion(ctx)),
                 tip = if (state.tipsSeen["settings"] == true) null else RobotAlert("tip_settings", 0, "اگه برنامه‌ای (مثل بانک) با VPN کار نکرد، از «تونل‌زنی انتخابی» بیرونش بذار. راهنمای کامل هم همین پایینه 👇"),
                 act = SettingsActions(
                     setDns = { state.dns = it; state.save() },
                     setAuto = { state.autoConnect = it; state.save() },
                     setSounds = { state.sounds = it; state.save() },
-                    setFloat = { on ->
-                        KankiFloatService.setEnabled(ctx, on)
-                        // اجازه‌ی «نمایش روی برنامه‌های دیگر» نیست: صفحه‌اش باز می‌شود؛ با برگشتن به برنامه روشن می‌شود
-                        if (on && !KankiFloatService.canDraw(ctx)) {
-                            runCatching { ctx.startActivity(KankiFloatService.permissionIntent(ctx)) }
-                            toast(ctx, ("«Kanki VPN» را پیدا کنید و «اجازه‌ی نمایش روی برنامه‌های دیگر» را روشن کنید"))
-                        }
-                    },
                     setTheme = { state.setTheme(it) },
                     setLang = { state.setLang(it); scope.launch { state.refresh() } },
                     openSplit = { showSplit = true },
@@ -285,8 +277,8 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     }
     // هشدارهای زمانی (مثل روزهای باقی‌مانده) هر دقیقه دوباره بررسی شوند
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
-    // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۳۰ ثانیه‌ای بالا آن را می‌آورد)
-    LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage() } }
+    // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۵ دقیقه‌ای بالا آن را می‌آورد)
+    LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage(5 * 60_000L) } }
     // فقط بار اول (نه هر بار که به خانه برمی‌گردی): فهرست برنامه‌ها سنگین است
     LaunchedEffect(Unit) {
         if (!state.gamesLoaded) {

@@ -4,8 +4,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- دکمه‌ی شناور روی بازی‌ها (فقط وقتی کاربر در تنظیمات روشنش کند) -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
         <intent>
@@ -87,10 +85,6 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
-
-        <service
-            android:name="cafe.kankipro.vpn.KankiFloatService"
-            android:exported="false" />
 
         <receiver
             android:name="cafe.kankipro.vpn.KankiActionReceiver"

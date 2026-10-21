@@ -61,13 +61,14 @@ object Emergency {
     }
 
     /** کدی که کاربرِ واردنشده برای چت اضطراری زده است */
-    fun savedCode(ctx: Context): String? = prefs(ctx).getString("emergency_code", null)
+    fun savedCode(ctx: Context): String? = prefs(ctx).getString("emergency_code", null)?.takeIf { it.isNotBlank() }
     fun saveCode(ctx: Context, code: String) = prefs(ctx).edit().putString("emergency_code", code).apply()
 
     fun sha256Hex(b: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 
     /** شناسه‌ی کاربر برای سرور اضطراری (پنل همین را حساب می‌کند) */
-    fun userId(code: String): String = sha256Hex((ID_PREFIX + code).toByteArray(Charsets.UTF_8))
+    // پنل کد را همیشه با پیشوند kanki- می‌سازد؛ کدی با پیشوند قدیمی هم همان کاربر است
+    fun userId(code: String): String = sha256Hex((ID_PREFIX + code.trim().replace(Regex("^[A-Za-z]{2,12}-(?=\\d+-)"), "kanki-")).toByteArray(Charsets.UTF_8))
 
     /** متنی که ادمین امضا کرده (سرور دقیقاً همین را می‌سازد) */
     fun signedText(id: Long, user: String, ts: Long, kind: String, payload: String) =
@@ -160,12 +161,15 @@ object Emergency {
         return user to list
     }
 
-    fun send(ctx: Context, code: String, text: String) {
-        post(ctx, "/api/e/send", code, JSONObject().put("text", text).toString().toByteArray(Charsets.UTF_8), "application/json")
+    /** cid: شماره‌ی خود برنامه برای همین پیام؛ اگر جواب سرور گم شد و دوباره فرستاده شد، سرور دوباره ثبتش نمی‌کند */
+    fun send(ctx: Context, code: String, text: String, cid: Long = 0) {
+        val o = JSONObject().put("text", text)
+        if (cid > 0) o.put("cid", cid)
+        post(ctx, "/api/e/send", code, o.toString().toByteArray(Charsets.UTF_8), "application/json")
     }
 
-    fun sendImage(ctx: Context, code: String, jpeg: ByteArray) {
-        post(ctx, "/api/e/image", code, jpeg, "image/jpeg")
+    fun sendImage(ctx: Context, code: String, jpeg: ByteArray, cid: Long = 0) {
+        post(ctx, "/api/e/image" + (if (cid > 0) "?cid=$cid" else ""), code, jpeg, "image/jpeg")
     }
 
     fun image(ctx: Context, code: String, id: Long): ByteArray = call(ctx, "GET", "/api/e/image/$id", code)

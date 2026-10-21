@@ -114,7 +114,7 @@ class KankiTileService : TileService() {
         }
         qsTile?.apply { state = Tile.STATE_UNAVAILABLE; updateTile() }
         val st = AppState.from(ctx)
-        // وصل نیست و اشتراک هست: «اتصال هوشمند» (پینگ همه و بهترین)، مثل دکمه‌ی شناور؛ بی‌اشتراک: آخرین کانفیگ
+        // وصل نیست و اشتراک هست: «اتصال هوشمند» (پینگ همه و بهترین)، مثل دکمه‌ی هوشمند خانه؛ بی‌اشتراک: آخرین کانفیگ
         if (!up && st.loggedIn) {
             kotlinx.coroutines.MainScope().launch {
                 if (st.account == null) runCatching { st.startupLoad() }
