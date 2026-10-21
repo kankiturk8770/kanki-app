@@ -260,7 +260,11 @@ private fun CfgRow(r: CfgRowUi, act: ServersActions) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(K.Gold))
                 Spacer(Modifier.width(6.dp))
             }
-            AutoText(r.title, size = 13.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            // عنوان لاتین (مثل Xray · VLESS) هم از سمت راست شروع شود و به پینگ نچسبد
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                AutoText(r.title, size = 13.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(10.dp))
             if (r.busy) Spinner(13.dp)
             else T(
                 when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping} ms" },

@@ -3,18 +3,18 @@ on:
   push:
   workflow_dispatch:
 
-# فقط خواندن مخزن؛ کلید امضا فقط از Secrets می‌آید
+# نوشتن مخزن فقط برای گذاشتن فایل نصبی در Releases؛ کلید امضا فقط از Secrets می‌آید
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -120,7 +120,7 @@ jobs:
       # هسته‌ی KANKI MIX (پروتکل خود کانکی، پوشه‌ی kmix-core) برنامه‌ی جدای libkmix.so است، مثل Hysteria2
       # و Xray در پروسه‌ی خودش (رانتایم Go آن هیچ‌وقت کنار موتور AmneziaWG در پروسه‌ی برنامه نیست).
       # نسخه‌ی Go از go.mod همان پوشه می‌آید تا هر ساخت دقیقاً همان هسته‌ی تست‌شده باشد.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: kmix-core/go.mod
           cache-dependency-path: kmix-core/go.sum
@@ -154,7 +154,7 @@ jobs:
           echo "$KANKI_KEYSTORE" | base64 -d > app/kanki-release.jks
           keytool -list -keystore app/kanki-release.jks -storepass "$KANKI_KEY_PASS" | head -3
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.13"
 
@@ -166,7 +166,24 @@ jobs:
       - name: حجم فایل‌ها
         run: ls -la app/build/outputs/apk/release/
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: KankiVPN-apk
-          path: app/build/outputs/apk/release/*.apk
+      # فایل نصبی در Releases گذاشته می‌شود (یک نسخه‌ی پیش‌انتشار برای هر شاخه که هر بار جایگزین می‌شود).
+      # فضای Releases جدا از سهمیه‌ی Artifacts حساب است و پر نمی‌شود.
+      - name: انتشار فایل نصبی در Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          tag="build-${GITHUB_REF_NAME//\//-}"
+          # اسم فایل‌ها با نسخه و نوع گوشی (KankiVPN-1.15.1-arm64.apk)؛ پنل نسخه و نوع را از همین اسم می‌خواند
+          ver=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          mkdir -p out
+          for f in app/build/outputs/apk/release/*.apk; do
+            n=$(basename "$f" .apk); n=${n#app-}; n=${n%-release}
+            case "$n" in arm64-v8a) a=arm64;; armeabi-v7a) a=armv7;; *) a=$n;; esac
+            cp "$f" "out/KankiVPN-$ver-$a.apk"
+          done
+          ls -la out
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" out/*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Kanki VPN · $GITHUB_REF_NAME · #$GITHUB_RUN_NUMBER" --notes "ساخت خودکار از $GITHUB_SHA"

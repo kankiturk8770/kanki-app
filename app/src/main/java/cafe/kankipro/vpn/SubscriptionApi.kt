@@ -65,7 +65,8 @@ data class DnsServer(
 
 data class DnsInfo(val token: String, val servers: List<DnsServer>)
 
-data class XrayLink(val name: String, val link: String)
+/** exit: جایی که ترافیک این لینک از آن به اینترنت می‌رود (پنل ۳.۶.۳ به بعد) */
+data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = null)
 
 /** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
 data class AppNotice(val id: String, val text: String, val until: Long)
@@ -260,7 +261,7 @@ object SubscriptionApi {
             dns = dataJson(html)?.optJSONObject("dns")?.let { parseDns(it) },
             xray = dataJson(html)?.optJSONArray("xray")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }
-                    .map { XrayLink(it.optString("name"), it.optString("link").trim()) }
+                    .map { XrayLink(it.optString("name"), it.optString("link").trim(), exitOf(it)) }
                     .filter { XrayCfg.supported(it.link) }
             } ?: emptyList(),
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
@@ -270,12 +271,18 @@ object SubscriptionApi {
     private fun parseExits(a: org.json.JSONArray): Map<String, ExitInfo> =
         (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
             val id = n.optString("id")
-            val cc = n.optString("exit_cc").trim().uppercase()
-            if (id.isBlank() || cc.length != 2) return@mapNotNull null
-            val geo = if (n.has("exit_lat") && n.has("exit_lon")) Geo(n.optDouble("exit_lat"), n.optDouble("exit_lon"))
-                .takeIf { !it.lat.isNaN() && !it.lon.isNaN() } else null
-            id to ExitInfo(n.optString("exit_ip"), cc, n.optString("exit_city"), geo)
+            if (id.isBlank()) return@mapNotNull null
+            exitOf(n)?.let { id to it }
         }.toMap()
+
+    /** فیلدهای exit_cc / exit_city / exit_lat,lon یک سرور یا یک لینک Xray */
+    private fun exitOf(n: org.json.JSONObject): ExitInfo? {
+        val cc = n.optString("exit_cc").trim().uppercase()
+        if (cc.length != 2) return null
+        val geo = if (n.has("exit_lat") && n.has("exit_lon")) Geo(n.optDouble("exit_lat"), n.optDouble("exit_lon"))
+            .takeIf { !it.lat.isNaN() && !it.lon.isNaN() } else null
+        return ExitInfo(n.optString("exit_ip"), cc, n.optString("exit_city"), geo)
+    }
 
     private fun parseDns(o: org.json.JSONObject): DnsInfo? {
         val arr = o.optJSONArray("servers") ?: return null

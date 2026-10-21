@@ -283,6 +283,7 @@ private val EN = mapOf(
     "گیگ" to "GB",
     "روز" to "days",
     "شما" to "You",
+    "DNS فعال · آی‌پی همان آی‌پی خودتان" to "DNS on · your own IP",
     "پیشنهاد" to "Best",
     "از تانل" to "via tunnel",
     "مستقیم · بدون تانل" to "direct · no tunnel",
