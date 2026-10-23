@@ -60,6 +60,17 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // عکس صفحه‌ها بدون گوشی (Shots.kt، Robolectric): منابع و فونت‌ها در تست هم باشند و RenderNodeها
+    // (لایه‌های Compose) واقعاً کشیده شوند
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { t ->
+                t.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+                t.maxHeapSize = "3g"
+            }
+        }
+    }
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -89,6 +100,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // بررسی پیام‌های چت اضطراری در پس‌زمینه (اعلان بدون سرویس پوش گوگل)
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // فقط برای عکس صفحه‌ها (Shots.kt)؛ داخل فایل نصبی نمی‌رود
+    testImplementation(composeBom)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 // ---------------------------------------------------------------- دانلود خودکار فونت‌ها و نقشه
