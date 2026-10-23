@@ -54,10 +54,10 @@ class SettingsActions(
 @Composable
 fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCloseTip: () -> Unit) {
     var dnsOpen by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(4.dp))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
+        Spacer(Modifier.height(D.S1))
         Heading("تنظیمات")
-        tip?.let { Spacer(Modifier.height(10.dp)); RobotBanner(it, onClose = onCloseTip) }
+        tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = onCloseTip) }
 
         Group("اتصال") {
             MenuRow("dns", "DNS", dnsTitle(ui.dns), dnsOpen, tint = K.Accent) { dnsOpen = !dnsOpen }
@@ -77,10 +77,10 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
         Group("ظاهر و زبان") {
             ThemePicker(act.setTheme)
             HDivider()
-            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(D.RowH), verticalAlignment = Alignment.CenterVertically) {
                 SettingIcon("lang", K.Gold)
-                Spacer(Modifier.width(12.dp))
-                T("زبان", size = 15.sp, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(D.S3))
+                T("زبان", size = D.TxtTitle, modifier = Modifier.weight(1f))
                 Segmented(
                     listOf(SegItem("fa", "فارسی"), SegItem("en", "English")), ui.lang,
                     Modifier.width(170.dp), onSelect = act.setLang,
@@ -92,14 +92,14 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
 
         Group("حساب و پشتیبانی") {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = act.guide).padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().height(D.RowH).clip(RoundedCornerShape(D.RS)).clickable(onClick = act.guide),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) { RobotFace(40.dp) }
-                Spacer(Modifier.width(12.dp))
+                Box(Modifier.size(D.IconBox), contentAlignment = Alignment.Center) { RobotFace(D.IconBox) }
+                Spacer(Modifier.width(D.S3))
                 Column(Modifier.weight(1f)) {
-                    T("راهنمای برنامه", size = 15.sp)
-                    T("ربات کانکی همه‌جای برنامه را نشانت می‌دهد", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                    T("راهنمای برنامه", size = D.TxtTitle, maxLines = 1)
+                    T("ربات کانکی همه‌جای برنامه را نشانت می‌دهد", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
                 }
                 Chevron(K.Gold)
             }
@@ -113,32 +113,32 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
             MenuRow("logout", "خروج از حساب", "حذف اشتراک از این گوشی", false, danger = true, onClick = act.logout)
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(D.S4))
         T("Kanki VPN · v${ui.version}", size = 12.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.align(Alignment.CenterHorizontally))
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(D.S4))
     }
 }
 
 @Composable
 private fun Group(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Spacer(Modifier.height(14.dp))
-    T(title, size = 13.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
-    KCard(Modifier.fillMaxWidth(), padding = 12.dp, content = content)
+    Spacer(Modifier.height(D.S4))
+    T(title, size = 13.sp, color = K.Accent, weight = FontWeight.Black, modifier = Modifier.padding(start = D.S1, bottom = D.S2))
+    KCard(Modifier.fillMaxWidth(), padding = D.CardPad, content = content)
 }
 
 @Composable
 fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(D.RowH), verticalAlignment = Alignment.CenterVertically) {
         SettingIcon(icon, K.Gold)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
-            T(title, size = 15.sp)
-            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            T(title, size = D.TxtTitle, maxLines = 1)
+            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         Switch(
             checked = checked, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold,
+                checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn,
                 uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF), uncheckedBorderColor = Color(0x33FFFFFF),
             ),
         )
@@ -151,14 +151,14 @@ fun MenuRow(
     arrow: Boolean = false, danger: Boolean = false, tint: Color = K.Gold, onClick: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().height(D.RowH).clip(RoundedCornerShape(D.RS)).clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingIcon(icon, if (danger) K.Red else tint)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
-            T(title, size = 15.sp, color = if (danger) K.Red else K.Text)
-            T(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            T(title, size = D.TxtTitle, color = if (danger) K.Red else K.Text, maxLines = 1)
+            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         when {
             danger -> {}
@@ -198,48 +198,49 @@ fun DnsPicker(current: String, onSet: (String) -> Unit) {
 @Composable
 private fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 4.dp),
+        Modifier.fillMaxWidth().height(D.RowS).clip(RoundedCornerShape(D.RS)).clickable(onClick = onClick).padding(horizontal = D.S1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CheckMark(selected, 20.dp)
-        Spacer(Modifier.width(10.dp))
+        CheckMark(selected, D.Icon)
+        Spacer(Modifier.width(D.S3))
         Column {
-            T(title, size = 14.sp)
-            AutoText(sub, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            T(title, size = 13.sp, maxLines = 1)
+            AutoText(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
         }
     }
 }
 
-/** انتخاب تم: طلایی + چهار تم نئونی */
+/** انتخاب تم: سه تم AMOLED — زرشکی (پیش‌فرض)، زرد کانکی، بنفش سلطنتی */
 @Composable
 fun ThemePicker(onSet: (String) -> Unit) {
-    val items = listOf("gold" to "طلایی", "mono" to "گرافیت", "crimson" to "زرشکی نئون", "cyber" to "سایبری", "violet" to "بنفش نئون")
+    val items = listOf("crimson" to "زرشکی", "gold" to "زرد کانکی", "purple" to "بنفش سلطنتی")
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingIcon("palette", K.Accent)
-            Spacer(Modifier.width(12.dp))
-            T("تم برنامه", size = 15.sp)
+            Spacer(Modifier.width(D.S3))
+            T("تم برنامه", size = D.TxtTitle)
         }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(D.S3))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             items.forEach { (id, name) ->
                 val p = Themes.first { it.id == id }
                 val sel = ThemeState.current.id == id
-                val shape = RoundedCornerShape(16.dp)
+                val shape = RoundedCornerShape(D.RM)
                 Column(
-                    Modifier.width(92.dp).clip(shape)
+                    Modifier.weight(1f).clip(shape)
                         .background(Brush.verticalGradient(listOf(p.bgMid, p.bgBottom)))
                         .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else p.gold.copy(alpha = .3f), shape)
                         .clickable { onSet(id) }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = D.S3),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // سه رنگ خود همان تم: رنگ اصلی، لهجه و رنگ «وصل»
+                    Row(horizontalArrangement = Arrangement.spacedBy(D.S1)) {
                         Box(Modifier.size(14.dp).clip(CircleShape).background(p.gold))
                         Box(Modifier.size(14.dp).clip(CircleShape).background(p.accent))
-                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.ok))
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.connected))
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(D.S2))
                     T(name, size = 11.sp, color = if (sel) p.gold else p.sub)
                 }
             }
@@ -267,21 +268,21 @@ fun AccountSheet(visible: Boolean, a: Account?, act: AccountActions) {
         ) {
             AnimatedVisibility(visible, enter = scaleIn(initialScale = .92f) + fadeIn(), exit = scaleOut(targetScale = .95f) + fadeOut()) {
                 KCard(
-                    Modifier.padding(18.dp).fillMaxWidth()
+                    Modifier.padding(D.PagePad).fillMaxWidth()
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                    padding = 18.dp, border = K.Gold.copy(alpha = .5f),
+                    padding = D.S4, border = K.Gold.copy(alpha = .5f),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RoundIcon(48.dp, filled = true, onClick = {}) { androidx.compose.foundation.Canvas(Modifier.size(22.dp)) { accountIcon(K.Gold) } }
-                        Spacer(Modifier.width(12.dp))
+                        RoundIcon(D.IconBox + D.S2, filled = true, onClick = {}) { androidx.compose.foundation.Canvas(Modifier.size(D.Icon)) { accountIcon(K.Gold) } }
+                        Spacer(Modifier.width(D.S3))
                         Column(Modifier.weight(1f)) {
-                            AutoText(a?.username?.ifBlank { "—" } ?: "—", size = 18.sp)
-                            T("اطلاعات حساب", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                            AutoText(a?.username?.ifBlank { "—" } ?: "—", size = 17.sp)
+                            T("اطلاعات حساب", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
                         }
                         if (a != null) Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
                     }
                     if (a != null) {
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(D.S4))
                         val f = a.limitGb?.let { l -> a.usedGb?.let { u -> if (l > 0) ((l - u) / l).toFloat() else null } }
                         if (f != null) {
                             Row {
@@ -289,25 +290,25 @@ fun AccountSheet(visible: Boolean, a: Account?, act: AccountActions) {
                                 Spacer(Modifier.weight(1f))
                                 AutoText(a.dataRemaining, size = 13.sp)
                             }
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(D.S2))
                             ProgressLine(f, if (f < .1f) K.Red else if (f < .25f) K.Warn else K.Green)
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(D.S2))
                         }
                         InfoRow("مصرف‌شده", a.used)
                         InfoRow("زمان باقی‌مانده", a.timeRemaining)
                         InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
                         InfoRow("اتصال همزمان", a.connections)
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(D.S4))
                     GoldButton("تمدید سرویس", Modifier.fillMaxWidth(), onClick = act.renew)
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.height(D.S2))
+                    Row(horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                         SmallLine("بروزرسانی", Modifier.weight(1f), onClick = act.refresh)
                         SmallLine("کپی سابلینک", Modifier.weight(1f), onClick = act.copy)
                         SmallLine("پشتیبانی", Modifier.weight(1f), onClick = act.support)
                     }
-                    Spacer(Modifier.height(6.dp))
-                    T("بستن", size = 13.sp, color = K.Sub, modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(10.dp)).clickable(onClick = act.close).padding(8.dp))
+                    Spacer(Modifier.height(D.S1))
+                    T("بستن", size = 13.sp, color = K.Sub, modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(D.RT)).clickable(onClick = act.close).padding(D.S2))
                 }
             }
         }

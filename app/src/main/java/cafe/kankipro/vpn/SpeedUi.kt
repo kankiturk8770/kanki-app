@@ -34,14 +34,14 @@ data class SpeedUi(
 
 @Composable
 fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(4.dp))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
+        Spacer(Modifier.height(D.S1))
         Heading("تست سرعت", if (ui.viaVpn) "از داخل تونل کانکی" else "بدون VPN")
-        tip?.let { Spacer(Modifier.height(10.dp)); RobotBanner(it, onClose = onCloseTip) }
-        Spacer(Modifier.height(12.dp))
-        KCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+        tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = onCloseTip) }
+        Spacer(Modifier.height(D.S3))
+        KCard(Modifier.fillMaxWidth(), padding = D.CardPad) {
             // مرحله‌ها
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                 PhaseChip("ping", "پینگ", ui, Modifier.weight(1f))
                 PhaseChip("down", "دانلود", ui, Modifier.weight(1f))
                 PhaseChip("up", "آپلود", ui, Modifier.weight(1f))
@@ -68,28 +68,28 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(D.S3))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                 ResultTile("down", "دانلود", ui.down?.let { String.format(java.util.Locale.US, "%.1f", it) }, "Mbps", K.Gold, Modifier.weight(1f))
                 ResultTile("up", "آپلود", ui.up?.let { String.format(java.util.Locale.US, "%.1f", it) }, "Mbps", K.Accent, Modifier.weight(1f))
             }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(D.S2))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                 ResultTile("ping", "پینگ", ui.ping?.toString(), "ms", ui.ping?.let { pingColor(it) } ?: K.Sub, Modifier.weight(1f))
                 ResultTile("clock", "جیتر", ui.jitter?.toString(), "ms", K.Sub, Modifier.weight(1f))
             }
             ui.server?.let {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(D.S3))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MiniIcon("status", K.Green, 10.dp)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(D.S2))
                     T("سرور تست:", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(D.S1))
                     AutoText(it, size = 11.sp, color = K.Text)
                 }
             }
-            ui.error?.let { Spacer(Modifier.height(8.dp)); T(it, size = 12.sp, color = K.Red) }
-            Spacer(Modifier.height(14.dp))
+            ui.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
+            Spacer(Modifier.height(D.S4))
             GoldButton(
                 when {
                     ui.running -> "در حال تست…"
@@ -98,14 +98,14 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                 },
                 Modifier.fillMaxWidth(), loading = ui.running, onClick = onStart,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(D.S2))
             T(
                 ui.usedBytes?.let { trf("مصرف اینترنت این تست: %s", ltr(formatBytes(it))) }
                     ?: "با سرورهای Speedtest by Ookla و چند اتصال همزمان، مثل اپ اصلی Speedtest",
                 size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(D.S4))
     }
 }
 
@@ -119,38 +119,38 @@ private fun PhaseChip(key: String, label: String, ui: SpeedUi, modifier: Modifie
     val c = when { active -> K.Gold; done -> K.Green; else -> K.Sub.copy(alpha = .6f) }
     val sh = RoundedCornerShape(50)
     Row(
-        modifier.clip(sh).background(c.copy(alpha = .10f)).border(1.dp, c.copy(alpha = .45f), sh).padding(vertical = 6.dp),
+        modifier.height(D.S6 + D.S2).clip(sh).background(c.copy(alpha = .10f)).border(1.dp, c.copy(alpha = .45f), sh),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         when {
             active -> Spinner(11.dp, c)
-            done -> CheckMark(true, 13.dp)
+            done -> CheckMark(true, 14.dp)
             else -> Dot(c, 6.dp)
         }
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(D.S2))
         T(label, size = 11.sp, color = c, weight = FontWeight.Bold)
     }
 }
 
 @Composable
 private fun ResultTile(icon: String, label: String, value: String?, unit: String, c: Color, modifier: Modifier) {
-    val sh = RoundedCornerShape(18.dp)
+    val sh = RoundedCornerShape(D.RM)
     Row(
-        modifier.clip(sh).background(K.Panel.copy(alpha = .75f)).border(1.dp, K.Gold.copy(alpha = .12f), sh)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier.height(D.RowH).clip(sh).background(K.Panel.copy(alpha = .75f)).border(1.dp, K.Gold.copy(alpha = .12f), sh)
+            .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(c.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(D.IconBoxS).clip(RoundedCornerShape(D.RT)).background(c.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
             MiniIcon(icon, c, 14.dp)
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(D.S3))
         Column {
             T(label, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
             // عدد و واحد همیشه چپ‌به‌راست (۸۷.۶ Mbps)
             CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    T(value ?: "–", size = 18.sp, font = Poppins, weight = FontWeight.Bold, color = if (value == null) K.Sub else K.Text, ltr = true)
+                    T(value ?: "–", size = 16.sp, font = Poppins, weight = FontWeight.Bold, color = if (value == null) K.Sub else K.Text, ltr = true)
                     Spacer(Modifier.width(3.dp))
                     T(unit, size = 10.sp, font = Poppins, weight = FontWeight.SemiBold, color = K.Sub, ltr = true, modifier = Modifier.padding(bottom = 3.dp))
                 }

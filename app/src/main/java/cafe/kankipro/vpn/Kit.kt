@@ -43,8 +43,8 @@ fun AutoText(text: String, size: TextUnit = 14.sp, color: Color = K.Text, weight
 @Composable
 fun KCard(
     modifier: Modifier = Modifier,
-    padding: Dp = 14.dp,
-    radius: Dp = 24.dp,
+    padding: Dp = D.CardPad,
+    radius: Dp = D.RL,
     border: Color = K.Gold.copy(alpha = .22f),
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -63,12 +63,12 @@ data class SegItem(val key: String, val label: String, val icon: String? = null,
 /** دکمه‌ی چندگزینه‌ای (مثل انتخاب پروتکل)؛ گزینه‌ی انتخاب‌شده طلایی می‌شود */
 @Composable
 fun Segmented(items: List<SegItem>, selected: String, modifier: Modifier = Modifier, enabled: Boolean = true, onSelect: (String) -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(D.RM)
     Row(
-        modifier.fillMaxWidth().height(44.dp).clip(shape)
+        modifier.fillMaxWidth().height(D.BtnS + D.S1).clip(shape)
             .goldGlass(shape)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(D.S1),
+        horizontalArrangement = Arrangement.spacedBy(D.S1),
     ) {
         items.forEach { item ->
             val sel = item.key == selected
@@ -80,7 +80,7 @@ fun Segmented(items: List<SegItem>, selected: String, modifier: Modifier = Modif
                 else -> K.Sub.copy(alpha = .45f)
             }
             Row(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(D.RS))
                     .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(bg, bg)))
                     .clickable(enabled = on && !sel) { onSelect(item.key) },
                 horizontalArrangement = Arrangement.Center,
@@ -95,7 +95,7 @@ fun Segmented(items: List<SegItem>, selected: String, modifier: Modifier = Modif
 
 /** پرچم کشور داخل یک دایره‌ی تیره با حلقه‌ی طلایی */
 @Composable
-fun FlagBadge(flag: String, size: Dp = 44.dp, ring: Color = K.Gold.copy(alpha = .55f)) {
+fun FlagBadge(flag: String, size: Dp = D.Flag, ring: Color = K.Gold.copy(alpha = .55f)) {
     Box(
         Modifier.size(size).clip(CircleShape)
             .background(Brush.radialGradient(listOf(K.Surface, K.Panel)))
@@ -104,7 +104,7 @@ fun FlagBadge(flag: String, size: Dp = 44.dp, ring: Color = K.Gold.copy(alpha = 
     ) { T(flag, size = (size.value * .46f).sp, weight = FontWeight.Normal) }
 }
 
-/** نشان پینگ: سبز (خوب)، طلایی (متوسط)، قرمز (بد) */
+/** نشان پینگ: رنگ «وصل» تم (خوب)، هشدار (متوسط)، خطا (بد) */
 @Composable
 fun PingChip(ms: Long?, modifier: Modifier = Modifier) {
     if (ms == null) return
@@ -112,11 +112,11 @@ fun PingChip(ms: Long?, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(50)
     Row(
         modifier.clip(shape).background(c.copy(alpha = .12f)).border(1.dp, c.copy(alpha = .45f), shape)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = D.S2, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Dot(c, 5.dp)
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(D.S1))
         T(if (ms < 0) "✕" else "${ms}ms", size = 10.sp, color = c, font = Poppins, weight = FontWeight.Bold, ltr = true)
     }
 }
@@ -147,12 +147,12 @@ fun Spinner(size: Dp = 16.dp, color: Color = K.Gold) {
 
 /** دکمه‌ی گرد آیکون‌دار */
 @Composable
-fun RoundIcon(size: Dp = 40.dp, tint: Color = K.Gold, filled: Boolean = false, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+fun RoundIcon(size: Dp = D.IconBox, tint: Color = K.Gold, filled: Boolean = false, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     Box(
         Modifier.size(size).clip(CircleShape)
             .background(if (filled) Brush.verticalGradient(listOf(tint.copy(alpha = .30f), tint.copy(alpha = .10f))) else Brush.verticalGradient(listOf(K.Surface, K.Panel)))
             .border(1.dp, tint.copy(alpha = .55f), CircleShape)
-            .clickable(onClick = onClick),
+            .pressable(scale = .93f, onClick = onClick),
         contentAlignment = Alignment.Center,
         content = content,
     )
@@ -185,11 +185,11 @@ fun HDivider(modifier: Modifier = Modifier) {
 /** دکمه‌ی کوچک طلایی */
 @Composable
 fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(38.dp).clip(shape)
+        modifier.height(D.BtnS).clip(shape)
             .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
-            .clickable(onClick = onClick).padding(horizontal = 16.dp),
+            .pressable(onClick = onClick).padding(horizontal = D.S4),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
@@ -197,11 +197,11 @@ fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) 
 /** دکمه‌ی کوچک خطی */
 @Composable
 fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(38.dp).clip(shape).background(color.copy(alpha = .08f))
+        modifier.height(D.BtnS).clip(shape).background(color.copy(alpha = .08f))
             .border(1.dp, color.copy(alpha = .6f), shape)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp),
+            .pressable(onClick = onClick).padding(horizontal = D.S3),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = color, weight = FontWeight.Bold) }
 }
@@ -211,7 +211,7 @@ fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold
 fun Heading(title: String, sub: String? = null, modifier: Modifier = Modifier, trailing: @Composable RowScope.() -> Unit = {}) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            T(title, size = 20.sp, color = K.Text, weight = FontWeight.Black)
+            T(title, size = D.TxtPage, color = K.Text, weight = FontWeight.Black)
             sub?.let { T(it, size = 12.sp, color = K.Sub, weight = FontWeight.Normal) }
         }
         trailing()
