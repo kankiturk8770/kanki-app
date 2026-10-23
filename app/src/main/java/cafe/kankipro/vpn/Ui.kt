@@ -84,32 +84,33 @@ val Themes: List<Palette> = listOf(
         accent = Color(0xFF4D8DFF), // یاقوت کبود
         connected = Color(0xFF3FD995), // زمرد
         modeSmart = Color(0xFFFFC72C), // طلایی
-        modeGame = Color(0xFFFF3D5E), // یاقوت سرخ
+        modeGame = Color(0xFFE8364F), // یاقوت سرخ
         modeAnti = Color(0xFF4D8DFF), // یاقوت کبود
         modeDns = Color(0xFFA98BFF), // آمتیست
-        mix = Color(0xFFFF3D5E),
+        mix = Color(0xFFE8364F),
         danger = Color(0xFFFF6A3D), warn = Color(0xFFFFB547),
         userCountry = Color(0xFF4D8DFF),
         toggleOn = Color(0xFFFFC72C),
         gameAlt = Color(0xFFFFC72C), tracer = Color(0xFFFFE27A),
     ),
-    // گرافیت (تیره‌ی مینیمال): نقره‌ای و زغالی با رنگ دوم طلای رز، و همان رنگ‌های جواهری کم‌رنگ و پاستلی برای حالت‌ها
+    // زرشکی (AMOLED): زمینه و کارت‌ها مشکی خالص تا پیکسل‌های صفحه‌ی AMOLED خاموش بمانند، زرشکی غنی رنگ اصلی و طلایی
+    // شامپاینی رنگ دوم (لبه‌ی کارت‌ها، نقشه، ستاره‌ها)؛ حالت‌ها با تُن‌های گرم همین جفت: زرشکی، آتشی، صدفی، آلویی؛ وصل طلایی
     Palette(
-        "mono", Color(0xFFD8DDE6), Color(0xFFFFFFFF), Color(0xFF5F6672), Color(0xFFF8FAFC),
-        Color(0xFF090A0C), Color(0xFFEEF1F6), Color(0xFF89909E),
-        Color(0xFF0A0B0E), Color(0xFF10131A), Color(0xFF050608),
-        Color(0xE614171D), Color(0xF01B1E26), Color(0xFF12141A), Color(0xFF101216),
-        accent = Color(0xFFE8B4A0), // طلای رز
-        connected = Color(0xFF8EE0BE), // نعنایی یخی
-        modeSmart = Color(0xFFD8DDE6), // نقره‌ای
-        modeGame = Color(0xFFEE8A9A), // سرخ پاستلی
-        modeAnti = Color(0xFF8FB8F0), // آبی یخی
-        modeDns = Color(0xFFB9A9EC), // یاسی
-        mix = Color(0xFFEE8A9A),
-        danger = Color(0xFFE5706A), warn = Color(0xFFE8CB8F),
-        userCountry = Color(0xFFE8B4A0),
-        toggleOn = Color(0xFFE8B4A0),
-        gameAlt = Color(0xFFE6E9F0), tracer = Color(0xFFE8B4A0),
+        "crimson", Color(0xFFE0284A), Color(0xFFFF6B80), Color(0xFF8E0E26), Color(0xFFFF9AA8),
+        Color(0xFF000000), Color(0xFFFFF5F6), Color(0xFFA8949A),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xF0060103), Color(0xF50B0205), Color(0xFF070103), Color(0xFF1A0006),
+        accent = Color(0xFFE6C79C), // طلایی شامپاینی
+        connected = Color(0xFFFFD166), // طلایی گرم
+        modeSmart = Color(0xFFE0284A), // زرشکی
+        modeGame = Color(0xFFFF6A3D), // آتشی
+        modeAnti = Color(0xFFEBD9DD), // صدفی
+        modeDns = Color(0xFFB565D9), // آلویی
+        mix = Color(0xFFFF6A3D),
+        danger = Color(0xFFFF4D4D), warn = Color(0xFFFFB347),
+        userCountry = Color(0xFFE6C79C),
+        toggleOn = Color(0xFFE0284A),
+        gameAlt = Color(0xFFFFC14D), tracer = Color(0xFFFFE08A),
     ),
     // نئون (رنگی، حس سینت‌ویو): فیروزه‌ای و سرخابی که همه‌جا با هم می‌آیند (لبه‌ی کارت‌ها، نقشه، نور زمینه)، با بنفش و
     // نارنجیِ غروب برای حالت‌ها؛ سبز کنار سرخابی ندارد
