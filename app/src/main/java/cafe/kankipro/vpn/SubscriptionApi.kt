@@ -130,8 +130,13 @@ object SubscriptionApi {
         val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
         val threads = urls.mapIndexed { i, u ->
             Thread {
-                if (i > 0) runCatching { Thread.sleep(300) }
-                done.put(runCatching { u to fetch(u) })
+                // آدرس‌هایی که دیر رسیدند بعد از برنده interrupt می‌شوند: put در رشته‌ی interrupt‌شده
+                // InterruptedException می‌داد و چون کسی آن را نمی‌گرفت، کل برنامه می‌بست (کرش «لینک ساب»).
+                // offer هیچ‌وقت منتظر نمی‌ماند و خطا نمی‌دهد؛ هر خطای دیگری هم همین‌جا تمام می‌شود.
+                runCatching {
+                    if (i > 0) runCatching { Thread.sleep(300) }
+                    done.offer(runCatching { u to fetch(u) })
+                }
             }.apply { isDaemon = true; start() }
         }
         var last: Throwable? = null
