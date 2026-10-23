@@ -43,7 +43,7 @@ abstract class ShotsBase {
 
     protected val out = File(System.getProperty("user.dir") ?: ".", "build/shots").apply { mkdirs() }
 
-    protected fun shot(name: String, theme: String = "gold", content: @Composable () -> Unit) {
+    protected fun shot(name: String, theme: String = "crimson", content: @Composable () -> Unit) {
         ThemeState.set(theme)
         LangState.lang = "fa"
         rule.mainClock.autoAdvance = false
@@ -232,7 +232,7 @@ abstract class ShotsBase {
         "10-emergency" to pgEmergency(),
     )
 
-    // ------------------------------------------------------------------ تم طلایی کانکی (پیش‌فرض)
+    // ------------------------------------------------------------------ تم زرد کانکی
     // ------------------------------------------------------------------ فریم‌های انیمیشن (برای GIF)
 
     /**
@@ -347,18 +347,18 @@ abstract class ShotsBase {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h640dp-xxhdpi")
 class ShotsSmall : ShotsBase() {
-    @Test fun w01() = shot("s640-gold-01-home-off", "gold", pgHomeOff())
-    @Test fun w02() = shot("s640-gold-02-home-on", "gold", pgHomeOn())
-    @Test fun w03() = shot("s640-gold-03-home-smart", "gold", pgHomeSmart())
-    @Test fun w04() = shot("s640-gold-11-home-connecting", "gold", pgHomeConnecting())
-    @Test fun w05() = shot("s640-gold-12-home-dns", "gold", pgHomeDns())
-    @Test fun w06() = shot("s640-gold-13-home-alert", "gold", pgHomeAlert())
-    @Test fun w07() = shot("s640-gold-14-home-game-on", "gold", pgHomeGameOn())
-    @Test fun w08() = shot("s640-crimson-01-home-off", "crimson", pgHomeOff())
-    @Test fun w09() = shot("s640-crimson-02-home-on", "crimson", pgHomeOn())
-    @Test fun w10() = shot("s640-neon-01-home-off", "neon", pgHomeOff())
-    @Test fun w11() = shot("s640-neon-02-home-on", "neon", pgHomeOn())
-    @Test fun w12() = shot("s640-gold-04-servers", "gold", pgServers())
+    @Test fun w01() = shot("s640-crimson-01-home-off", "crimson", pgHomeOff())
+    @Test fun w02() = shot("s640-crimson-02-home-on", "crimson", pgHomeOn())
+    @Test fun w03() = shot("s640-crimson-03-home-smart", "crimson", pgHomeSmart())
+    @Test fun w04() = shot("s640-crimson-11-home-connecting", "crimson", pgHomeConnecting())
+    @Test fun w05() = shot("s640-crimson-12-home-dns", "crimson", pgHomeDns())
+    @Test fun w06() = shot("s640-crimson-13-home-alert", "crimson", pgHomeAlert())
+    @Test fun w07() = shot("s640-crimson-14-home-game-on", "crimson", pgHomeGameOn())
+    @Test fun w08() = shot("s640-gold-01-home-off", "gold", pgHomeOff())
+    @Test fun w09() = shot("s640-gold-02-home-on", "gold", pgHomeOn())
+    @Test fun w10() = shot("s640-purple-01-home-off", "purple", pgHomeOff())
+    @Test fun w11() = shot("s640-purple-02-home-on", "purple", pgHomeOn())
+    @Test fun w12() = shot("s640-crimson-04-servers", "crimson", pgServers())
 }
 
 /** گوشی‌های میانی (۳۶۰×۷۴۰ و ۳۹۳×۸۵۰): همان حالت‌های صفحه‌ی خانه، برای چک جا شدن بدون اسکرول */
@@ -366,22 +366,22 @@ class ShotsSmall : ShotsBase() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h740dp-xxhdpi")
 class ShotsMid : ShotsBase() {
-    @Test fun a01() = shot("s740-gold-01-home-off", "gold", pgHomeOff())
-    @Test fun a02() = shot("s740-gold-02-home-on", "gold", pgHomeOn())
-    @Test fun a03() = shot("s740-gold-03-home-smart", "gold", pgHomeSmart())
-    @Test fun a04() = shot("s740-gold-12-home-dns", "gold", pgHomeDns())
-    @Test fun a05() = shot("s740-gold-13-home-alert", "gold", pgHomeAlert())
+    @Test fun a01() = shot("s740-crimson-01-home-off", "crimson", pgHomeOff())
+    @Test fun a02() = shot("s740-crimson-02-home-on", "crimson", pgHomeOn())
+    @Test fun a03() = shot("s740-crimson-03-home-smart", "crimson", pgHomeSmart())
+    @Test fun a04() = shot("s740-crimson-12-home-dns", "crimson", pgHomeDns())
+    @Test fun a05() = shot("s740-crimson-13-home-alert", "crimson", pgHomeAlert())
 }
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w393dp-h850dp-xxhdpi")
 class ShotsTall : ShotsBase() {
-    @Test fun b01() = shot("s850-gold-01-home-off", "gold", pgHomeOff())
-    @Test fun b02() = shot("s850-gold-02-home-on", "gold", pgHomeOn())
-    @Test fun b03() = shot("s850-gold-03-home-smart", "gold", pgHomeSmart())
-    @Test fun b04() = shot("s850-gold-12-home-dns", "gold", pgHomeDns())
-    @Test fun b05() = shot("s850-gold-13-home-alert", "gold", pgHomeAlert())
+    @Test fun b01() = shot("s850-crimson-01-home-off", "crimson", pgHomeOff())
+    @Test fun b02() = shot("s850-crimson-02-home-on", "crimson", pgHomeOn())
+    @Test fun b03() = shot("s850-crimson-03-home-smart", "crimson", pgHomeSmart())
+    @Test fun b04() = shot("s850-crimson-12-home-dns", "crimson", pgHomeDns())
+    @Test fun b05() = shot("s850-crimson-13-home-alert", "crimson", pgHomeAlert())
 }
 
 // ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر سه تم (۴۱۱×۹۱۵dp)
@@ -412,16 +412,16 @@ class Shots : ShotsBase() {
     @Test fun m09() = shot("crimson-09-intro", "crimson", pgIntro())
     @Test fun m10() = shot("crimson-10-emergency", "crimson", pgEmergency())
 
-    // ------------------------------------------------------------------ تم نئون (رنگی)
-    @Test fun n01() = shot("neon-01-home-off", "neon", pgHomeOff())
-    @Test fun n02() = shot("neon-02-home-on", "neon", pgHomeOn())
-    @Test fun n03() = shot("neon-03-home-smart", "neon", pgHomeSmart())
-    @Test fun n04() = shot("neon-04-servers", "neon", pgServers())
-    @Test fun n05() = shot("neon-05-speed", "neon", pgSpeed())
-    @Test fun n06() = shot("neon-06-settings", "neon", pgSettings())
-    @Test fun n07() = shot("neon-07-account", "neon", pgAccount())
-    @Test fun n08() = shot("neon-08-gaming", "neon", pgGame())
-    @Test fun n09() = shot("neon-09-intro", "neon", pgIntro())
-    @Test fun n10() = shot("neon-10-emergency", "neon", pgEmergency())
+    // ------------------------------------------------------------------ تم بنفش سلطنتی
+    @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())
+    @Test fun n02() = shot("purple-02-home-on", "purple", pgHomeOn())
+    @Test fun n03() = shot("purple-03-home-smart", "purple", pgHomeSmart())
+    @Test fun n04() = shot("purple-04-servers", "purple", pgServers())
+    @Test fun n05() = shot("purple-05-speed", "purple", pgSpeed())
+    @Test fun n06() = shot("purple-06-settings", "purple", pgSettings())
+    @Test fun n07() = shot("purple-07-account", "purple", pgAccount())
+    @Test fun n08() = shot("purple-08-gaming", "purple", pgGame())
+    @Test fun n09() = shot("purple-09-intro", "purple", pgIntro())
+    @Test fun n10() = shot("purple-10-emergency", "purple", pgEmergency())
 
 }

@@ -138,7 +138,7 @@ fun WorldMap(
         fun proj(g: Geo) = Offset(((g.lon - v.lon0) * sx).toFloat(), ((v.lat0 - g.lat) * sy).toFloat())
 
         val selIso = sel?.iso
-        val selColor = if (connected) K.Green else accent
+        val selColor = if (connected) K.Gold else accent
         val border = 1f / sx
         // کشور شما: رنگ userCountry تم؛ با DNS وصل، رنگ DNS
         val youColor = if (dns && connected) accent else K.UserCountry
@@ -161,8 +161,8 @@ fun WorldMap(
                     countries?.forEach { c ->
                         if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
                         // خشکی شیشه‌ای تیره با مرز به رنگ تم؛ کشور شما userCountry، کشور سرور به رنگ لهجه (وصل: رنگ «وصل») و درخشان
-                        // خشکی کمی به رنگ دوم تم (طلایی: سرمه‌ای با مرز طلایی)
-                        drawPath(c.path, lerp(K.Panel, K.Accent, .14f).copy(alpha = .55f))
+                        // خشکی تیره و کمی به رنگ تم، مرزها به رنگ تم
+                        drawPath(c.path, lerp(Color(0xFF1E1E1A), K.Gold, .06f).copy(alpha = .75f))
                         when (c.iso) {
                             selIso -> {
                                 drawPath(c.path, selColor.copy(alpha = .32f))
@@ -170,8 +170,9 @@ fun WorldMap(
                                 drawPath(c.path, selColor, style = Stroke(border * 1.8f))
                             }
                             userIso -> {
-                                drawPath(c.path, youColor.copy(alpha = .20f))
-                                drawPath(c.path, youColor.copy(alpha = .6f), style = Stroke(border * 1.2f))
+                                drawPath(c.path, youColor.copy(alpha = .16f))
+                                drawPath(c.path, youColor.copy(alpha = .25f), style = Stroke(border * 4f))
+                                drawPath(c.path, youColor.copy(alpha = .75f), style = Stroke(border * 1.4f))
                             }
                             else -> {
                                 drawPath(c.path, K.Gold.copy(alpha = .10f), style = Stroke(border * 3f))
@@ -217,11 +218,13 @@ fun WorldMap(
                 for (i in 1..(steps * draw).toInt().coerceAtLeast(1)) { val o = bez(i / steps.toFloat()); lineTo(o.x, o.y) }
             }
             val sw = w / 240f
+            // کمان از رنگ کشور شما به رنگ اصلی تم (سرور)، با نور سفیدی که رویش می‌دود
+            fun arc(al: Float) = Brush.linearGradient(listOf(K.UserCountry.copy(alpha = al), K.Gold.copy(alpha = al)), start = a, end = b)
             for ((m, al) in listOf(5f to .07f, 3f to .16f, 1.8f to .36f, 1f to 1f)) {
-                drawPath(path, K.Green.copy(alpha = al), style = Stroke(sw * m, cap = StrokeCap.Round))
+                drawPath(path, arc(al), style = Stroke(sw * m, cap = StrokeCap.Round))
             }
-            drawPath(path, Color.White.copy(alpha = .7f), style = Stroke(sw * .35f, cap = StrokeCap.Round))
-            if (draw >= 1f) neonDot(K.Green, bez(flow), sw * 1.5f)
+            drawPath(path, Color.White.copy(alpha = .55f), style = Stroke(sw * .3f, cap = StrokeCap.Round))
+            if (draw >= 1f) for (k in 0 until 3) neonDot(Color.White, bez((flow + k / 3f) % 1f), sw * 1.2f)
         }
 
         val pr = w / 34f

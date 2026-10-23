@@ -193,11 +193,21 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
     ) {
         KTab.entries.forEachIndexed { i, t ->
             val sel = t == current
-            val c = if (sel) K.Gold else K.Sub
+            val p = ThemeState.current
+            val c = if (sel) p.onNav else K.Sub
             val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
             val ts = RoundedCornerShape(D.RM)
+            // تب انتخاب‌شده: پر با گرادیان رنگ تم (navTop ← navBottom)، لبه‌ی روشن و درخشش ملایم
+            val selMod = Modifier
+                .drawBehind {
+                    val o = ts.createOutline(size, layoutDirection, this)
+                    for ((w, a) in listOf(10f to .08f, 5f to .16f)) drawOutline(o, p.gold.copy(alpha = a), style = Stroke(w.dp.toPx()))
+                }
+                .clip(ts)
+                .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
+                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f), p.goldLight.copy(alpha = .25f))), ts)
             Column(
-                Modifier.weight(1f).then(if (sel) Modifier.goldGlass(ts, selected = true) else Modifier.clip(ts))
+                Modifier.weight(1f).then(if (sel) selMod else Modifier.clip(ts))
                     .clickable { onSelect(t) }
                     .guideTarget(ids[i])
                     .padding(vertical = D.S2),
@@ -529,10 +539,14 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                         Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round),
                     )
                 }
-                // وصل: دو موج طلایی که از دکمه بیرون می‌زنند
+                // وصل: لبه‌ی خط‌چین و دو موج به رنگ دوم تم (رنگ «وصل») که از دکمه بیرون می‌زنند
+                if (onA > .01f && goldA > .01f) drawCircle(
+                    K.Accent.copy(alpha = .55f * onA * goldA), r + 1.dp.toPx(), c,
+                    style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(r * .75f, r * .25f), -time * r)),
+                )
                 if (onA > .01f) for (k in 0 until 2) {
                     val p = ((time / 2.6f) + k * .5f) % 1f
-                    drawCircle(K.GoldLight.copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
+                    drawCircle(K.Accent.copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
                 }
                 if (gOn > .01f) heartbeat(env * (.6f + .5f * amp), gOn, c, r)
                 if (game && blast.value < 1f) connectBlast(blast.value, c, r)

@@ -68,68 +68,71 @@ class Palette(
     val toggleOn: Color,
     /** نئون دوم لبه‌ی دکمه‌ی گیمینگ (کنار modeGame) و رنگ تیرهای گیمینگ */
     val gameAlt: Color, val tracer: Color,
+    /** تب انتخاب‌شده‌ی نوار پایین: گرادیان بالا به پایین و رنگ نوشته‌ی رویش */
+    val navTop: Color, val navBottom: Color, val onNav: Color,
 ) {
     /** نام قدیمی رنگ «وصل» */
     val ok: Color get() = connected
 }
 
 val Themes: List<Palette> = listOf(
-    // طلایی کانکی (پیش‌فرض و هویت برند): طلایی و مشکی با رنگ دوم یاقوت کبود (لبه‌ی کارت‌ها، خشکی نقشه، نور زمینه، ستاره‌ها)
-    // و رنگ‌های جواهری هم‌شدت برای حالت‌ها: هوشمند طلایی، گیمینگ یاقوت سرخ، ضد فیلتر یاقوت کبود، DNS آمتیست، وصل زمرد
+    // زرشکی (پیش‌فرض): زرشکی غنی با طلایی شامپاینی (وصل، کشور شما، خط مسیر)؛ حالت‌ها زرشکی، آتشی، شامپاینی، آلویی
     Palette(
-        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
-        Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
-        Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
-        Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700),
-        accent = Color(0xFF4D8DFF), // یاقوت کبود
-        connected = Color(0xFF3FD995), // زمرد
-        modeSmart = Color(0xFFFFC72C), // طلایی
-        modeGame = Color(0xFFE8364F), // یاقوت سرخ
-        modeAnti = Color(0xFF4D8DFF), // یاقوت کبود
-        modeDns = Color(0xFFA98BFF), // آمتیست
-        mix = Color(0xFFE8364F),
-        danger = Color(0xFFFF6A3D), warn = Color(0xFFFFB547),
-        userCountry = Color(0xFF4D8DFF),
-        toggleOn = Color(0xFFFFC72C),
-        gameAlt = Color(0xFFFFC72C), tracer = Color(0xFFFFE27A),
-    ),
-    // زرشکی (AMOLED): زمینه و کارت‌ها مشکی خالص تا پیکسل‌های صفحه‌ی AMOLED خاموش بمانند، زرشکی غنی رنگ اصلی و طلایی
-    // شامپاینی رنگ دوم (لبه‌ی کارت‌ها، نقشه، ستاره‌ها)؛ حالت‌ها با تُن‌های گرم همین جفت: زرشکی، آتشی، صدفی، آلویی؛ وصل طلایی
-    Palette(
-        "crimson", Color(0xFFE0284A), Color(0xFFFF6B80), Color(0xFF8E0E26), Color(0xFFFF9AA8),
+        "crimson", Color(0xFFE8203F), Color(0xFFFF5C74), Color(0xFF9E0E28), Color(0xFFFF7A8E),
         Color(0xFF000000), Color(0xFFFFF5F6), Color(0xFFA8949A),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xF0060103), Color(0xF50B0205), Color(0xFF070103), Color(0xFF1A0006),
-        accent = Color(0xFFE6C79C), // طلایی شامپاینی
-        connected = Color(0xFFFFD166), // طلایی گرم
-        modeSmart = Color(0xFFE0284A), // زرشکی
-        modeGame = Color(0xFFFF6A3D), // آتشی
-        modeAnti = Color(0xFFEBD9DD), // صدفی
+        Color(0xE60A0305), Color(0xF0120509), Color(0xFF0A0305), Color(0xFFFFFFFF),
+        accent = Color(0xFFF2C879), // طلایی شامپاینی
+        connected = Color(0xFFF2C879),
+        modeSmart = Color(0xFFE8203F), // زرشکی
+        modeGame = Color(0xFFFF7A3D), // آتشی
+        modeAnti = Color(0xFFF2C879), // شامپاینی
         modeDns = Color(0xFFB565D9), // آلویی
-        mix = Color(0xFFFF6A3D),
+        mix = Color(0xFFFF7A3D),
         danger = Color(0xFFFF4D4D), warn = Color(0xFFFFB347),
-        userCountry = Color(0xFFE6C79C),
-        toggleOn = Color(0xFFE0284A),
-        gameAlt = Color(0xFFFFC14D), tracer = Color(0xFFFFE08A),
+        userCountry = Color(0xFFF2C879),
+        toggleOn = Color(0xFFE8203F),
+        gameAlt = Color(0xFFF2C879), tracer = Color(0xFFFFE08A),
+        // تب انتخاب‌شده: زرشکی عمیق (نه صورتی روشن) با نوشته‌ی سفید
+        navTop = Color(0xFFC0152F), navBottom = Color(0xFF6E0918), onNav = Color(0xFFFFFFFF),
     ),
-    // نئون (رنگی، حس سینت‌ویو): فیروزه‌ای و سرخابی که همه‌جا با هم می‌آیند (لبه‌ی کارت‌ها، نقشه، نور زمینه)، با بنفش و
-    // نارنجیِ غروب برای حالت‌ها؛ سبز کنار سرخابی ندارد
+    // زرد کانکی: زرد خالص روی مشکی با فیروزه‌ای برقی (وصل، کشور شما، خط مسیر)؛ حالت‌ها زرد، قرمز، فیروزه‌ای، بنفش
     Palette(
-        "neon", Color(0xFF22E4FF), Color(0xFF9BF7FF), Color(0xFF0A7FA8), Color(0xFFD6FBFF),
-        Color(0xFF020409), Color(0xFFEDFBFF), Color(0xFF7FA6B8),
-        Color(0xFF040814), Color(0xFF0A1224), Color(0xFF020409),
-        Color(0xE60A1626), Color(0xF00E1A30), Color(0xFF081020), Color(0xFF02181F),
-        accent = Color(0xFFFF3DDB), // سرخابی
-        connected = Color(0xFF4DFFE1), // آبی‌آسمانی درخشان
-        modeSmart = Color(0xFF22E4FF), // فیروزه‌ای
-        modeGame = Color(0xFFFF3DDB), // سرخابی
-        modeAnti = Color(0xFF9B6BFF), // بنفش
-        modeDns = Color(0xFFFF9D4D), // نارنجی غروب
-        mix = Color(0xFFFF3DDB),
-        danger = Color(0xFFFF4A6E), warn = Color(0xFFFFC94D),
-        userCountry = Color(0xFFFF3DDB),
-        toggleOn = Color(0xFF22E4FF),
-        gameAlt = Color(0xFF9B6BFF), tracer = Color(0xFF22E4FF),
+        "gold", Color(0xFFFFD60A), Color(0xFFFFE766), Color(0xFFB89600), Color(0xFFFFF6B0),
+        Color(0xFF000000), Color(0xFFF7F6F0), Color(0xFF9C998E),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xE60A0A09), Color(0xF0121210), Color(0xFF0A0A09), Color(0xFF111111),
+        accent = Color(0xFF2FD9FF), // فیروزه‌ای برقی
+        connected = Color(0xFF2FD9FF),
+        modeSmart = Color(0xFFFFD60A), // زرد
+        modeGame = Color(0xFFFF3B5C), // قرمز
+        modeAnti = Color(0xFF2FD9FF), // فیروزه‌ای
+        modeDns = Color(0xFFA78BFA), // بنفش ملایم
+        mix = Color(0xFFFF3B5C),
+        danger = Color(0xFFFF5A4D), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFF2FD9FF),
+        toggleOn = Color(0xFFFFD60A),
+        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFE766),
+        navTop = Color(0xFFFFE766), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+    ),
+    // بنفش سلطنتی: بنفش روشن با نعنایی یخی (وصل، کشور شما، خط مسیر)؛ حالت‌ها بنفش، صورتی، نعنایی، کهربایی
+    Palette(
+        "purple", Color(0xFFA259FF), Color(0xFFC9A2FF), Color(0xFF5B21B6), Color(0xFFC9A2FF),
+        Color(0xFF000000), Color(0xFFF6F2FF), Color(0xFF9E94B4),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xE6080512), Color(0xF00F0A1C), Color(0xFF07040E), Color(0xFFFFFFFF),
+        accent = Color(0xFF3DF5C8), // نعنایی یخی
+        connected = Color(0xFF3DF5C8),
+        modeSmart = Color(0xFFA259FF), // بنفش
+        modeGame = Color(0xFFFF5FA2), // صورتی
+        modeAnti = Color(0xFF3DF5C8), // نعنایی
+        modeDns = Color(0xFFFFB84D), // کهربایی
+        mix = Color(0xFFFF5FA2),
+        danger = Color(0xFFFF5A6E), warn = Color(0xFFFFB84D),
+        userCountry = Color(0xFF3DF5C8),
+        toggleOn = Color(0xFFA259FF),
+        gameAlt = Color(0xFFC9A2FF), tracer = Color(0xFF3DF5C8),
+        navTop = Color(0xFFC9A2FF), navBottom = Color(0xFFA259FF), onNav = Color(0xFFFFFFFF),
     ),
 )
 
@@ -147,6 +150,7 @@ fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
     mix = lerp(a.mix, b.mix, f), danger = lerp(a.danger, b.danger, f), warn = lerp(a.warn, b.warn, f),
     userCountry = lerp(a.userCountry, b.userCountry, f), toggleOn = lerp(a.toggleOn, b.toggleOn, f),
     gameAlt = lerp(a.gameAlt, b.gameAlt, f), tracer = lerp(a.tracer, b.tracer, f),
+    navTop = lerp(a.navTop, b.navTop, f), navBottom = lerp(a.navBottom, b.navBottom, f), onNav = lerp(a.onNav, b.onNav, f),
 )
 
 object ThemeState {
@@ -335,32 +339,43 @@ private val motes: List<Mote> = run {
 @Composable
 fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(K.Ink)) {
-        // گرادیان عمودی تم + هاله‌ی لهجه در مرکز + وینیت لبه‌ها (همه با کد)
+        // مشکی خالص (AMOLED) + بافت شش‌ضلعی خیلی کم‌رنگ + هاله‌ی رنگ تم پشت دکمه و رنگ دوم از گوشه‌ی پایین (همه با کد)
         Box(
             Modifier.fillMaxSize().graphicsLayer().drawBehind {
                 drawRect(Brush.verticalGradient(listOf(K.BgTop, K.BgMid, K.BgBottom)))
-                val c = Offset(size.width / 2, size.height * .40f)
+                drawPath(hexGrid(size, 16.dp.toPx()), K.Gold.copy(alpha = .045f), style = Stroke(.7.dp.toPx()))
+                val c = Offset(size.width / 2, size.height * .52f)
                 drawCircle(
-                    Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f),
-                    size.width * .95f, c,
+                    Brush.radialGradient(listOf(accent.copy(alpha = .13f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .75f),
+                    size.width * .75f, c,
                 )
-                // نور خیلی ملایم رنگ دوم تم از گوشه‌ی پایین و بالا، تا زمینه تک‌رنگ نباشد
-                val c2 = Offset(size.width * .05f, size.height * .92f)
-                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .09f), Color.Transparent), c2, size.width * .9f), size.width * .9f, c2)
-                val c3 = Offset(size.width * .98f, size.height * .06f)
-                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .06f), Color.Transparent), c3, size.width * .7f), size.width * .7f, c3)
-                // وینیت: تیره شدن ملایم لبه‌ها برای عمق بیشتر
-                drawRect(
-                    Brush.radialGradient(
-                        listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .38f)),
-                        Offset(size.width / 2, size.height * .52f),
-                        size.maxDimension * .72f,
-                    ),
-                )
+                val c2 = Offset(0f, size.height)
+                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .07f), Color.Transparent), c2, size.width * .85f), size.width * .85f, c2)
+                val c3 = Offset(size.width, 0f)
+                drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .06f), Color.Transparent), c3, size.width * .6f), size.width * .6f, c3)
             },
         )
         Twinkles(if (calm) 12 else motes.size, accent)
         content()
+    }
+}
+
+/** شبکه‌ی شش‌ضلعی (بافت زمینه)؛ r شعاع هر شش‌ضلعی */
+private fun hexGrid(size: Size, r: Float): Path = Path().apply {
+    val w = r * 1.7320508f
+    var row = 0
+    var y = -r
+    while (y < size.height + r) {
+        var x = if (row % 2 == 0) 0f else w / 2
+        while (x < size.width + w) {
+            for (k in 0..6) {
+                val a = Math.toRadians(60.0 * k - 30.0)
+                val px = x + r * cos(a).toFloat(); val py = y + r * sin(a).toFloat()
+                if (k == 0) moveTo(px, py) else lineTo(px, py)
+            }
+            x += w
+        }
+        y += r * 1.5f; row++
     }
 }
 
@@ -505,35 +520,31 @@ enum class VState { OFF, CONNECTING, ON }
  * selected: لبه‌ی روشن‌تر و ضخیم‌تر، درخشش بیشتر و ته‌رنگ طلایی داخل کارت.
  */
 fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier = this
+    // شیشه‌ی تیره روی زمینه‌ی مشکی: سایه‌ی نرم زیر کارت و درخشش کم‌رنگ لبه (انتخاب‌شده پررنگ‌تر)
     .drawBehind {
         val o = shape.createOutline(size, layoutDirection, this)
-        val layers = if (selected) listOf(12f to .07f, 7f to .14f, 3.5f to .30f) else listOf(9f to .05f, 4.5f to .10f, 2f to .16f)
-        for ((m, a) in layers) drawOutline(o, lerp(tint, K.Accent, .35f).copy(alpha = a), style = Stroke(m.dp.toPx()))
+        val layers = if (selected) listOf(12f to .06f, 7f to .12f, 3.5f to .24f) else listOf(8f to .03f, 3f to .06f)
+        for ((m, a) in layers) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
     }
     .clip(shape)
     .background(K.Surface)
     .background(
         Brush.linearGradient(
-            if (selected) listOf(tint.copy(alpha = .26f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .25f), K.Accent.copy(alpha = .12f))
-            else listOf(tint.copy(alpha = .11f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .35f), K.Accent.copy(alpha = .08f)),
+            if (selected) listOf(tint.copy(alpha = .20f), tint.copy(alpha = .05f), Color.Black.copy(alpha = .25f))
+            else listOf(Color.White.copy(alpha = .06f), Color.White.copy(alpha = .01f), Color.Black.copy(alpha = .25f)),
         ),
     )
     .drawWithContent {
-        // براقی شیشه در نیمه‌ی بالا
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .16f else .10f), Color.Transparent), endY = size.height * .5f))
+        // براقی خیلی کم شیشه در بالای کارت
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .10f else .05f), Color.Transparent), endY = size.height * .45f))
         drawContent()
-        // خط نور طلایی وسط لبه‌ی پایین
-        val y = size.height - 1.dp.toPx()
-        val line = Brush.horizontalGradient(listOf(Color.Transparent, K.GoldLight, Color.Transparent), startX = size.width * .16f, endX = size.width * .84f)
-        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 3.dp.toPx(), alpha = .35f)
-        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 1.2.dp.toPx())
     }
+    // لبه‌ی ظریف: از گوشه‌ی بالا پررنگ، وسط کم‌رنگ و دوباره کمی پررنگ در گوشه‌ی مقابل
     .border(
         if (selected) 1.5.dp else 1.dp,
         Brush.linearGradient(
-            // لبه از رنگ کارت به رنگ دوم تم می‌رود (طلایی ← یاقوت کبود، نقره‌ای ← طلای رز، فیروزه‌ای ← سرخابی)
-            if (selected) listOf(K.Shine, K.GoldLight, tint, K.Accent)
-            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .30f), K.Accent.copy(alpha = .45f), K.Accent.copy(alpha = .90f)),
+            if (selected) listOf(K.Shine, tint, tint.copy(alpha = .45f), tint)
+            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .15f), Color.White.copy(alpha = .08f), tint.copy(alpha = .45f)),
         ),
         shape,
     )
@@ -831,15 +842,12 @@ fun DrawScope.navIcon(kind: Int, c: Color) {
             drawLine(c, Offset(w * .5f, w * .56f), Offset(w * .68f, w * .36f), sw, cap = StrokeCap.Round)
             drawCircle(c, w * .06f, Offset(w * .5f, w * .56f))
         }
-        else -> { // تنظیمات (خورشید/چرخ‌دنده)
-            for (i in 0 until 8) {
-                val a = Math.toRadians(i * 45.0)
-                drawLine(
-                    c, Offset(w / 2 + w * .31f * cos(a).toFloat(), w / 2 + w * .31f * sin(a).toFloat()),
-                    Offset(w / 2 + w * .43f * cos(a).toFloat(), w / 2 + w * .43f * sin(a).toFloat()), sw, cap = StrokeCap.Round,
-                )
+        else -> { // تنظیمات (سه کشویی تنظیم)
+            for ((y, k) in listOf(.26f to .64f, .5f to .34f, .74f to .58f)) {
+                drawLine(c, Offset(w * .12f, w * y), Offset(w * .88f, w * y), sw, cap = StrokeCap.Round)
+                drawCircle(Color.Black, w * .11f, Offset(w * k, w * y))
+                drawCircle(c, w * .11f, Offset(w * k, w * y), style = st)
             }
-            drawCircle(c, w * .20f, center, style = st)
         }
     }
 }

@@ -902,7 +902,7 @@ class AppState private constructor(context: Context) {
         watchState()
         watchHealth()
         watchSync()
-        ThemeState.set(prefs.getString("theme", "gold") ?: "gold")
+        ThemeState.set(prefs.getString("theme", "crimson") ?: "crimson")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
 
