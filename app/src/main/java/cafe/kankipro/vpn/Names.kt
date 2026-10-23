@@ -69,6 +69,36 @@ val flagTable = listOf(
     listOf("MD", "MOLDOVA", "مولداوی") to "🇲🇩",
     listOf("LU", "LUXEMBOURG", "لوکزامبورگ") to "🇱🇺",
     listOf("CY", "CYPRUS", "قبرس") to "🇨🇾",
+    // بقیه‌ی اروپا و همسایه‌ها (کشور خروجی واقعی را پنل با کد ISO می‌دهد؛ اسم و پرچمش از همین جدول است)
+    listOf("SK", "SLOVAKIA", "BRATISLAVA", "اسلواکی") to "🇸🇰",
+    listOf("SI", "SLOVENIA", "LJUBLJANA", "اسلوونی") to "🇸🇮",
+    listOf("HR", "CROATIA", "ZAGREB", "کرواسی") to "🇭🇷",
+    listOf("BA", "BOSNIA", "SARAJEVO", "بوسنی") to "🇧🇦",
+    listOf("AL", "ALBANIA", "TIRANA", "آلبانی") to "🇦🇱",
+    listOf("MK", "MACEDONIA", "SKOPJE", "مقدونیه شمالی") to "🇲🇰",
+    listOf("MONTENEGRO", "PODGORICA", "مونته‌نگرو") to "🇲🇪",
+    listOf("XK", "KOSOVO", "PRISTINA", "کوزوو") to "🇽🇰",
+    listOf("ICELAND", "REYKJAVIK", "ایسلند") to "🇮🇸",
+    listOf("MT", "MALTA", "مالت") to "🇲🇹",
+    listOf("BY", "BELARUS", "MINSK", "بلاروس") to "🇧🇾",
+    listOf("MONACO", "موناکو") to "🇲🇨",
+    listOf("LI", "LIECHTENSTEIN", "لیختن‌اشتاین") to "🇱🇮",
+    listOf("AD", "ANDORRA", "آندورا") to "🇦🇩",
+    listOf("OM", "OMAN", "MUSCAT", "عمان") to "🇴🇲",
+    listOf("BH", "BAHRAIN", "MANAMA", "بحرین") to "🇧🇭",
+    listOf("JO", "JORDAN", "AMMAN", "اردن") to "🇯🇴",
+    listOf("EG", "EGYPT", "CAIRO", "مصر") to "🇪🇬",
+    listOf("PK", "PAKISTAN", "KARACHI", "پاکستان") to "🇵🇰",
+    listOf("TW", "TAIWAN", "TAIPEI", "تایوان") to "🇹🇼",
+    listOf("ZA", "SOUTH AFRICA", "JOHANNESBURG", "آفریقای جنوبی") to "🇿🇦",
+    listOf("MX", "MEXICO", "مکزیک") to "🇲🇽",
+    listOf("AR", "ARGENTINA", "آرژانتین") to "🇦🇷",
+    listOf("CL", "CHILE", "SANTIAGO", "شیلی") to "🇨🇱",
+    listOf("NZ", "NEW ZEALAND", "AUCKLAND", "نیوزیلند") to "🇳🇿",
+    listOf("UZ", "UZBEKISTAN", "TASHKENT", "ازبکستان") to "🇺🇿",
+    listOf("TM", "TURKMENISTAN", "ASHGABAT", "ترکمنستان") to "🇹🇲",
+    listOf("TJ", "TAJIKISTAN", "DUSHANBE", "تاجیکستان") to "🇹🇯",
+    listOf("KG", "KYRGYZSTAN", "BISHKEK", "قرقیزستان") to "🇰🇬",
 )
 
 /** پرچم را از اسم سرور تشخیص می‌دهد (فقط کلمه‌های کامل) */
@@ -116,7 +146,8 @@ fun countryName(iso: String?): String? {
     val f = flagEmoji(iso) ?: return null
     val keys = flagTable.firstOrNull { it.second == f }?.first ?: return null
     return if (LangState.en) {
-        keys.firstOrNull { k -> k.length > 3 && k.all { it in 'A'..'Z' } }?.lowercase()?.replaceFirstChar { it.uppercase() }
+        keys.firstOrNull { k -> k.length > 3 && k.all { it in 'A'..'Z' || it == ' ' } }
+            ?.lowercase()?.split(" ")?.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
     } else {
         keys.lastOrNull { k -> k.any { it in '؀'..'ۿ' } }
     }
@@ -131,6 +162,21 @@ fun cityName(iso: String?): String? {
         "SE" -> "استکهلم" to "Stockholm"; "CA" -> "تورنتو" to "Toronto"; "PL" -> "ورشو" to "Warsaw"
         "AT" -> "وین" to "Vienna"; "AM" -> "ایروان" to "Yerevan"; "SG" -> "سنگاپور" to "Singapore"
         "JP" -> "توکیو" to "Tokyo"; "IR" -> "تهران" to "Tehran"
+        "IT" -> "میلان" to "Milan"; "ES" -> "مادرید" to "Madrid"; "CH" -> "زوریخ" to "Zurich"
+        "BE" -> "بروکسل" to "Brussels"; "CZ" -> "پراگ" to "Prague"; "RO" -> "بخارست" to "Bucharest"
+        "BG" -> "صوفیه" to "Sofia"; "UA" -> "کی‌یف" to "Kyiv"; "KZ" -> "آلماتی" to "Almaty"
+        "GE" -> "تفلیس" to "Tbilisi"; "AZ" -> "باکو" to "Baku"; "IN" -> "بمبئی" to "Mumbai"
+        "KR" -> "سئول" to "Seoul"; "HK" -> "هنگ کنگ" to "Hong Kong"; "AU" -> "سیدنی" to "Sydney"
+        "BR" -> "سائوپائولو" to "Sao Paulo"; "IE" -> "دوبلین" to "Dublin"; "NO" -> "اسلو" to "Oslo"
+        "DK" -> "کپنهاگ" to "Copenhagen"; "LT" -> "ویلنیوس" to "Vilnius"; "LV" -> "ریگا" to "Riga"
+        "EE" -> "تالین" to "Tallinn"; "PT" -> "لیسبون" to "Lisbon"; "GR" -> "آتن" to "Athens"
+        "HU" -> "بوداپست" to "Budapest"; "RS" -> "بلگراد" to "Belgrade"; "MD" -> "کیشیناو" to "Chisinau"
+        "LU" -> "لوکزامبورگ" to "Luxembourg"; "CY" -> "نیکوزیا" to "Nicosia"; "SK" -> "براتیسلاوا" to "Bratislava"
+        "SI" -> "لیوبلیانا" to "Ljubljana"; "HR" -> "زاگرب" to "Zagreb"; "IS" -> "ریکیاویک" to "Reykjavik"
+        "SA" -> "ریاض" to "Riyadh"; "QA" -> "دوحه" to "Doha"; "KW" -> "کویت" to "Kuwait City"
+        "IQ" -> "بغداد" to "Baghdad"; "OM" -> "مسقط" to "Muscat"; "BH" -> "منامه" to "Manama"
+        "TH" -> "بانکوک" to "Bangkok"; "VN" -> "هانوی" to "Hanoi"; "ID" -> "جاکارتا" to "Jakarta"
+        "MY" -> "کوالالامپور" to "Kuala Lumpur"; "BY" -> "مینسک" to "Minsk"; "MT" -> "والتا" to "Valletta"
         else -> return null
     }
     return if (LangState.en) fa.second else fa.first

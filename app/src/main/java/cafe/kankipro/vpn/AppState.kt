@@ -343,12 +343,10 @@ class AppState private constructor(context: Context) {
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
     fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
-    /** پینگ چند کانفیگ با هم (با روش درست هر پروتکل)؛ نتیجه در pings هم ذخیره می‌شود */
+    /** پینگ واقعی چند کانفیگ با هم (Probe)؛ نتیجه در pings هم ذخیره می‌شود */
     private suspend fun pingMany(list: List<Pair<String, String>>): Map<Pair<String, String>, Long?> {
         val res = kotlinx.coroutines.coroutineScope {
-            list.map { c ->
-                async(Dispatchers.IO) { c to infos["${c.first}/${c.second}"]?.let { runCatching { Pinger.test(it) }.getOrNull() } }
-            }.awaitAll()
+            list.map { c -> async { c to probe(c.first, c.second) } }.awaitAll()
         }
         res.forEach { (c, v) -> pings["${c.first}/${c.second}"] = v ?: -1L }
         return res.toMap()
@@ -377,8 +375,10 @@ class AppState private constructor(context: Context) {
             }
             tryStep = "سنجش پینگ…"
             val m = pingMany(all)
-            // کانفیگی که جواب پینگ نداد آخر می‌رود
-            all.sortedBy { m[it]?.takeIf { v -> v > 0 } ?: 99_999L }.take(3)
+            // پینگ واقعی است: کانفیگی که جواب نداد واقعاً وصل نمی‌شود و امتحانش فقط معطلی است
+            // (هر تلاش ناموفق ۱۲ تا ۲۵ ثانیه). فقط اگر هیچ‌کدام جواب نداد، دو تای اول امتحان می‌شوند.
+            val alive = all.filter { (m[it] ?: -1L) > 0 }.sortedBy { m[it] }
+            if (alive.isEmpty()) all.take(2) else alive.take(3)
         } else {
             val n = gameNode
             if (n == null || !hasCfg(n, gameProto)) {
@@ -437,7 +437,8 @@ class AppState private constructor(context: Context) {
         val ranked = pool.filter { ok(it) }.sortedBy { m[it] ?: 99_999L }
         val remembered = prefs.getString(memKey(KMode.FILTER), null)?.split("|")?.takeIf { it.size == 2 }
             ?.let { it[0] to it[1] }?.takeIf { it in pool && ok(it) }
-        val list = (listOfNotNull(remembered) + ranked.take(5) + pool.filter { !ok(it) }.take(2)).distinct().take(7)
+        // کانفیگ بی‌جواب (پینگ واقعی) فقط وقتی امتحان می‌شود که هیچ‌کدام جواب نداده باشد
+        val list = (listOfNotNull(remembered) + ranked.take(5) + (if (ranked.isEmpty()) pool.take(2) else emptyList())).distinct().take(7)
         val done = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
         if (done) prefs.edit().putString(memKey(KMode.FILTER), node + "|" + proto).apply()
         else if (wantTry) error = if (filterXray) "هیچ اینباند Xray وصل نشد. «ضد فیلتر» را نگه دارید و تیک Amnezia را بزنید یا «هوشمند» را بزنید."
@@ -591,22 +592,22 @@ class AppState private constructor(context: Context) {
                 infos["${n.node}/$p"]?.takeIf { it.host != "—" }?.let { i -> Triple(n, p, i) }
             }
         }
-        // هر میزبان/پورت یک بار سنجیده می‌شود
-        val keys = cands.map { Triple(it.third.host, it.third.transport, it.third.port) }.distinct()
-        smartTotal = keys.size
+        // هر کانفیگ با کلید خودش (دو بار، برای جیتر)؛ همه با هم، پس سرور مرده کل کار را معطل نمی‌کند
+        smartTotal = cands.size
         smartDone = 0
         val measured = kotlinx.coroutines.coroutineScope {
-            keys.map { k ->
+            cands.map { (n, p, _) ->
                 async {
-                    val info = cands.first { Triple(it.third.host, it.third.transport, it.third.port) == k }.third
-                    val r = withContext(Dispatchers.IO) { runCatching { Pinger.measure(info) }.getOrNull() }
+                    val first = probe(n.node, p, store = false)
+                    val second = if (first != null && wantTry) probe(n.node, p, store = false) else null
                     smartDone += 1
-                    k to r
+                    (n.node to p) to first?.let { x -> (second?.let { minOf(x, it) } ?: x) to (second?.let { kotlin.math.abs(x - it) } ?: 0L) }
                 }
             }.awaitAll().toMap()
         }
-        return cands.mapNotNull { (n, p, i) ->
-            measured[Triple(i.host, i.transport, i.port)]?.let { (ping, jit) ->
+        return cands.mapNotNull { (n, p, _) ->
+            if (measured[n.node to p] == null) pings["${n.node}/$p"] = -1L
+            measured[n.node to p]?.let { (ping, jit) ->
                 pings["${n.node}/$p"] = ping
                 SmartRow(n.node, p, "${placeName(n.node)} · ${protoTitle(p)}" + (if (p == "kankimix") kmixTag(n.node)?.let { " · $it" } ?: "" else ""), flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
             }
@@ -958,9 +959,14 @@ class AppState private constructor(context: Context) {
      * سرور تازه (مثلاً فرانسه یا هلند) که بعداً به پنل اضافه شود، خودکار تشخیص داده می‌شود.
      */
     private fun augment(a: Account): Account {
-        val base = a.configs.filter { !it.protocol.startsWith("openvpn") && !it.protocol.startsWith("ikev2") }
+        val all = a.configs.filter { !it.protocol.startsWith("openvpn") && !it.protocol.startsWith("ikev2") }
+        // پنل ۳.۹.۱ به بعد خودش می‌گوید کانفیگ AmneziaWG هر سرور از تانل است یا مستقیم، و آدرس مستقیم
+        // درست کدام است. کانفیگی که خودش مستقیم است «مستقیم» نام می‌گیرد و نسخه‌ی دوم ندارد.
+        val base = all.map { l -> if (l.protocol == "amneziawg" && a.awg[l.node]?.via == "direct") l.copy(protocol = "amneziawg-direct") else l }
         val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
-            directHost(l)?.let { h -> l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + h) }
+            val r = a.awg[l.node]
+            val h = if (r != null) r.direct.takeIf { it.isNotBlank() } else directHost(l)
+            h?.let { l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + it) }
         }
         // هر لینک Xray یک «سرور» جدا با پروتکل xray؛ مکانش (اگر پنل داده) کنار خروجی‌های بقیه‌ی سرورها
         val xrayExits = mutableMapOf<String, ExitInfo>()
@@ -977,10 +983,9 @@ class AppState private constructor(context: Context) {
         isoOfFlag(flagOf(l.nodeName)) ?: isoOfFlag(flagOf(l.node))
 
     /**
-     * دامنه‌ی مستقیم هر کشور:
-     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe   (آدرس پیش‌فرض اشتراک: fi.kankipro.cafe)
-     *   فرانسه → fr.kankipro.cafe    هلند → nl.kankipro.cafe
-     * هر کشور تازه هم به همین شکل «کدکشور.kankipro.cafe» می‌شود.
+     * فقط برای پنل‌های قدیمی (بدون awg_via): دامنه‌ی مستقیم از روی کشور اسم سرور حدس زده می‌شود:
+     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe   فرانسه → fr.kankipro.cafe …
+     * پنل جدید آدرس درست را خودش می‌دهد (دو سرور یک کشور: fr و fr2) و فقط وقتی که به همان سرور اشاره کند.
      */
     private fun directHost(l: ConfigLink): String? = when (val iso = isoOfConfig(l)) {
         null -> null
@@ -1287,6 +1292,7 @@ class AppState private constructor(context: Context) {
         }
 
         vstate = VState.CONNECTING
+        activeKey = link.node + "|" + link.protocol
         // گیمینگ با «فقط بازی‌ها»: فقط بازی‌ها و برنامه‌های انتخابی از VPN رد می‌شوند
         val onlyApps = if (mode == KMode.GAME && gamesOnly) allowedAppsNow() else emptyList()
         try {
@@ -1469,8 +1475,8 @@ class AppState private constructor(context: Context) {
                         gate.acquire()
                         try {
                             pinging[k] = true
-                            val r = withContext(Dispatchers.IO) { runCatching { Pinger.test(info) }.getOrNull() }
-                            pings[k] = r ?: -1L
+                            val (nd, pr) = k.substringBeforeLast("/") to k.substringAfterLast("/")
+                            probe(nd, pr)
                         } finally {
                             pinging[k] = false
                             gate.release()
@@ -1498,17 +1504,56 @@ class AppState private constructor(context: Context) {
         ping = pingHist.takeLast(3).minOrNull()
     }
 
+    /** کانفیگی که الان به آن وصل است یا در حال وصل شدن است («node|proto»)؛ null وقتی هیچ */
+    @Volatile private var activeKey: String? = null
+
+    /** خانواده‌ی کانفیگ برای «همان کلید»: تانل و مستقیم یک سرور یک کاربرند */
+    private fun peerOf(nodeId: String, p: String) = parentOf(nodeId) + "|" + p.removeSuffix("-direct")
+
+    /**
+     * پینگ واقعی یک کانفیگ (Probe): سرور فقط وقتی جواب می‌دهد که این کاربر را واقعاً داشته باشد، و وقتی VPN
+     * وصل است از تونل رد نمی‌شود. کانفیگی که الان به آن وصل است دست‌دادن تازه نمی‌گیرد (سرور آدرس اتصال
+     * زنده را به سوکت پینگ عوض می‌کرد)؛ پینگ زنده‌ی داخل تونل برای آن است. کانفیگی که در حال وصل شدن است
+     * هم دست نمی‌خورد: دو دست‌دادن هم‌زمان با یک کلید، اولی (همان اتصال) را باطل می‌کرد و اتصال چند ثانیه
+     * عقب می‌افتاد یا وصل نمی‌شد. store: نتیجه در pings هم برود.
+     */
+    suspend fun probe(nodeId: String, p: String, store: Boolean = true): Long? {
+        val k = "$nodeId/$p"
+        val live = activeKey
+        val mine = live != null && vstate != VState.OFF && peerOf(nodeId, p) == peerOf(live.substringBefore("|"), live.substringAfter("|"))
+        if (mine && vstate == VState.CONNECTING) return pings[k]?.takeIf { it > 0 }
+        val r = if (mine) {
+            ping ?: withContext(Dispatchers.IO) { RealPing.measure() }
+        } else withContext(Dispatchers.IO) {
+            runCatching {
+                val l = account?.configs?.firstOrNull { it.node == nodeId && it.protocol == p } ?: return@runCatching null
+                val text = fetchConfig(l)
+                val net = Probe.underlying(ctx)
+                when (p) {
+                    "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
+                    "kankimix" -> Probe.kmix(net, text)
+                    "hysteria2" -> Probe.hysteria(ctx, net, text)
+                    else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
+                        // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس
+                        if (i.transport == "TCP" && i.port > 0) Probe.tcp(net, i.host, i.port) else Pinger.icmp(i.host)
+                    }
+                }
+            }.getOrNull()
+        }
+        if (store) pings[k] = r ?: -1L
+        return r
+    }
+
     /** تست پینگ یک کانفیگ */
     suspend fun pingTest(nodeId: String, p: String) {
         val key = "$nodeId/$p"
-        val info = infos[key] ?: return
+        if (infos[key] == null) return
         pinging[key] = true
-        val r = withContext(Dispatchers.IO) { Pinger.test(info) }
-        pings[key] = r ?: -1L
-        pinging[key] = false
+        try { probe(nodeId, p) } finally { pinging[key] = false }
     }
 
     suspend fun disconnect() {
+        activeKey = null
         wantOn = false
         wantTry = false
         dnsActive = null
