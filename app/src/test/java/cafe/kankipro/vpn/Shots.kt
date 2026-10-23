@@ -194,7 +194,7 @@ abstract class ShotsBase {
     }
     protected fun pgIntro(): @Composable () -> Unit = { KankiBackground { SplashVisual(.68f) } }
     protected fun pgEmergency(): @Composable () -> Unit = {
-        KankiBackground { EmergencyScreen(AppState().apply { code = "kanki-4-demo" }, {}) }
+        KankiBackground { EmergencyScreen(AppState.from(ctx).apply { code = "kanki-4-demo" }, {}) }
     }
 
     /** همه‌ی صفحه‌ها، به ترتیب نمایش */
