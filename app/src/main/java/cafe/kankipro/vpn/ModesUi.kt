@@ -64,7 +64,7 @@ fun modeColor(m: KMode): Color = when (m) {
 
 /** آیکون هر حالت (کشیده‌شده، بدون فایل تصویر) */
 @Composable
-fun ModeIcon(m: KMode, color: Color, size: Dp = 22.dp) {
+fun ModeIcon(m: KMode, color: Color, size: Dp = D.Icon) {
     if (m == KMode.DNS) {
         Box(
             Modifier.size(size).clip(CircleShape).background(color.copy(alpha = .08f)).border(1.4.dp, color, CircleShape),
@@ -335,23 +335,23 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             T(if (open) "▴" else "▾", size = 14.sp, color = mc)
         }
         AnimatedVisibility(open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(top = D.S2), verticalArrangement = Arrangement.spacedBy(D.S1)) {
                 u.servers.forEach { r ->
                     val sel = u.pick == r.id
-                    val rs = RoundedCornerShape(12.dp)
+                    val rs = RoundedCornerShape(D.RS)
                     Row(
                         Modifier.fillMaxWidth().clip(rs)
                             .background(if (sel) mc.copy(alpha = .16f) else Color(0x0CFFFFFF))
                             .border(1.dp, if (sel) mc else Color(0x18FFFFFF), rs)
                             .clickable(enabled = vstate != VState.CONNECTING) { act.pickDns(r.id); open = false }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .height(D.RowS).padding(horizontal = D.S3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
                             AutoText(dnsRowTitle(r), size = 12.5.sp, color = if (sel) mc else K.Text)
                             T(dnsRowTag(r), size = 10.sp, color = K.Sub, weight = FontWeight.Bold)
                         }
-                        if (sel) CheckMark(true, 18.dp, mc)
+                        if (sel) CheckMark(true, D.Icon, mc)
                     }
                 }
                 if (vstate == VState.ON) T("برای عوض کردن سرور، یک بار قطع و وصل کن", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
@@ -411,7 +411,7 @@ fun ModeSheet(
             enter = slideInVertically(tween(260)) { it } + fadeIn(),
             exit = slideOutVertically(tween(220)) { it } + fadeOut(),
         ) {
-            val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            val shape = RoundedCornerShape(topStart = D.RX, topEnd = D.RX)
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 660.dp).clip(shape)
                     .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
@@ -815,21 +815,21 @@ fun AppPicker(
                 }
                 SmallGold("تمام", onClick = onClose)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(D.S2))
             SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان انتخاب می‌شوند", autoGames, mc, onChange = onAutoGames)
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 OutlinedTextField(
                     value = q, onValueChange = { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     placeholder = { T("جستجو…", size = 13.sp, color = K.Sub) },
                     textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, color = K.Text),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(D.RM),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = mc, unfocusedBorderColor = K.Line, cursorColor = mc),
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(D.S2))
             val list = apps
             if (list == null) {
-                Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { Spinner(26.dp, mc) }
+                Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { Spinner(D.S6, mc) }
             } else {
                 val shown = list.filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
                     .sortedWith(compareBy({ if (it.pkg in detected) 0 else 1 }, { if (isOn(it.pkg)) 0 else 1 }))
@@ -848,13 +848,13 @@ fun AppPicker(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     T(app.label, size = 14.sp)
                                     if (app.pkg in detected) {
-                                        Spacer(Modifier.width(6.dp))
+                                        Spacer(Modifier.width(D.S2))
                                         T("🎮 بازی", size = 9.5.sp, color = modeColor(KMode.GAME), weight = FontWeight.Bold)
                                     }
                                 }
                                 T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
                             }
-                            CheckMark(on, 22.dp, mc)
+                            CheckMark(on, D.Icon, mc)
                         }
                         HDivider()
                     }

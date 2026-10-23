@@ -238,6 +238,8 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 // نقشه و پنل‌های روی آن (هوشمند، هشدار ربات)؛ ارتفاعش با فضای مانده (۷۶ تا ۲۵۰dp)
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(.44f)) {
                     val mapH = maxHeight.coerceIn(76.dp, 250.dp)
+                    // روی گوشی کوتاه پنل هوشمند فقط تعداد ردیفی که روی نقشه جا می‌شود (سرتیتر و نوار پیشرفت همیشه)
+                    val rows = ((maxHeight - gap * 2 - 64.dp) / (SmartRowH + D.S1)).toInt().coerceAtLeast(1)
                     WorldMap(
                         ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
                         Modifier.fillMaxWidth().height(mapH).align(Alignment.Center).guideTarget("map"),
@@ -248,8 +250,6 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                         Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(horizontal = D.PagePad, vertical = gap),
                         verticalArrangement = Arrangement.spacedBy(gap),
                     ) {
-                        // روی گوشی کوتاه فقط تعداد ردیفی که روی نقشه جا می‌شود (سرتیتر و نوار پیشرفت همیشه)
-                        val rows = ((maxHeight - gap * 2 - 64.dp) / (SmartRowH + D.S1)).toInt().coerceAtLeast(1)
                         AnimatedVisibility(ui.hasAccount && ui.smart.open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                             SmartPanel(ui.smart.copy(rows = ui.smart.rows.take(rows)))
                         }
