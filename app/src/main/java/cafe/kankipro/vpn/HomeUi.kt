@@ -420,7 +420,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 val rad = Math.toRadians((s.start + deg * .07f / s.orbit).toDouble())
                 val o = Offset(c.x + r * s.orbit * cos(rad).toFloat(), c.y + r * s.orbit * sin(rad).toFloat() * .8f)
                 val tw = .5f + .5f * sin(time * s.twinkle + s.start)
-                val col = if (s.white) Color.White else K.GoldLight
+                val col = if (s.white) Color.White else lerp(K.GoldLight, GameLight, gameA)
                 val sz = s.size.dp.toPx()
                 val a = .35f + .65f * tw
                 drawCircle(col.copy(alpha = .16f * a), sz * 4f, o)
@@ -432,7 +432,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 }
             }
 
-            // ---- حلقه‌ی نئونی بیرونی با دو نور دنباله‌دار (گیمینگ: رنگین‌کمانی نئونی و بی‌نورِ دنباله‌دار، جای دویدن آدمک‌ها)
+            // ---- حلقه‌ی نئونی بیرونی با دو نور دنباله‌دار (گیمینگ: نئون سبز تا فیروزه‌ای، بی‌نورِ دنباله‌دار، جای دویدن آدمک‌ها)
             val r2 = r * 1.42f
             val goldA = 1f - gameA
             if (goldA > .01f) neonRing(gold, c, r2, 1.2.dp.toPx(), strength = (.45f + .25f * lit) * goldA)
@@ -449,7 +449,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                     val major = i % 6 == 0
                     val h = (if (major) 5f else 3f).dp.toPx()
                     val ca = cos(a).toFloat(); val sa = sin(a).toFloat()
-                    // گیمینگ: هر درجه رنگ همان جای حلقه‌ی رنگین‌کمانی
+                    // گیمینگ: هر درجه رنگ همان جای حلقه‌ی نئونی
                     val base = if (major) K.GoldLight else gold
                     val tc = if (gameA > .01f) lerp(base, rgbAt(i / 72f), .85f * gameA) else base
                     drawLine(
@@ -461,7 +461,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             }
             if (gameA > .01f) chaseScene(chase, c, r2, time, gameA, gOn)
 
-            // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان (گیمینگ: شیشه‌ی سبز-فیروزه‌ای تیره و لبه‌ی RGB چرخان)
+            // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان (گیمینگ: شیشه‌ی سبز-فیروزه‌ای تیره و لبه‌ی نئونی چرخان)
             val glowA = (.35f + .25f * lit * breathe) * (1f + .4f * env * amp * gOn)
             drawCircle(Brush.radialGradient(listOf(lerp(K.Warn, Game, .6f * gameA).copy(alpha = glowA.coerceAtMost(1f)), Color.Transparent), c, r * 1.32f), r * 1.32f, c)
             drawCircle(Color(0xFF0B0906), r + 4.dp.toPx(), c)
@@ -474,7 +474,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 r + 1.dp.toPx(), c, alpha = goldA, style = Stroke(5.dp.toPx()),
             )
             if (gameA > .01f) {
-                // لبه‌ی RGB: با چرخش دکمه می‌چرخد (موقع اتصال تند) و وصل با هر ضربان پینگ پررنگ‌تر می‌درخشد
+                // لبه‌ی نئونی: با چرخش دکمه می‌چرخد (موقع اتصال تند) و وصل با هر ضربان پینگ پررنگ‌تر می‌درخشد
                 val rgb = Brush.sweepGradient(GameRgb, c)
                 val glowUp = 1f + env * gOn * (.6f + .5f * amp)
                 rotate(deg * 1.6f, c) {
@@ -531,11 +531,14 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
 private val Game get() = modeColor(KMode.GAME)
 private val GameLight get() = lerp(Game, Color.White, .35f)
 
-/** رنگ‌های نئونی RGB حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): سبز، فیروزه‌ای، آبی، بنفش و دوباره سبز */
+/**
+ * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط سبزِ گیمینگ و دو رنگ همسایه‌اش (فیروزه‌ای و سبز لیمویی) تا
+ * کنار لوگوی طلایی و تیرهای نارنجی یکدست بماند
+ */
 private val GameCyan = Color(0xFF35E0F0)
-private val GameRgb get() = listOf(Game, GameCyan, Color(0xFF4D7CFF), Color(0xFFB15CFF), Game)
+private val GameRgb get() = listOf(Game, GameCyan, Game, Color(0xFFB4F25A), Game)
 
-/** رنگ RGB گیمینگ در جای f (۰..۱) دور حلقه */
+/** رنگ نئونی گیمینگ در جای f (۰..۱) دور حلقه */
 private fun rgbAt(f: Float): Color {
     val p = GameRgb
     val x = (((f % 1f) + 1f) % 1f) * (p.size - 1)
@@ -543,7 +546,7 @@ private fun rgbAt(f: Float): Color {
     return lerp(p[i], p[i + 1], x - i)
 }
 
-/** حلقه‌ی نئونی رنگین‌کمانی گیمینگ که rot درجه چرخیده؛ w ضخامت خط اصلی */
+/** حلقه‌ی نئونی گیمینگ (سبز تا فیروزه‌ای و لیمویی) که rot درجه چرخیده؛ w ضخامت خط اصلی */
 private fun DrawScope.rgbRing(c: Offset, r: Float, w: Float, a: Float, rot: Float) {
     val b = Brush.sweepGradient(GameRgb, c)
     rotate(rot, c) {
