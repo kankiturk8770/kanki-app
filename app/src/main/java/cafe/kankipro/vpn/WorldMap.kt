@@ -294,7 +294,8 @@ private fun edgeFade(o: Offset, w: Float, h: Float): Float {
     val fy = (o.y - w / 34f * 2.2f) / h // سرِ سنجاق که بالای نقطه است
     val v = min(ramp(fy, 0f, .20f), 1f - ramp(fy, .66f, 1f))
     val hz = min(ramp(fx, 0f, .14f), 1f - ramp(fx, .86f, 1f))
-    return v * hz
+    // توان دو: نزدیک لبه زودتر محو می‌شود تا سنجاق تنهای کنار نقشه مرز نقشه را نشان ندهد
+    return (v * hz).let { it * it }
 }
 
 /** عکس لایه‌ی ثابت نقشه و چیزهایی که با آن کشیده شده (فقط وقتی این‌ها عوض شوند دوباره کشیده می‌شود) */
