@@ -96,7 +96,7 @@ class Shots {
         smart = smart,
         dns = DnsCardUi(),
         accent = if (on) modeColor(mode) else K.Gold,
-        server = if (on) ServerChipUi("🇩🇪", "آلمان", "فرانکفورت", "AmneziaWG") else null,
+        server = if (on) ServerChipUi("🇩🇪", "آلمان", "فرانکفورت", "amneziawg") else null,
     )
 
     @Composable
