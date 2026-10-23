@@ -1,6 +1,11 @@
 package cafe.kankipro.vpn
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -205,7 +210,7 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions) {
             }
             CardPing(c.best, c.expanded)
         }
-        AnimatedVisibility(visible = c.expanded) {
+        AnimatedVisibility(visible = c.expanded, enter = fadeIn(tween(220)) + expandVertically(tween(260)), exit = fadeOut(tween(160)) + shrinkVertically(tween(200))) {
             Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 8.dp)) {
                 HDivider(Modifier.padding(bottom = 4.dp))
                 c.rows.forEach { r -> CfgRow(r, act) }
@@ -271,7 +276,7 @@ private fun CfgRow(r: CfgRowUi, act: ServersActions) {
                 size = 12.5.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
             )
         }
-        AnimatedVisibility(visible = details) {
+        AnimatedVisibility(visible = details, enter = fadeIn(tween(200)) + expandVertically(tween(240)), exit = fadeOut(tween(150)) + shrinkVertically(tween(180))) {
             Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
                 T(protoDesc(r.proto), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 r.host?.let { h -> T(trf("سرور: %s", h), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = 6.dp)) }

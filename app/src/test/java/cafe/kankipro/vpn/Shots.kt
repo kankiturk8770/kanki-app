@@ -37,16 +37,13 @@ import java.io.File
  * روی گیت‌هاب: .github/workflows/shots.yml (عکس‌ها در شاخه‌ی shots). فقط برای دیدن ظاهر است؛ به
  * کد برنامه دست نمی‌زند.
  */
-@RunWith(AndroidJUnit4::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
-class Shots {
+abstract class ShotsBase {
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private val out = File(System.getProperty("user.dir") ?: ".", "build/shots").apply { mkdirs() }
+    protected val out = File(System.getProperty("user.dir") ?: ".", "build/shots").apply { mkdirs() }
 
-    private fun shot(name: String, theme: String = "gold", content: @Composable () -> Unit) {
+    protected fun shot(name: String, theme: String = "gold", content: @Composable () -> Unit) {
         ThemeState.set(theme)
         LangState.lang = "fa"
         rule.mainClock.autoAdvance = false
@@ -55,6 +52,7 @@ class Shots {
                 LocalLayoutDirection provides LayoutDirection.Rtl,
                 LocalTextStyle provides TextStyle(fontFamily = Vazir, fontWeight = FontWeight.Bold, color = K.Text),
             ) {
+                ThemeState.animate() // در عکس‌ها تم بلافاصله و بدون درنگ کامل می‌شود
                 MaterialTheme(colorScheme = darkColorScheme(primary = K.Gold, background = K.Ink, surface = K.Ink)) {
                     content()
                 }
@@ -66,22 +64,22 @@ class Shots {
         File(out, "$name.png").outputStream().use { capture().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun capture(): Bitmap = runCatching { rule.onRoot().captureToImage().asAndroidBitmap() }.getOrElse {
+    protected fun capture(): Bitmap = runCatching { rule.onRoot().captureToImage().asAndroidBitmap() }.getOrElse {
         val v = rule.activity.window.decorView.rootView
         Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888).also { v.draw(android.graphics.Canvas(it)) }
     }
 
     // ------------------------------------------------------------------ داده‌ی نمونه
-    private val ctx get() = rule.activity
+    protected val ctx get() = rule.activity
 
-    private fun countries() = runCatching { LightsData.load(ctx); MapData.load(ctx) }.getOrNull()
+    protected fun countries() = runCatching { LightsData.load(ctx); MapData.load(ctx) }.getOrNull()
 
-    private val pins = listOf(
+    protected val pins = listOf(
         MapPin(Geo(50.1, 8.7), "DE", false), MapPin(Geo(48.9, 2.35), "FR", false),
         MapPin(Geo(52.4, 4.9), "NL", false), MapPin(Geo(41.0, 29.0), "TR", false),
     )
 
-    private fun home(
+    protected fun home(
         on: Boolean, smart: SmartPanelUi = SmartPanelUi(), mode: KMode = KMode.SMART,
         vs: VState = if (on) VState.ON else VState.OFF, hist: List<Long> = listOf(82, 77, 75, 79, 73, 74, 76, 74),
     ) = HomeUi(
@@ -110,7 +108,7 @@ class Shots {
     )
 
     @Composable
-    private fun Frame(tab: KTab, accent: androidx.compose.ui.graphics.Color = K.Gold, body: @Composable () -> Unit) {
+    protected fun Frame(tab: KTab, accent: androidx.compose.ui.graphics.Color = K.Gold, body: @Composable () -> Unit) {
         KankiBackground(accent = accent) {
             Box(Modifier) {
                 MainFrame(tab, onTab = {}, onRobot = {}, onAccount = {}) { body() }
@@ -118,7 +116,7 @@ class Shots {
         }
     }
 
-    private fun cards(): List<CountryCardUi> = listOf(
+    protected fun cards(): List<CountryCardUi> = listOf(
         CountryCardUi(
             "de", "آلمان", "فرانکفورت", "🇩🇪", 74, expanded = true, selected = true,
             rows = listOf(
@@ -133,18 +131,17 @@ class Shots {
         CountryCardUi("tr", "ترکیه", "استانبول", "🇹🇷", 61, expanded = false, selected = false, rows = emptyList()),
     )
 
-    private val account = Account(
+    protected val account = Account(
         username = "mahtab87", status = "Active", dataRemaining = "42.00 GB", used = "18.00 GB", connections = "2",
         timeRemaining = "23 روز و 4 ساعت", expiry = "24 آبان 1405، 18:20", configs = emptyList(),
         expiresAt = System.currentTimeMillis() + 23L * 86_400_000, limitGb = 60.0, usedGb = 18.0,
     )
 
-    // ------------------------------------------------------------------ صفحه‌ها (تم طلایی)
-    @Test fun s1_home_off() = shot("1-home-off") { Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) } }
+    // ------------------------------------------------------------------ تعریف همه‌ی صفحه‌ها (یک بار، برای هر سه تم)
 
-    @Test fun s2_home_on() = shot("2-home-on") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
-
-    @Test fun s3_home_smart() = shot("3-home-smart") {
+    protected fun pgHomeOff(): @Composable () -> Unit = { Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) } }
+    protected fun pgHomeOn(): @Composable () -> Unit = { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
+    protected fun pgHomeSmart(): @Composable () -> Unit = {
         Frame(KTab.HOME) {
             HomeContent(
                 home(false, SmartPanelUi(
@@ -160,27 +157,22 @@ class Shots {
             )
         }
     }
-
-    @Test fun s4_servers() = shot("4-servers") {
+    protected fun pgServers(): @Composable () -> Unit = {
         Frame(KTab.SERVERS) { ServersContent(cards(), PingAllUi(finished = true, total = 9, done = 9, udp = 8, tcp = 1), null, ServersActions()) }
     }
-
-    @Test fun s5_speed() = shot("5-speed") {
+    protected fun pgSpeed(): @Composable () -> Unit = {
         Frame(KTab.TEST) {
             SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
         }
     }
-
-    @Test fun s6_settings() = shot("6-settings") {
-        Frame(KTab.SETTINGS) { SettingsContent(SettingsUi("", true, true, "fa", 2, "1.17.0"), null, SettingsActions(), {}) }
+    protected fun pgSettings(): @Composable () -> Unit = {
+        Frame(KTab.SETTINGS) { SettingsContent(SettingsUi("", true, true, "fa", 2, "1.17.1"), null, SettingsActions(), {}) }
     }
-
-    @Test fun s7_account() = shot("7-account") {
+    protected fun pgAccount(): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) }
         AccountSheet(true, account, AccountActions())
     }
-
-    @Test fun s8_game() = shot("8-gaming") {
+    protected fun pgGame(): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.GAME), HomeActions()) }
         val servers = listOf(
             SheetServer("tr", "kankimix", "🇹🇷", "ترکیه · استانبول", null, 61),
@@ -200,16 +192,26 @@ class Shots {
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }
+    protected fun pgIntro(): @Composable () -> Unit = { KankiBackground { SplashVisual(.68f) } }
+    protected fun pgEmergency(): @Composable () -> Unit = {
+        KankiBackground { EmergencyScreen(AppState().apply { code = "kanki-4-demo" }, {}) }
+    }
 
-    // ------------------------------------------------------------------ صفحه‌ی اول، وصل، با هر تم موجود
-    @Test fun t_mono() = shot("theme-mono", "mono") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
+    /** همه‌ی صفحه‌ها، به ترتیب نمایش */
+    protected fun pages(): List<Pair<String, @Composable () -> Unit>> = listOf(
+        "01-home-off" to pgHomeOff(),
+        "02-home-on" to pgHomeOn(),
+        "03-home-smart" to pgHomeSmart(),
+        "04-servers" to pgServers(),
+        "05-speed" to pgSpeed(),
+        "06-settings" to pgSettings(),
+        "07-account" to pgAccount(),
+        "08-gaming" to pgGame(),
+        "09-intro" to pgIntro(),
+        "10-emergency" to pgEmergency(),
+    )
 
-    @Test fun t_crimson() = shot("theme-crimson", "crimson") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
-
-    @Test fun t_cyber() = shot("theme-cyber", "cyber") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
-
-    @Test fun t_violet() = shot("theme-violet", "violet") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
-
+    // ------------------------------------------------------------------ تم طلایی کانکی (پیش‌فرض)
     // ------------------------------------------------------------------ فریم‌های انیمیشن (برای GIF)
 
     /**
@@ -271,6 +273,7 @@ class Shots {
     }
 
     @Test fun z_game_frames() {
+        org.junit.Assume.assumeTrue(System.getenv("KANKI_ORB") != null)
         ThemeState.set("gold")
         LangState.lang = "fa"
         val mode = mutableStateOf(KMode.SMART)
@@ -313,4 +316,64 @@ class Shots {
             if (i % 30 == 20) hist.value = (hist.value + samples[(i / 30) % samples.size]).takeLast(12)
         }
     }
+}
+
+/**
+ * همان صفحه‌های کلیدی روی گوشی کوچک (~۳۶۰dp): چک می‌کند همه‌چیز جا می‌شود و چیزی زیر نوار پایین نمی‌رود.
+ * عکس‌ها با پیشوند small- در همان پوشه‌ی build/shots ذخیره می‌شوند.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w360dp-h780dp-xxhdpi")
+class ShotsSmall : ShotsBase() {
+    @Test fun w01() = shot("small-gold-01-home-off", "gold", pgHomeOff())
+    @Test fun w02() = shot("small-gold-02-home-on", "gold", pgHomeOn())
+    @Test fun w03() = shot("small-gold-04-servers", "gold", pgServers())
+    @Test fun w04() = shot("small-gold-06-settings", "gold", pgSettings())
+    @Test fun w05() = shot("small-mono-02-home-on", "mono", pgHomeOn())
+    @Test fun w06() = shot("small-neon-02-home-on", "neon", pgHomeOn())
+    @Test fun w07() = shot("small-gold-08-gaming", "gold", pgGame())
+    @Test fun w08() = shot("small-gold-10-emergency", "gold", pgEmergency())
+}
+
+// ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر سه تم (۴۱۱dp)
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+class Shots : ShotsBase() {
+    @Test fun g01() = shot("gold-01-home-off", "gold", pgHomeOff())
+    @Test fun g02() = shot("gold-02-home-on", "gold", pgHomeOn())
+    @Test fun g03() = shot("gold-03-home-smart", "gold", pgHomeSmart())
+    @Test fun g04() = shot("gold-04-servers", "gold", pgServers())
+    @Test fun g05() = shot("gold-05-speed", "gold", pgSpeed())
+    @Test fun g06() = shot("gold-06-settings", "gold", pgSettings())
+    @Test fun g07() = shot("gold-07-account", "gold", pgAccount())
+    @Test fun g08() = shot("gold-08-gaming", "gold", pgGame())
+    @Test fun g09() = shot("gold-09-intro", "gold", pgIntro())
+    @Test fun g10() = shot("gold-10-emergency", "gold", pgEmergency())
+
+    // ------------------------------------------------------------------ تم گرافیت (تیره‌ی مینیمال)
+    @Test fun m01() = shot("mono-01-home-off", "mono", pgHomeOff())
+    @Test fun m02() = shot("mono-02-home-on", "mono", pgHomeOn())
+    @Test fun m03() = shot("mono-03-home-smart", "mono", pgHomeSmart())
+    @Test fun m04() = shot("mono-04-servers", "mono", pgServers())
+    @Test fun m05() = shot("mono-05-speed", "mono", pgSpeed())
+    @Test fun m06() = shot("mono-06-settings", "mono", pgSettings())
+    @Test fun m07() = shot("mono-07-account", "mono", pgAccount())
+    @Test fun m08() = shot("mono-08-gaming", "mono", pgGame())
+    @Test fun m09() = shot("mono-09-intro", "mono", pgIntro())
+    @Test fun m10() = shot("mono-10-emergency", "mono", pgEmergency())
+
+    // ------------------------------------------------------------------ تم نئون (رنگی)
+    @Test fun n01() = shot("neon-01-home-off", "neon", pgHomeOff())
+    @Test fun n02() = shot("neon-02-home-on", "neon", pgHomeOn())
+    @Test fun n03() = shot("neon-03-home-smart", "neon", pgHomeSmart())
+    @Test fun n04() = shot("neon-04-servers", "neon", pgServers())
+    @Test fun n05() = shot("neon-05-speed", "neon", pgSpeed())
+    @Test fun n06() = shot("neon-06-settings", "neon", pgSettings())
+    @Test fun n07() = shot("neon-07-account", "neon", pgAccount())
+    @Test fun n08() = shot("neon-08-gaming", "neon", pgGame())
+    @Test fun n09() = shot("neon-09-intro", "neon", pgIntro())
+    @Test fun n10() = shot("neon-10-emergency", "neon", pgEmergency())
+
 }

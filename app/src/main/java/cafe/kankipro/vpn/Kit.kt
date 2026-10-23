@@ -152,7 +152,7 @@ fun RoundIcon(size: Dp = 40.dp, tint: Color = K.Gold, filled: Boolean = false, o
         Modifier.size(size).clip(CircleShape)
             .background(if (filled) Brush.verticalGradient(listOf(tint.copy(alpha = .30f), tint.copy(alpha = .10f))) else Brush.verticalGradient(listOf(K.Surface, K.Panel)))
             .border(1.dp, tint.copy(alpha = .55f), CircleShape)
-            .clickable(onClick = onClick),
+            .pressable(scale = .93f, onClick = onClick),
         contentAlignment = Alignment.Center,
         content = content,
     )
@@ -189,7 +189,7 @@ fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) 
     Box(
         modifier.height(38.dp).clip(shape)
             .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
-            .clickable(onClick = onClick).padding(horizontal = 16.dp),
+            .pressable(onClick = onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
@@ -201,7 +201,7 @@ fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold
     Box(
         modifier.height(38.dp).clip(shape).background(color.copy(alpha = .08f))
             .border(1.dp, color.copy(alpha = .6f), shape)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp),
+            .pressable(onClick = onClick).padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = color, weight = FontWeight.Bold) }
 }

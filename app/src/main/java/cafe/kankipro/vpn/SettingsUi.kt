@@ -210,10 +210,10 @@ private fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () ->
     }
 }
 
-/** انتخاب تم: طلایی + چهار تم نئونی */
+/** انتخاب تم: سه تم کامل — طلایی کانکی، گرافیت مینیمال، نئون رنگی */
 @Composable
 fun ThemePicker(onSet: (String) -> Unit) {
-    val items = listOf("gold" to "طلایی", "mono" to "گرافیت", "crimson" to "زرشکی نئون", "cyber" to "سایبری", "violet" to "بنفش نئون")
+    val items = listOf("gold" to "طلایی کانکی", "mono" to "گرافیت", "neon" to "نئون")
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingIcon("palette", K.Accent)

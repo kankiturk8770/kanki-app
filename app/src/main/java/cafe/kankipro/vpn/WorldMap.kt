@@ -142,14 +142,15 @@ fun WorldMap(
         val youColor = if (dns && connected) accent else K.Accent
         val key = listOf(size, zoom, pins, user, userIso, connected, accent, dns, countries?.size, ThemeState.current.id)
         val old = cache.bmp
-        val bmp = if (old != null && old.width == w.toInt().coerceAtLeast(1) && old.height == h.toInt().coerceAtLeast(1)) old
-            else ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
-        if (cache.key != key || cache.bmp !== bmp) {
+        // لایه‌ی ثابت فقط وقتی کلید عوض شود از نو روی بیت‌مپ تازه (شفاف) کشیده می‌شود؛ پاک‌کردن با Clear لازم نیست
+        val redraw = cache.key != key || old == null ||
+            old.width != w.toInt().coerceAtLeast(1) || old.height != h.toInt().coerceAtLeast(1)
+        val bmp = if (redraw) ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)) else old!!
+        if (redraw) {
         cache.key = key
         cache.bmp = bmp
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
-            drawRect(Color.Black, blendMode = BlendMode.Clear)
-            // نور طلایی خیلی ملایم پشت نقشه؛ زمینه همان مشکی صفحه است تا نقشه جزو خود صفحه باشد
+            // نور لهجه‌ی خیلی ملایم پشت نقشه؛ زمینه همان رنگ تیره‌ی صفحه است تا نقشه جزو خود صفحه باشد
             drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .07f), Color.Transparent), Offset(w * .5f, h * .5f), w * .7f))
             clipRect {
                 withTransform({
@@ -159,7 +160,7 @@ fun WorldMap(
                     countries?.forEach { c ->
                         if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
                         // خشکی شیشه‌ای تیره با مرز طلایی؛ کشور شما فیروزه‌ای، کشور سرور طلایی (وصل: سبز) و درخشان
-                        drawPath(c.path, Color(0xFF1E1A12).copy(alpha = .85f))
+                        drawPath(c.path, K.Panel.copy(alpha = .85f))
                         when (c.iso) {
                             selIso -> {
                                 drawPath(c.path, selColor.copy(alpha = .32f))

@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -105,9 +106,22 @@ class HomeActions(
 /** قاب همه‌ی تب‌ها: سربرگ بالا، محتوا، نوار تب‌ها پایین */
 @Composable
 fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}, content: @Composable BoxScope.() -> Unit) {
+    ThemeState.animate() // گذر نرم بین تم‌ها
+    // ورود محو + لغزش ملایم محتوا هنگام تعویض تب (سبک و ۶۰فریمی)
+    val enter = remember { Animatable(1f) }
+    LaunchedEffect(tab) {
+        enter.snapTo(0f)
+        enter.animateTo(1f, tween(260, easing = FastOutSlowInEasing))
+    }
     Column(Modifier.fillMaxSize()) {
         AppHeader(onRobot, onAccount, onEmergency)
-        Box(Modifier.weight(1f), content = content)
+        Box(
+            Modifier.weight(1f).graphicsLayer {
+                alpha = enter.value
+                translationY = (1f - enter.value) * 14.dp.toPx()
+            },
+            content = content,
+        )
         BottomBar(tab, onTab)
     }
 }
@@ -212,10 +226,11 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
                     LocationChip(ui.locationIso, ui.locationIsExit)
                 }
-                // نقشه بدون قاب، لبه‌هایش در زمینه‌ی مشکی محو می‌شود؛ جدا از دکمه‌ی اتصال تا رویش نیفتد
+                // نقشه بدون قاب، لبه‌هایش در زمینه محو می‌شود؛ ارتفاعش با اندازه‌ی صفحه تطبیق پیدا می‌کند
+                val mapH = (minH * .30f).coerceIn(150.dp, 250.dp)
                 WorldMap(
                     ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
-                    Modifier.fillMaxWidth().height(206.dp).guideTarget("map"),
+                    Modifier.fillMaxWidth().height(mapH).guideTarget("map"),
                     accent = if (ui.vstate == VState.OFF) K.Gold else mc,
                     dns = ui.mode == KMode.DNS,
                 )

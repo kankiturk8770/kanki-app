@@ -5,6 +5,7 @@ package cafe.kankipro.vpn
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.res.imageResource
@@ -54,51 +56,70 @@ class Palette(
 )
 
 val Themes: List<Palette> = listOf(
-    // طلایی کانکی: زمینه‌ی مشکی، طلایی روشن نئونی و کارت‌های شیشه‌ای براق
+    // طلایی کانکی (پیش‌فرض و هویت برند): زمینه‌ی مشکی، طلایی درخشان و کارت‌های شیشه‌ای براق
     Palette(
-        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFE09A10), Color(0xFFFFF2B8),
-        Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFFB9B2A2),
-        Color(0xFF000000), Color(0xFF050505), Color(0xFF000000),
-        Color(0xD60C0C0C), Color(0xE0050505), Color(0xF20A0A0A), Color(0xFF1A1000), Color(0xFF3FD8FF),
-        Color(0xFF2EE58C),
+        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
+        Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
+        Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
+        Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700), Color(0xFF4CC3E8),
+        Color(0xFF2FD88C),
     ),
-    // گرافیت نئونی (مشکی، نقره‌ای، یخی)
+    // گرافیت (تیره‌ی مینیمال): نقره‌ای روی زغالی، بدون رنگ اضافه؛ درخشش‌ها سفید و آرام
     Palette(
-        "mono", Color(0xFFDADDE3), Color(0xFFFFFFFF), Color(0xFF5E636B), Color(0xFFF4F6FA),
-        Color(0xFF050608), Color(0xFFF2F4F8), Color(0xFF8C93A0),
-        Color(0xFF0A0B0E), Color(0xFF15181E), Color(0xFF040506),
-        Color(0xE8181B22), Color(0xF00B0D11), Color(0xFF0F1116), Color(0xFF0B0C10), Color(0xFF8FE3FF),
-        Color(0xFF9CFFE0),
+        "mono", Color(0xFFD8DDE6), Color(0xFFFFFFFF), Color(0xFF5F6672), Color(0xFFF8FAFC),
+        Color(0xFF090A0C), Color(0xFFEEF1F6), Color(0xFF89909E),
+        Color(0xFF0A0B0E), Color(0xFF10131A), Color(0xFF050608),
+        Color(0xE614171D), Color(0xF01B1E26), Color(0xFF12141A), Color(0xFF101216), Color(0xFF8FB8FF),
+        Color(0xFF55D99A),
     ),
-    // زرشکی نئونی با آبی
+    // نئون (رنگی): فیروزه‌ای الکتریکی با سرخابی، روی آبی نفتی تیره
     Palette(
-        "crimson", Color(0xFFFF3D6E), Color(0xFFFF9DB5), Color(0xFF9E1238), Color(0xFFFF7A98),
-        Color(0xFF07030A), Color(0xFFFBEFF3), Color(0xFFA592A6),
-        Color(0xFF0D0610), Color(0xFF1C0A1C), Color(0xFF07030A),
-        Color(0xE8220C20), Color(0xF00E0610), Color(0xFF150A15), Color(0xFF1A0510), Color(0xFF3FA9FF),
-        Color(0xFF45F0A6),
+        "neon", Color(0xFF22E4FF), Color(0xFF9BF7FF), Color(0xFF0A7FA8), Color(0xFFD6FBFF),
+        Color(0xFF020409), Color(0xFFEDFBFF), Color(0xFF7FA6B8),
+        Color(0xFF040814), Color(0xFF0A1224), Color(0xFF020409),
+        Color(0xE60A1626), Color(0xF00E1A30), Color(0xFF081020), Color(0xFF02181F), Color(0xFFFF3DDB),
+        Color(0xFF2FFFA3),
     ),
-    // سایبری (فیروزه‌ای و صورتی نئون)
-    Palette(
-        "cyber", Color(0xFF00E5FF), Color(0xFF9DF6FF), Color(0xFF007C8C), Color(0xFF6FF3FF),
-        Color(0xFF03060A), Color(0xFFEAFBFF), Color(0xFF7FA3AE),
-        Color(0xFF050B10), Color(0xFF0A1822), Color(0xFF03060A),
-        Color(0xE80B1A24), Color(0xF0061016), Color(0xFF08131A), Color(0xFF021014), Color(0xFFFF2BD6),
-        Color(0xFF39FF9A),
-    ),
-    // بنفش نئونی
-    Palette(
-        "violet", Color(0xFFB26BFF), Color(0xFFE0C4FF), Color(0xFF5B2A9E), Color(0xFFCFA2FF),
-        Color(0xFF05030A), Color(0xFFF4EEFF), Color(0xFF9A8FB0),
-        Color(0xFF0A0614), Color(0xFF170C28), Color(0xFF05030A),
-        Color(0xE8190F2A), Color(0xF00C0816), Color(0xFF110A1C), Color(0xFF12081E), Color(0xFF4DE1FF),
-        Color(0xFF7CFFB2),
-    ),
+)
+
+/** ترکیب دو پالت (برای تغییر نرم تم) */
+fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
+    b.id,
+    lerp(a.gold, b.gold, f), lerp(a.goldLight, b.goldLight, f), lerp(a.goldDeep, b.goldDeep, f), lerp(a.shine, b.shine, f),
+    lerp(a.ink, b.ink, f), lerp(a.text, b.text, f), lerp(a.sub, b.sub, f),
+    lerp(a.bgTop, b.bgTop, f), lerp(a.bgMid, b.bgMid, f), lerp(a.bgBottom, b.bgBottom, f),
+    lerp(a.surface, b.surface, f), lerp(a.surface2, b.surface2, f), lerp(a.panel, b.panel, f),
+    lerp(a.onGold, b.onGold, f), lerp(a.accent, b.accent, f), lerp(a.ok, b.ok, f),
 )
 
 object ThemeState {
     var current: Palette by androidx.compose.runtime.mutableStateOf(Themes[0])
-    fun set(id: String) { current = Themes.firstOrNull { it.id == id } ?: Themes[0] }
+        private set
+    /** تم هدف؛ current با انیمیشن به آن می‌رسد (animate را در قاب اصلی صدا بزنید) */
+    var targetId: String by androidx.compose.runtime.mutableStateOf(Themes[0].id)
+        private set
+    private var from: Palette = Themes[0]
+
+    fun set(id: String) {
+        val t = Themes.firstOrNull { it.id == id } ?: Themes[0]
+        if (t.id == targetId && current.id == t.id) return
+        from = current
+        targetId = t.id
+    }
+
+    /** عوض شدن تم را نرم می‌کند (رنگ‌ها در ۴۲۰ میلی‌ثانیه از تم قبلی به تم تازه می‌رسند) */
+    @Composable
+    fun animate() {
+        val target = Themes.firstOrNull { it.id == targetId } ?: Themes[0]
+        androidx.compose.runtime.LaunchedEffect(targetId) {
+            if (current.id == target.id) return@LaunchedEffect
+            val start = from
+            androidx.compose.animation.core.Animatable(0f).animateTo(1f, tween(420, easing = FastOutSlowInEasing)) {
+                current = lerpPalette(start, target, value)
+            }
+            current = target
+        }
+    }
 }
 
 object K {
@@ -109,6 +130,10 @@ object K {
     val Ink: Color get() = ThemeState.current.ink
     val Text: Color get() = ThemeState.current.text
     val Sub: Color get() = ThemeState.current.sub
+    /** پله‌های گرادیان پس‌زمینه‌ی هر تم (بالا، وسط، پایین) */
+    val BgTop: Color get() = ThemeState.current.bgTop
+    val BgMid: Color get() = ThemeState.current.bgMid
+    val BgBottom: Color get() = ThemeState.current.bgBottom
     val Line: Color get() = ThemeState.current.gold.copy(alpha = .25f)
     val Surface: Color get() = ThemeState.current.surface
     val Surface2: Color get() = ThemeState.current.surface2
@@ -124,6 +149,51 @@ object K {
 }
 
 fun glow(c: Color, r: Float = 22f) = Shadow(color = c.copy(alpha = .75f), offset = Offset.Zero, blurRadius = r)
+
+// ------------------------------------------------------------------ توکن‌های دیزاین
+
+/**
+ * سیستم اندازه‌های ثابت کل برنامه:
+ * فاصله‌گذاری فقط از این پله‌ها (۴، ۸، ۱۲، ۱۶، ۲۴) و گردی گوشه‌ها فقط از RS تا RX.
+ */
+object D {
+    val S1 = 4.dp
+    val S2 = 8.dp
+    val S3 = 12.dp
+    val S4 = 16.dp
+    val S5 = 20.dp
+    val S6 = 24.dp
+    /** گردی گوشه‌ها: S چیپ و ردیف، M دکمه و کارت کوچک، L کارت، XL پنل و کارت بزرگ */
+    val RS = 12.dp
+    val RM = 16.dp
+    val RL = 20.dp
+    val RX = 26.dp
+    /** ارتفاع دکمه‌های اصلی */
+    val BtnH = 56.dp
+    /** حاشیه‌ی کناری همه‌ی صفحه‌ها */
+    val PagePad = 16.dp
+}
+
+/**
+ * لمسی با فیدبک فشردن (کمی کوچک می‌شود و با فنر برمی‌گردد)؛ به‌جای clickable برای دکمه‌ها و کارت‌های مهم.
+ */
+@Composable
+fun Modifier.pressable(enabled: Boolean = true, scale: Float = .965f, onClick: () -> Unit): Modifier {
+    val s = remember { Animatable(1f) }
+    return this
+        .graphicsLayer { scaleX = s.value; scaleY = s.value }
+        .pointerInput(enabled) {
+            detectTapGestures(
+                onPress = {
+                    if (!enabled) return@detectTapGestures
+                    s.animateTo(scale, tween(90))
+                    tryAwaitRelease()
+                    s.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium))
+                },
+                onTap = { if (enabled) onClick() },
+            )
+        }
+}
 
 @Composable
 fun T(
@@ -177,10 +247,23 @@ private val motes: List<Mote> = run {
 @Composable
 fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(K.Ink)) {
+        // گرادیان عمودی تم + هاله‌ی لهجه در مرکز + وینیت لبه‌ها (همه با کد)
         Box(
             Modifier.fillMaxSize().graphicsLayer().drawBehind {
-                val c = Offset(size.width / 2, size.height * .46f)
-                drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f), size.width * .95f, c)
+                drawRect(Brush.verticalGradient(listOf(K.BgTop, K.BgMid, K.BgBottom)))
+                val c = Offset(size.width / 2, size.height * .40f)
+                drawCircle(
+                    Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f),
+                    size.width * .95f, c,
+                )
+                // وینیت: تیره شدن ملایم لبه‌ها برای عمق بیشتر
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .38f)),
+                        Offset(size.width / 2, size.height * .52f),
+                        size.maxDimension * .72f,
+                    ),
+                )
             },
         )
         Twinkles(if (calm) 12 else motes.size, accent)
@@ -201,7 +284,7 @@ private fun Twinkles(count: Int, accent: Color) {
             val m = motes[i]
             val tw = (sin((twinkle * m.speed + m.phase) * 6.2832f) + 1f) / 2f
             val pos = Offset(m.x * w, m.y * h)
-            val c = if (m.warm) Color(0xFFFFD58A) else Color(0xFFDDE8FF)
+            val c = if (m.warm) K.GoldLight else K.Accent
             val a = .85f * tw * tw
             drawCircle(c.copy(alpha = a * .18f), m.r * 5f * u, pos)
             drawCircle(c.copy(alpha = a), m.r * u, pos)
@@ -366,20 +449,20 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
 
 @Composable
 fun Glass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(D.RX)
     Column(
         modifier
             .goldGlass(shape)
-            .padding(18.dp),
+            .padding(D.S4),
         content = content,
     )
 }
 
 @Composable
 fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = false, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(D.RL)
     Box(
-        modifier.height(58.dp)
+        modifier.height(D.BtnH)
             // درخشش طلایی دور دکمه (مثل طرح)
             .drawBehind {
                 val o = shape.createOutline(size, layoutDirection, this)
@@ -388,22 +471,22 @@ fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = f
             .clip(shape)
             .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
             .border(1.dp, K.GoldLight.copy(alpha = .7f), shape)
-            .clickable(enabled = !loading, onClick = onClick),
+            .pressable(enabled = !loading, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        T(if (loading) "لطفاً صبر کنید…" else text, size = 18.sp, color = K.OnGold, weight = FontWeight.Black)
+        T(if (loading) "لطفاً صبر کنید…" else text, size = 17.sp, color = K.OnGold, weight = FontWeight.Black)
     }
 }
 
 @Composable
 fun LineButton(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(D.RL)
     Box(
-        modifier.height(58.dp).clip(shape).background(K.Panel.copy(alpha = .8f))
+        modifier.height(D.BtnH).clip(shape).background(K.Panel.copy(alpha = .8f))
             .border(1.5.dp, color.copy(alpha = .8f), shape)
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { T(text, size = 17.sp, color = color, weight = FontWeight.Black) }
+    ) { T(text, size = 16.sp, color = color, weight = FontWeight.Black) }
 }
 
 @Composable
