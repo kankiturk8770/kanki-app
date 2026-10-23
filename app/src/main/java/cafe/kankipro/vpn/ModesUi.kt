@@ -2,6 +2,7 @@ package cafe.kankipro.vpn
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -24,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -32,9 +35,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -137,36 +142,80 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
     }
 }
 
-/** چهار کاشی حالت (هوشمند، گیمینگ، ضد فیلتر، DNS)؛ گیمینگ با نگه‌داشتن هم پنلش را باز می‌کند */
+/**
+ * چهار کاشی حالت (هوشمند، گیمینگ، ضد فیلتر، DNS)؛ گیمینگ با نگه‌داشتن هم پنلش را باز می‌کند.
+ * هر کاشی لبه و نور خودش را به رنگ همان حالت دارد: انتخاب‌شده لبه‌ی پررنگ با درخشش، بقیه لبه‌ی کم‌رنگ.
+ */
 @Composable
 fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         KMode.entries.forEach { m ->
             val sel = m == selected
-            val shape = RoundedCornerShape(16.dp)
-            Box(Modifier.weight(1f).height(68.dp)) {
-                Column(
-                    Modifier.matchParentSize().goldGlass(shape, selected = sel)
-                        .alpha(if (enabled) 1f else .5f)
-                        .pointerInput(m, enabled) {
-                            if (enabled) detectTapGestures(
-                                onTap = { tap(m) },
-                                onLongPress = { long(m) },
-                            )
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    ModeIcon(m, if (sel) K.GoldLight else K.Gold, 26.dp)
-                    Spacer(Modifier.height(6.dp))
-                    T(m.title, size = 12.5.sp, color = if (sel) K.Text else K.Text.copy(alpha = .85f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
-                }
+            val mc = modeColor(m)
+            // روشن شدن نرم کاشی موقع انتخاب
+            val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
+            val shape = RoundedCornerShape(14.dp)
+            Column(
+                Modifier.weight(1f).height(60.dp).modeGlass(shape, mc, lit)
+                    .alpha(if (enabled) 1f else .5f)
+                    .pointerInput(m, enabled) {
+                        if (enabled) detectTapGestures(
+                            onTap = { tap(m) },
+                            onLongPress = { long(m) },
+                        )
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), 23.dp)
+                Spacer(Modifier.height(5.dp))
+                T(m.title, size = 11.5.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
             }
         }
     }
 }
+
+/**
+ * شیشه‌ی کاشی حالت به رنگ خود حالت (lit: ۰ = انتخاب‌نشده، ۱ = انتخاب‌شده):
+ * انتخاب‌نشده لبه‌ی ۱dp با ٪۳۰ رنگ و بدون درخشش؛ انتخاب‌شده لبه‌ی ۱.۵dp پررنگ، درخشش نرم بیرون و داخل کمی روشن‌تر.
+ */
+fun Modifier.modeGlass(shape: RoundedCornerShape, c: Color, lit: Float): Modifier = this
+    .drawBehind {
+        if (lit > .01f) {
+            val o = shape.createOutline(size, layoutDirection, this)
+            for ((w, a) in listOf(11f to .06f, 6.5f to .12f, 3.2f to .26f)) drawOutline(o, c.copy(alpha = a * lit), style = Stroke(w.dp.toPx()))
+        }
+    }
+    .clip(shape)
+    .background(K.Surface)
+    .background(
+        Brush.linearGradient(
+            listOf(c.copy(alpha = .05f + .17f * lit), Color.White.copy(alpha = .015f), Color.Black.copy(alpha = .32f - .08f * lit), c.copy(alpha = .03f + .08f * lit)),
+        ),
+    )
+    .drawWithContent {
+        // براقی شیشه در نیمه‌ی بالا
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .07f + .07f * lit), Color.Transparent), endY = size.height * .5f))
+        drawContent()
+        // خط نور کوتاه وسط لبه‌ی پایین، به رنگ حالت (فقط برای انتخاب‌شده پررنگ)
+        val y = size.height - 1.dp.toPx()
+        val line = Brush.horizontalGradient(listOf(Color.Transparent, lerp(c, Color.White, .25f), Color.Transparent), startX = size.width * .2f, endX = size.width * .8f)
+        drawLine(line, Offset(size.width * .2f, y), Offset(size.width * .8f, y), 3.dp.toPx(), alpha = .3f * lit)
+        drawLine(line, Offset(size.width * .2f, y), Offset(size.width * .8f, y), 1.1.dp.toPx(), alpha = .25f + .75f * lit)
+    }
+    .border(
+        (1f + .5f * lit).dp,
+        Brush.linearGradient(
+            listOf(
+                lerp(c, Color.White, .3f * lit).copy(alpha = .30f + .70f * lit),
+                c.copy(alpha = .22f + .68f * lit),
+                c.copy(alpha = .30f + .70f * lit),
+            ),
+        ),
+        shape,
+    )
 
 /** یک خط باریک زیر کاشی‌ها: حالت انتخاب‌شده چه می‌کند */
 @Composable
@@ -177,7 +226,7 @@ fun ModeHint(m: KMode, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MiniIcon("spark", K.Gold, 12.dp)
+        MiniIcon("spark", modeColor(m), 12.dp)
         Spacer(Modifier.width(7.dp))
         T(tr(m.title) + " : " + tr(m.sub), size = 11.5.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
     }

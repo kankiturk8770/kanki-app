@@ -39,7 +39,16 @@ data class Account(
     val xray: List<XrayLink> = emptyList(),
     /** خروجی واقعی هر سرور (شناسه‌ی نود ← IP، کشور، شهر) که پنل ۳.۵.۷ به بعد می‌دهد؛ خالی یعنی پنل قدیمی */
     val exits: Map<String, ExitInfo> = emptyMap(),
+    /** مسیر AmneziaWG هر سرور (پنل ۳.۹.۱ به بعد)؛ خالی یعنی پنل قدیمی (برنامه خودش حدس می‌زند) */
+    val awg: Map<String, AwgRoute> = emptyMap(),
 )
+
+/**
+ * via: کانفیگ AmneziaWG همین سرور از تانل (سرور ایران) می‌رود یا مستقیم به خود سرور.
+ * direct: آدرس کانفیگ دوم «مستقیم» (فقط برای تانل‌ها؛ خالی = ندارد). پنل این آدرس را فقط وقتی می‌دهد
+ * که واقعاً به همین سرور اشاره کند، پس کانفیگ مستقیم هیچ‌وقت به سرور دیگری نمی‌رود.
+ */
+data class AwgRoute(val via: String, val direct: String)
 
 /** جایی که ترافیک یک سرور واقعاً از آن به اینترنت می‌رود (برای کانفیگ تانل، سرور خارج؛ نه سرور ایران) */
 data class ExitInfo(val ip: String, val iso: String, val city: String, val geo: Geo?)
@@ -121,8 +130,13 @@ object SubscriptionApi {
         val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
         val threads = urls.mapIndexed { i, u ->
             Thread {
-                if (i > 0) runCatching { Thread.sleep(300) }
-                done.put(runCatching { u to fetch(u) })
+                // آدرس‌هایی که دیر رسیدند بعد از برنده interrupt می‌شوند: put در رشته‌ی interrupt‌شده
+                // InterruptedException می‌داد و چون کسی آن را نمی‌گرفت، کل برنامه می‌بست (کرش «لینک ساب»).
+                // offer هیچ‌وقت منتظر نمی‌ماند و خطا نمی‌دهد؛ هر خطای دیگری هم همین‌جا تمام می‌شود.
+                runCatching {
+                    if (i > 0) runCatching { Thread.sleep(300) }
+                    done.offer(runCatching { u to fetch(u) })
+                }
             }.apply { isDaemon = true; start() }
         }
         var last: Throwable? = null
@@ -268,6 +282,7 @@ object SubscriptionApi {
                     .filter { XrayCfg.supported(it.link) }
             } ?: emptyList(),
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
+            awg = dataJson(html)?.optJSONArray("nodes")?.let { parseAwg(it) } ?: emptyMap(),
         ).also {
             dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
                 ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
@@ -280,6 +295,16 @@ object SubscriptionApi {
             val id = n.optString("id")
             if (id.isBlank()) return@mapNotNull null
             exitOf(n)?.let { id to it }
+        }.toMap()
+
+    private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
+            val id = n.optString("id")
+            val via = n.optString("awg_via")
+            if (id.isBlank() || via !in setOf("tunnel", "direct")) return@mapNotNull null
+            // فقط اسم میزبان (یا IPv4) قبول می‌شود؛ پورت همان پورت کانفیگ است
+            val d = n.optString("awg_direct").trim().takeIf { it.length <= 253 && it.all { c -> c.isLetterOrDigit() || c == '.' || c == '-' } }.orEmpty()
+            id to AwgRoute(via, d)
         }.toMap()
 
     /** فیلدهای exit_cc / exit_city / exit_lat,lon یک سرور یا یک لینک Xray */
