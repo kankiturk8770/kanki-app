@@ -78,17 +78,16 @@ data class FilterOptsUi(val auto: Boolean, val xrayFirst: Boolean)
 @Composable
 private fun FilterOptsCard(u: FilterOptsUi, act: ServersActions) {
     val mc = modeColor(KMode.FILTER)
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(D.RL)
     Column(
         Modifier.fillMaxWidth().clip(shape)
             .background(Brush.verticalGradient(listOf(mc.copy(alpha = .10f), mc.copy(alpha = .03f))))
             .border(1.dp, mc.copy(alpha = .45f), shape)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(D.CardPad),
     ) {
-        T("ضد فیلتر", size = 14.sp, color = K.Text, weight = FontWeight.Black)
-        Spacer(Modifier.height(6.dp))
+        T("ضد فیلتر", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black)
+        Spacer(Modifier.height(D.S1))
         FilterCheck("خودکار", "بهترین راه را خودش پیدا و وصل می‌کند؛ با لمس یک کانفیگ، همان دستی انتخاب می‌شود", u.auto, mc) { act.filterAuto(!u.auto) }
-        Spacer(Modifier.height(4.dp))
         FilterCheck("اولویت Xray", if (u.xrayFirst) "فقط اینباندهای Xray امتحان می‌شوند" else "Xray، AmneziaWG مستقیم و تانل، همه با هم به ترتیب پینگ", u.xrayFirst, mc) { act.filterXray(!u.xrayFirst) }
     }
 }
@@ -96,14 +95,14 @@ private fun FilterOptsCard(u: FilterOptsUi, act: ServersActions) {
 @Composable
 private fun FilterCheck(title: String, sub: String, on: Boolean, c: Color, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(D.RS)).clickable(onClick = onClick).padding(vertical = D.S1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CheckMark(on, 22.dp, c)
-        Spacer(Modifier.width(10.dp))
+        CheckMark(on, D.Icon, c)
+        Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
             T(title, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
-            T(sub, size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal)
+            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
         }
     }
 }
@@ -122,59 +121,46 @@ fun protoDesc(p: String) = when (p) {
 
 @Composable
 fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions, filter: FilterOptsUi? = null) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(6.dp))
-        T("سرورها", size = 24.sp, color = K.Text, weight = FontWeight.Black)
-        T("یک کلیک تا کانفیگ", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
-        tip?.let { Spacer(Modifier.height(10.dp)); RobotBanner(it, onClose = act.closeTip) }
-        filter?.let { Spacer(Modifier.height(12.dp)); FilterOptsCard(it, act) }
-        Spacer(Modifier.height(12.dp))
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad),
+        verticalArrangement = Arrangement.spacedBy(D.CardGap),
+    ) {
+        Heading("سرورها", "یک کلیک تا کانفیگ", Modifier.padding(top = D.S1, bottom = D.S1))
+        tip?.let { RobotBanner(it, onClose = act.closeTip) }
+        filter?.let { FilterOptsCard(it, act) }
         PingAllCard(ping, act.pingAll)
-        Spacer(Modifier.height(12.dp))
         if (cards.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
+            Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
         }
-        cards.forEach { c ->
-            CountryCard(c, act)
-            Spacer(Modifier.height(10.dp))
-        }
-        Spacer(Modifier.height(12.dp))
+        cards.forEach { c -> CountryCard(c, act) }
+        Spacer(Modifier.height(D.S2))
     }
 }
 
 /** کارت «تست پینگ همه»: همه‌ی کانفیگ‌ها (UDP با پینگ ICMP، TCP با زمان اتصال) با هم سنجیده می‌شوند */
 @Composable
 private fun PingAllCard(p: PingAllUi, onStart: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(D.RL)
     Column(
         Modifier.fillMaxWidth().goldGlass(shape)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = D.CardPad, vertical = D.S2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                T("تست پینگ همه", size = 16.sp, color = K.Text, weight = FontWeight.Black)
-                Spacer(Modifier.height(2.dp))
+                T("تست پینگ همه", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black)
                 val line = when {
                     p.running -> trf("در حال تست… %d از %d", p.done, p.total)
                     else -> "UDP " + faDigits(p.udp.toString()) + " · TCP " + faDigits(p.tcp.toString())
                 }
-                T(line, size = 11.5.sp, color = K.Sub, weight = FontWeight.Normal)
+                T(line, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
             }
             if (p.running) {
-                Box(Modifier.size(width = 84.dp, height = 44.dp), contentAlignment = Alignment.Center) { Spinner(22.dp) }
+                Box(Modifier.size(width = 80.dp, height = D.BtnS), contentAlignment = Alignment.Center) { Spinner(D.Icon) }
             } else {
-                val bs = RoundedCornerShape(14.dp)
-                Box(
-                    Modifier.height(44.dp).clip(bs)
-                        .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
-                        .border(1.dp, K.GoldLight.copy(alpha = .7f), bs)
-                        .clickable(onClick = onStart)
-                        .padding(horizontal = 22.dp),
-                    contentAlignment = Alignment.Center,
-                ) { T(if (p.finished) "دوباره" else "شروع", size = 15.sp, color = K.OnGold, weight = FontWeight.Black) }
+                SmallGold(if (p.finished) "دوباره" else "شروع", Modifier.widthIn(min = 80.dp), onClick = onStart)
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(D.S2))
         val f = when {
             p.total == 0 -> 0f
             p.running -> p.done.toFloat() / p.total
@@ -187,32 +173,32 @@ private fun PingAllCard(p: PingAllUi, onStart: () -> Unit) {
 
 @Composable
 private fun CountryCard(c: CountryCardUi, act: ServersActions) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(D.RL)
     val lit = c.expanded || c.selected
     Column(
         Modifier.fillMaxWidth().goldGlass(shape, selected = lit),
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable { act.toggle(c.id) }.padding(horizontal = 14.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().height(D.RowH).clickable { act.toggle(c.id) }.padding(horizontal = D.CardPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FlagBadge(c.flag, 46.dp, ring = if (lit) K.Gold else K.Gold.copy(alpha = .5f))
-            Spacer(Modifier.width(12.dp))
+            FlagBadge(c.flag, D.Flag, ring = if (lit) K.Gold else K.Gold.copy(alpha = .5f))
+            Spacer(Modifier.width(D.S3))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AutoText(c.name, size = 16.sp, color = K.Text)
+                    AutoText(c.name, size = D.TxtTitle, color = K.Text)
                     if (c.selected) {
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(D.S2))
                         Dot(K.Green, 6.dp)
                     }
                 }
-                AutoText(c.city, size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                AutoText(c.city, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
             }
             CardPing(c.best, c.expanded)
         }
         AnimatedVisibility(visible = c.expanded, enter = fadeIn(tween(220)) + expandVertically(tween(260)), exit = fadeOut(tween(160)) + shrinkVertically(tween(200))) {
-            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 8.dp)) {
-                HDivider(Modifier.padding(bottom = 4.dp))
+            Column(Modifier.fillMaxWidth().padding(start = D.CardPad, end = D.CardPad, bottom = D.S2)) {
+                HDivider(Modifier.padding(bottom = D.S1))
                 c.rows.forEach { r -> CfgRow(r, act) }
             }
         }
@@ -234,10 +220,10 @@ private fun CardPing(ms: Long?, expanded: Boolean) {
                 }
                 drawPath(p, if (expanded) K.Gold else col)
             }
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(D.S2))
             T(
                 when { ms == null -> "-"; ms < 0 -> "✕"; else -> "$ms ms" },
-                size = 13.sp, color = col, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
+                size = 12.sp, color = col, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
             )
         }
     }
@@ -250,7 +236,7 @@ private fun CfgRow(r: CfgRowUi, act: ServersActions) {
     val pick by rememberUpdatedState(act.pick)
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            Modifier.fillMaxWidth().height(D.RowS).clip(RoundedCornerShape(D.RS))
                 .background(if (r.selected) K.Gold.copy(alpha = .08f) else Color.Transparent)
                 .pointerInput(r.node, r.proto) {
                     detectTapGestures(
@@ -258,28 +244,28 @@ private fun CfgRow(r: CfgRowUi, act: ServersActions) {
                         onLongPress = { details = !details },
                     )
                 }
-                .padding(horizontal = 8.dp, vertical = 9.dp),
+                .padding(horizontal = D.S2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (r.selected) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(K.Gold))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(D.S2))
             }
             // عنوان لاتین (مثل Xray · VLESS) هم از سمت راست شروع شود و به پینگ نچسبد
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                 AutoText(r.title, size = 13.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold)
             }
-            Spacer(Modifier.width(10.dp))
-            if (r.busy) Spinner(13.dp)
+            Spacer(Modifier.width(D.S3))
+            if (r.busy) Spinner(14.dp)
             else T(
                 when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping} ms" },
-                size = 12.5.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
+                size = 12.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
             )
         }
         AnimatedVisibility(visible = details, enter = fadeIn(tween(200)) + expandVertically(tween(240)), exit = fadeOut(tween(150)) + shrinkVertically(tween(180))) {
-            Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+            Column(Modifier.padding(start = D.S2, end = D.S2, bottom = D.S2)) {
                 T(protoDesc(r.proto), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-                r.host?.let { h -> T(trf("سرور: %s", h), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = 6.dp)) }
+                r.host?.let { h -> T(trf("سرور: %s", h), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = D.S2)) }
                 if (r.proto != "xray") MtuField(act.mtu(r.proto)) { act.setMtu(r.proto, it) }
             }
         }
@@ -297,7 +283,7 @@ fun MtuField(initial: String, onChange: (String) -> Unit) {
             label = { T("MTU دلخواه (خالی = پیش‌فرض)", size = 12.sp, color = K.Sub, weight = FontWeight.Normal) },
             textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(D.RS),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
         )
     }

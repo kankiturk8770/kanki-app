@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
+import kotlin.math.min
 
 // نقشه‌ی جهان (فقط رسم؛ خواندن فایل نقشه در MapView.kt است)
 
@@ -94,9 +95,10 @@ private fun fitView(pts: List<Geo>, aspect: Double, minSpan: Double): View {
 }
 
 /**
- * نقشه‌ی طلایی بدون قاب که لبه‌هایش در زمینه‌ی مشکی محو می‌شود (جزو خود صفحه است، نه یک کارت جدا):
- * خشکی تیره با مرز طلایی، کشور شما فیروزه‌ای، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها،
- * و وقتی وصل است نقشه روی مسیر زوم می‌کند و کمان نئونی سبز از شما تا سرور کامل دیده می‌شود.
+ * نقشه‌ی بدون قاب که مستقیم روی پس‌زمینه‌ی صفحه کشیده می‌شود (نه یک کارت جدا): زمینه‌ی جدا، لبه، گوشه‌ی گرد و خط
+ * نورانی ندارد و چهار لبه‌اش آرام در پس‌زمینه محو می‌شوند (edgeFade). خشکی تیره با مرز به رنگ تم، کشور شما به رنگ
+ * userCountry تم، سنجاق‌های درخشان با پرچم برای همه‌ی سرورها، و وقتی وصل است نقشه روی مسیر زوم می‌کند و کمان نئونی
+ * به رنگ «وصل» تم از شما تا سرور کامل دیده می‌شود.
  */
 @Composable
 fun WorldMap(
@@ -122,7 +124,7 @@ fun WorldMap(
     // عوض شوند دوباره ساخته می‌شود؛ هر فریم فقط سنجاق‌ها و کمان متحرک کشیده می‌شوند (وگرنه ده‌ها هزار نقطه
     // و مرز کشورها ۶۰ بار در ثانیه کشیده می‌شد و صفحه کند می‌شد)
     val cache = remember { MapCache() }
-    androidx.compose.foundation.layout.Spacer(modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawBehind {
+    androidx.compose.foundation.layout.Spacer(modifier.drawBehind {
         val w = size.width
         val h = size.height
         val aspect = (w / h).toDouble()
@@ -138,8 +140,8 @@ fun WorldMap(
         val selIso = sel?.iso
         val selColor = if (connected) K.Green else accent
         val border = 1f / sx
-        // کشور شما: فیروزه‌ای؛ با DNS وصل، رنگ DNS
-        val youColor = if (dns && connected) accent else K.Accent
+        // کشور شما: رنگ userCountry تم؛ با DNS وصل، رنگ DNS
+        val youColor = if (dns && connected) accent else K.UserCountry
         val key = listOf(size, zoom, pins, user, userIso, connected, accent, dns, countries?.size, ThemeState.current.id)
         val old = cache.bmp
         // لایه‌ی ثابت فقط وقتی کلید عوض شود از نو روی بیت‌مپ تازه (شفاف) کشیده می‌شود؛ پاک‌کردن با Clear لازم نیست
@@ -150,8 +152,7 @@ fun WorldMap(
         cache.key = key
         cache.bmp = bmp
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
-            // نور لهجه‌ی خیلی ملایم پشت نقشه؛ زمینه همان رنگ تیره‌ی صفحه است تا نقشه جزو خود صفحه باشد
-            drawRect(Brush.radialGradient(listOf(K.Gold.copy(alpha = .07f), Color.Transparent), Offset(w * .5f, h * .5f), w * .7f))
+            // زمینه‌ی جدا ندارد: فقط خشکی‌ها و مرزها روی بیت‌مپ شفاف کشیده می‌شوند و پشتش خود پس‌زمینه‌ی صفحه است
             clipRect {
                 withTransform({
                     translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
@@ -159,8 +160,8 @@ fun WorldMap(
                 }) {
                     countries?.forEach { c ->
                         if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
-                        // خشکی شیشه‌ای تیره با مرز طلایی؛ کشور شما فیروزه‌ای، کشور سرور طلایی (وصل: سبز) و درخشان
-                        drawPath(c.path, K.Panel.copy(alpha = .85f))
+                        // خشکی شیشه‌ای تیره با مرز به رنگ تم؛ کشور شما userCountry، کشور سرور به رنگ لهجه (وصل: رنگ «وصل») و درخشان
+                        drawPath(c.path, K.Panel.copy(alpha = .55f))
                         when (c.iso) {
                             selIso -> {
                                 drawPath(c.path, selColor.copy(alpha = .32f))
@@ -179,6 +180,9 @@ fun WorldMap(
                     }
                 }
             }
+            // محو شدن چهار لبه در پس‌زمینه، همین‌جا روی خود عکس (به حالت لایه‌ی Compose وابسته نیست)
+            drawRect(edgeMaskV, blendMode = BlendMode.DstIn)
+            drawRect(edgeMaskH, blendMode = BlendMode.DstIn)
         }
         }
 
@@ -196,7 +200,7 @@ fun WorldMap(
                 style = Stroke(sw, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(sw * 4f, sw * 4f), flow * sw * 8f)),
             )
         }
-        // کمان نئونی سبز از شما تا سرور
+        // کمان نئونی به رنگ «وصل» تم از شما تا سرور
         if (user != null && sel != null && draw > 0f) {
             val a = proj(user)
             val b = proj(sel.geo)
@@ -226,8 +230,10 @@ fun WorldMap(
         val pinAlpha = if (dns) 1f - .5f * draw else 1f
         pins.filter { (dns || !it.selected) && (user == null || it.iso != userIso) }.forEach { p ->
             val o = proj(p.geo)
-            neonDot(K.Gold.copy(alpha = .85f * pinAlpha), o, w / 170f)
-            flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f * pinAlpha), pr * .78f)
+            val e = edgeFade(o, w, h)
+            if (e <= .01f) return@forEach
+            neonDot(K.Gold.copy(alpha = .85f * pinAlpha * e), o, w / 170f)
+            flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f * pinAlpha * e), pr * .78f, e)
         }
         // سرور انتخابی: هاله، موج تپنده و سنجاق بزرگ‌تر
         sel?.let {
@@ -274,17 +280,21 @@ fun WorldMap(
             val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 34f).toSp(), color = K.Text))
             drawText(layout, topLeft = Offset(o.x + pr * 1.1f, o.y - pr * 2.2f - layout.size.height / 2f))
         }
-
-        // محو شدن لبه‌ها در پس‌زمینه (بدون قاب)
-        drawRect(
-            Brush.verticalGradient(0f to Color.Transparent, .08f to Color.Black, .80f to Color.Black, 1f to Color.Transparent),
-            blendMode = BlendMode.DstIn,
-        )
-        drawRect(
-            Brush.horizontalGradient(0f to Color.Transparent, .07f to Color.Black, .93f to Color.Black, 1f to Color.Transparent),
-            blendMode = BlendMode.DstIn,
-        )
     })
+}
+
+/** ماسک محو شدن لبه‌ها: بالا و پایین پهن‌تر (پایین بیشتر، تا زیر نقشه هیچ مرزی دیده نشود)، کناره‌ها باریک‌تر */
+private val edgeMaskV = Brush.verticalGradient(0f to Color.Transparent, .20f to Color.Black, .66f to Color.Black, 1f to Color.Transparent)
+private val edgeMaskH = Brush.horizontalGradient(0f to Color.Transparent, .14f to Color.Black, .86f to Color.Black, 1f to Color.Transparent)
+
+/** همان ماسک لبه‌ها برای یک نقطه (۰ لبه تا ۱ داخل)، برای سنجاق‌هایی که هر فریم جدا کشیده می‌شوند */
+private fun edgeFade(o: Offset, w: Float, h: Float): Float {
+    fun ramp(x: Float, a: Float, b: Float) = ((x - a) / (b - a)).coerceIn(0f, 1f)
+    val fx = o.x / w
+    val fy = (o.y - w / 34f * 2.2f) / h // سرِ سنجاق که بالای نقطه است
+    val v = min(ramp(fy, 0f, .20f), 1f - ramp(fy, .66f, 1f))
+    val hz = min(ramp(fx, 0f, .14f), 1f - ramp(fx, .86f, 1f))
+    return v * hz
 }
 
 /** عکس لایه‌ی ثابت نقشه و چیزهایی که با آن کشیده شده (فقط وقتی این‌ها عوض شوند دوباره کشیده می‌شود) */
@@ -293,8 +303,8 @@ private class MapCache {
     var bmp: ImageBitmap? = null
 }
 
-/** سنجاق کوچک با پرچم بالای یک نقطه */
-private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, pr: Float) {
+/** سنجاق کوچک با پرچم بالای یک نقطه؛ fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه */
+private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, pr: Float, fade: Float = 1f) {
     val head = Offset(o.x, o.y - pr * 2.2f)
     val stem = Path().apply {
         moveTo(o.x, o.y - pr * .3f)
@@ -305,10 +315,10 @@ private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offs
     drawPath(stem, c)
     drawCircle(c.copy(alpha = .28f), pr * 1.45f, head)
     drawCircle(c, pr * 1.12f, head)
-    drawCircle(K.Panel, pr * .96f, head)
+    drawCircle(K.Panel.copy(alpha = K.Panel.alpha * fade), pr * .96f, head)
     flagEmoji(iso)?.let { f ->
         val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.1f).toSp()))
-        drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f))
+        drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f), alpha = fade)
     }
 }
 

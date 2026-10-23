@@ -262,7 +262,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().imePadding().padding(horizontal = 14.dp)) {
         // سربرگ
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundIcon(40.dp, onClick = onClose) { Canvas(Modifier.size(18.dp)) { backArrow(K.Gold) } }
+            RoundIcon(D.IconBox + D.S1, onClick = onClose) { Canvas(Modifier.size(18.dp)) { backArrow(K.Gold) } }
             Spacer(Modifier.width(10.dp))
             EmergencyIcon(30.dp)
             Spacer(Modifier.width(8.dp))
@@ -355,9 +355,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                RoundIcon(44.dp, onClick = { stickersOpen = !stickersOpen }) { T("😊", size = 18.sp) }
+                RoundIcon(D.IconBox + D.S1, onClick = { stickersOpen = !stickersOpen }) { T("😊", size = 18.sp) }
                 Spacer(Modifier.width(6.dp))
-                RoundIcon(44.dp, onClick = { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                RoundIcon(D.IconBox + D.S1, onClick = { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     Canvas(Modifier.size(20.dp)) { pictureIcon(K.Gold) }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -369,7 +369,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
                 )
                 Spacer(Modifier.width(8.dp))
-                RoundIcon(44.dp, filled = true, onClick = {
+                RoundIcon(D.IconBox + D.S1, filled = true, onClick = {
                     val c = code
                     val t = text.trim()
                     if (t.isNotEmpty() && c != null && !sending) {
@@ -423,7 +423,7 @@ private fun Bubble(m: EMsg, img: ImageBitmap?, okOrNull: Boolean?, read: Boolean
                 if (mine) {
                     Spacer(Modifier.width(6.dp))
                     // 🕓 در صف (هنوز به سرور نرسیده)، ✓ رسید، ✓✓ آبی ادمین خواند
-                    T(if (waiting) "🕓" else if (read) "✓✓" else "✓", size = 11.sp, color = if (read && !waiting) Color(0xFF4FC3F7) else K.Sub, weight = FontWeight.Black)
+                    T(if (waiting) "🕓" else if (read) "✓✓" else "✓", size = 11.sp, color = if (read && !waiting) K.Accent else K.Sub, weight = FontWeight.Black)
                 }
             }
         }

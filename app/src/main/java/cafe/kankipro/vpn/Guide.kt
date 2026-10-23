@@ -211,17 +211,17 @@ fun robotAlertFor(a: Account?, now: Long, error: String?, errorDetail: String?, 
 @Composable
 fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (String) -> Unit = {}, onClose: () -> Unit) {
     val c = when (alert.level) { 2 -> K.Red; 1 -> K.Warn; else -> K.Gold }
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(D.RM)
     var showDetail by remember(alert.id) { mutableStateOf(false) }
     Row(
         modifier.fillMaxWidth().goldGlass(shape, tint = c)
-            .padding(start = 8.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = D.S2, end = D.S1, top = D.S2, bottom = D.S2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RobotFace(44.dp)
-        Spacer(Modifier.width(8.dp))
+        RobotFace(D.IconBox)
+        Spacer(Modifier.width(D.S2))
         Column(Modifier.weight(1f)) {
-            T(alert.text, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
+            T(alert.text, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 2)
             alert.detail?.let { d ->
                 T(if (showDetail) "▲ جزئیات" else "▼ جزئیات", size = 11.sp, color = K.Sub, modifier = Modifier.clickable { showDetail = !showDetail }.padding(vertical = 2.dp))
                 if (showDetail) T(d, size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
@@ -233,7 +233,7 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
             else SmallGold(a, onClick = { onAction(alert.actionId ?: "") })
         }
         Box(
-            Modifier.padding(start = 2.dp).size(28.dp).clip(CircleShape).clickable(onClick = onClose),
+            Modifier.size(D.S6 + D.S1).clip(CircleShape).clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) { T("✕", size = 12.sp, color = K.Sub, font = Poppins, ltr = true) }
     }

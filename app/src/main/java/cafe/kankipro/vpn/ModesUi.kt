@@ -54,13 +54,12 @@ import kotlinx.coroutines.withContext
 
 // چهار کاشی حالت، پنل هوشمند، کارت DNS، پنل گیمینگ و انتخاب برنامه‌ها.
 
-/** رنگ اختصاصی هر حالت برای حلقه و نور دکمه‌ی اتصال (ملایم، نه جیغ) */
+/** رنگ اختصاصی هر حالت برای حلقه و نور دکمه‌ی اتصال؛ از تم (هر تم چهار تُن هم‌خانواده‌ی خودش را دارد) */
 fun modeColor(m: KMode): Color = when (m) {
-    KMode.SMART -> K.Gold
-    KMode.GAME -> Color(0xFF46D99A)
-    KMode.FILTER -> Color(0xFF58A6F0)
-    // آبی-فیروزه‌ای: با بنفش Amnezia قاطی نشود
-    KMode.DNS -> Color(0xFF3ED6E0)
+    KMode.SMART -> ThemeState.current.modeSmart
+    KMode.GAME -> ThemeState.current.modeGame
+    KMode.FILTER -> ThemeState.current.modeAnti
+    KMode.DNS -> ThemeState.current.modeDns
 }
 
 /** آیکون هر حالت (کشیده‌شده، بدون فایل تصویر) */
@@ -150,15 +149,16 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
 fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    val compact = LocalCompact.current
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
         KMode.entries.forEach { m ->
             val sel = m == selected
             val mc = modeColor(m)
             // روشن شدن نرم کاشی موقع انتخاب
             val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
-            val shape = RoundedCornerShape(14.dp)
+            val shape = RoundedCornerShape(D.RS)
             Column(
-                Modifier.weight(1f).height(60.dp).modeGlass(shape, mc, lit)
+                Modifier.weight(1f).height(if (compact) D.TileS else D.Tile).modeGlass(shape, mc, lit)
                     .alpha(if (enabled) 1f else .5f)
                     .pointerInput(m, enabled) {
                         if (enabled) detectTapGestures(
@@ -169,9 +169,9 @@ fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, on
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), 23.dp)
-                Spacer(Modifier.height(5.dp))
-                T(m.title, size = 11.5.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
+                ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), if (compact) 18.dp else D.Icon)
+                Spacer(Modifier.height(D.S1))
+                T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
             }
         }
     }
@@ -220,15 +220,15 @@ fun Modifier.modeGlass(shape: RoundedCornerShape, c: Color, lit: Float): Modifie
 /** یک خط باریک زیر کاشی‌ها: حالت انتخاب‌شده چه می‌کند */
 @Composable
 fun ModeHint(m: KMode, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(D.RS)
     Row(
         modifier.fillMaxWidth().goldGlass(shape)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(horizontal = D.S3, vertical = if (LocalCompact.current) D.S1 else D.S2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MiniIcon("spark", modeColor(m), 12.dp)
-        Spacer(Modifier.width(7.dp))
-        T(tr(m.title) + " : " + tr(m.sub), size = 11.5.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(D.S2))
+        T(tr(m.title) + " : " + tr(m.sub), size = 11.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
     }
 }
 
@@ -245,28 +245,31 @@ data class SmartPanelUi(
     val current: String? = null,
 )
 
+/** ارتفاع هر ردیف پنل هوشمند (بدون فاصله‌ی بالایش) */
+val SmartRowH = D.S6
+
 /** پنل کوچک «هوشمند»: پیشرفت سنجش، بهترین‌ها و سروری که به آن وصل می‌شود؛ بعد از اتصال خودش بسته می‌شود */
 @Composable
 fun SmartPanel(u: SmartPanelUi, modifier: Modifier = Modifier) {
     val mc = modeColor(KMode.SMART)
-    KCard(modifier.fillMaxWidth(), padding = 12.dp, radius = 18.dp, border = mc.copy(alpha = .45f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Spinner(15.dp, mc)
-            Spacer(Modifier.width(8.dp))
-            T(u.status, size = 12.sp, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+    KCard(modifier.fillMaxWidth(), padding = D.CardPad, radius = D.RM, border = mc.copy(alpha = .45f)) {
+        Row(Modifier.height(D.S5), verticalAlignment = Alignment.CenterVertically) {
+            Spinner(14.dp, mc)
+            Spacer(Modifier.width(D.S2))
+            T(u.status, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
             if (u.total > 0) T("${u.done}/${u.total}", size = 11.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
         }
         if (u.total > 0) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(D.S2))
             ProgressLine(u.done.toFloat() / u.total.coerceAtLeast(1), mc, height = 4.dp)
         }
         u.rows.forEachIndexed { i, r ->
             val cur = r.key == u.current
-            Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = D.S1).height(SmartRowH), verticalAlignment = Alignment.CenterVertically) {
                 if (cur) Spinner(12.dp, K.Green) else if (i == 0) MiniIcon("crown", mc, 12.dp) else Spacer(Modifier.width(12.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(D.S2))
                 T(r.flag, size = 13.sp, weight = FontWeight.Normal)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(D.S2))
                 AutoText(r.title, size = 11.sp, color = if (cur) K.Green else K.Text, modifier = Modifier.weight(1f))
                 PingChip(r.ping)
             }
@@ -302,30 +305,31 @@ class DnsActions(
 @Composable
 fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = Modifier) {
     val mc = modeColor(KMode.DNS)
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(D.RM)
+    val compact = LocalCompact.current
     var open by remember { mutableStateOf(false) }
     Column(
         modifier.fillMaxWidth().goldGlass(shape, tint = mc)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = D.S3, vertical = if (compact) D.S1 else D.S2),
     ) {
         if (!u.hasDns) {
             T("اشتراک شما DNS ندارد", size = 12.sp, color = K.Warn, weight = FontWeight.Bold)
             return@Column
         }
         val cur = u.servers.firstOrNull { it.id == u.pick } ?: u.servers.firstOrNull()
-        val bs = RoundedCornerShape(14.dp)
+        val bs = RoundedCornerShape(D.RS)
         Row(
-            Modifier.fillMaxWidth().clip(bs)
+            Modifier.fillMaxWidth().height(if (compact) D.HomeRowS else D.HomeRow).clip(bs)
                 .background(Brush.horizontalGradient(listOf(mc.copy(alpha = .26f), mc.copy(alpha = .10f))))
                 .border(1.dp, mc.copy(alpha = .7f), bs)
                 .clickable { open = !open }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = D.S3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             T("DNS", size = 11.sp, color = mc, font = Poppins, weight = FontWeight.Bold, ltr = true)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(D.S3))
             Column(Modifier.weight(1f)) {
-                T("سرورهای DNS", size = 13.sp, color = K.Text, weight = FontWeight.Black)
+                T("سرورهای DNS", size = 12.sp, color = K.Text, weight = FontWeight.Black)
                 cur?.let { T(dnsRowLabel(it), size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1) }
             }
             T(if (open) "▴" else "▾", size = 14.sp, color = mc)
@@ -354,7 +358,7 @@ fun DnsCard(u: DnsCardUi, vstate: VState, act: DnsActions, modifier: Modifier = 
             }
         }
         u.active?.let {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(D.S1))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(trf("وصل به: %s", it) + (u.activeRoute?.let { r -> " · " + tr(r) } ?: ""), size = 10.sp, color = K.Green, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 u.sessionBytes?.let { b -> T(trf("مصرف: %s", formatBytes(b)), size = 10.sp, color = mc, weight = FontWeight.Bold) }
@@ -413,23 +417,23 @@ fun ModeSheet(
                     .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
                     .border(1.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .55f), K.Gold.copy(alpha = .08f))), shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = D.PagePad, vertical = D.S2),
             ) {
-                Box(Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(4.dp).clip(CircleShape).background(K.Gold.copy(alpha = .3f)))
-                Spacer(Modifier.height(12.dp))
+                Box(Modifier.align(Alignment.CenterHorizontally).width(D.S6 * 2).height(4.dp).clip(CircleShape).background(K.Gold.copy(alpha = .3f)))
+                Spacer(Modifier.height(D.S3))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(mc.copy(alpha = .10f)).border(1.dp, K.Gold.copy(alpha = .5f), RoundedCornerShape(13.dp)),
+                        Modifier.size(D.IconBox + D.S1).clip(RoundedCornerShape(D.RS)).background(mc.copy(alpha = .10f)).border(1.dp, K.Gold.copy(alpha = .5f), RoundedCornerShape(D.RS)),
                         contentAlignment = Alignment.Center,
-                    ) { ModeIcon(mode, mc, 26.dp) }
-                    Spacer(Modifier.width(10.dp))
+                    ) { ModeIcon(mode, mc, D.S6) }
+                    Spacer(Modifier.width(D.S3))
                     Column(Modifier.weight(1f)) {
-                        T(title, size = 19.sp, color = K.Text, weight = FontWeight.Black)
-                        T(sub, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                        T(title, size = D.TxtPage, color = K.Text, weight = FontWeight.Black)
+                        T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
                     }
                     trailing()
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(D.S2))
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { content() }
             }
         }
@@ -438,7 +442,7 @@ fun ModeSheet(
 
 @Composable
 private fun SheetLabel(text: String, trailing: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp, start = 2.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = D.S3, bottom = D.S2, start = D.S1, end = D.S1), verticalAlignment = Alignment.CenterVertically) {
         T(text, size = 12.sp, color = K.Sub, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
         trailing()
     }
@@ -447,32 +451,32 @@ private fun SheetLabel(text: String, trailing: @Composable RowScope.() -> Unit =
 /** برچسب کوچک گرد */
 @Composable
 private fun Tag(text: String, c: Color, strong: Boolean = false) {
-    val sh = RoundedCornerShape(8.dp)
+    val sh = RoundedCornerShape(D.RT)
     T(
         text, size = 9.5.sp, color = c, weight = if (strong) FontWeight.Black else FontWeight.Bold, maxLines = 1,
         modifier = Modifier.clip(sh).background(c.copy(alpha = if (strong) .18f else .10f)).border(1.dp, c.copy(alpha = .35f), sh)
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .padding(horizontal = D.S2, vertical = 2.dp),
     )
 }
 
 @Composable
 private fun Radio(on: Boolean, c: Color) {
     Box(
-        Modifier.size(18.dp).clip(CircleShape).border(1.6.dp, if (on) c else K.Sub.copy(alpha = .6f), CircleShape),
+        Modifier.size(D.Icon).clip(CircleShape).border(1.6.dp, if (on) c else K.Sub.copy(alpha = .6f), CircleShape),
         contentAlignment = Alignment.Center,
-    ) { if (on) Box(Modifier.size(9.dp).clip(CircleShape).background(c)) }
+    ) { if (on) Box(Modifier.size(10.dp).clip(CircleShape).background(c)) }
 }
 
 @Composable
 private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = D.S1), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            T(title, size = 12.5.sp, color = K.Text, weight = FontWeight.Bold)
-            sub?.let { T(it, size = 10.sp, color = K.Sub, weight = FontWeight.Normal) }
+            T(title, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
+            sub?.let { T(it, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal) }
         }
         Switch(
             checked = on, onCheckedChange = onChange, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = color, uncheckedTrackColor = K.Panel),
+            colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn, uncheckedTrackColor = K.Panel),
         )
     }
 }
@@ -504,7 +508,7 @@ data class GameFamilyUi(val key: String, val title: String, val sub: String, val
 @Composable
 private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modifier: Modifier, onClick: () -> Unit) {
     val c = familyColor(f.key)
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(D.RM)
     val has = f.servers.isNotEmpty()
     Column(
         modifier.clip(shape)
@@ -512,16 +516,16 @@ private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modif
             .border(if (selected) 1.6.dp else 1.dp, if (selected) c else c.copy(alpha = .28f), shape)
             .alpha(if (has) 1f else .4f)
             .clickable(enabled = has, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(horizontal = D.S2, vertical = D.S3),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Canvas(Modifier.size(24.dp)) { familyIcon(f.key, c) }
-        Spacer(Modifier.height(5.dp))
+        Canvas(Modifier.size(D.S6)) { familyIcon(f.key, c) }
+        Spacer(Modifier.height(D.S1))
         AutoText(f.title, size = 12.5.sp, color = if (selected) K.Text else K.Text.copy(alpha = .85f))
         T(if (!has) tr("در اشتراک نیست") else f.best?.let { "$it ms" } ?: trf("%d سرور", f.servers.size),
             size = 9.5.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null)
         badge?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(D.S1))
             Tag(it, c, strong = true)
         }
     }
@@ -530,22 +534,22 @@ private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modif
 /** یک ردیف سرور: لمس یعنی همین حالا به همین وصل شو */
 @Composable
 private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(D.RS)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(shape)
+        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH).clip(shape)
             .background(if (selected) color.copy(alpha = .12f) else Color(0x08FFFFFF))
             .border(if (selected) 1.3.dp else 1.dp, if (selected) color.copy(alpha = .85f) else K.Gold.copy(alpha = .16f), shape)
             .alpha(if (enabled) 1f else .55f)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 11.dp),
+            .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Radio(selected, color)
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(D.S3))
         T(sv.flag, size = 15.sp, weight = FontWeight.Normal)
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(D.S2))
         AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f))
-        sv.tag?.let { Tag(it, color); Spacer(Modifier.width(6.dp)) }
+        sv.tag?.let { Tag(it, color); Spacer(Modifier.width(D.S2)) }
         sv.ping?.let { p -> T(if (p < 0) "✕" else "$p ms", size = 11.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true) }
             ?: T("…", size = 11.sp, color = K.Sub, font = Poppins, ltr = true)
     }
@@ -554,23 +558,23 @@ private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled:
 /** ردیف «سریع‌ترین سرور»: خودش کم‌پینگ‌ترین سرور همین پروتکل را انتخاب و وصل می‌کند */
 @Composable
 private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(D.RS)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape)
+        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH).clip(shape)
             .background(Brush.horizontalGradient(listOf(color.copy(alpha = if (selected) .26f else .14f), color.copy(alpha = .04f))))
             .border(if (selected) 1.5.dp else 1.dp, color.copy(alpha = if (selected) .9f else .45f), shape)
             .alpha(if (enabled) 1f else .5f)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        T("⚡", size = 18.sp, weight = FontWeight.Normal)
-        Spacer(Modifier.width(10.dp))
+        T("⚡", size = 16.sp, weight = FontWeight.Normal)
+        Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
-            T("سریع‌ترین سرور", size = 14.sp, color = K.Text, weight = FontWeight.Black)
-            T("خودش کم‌پینگ‌ترین را انتخاب و وصل می‌کند", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            T("سریع‌ترین سرور", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T("خودش کم‌پینگ‌ترین را انتخاب و وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true); Spacer(Modifier.width(6.dp)) }
+        best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true); Spacer(Modifier.width(D.S2)) }
         Chevron(color)
     }
 }
@@ -612,12 +616,12 @@ fun GameSheet(
     val c = familyColor(fam)
     ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
         SheetLabel("پروتکل")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             families.forEach { x ->
                 FamilyCard(x, x.key == fam, if (x.key == "kankimix") tr("ویژه گیم") else null, Modifier.weight(1f)) { fam = x.key }
             }
         }
-        T(f?.sub ?: "", size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+        T(f?.sub ?: "", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = D.S2, start = D.S1))
         if (fam == "kankimix" && f?.servers?.isNotEmpty() == true) {
             SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
         }
@@ -632,22 +636,22 @@ fun GameSheet(
         }
 
         // تنظیمات پیشرفته: «فقط بازی‌ها اینترنت داشته باشند»
-        val ash = RoundedCornerShape(16.dp)
+        val ash = RoundedCornerShape(D.RS)
         Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp).clip(ash)
+            Modifier.fillMaxWidth().padding(top = D.S2).height(D.RowH).clip(ash)
                 .background(c.copy(alpha = .05f))
                 .border(1.2.dp, Brush.horizontalGradient(listOf(c.copy(alpha = .7f), K.Gold.copy(alpha = .4f))), ash)
                 .clickable { advanced = !advanced }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = D.S3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Canvas(Modifier.size(18.dp)) { gearIcon(K.GoldLight) }
-            Spacer(Modifier.width(10.dp))
-            T("تنظیمات پیشرفته", size = 14.sp, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Canvas(Modifier.size(D.Icon)) { gearIcon(K.GoldLight) }
+            Spacer(Modifier.width(D.S3))
+            T("تنظیمات پیشرفته", size = D.TxtTitle, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             T(if (advanced) "▲" else "▼", size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
         }
         AnimatedVisibility(advanced, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(top = 6.dp, bottom = 6.dp)) {
+            Column(Modifier.padding(top = D.S2, bottom = D.S2)) {
                 SwitchRow(
                     "فقط بازی‌ها اینترنت داشته باشند",
                     if (appCount > 0) trf("%d برنامه مجاز است؛ بقیه تا قطع اتصال اینترنت ندارند", appCount) else "اول بازی یا برنامه‌ای انتخاب کنید",
@@ -656,13 +660,13 @@ fun GameSheet(
                 SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, c, onChange = onAutoGames)
                 SmallLine("انتخاب برنامه‌ها", Modifier.fillMaxWidth(), color = K.Gold, onClick = onPickApps)
                 if (gamesOnly && !canBlock) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(D.S2))
                     T("روی این نسخه‌ی اندروید برای بستن بقیه‌ی برنامه‌ها «مسدود کردن اتصال‌های بدون VPN» را در تنظیمات VPN گوشی روشن کنید.",
                         size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(D.S2))
     }
 }
 
@@ -690,12 +694,12 @@ fun FilterSheet(
     LaunchedEffect(visible) { if (visible) onShown() }
     ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای فیلتر شدید", onClose) {
         SheetLabel("پروتکل‌ها")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
             TickChip("Amnezia", trf("%d سرور", amnezia.size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
         }
         val list = (if (useX) xray else emptyList()) + (if (useAwg) amnezia else emptyList())
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(D.S3))
         FastestRow(auto, mc, list.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && list.isNotEmpty(), onAuto)
         if (useX) {
             SheetLabel("Xray")
@@ -714,17 +718,17 @@ fun FilterSheet(
 /** چیپ تیک‌دار بزرگ (Xray / Amnezia) */
 @Composable
 private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(D.RS)
     Row(
-        modifier.clip(shape)
+        modifier.height(D.RowH).clip(shape)
             .background(if (on) c.copy(alpha = .16f) else Color(0x08FFFFFF))
             .border(if (on) 1.5.dp else 1.dp, if (on) c else K.Gold.copy(alpha = .18f), shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CheckMark(on, 20.dp, c)
-        Spacer(Modifier.width(8.dp))
+        CheckMark(on, D.Icon, c)
+        Spacer(Modifier.width(D.S2))
         Column {
             T(title, size = 13.5.sp, color = K.Text, weight = FontWeight.Black, font = Poppins, ltr = true)
             T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
@@ -732,13 +736,13 @@ private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier
     }
 }
 
-/** رنگ هر پروتکل (حلقه و هاله‌ی کهکشانی دکمه‌ی اتصال، کارت‌ها) */
+/** رنگ هر پروتکل (حلقه و هاله‌ی دکمه‌ی اتصال، کارت‌ها)؛ همه از تُن‌های همان تم، تا کنار هم یکدست بمانند */
 fun protoColor(p: String?): Color = when (p) {
-    "kankimix" -> Color(0xFFFF8A3D)
-    "amneziawg", "amneziawg-direct" -> Color(0xFF9B7BFF)
-    "wireguard" -> Color(0xFF34D399)
-    "hysteria2" -> Color(0xFFF06292)
-    "xray" -> Color(0xFF4FB3FF)
+    "kankimix" -> ThemeState.current.mix
+    "amneziawg", "amneziawg-direct" -> ThemeState.current.modeAnti
+    "wireguard" -> ThemeState.current.modeDns
+    "hysteria2" -> K.GoldLight
+    "xray" -> K.Gold
     else -> K.Gold
 }
 
@@ -803,7 +807,7 @@ fun AppPicker(
         Modifier.fillMaxSize().background(K.Ink.copy(alpha = .97f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = D.PagePad, vertical = D.S3)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     T("انتخاب برنامه‌ها", size = 20.sp, color = K.Text, weight = FontWeight.Black)
@@ -834,12 +838,12 @@ fun AppPicker(
                         val app = shown[idx]
                         val on = isOn(app.pkg)
                         Row(
-                            Modifier.fillMaxWidth().clickable { onToggle(app.pkg) }.padding(vertical = 8.dp),
+                            Modifier.fillMaxWidth().height(D.RowH).clickable { onToggle(app.pkg) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            app.icon?.let { Image(it, null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))) }
-                                ?: Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(K.Surface))
-                            Spacer(Modifier.width(12.dp))
+                            app.icon?.let { Image(it, null, Modifier.size(D.IconBox).clip(RoundedCornerShape(D.RT))) }
+                                ?: Box(Modifier.size(D.IconBox).clip(RoundedCornerShape(D.RT)).background(K.Surface))
+                            Spacer(Modifier.width(D.S3))
                             Column(Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     T(app.label, size = 14.sp)

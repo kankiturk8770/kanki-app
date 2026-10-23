@@ -82,6 +82,7 @@ abstract class ShotsBase {
     protected fun home(
         on: Boolean, smart: SmartPanelUi = SmartPanelUi(), mode: KMode = KMode.SMART,
         vs: VState = if (on) VState.ON else VState.OFF, hist: List<Long> = listOf(82, 77, 75, 79, 73, 74, 76, 74),
+        alert: RobotAlert? = null, dns: DnsCardUi = DnsCardUi(),
     ) = HomeUi(
         vstate = vs,
         hasAccount = true,
@@ -93,19 +94,27 @@ abstract class ShotsBase {
         tx = if (on) 124_000 else 0,
         elapsedSec = if (on) 754 else null,
         sub = SubUi("42", "23", "Active", 0.35f),
-        alert = null,
+        alert = alert,
         countries = countries(),
-        pins = pins.map { if (on && it.iso == "DE") it.copy(selected = true) else it },
+        pins = pins.map { if (vs != VState.OFF && it.iso == "DE") it.copy(selected = true) else it },
         userGeo = Geo(35.7, 51.4),
         userIso = "IR",
         locationIso = if (on) "DE" else "IR",
         locationIsExit = on,
         sheetOpen = false,
         smart = smart,
-        dns = DnsCardUi(),
-        accent = if (on) modeColor(mode) else K.Gold,
-        server = if (on) ServerChipUi("🇩🇪", "آلمان", "فرانکفورت", "amneziawg") else null,
+        dns = dns,
+        accent = if (vs != VState.OFF) modeColor(mode) else K.Gold,
+        server = if (on && mode != KMode.DNS) ServerChipUi("🇩🇪", "آلمان", "فرانکفورت", "amneziawg") else null,
     )
+
+    protected val dnsCard = DnsCardUi(
+        hasDns = true,
+        servers = listOf(DnsRowUi("", "خودکار", "auto", ""), DnsRowUi("de", "آلمان", "direct", "🇩🇪")),
+        pick = "", active = "آلمان", activeRoute = "مستقیم", sessionBytes = 4_200_000,
+    )
+
+    protected val robotAlert = RobotAlert("low", 1, "حجم اشتراک شما رو به اتمام است", action = "تمدید", actionId = "buy")
 
     @Composable
     protected fun Frame(tab: KTab, accent: androidx.compose.ui.graphics.Color = K.Gold, body: @Composable () -> Unit) {
@@ -157,6 +166,18 @@ abstract class ShotsBase {
             )
         }
     }
+    protected fun pgHomeConnecting(): @Composable () -> Unit = {
+        Frame(KTab.HOME) { HomeContent(home(false, vs = VState.CONNECTING), HomeActions()) }
+    }
+    protected fun pgHomeDns(): @Composable () -> Unit = {
+        Frame(KTab.HOME, modeColor(KMode.DNS)) { HomeContent(home(true, mode = KMode.DNS, dns = dnsCard), HomeActions()) }
+    }
+    protected fun pgHomeAlert(): @Composable () -> Unit = {
+        Frame(KTab.HOME) { HomeContent(home(false, alert = robotAlert), HomeActions()) }
+    }
+    protected fun pgHomeGameOn(): @Composable () -> Unit = {
+        Frame(KTab.HOME, modeColor(KMode.GAME)) { HomeContent(home(true, mode = KMode.GAME), HomeActions()) }
+    }
     protected fun pgServers(): @Composable () -> Unit = {
         Frame(KTab.SERVERS) { ServersContent(cards(), PingAllUi(finished = true, total = 9, done = 9, udp = 8, tcp = 1), null, ServersActions()) }
     }
@@ -166,7 +187,7 @@ abstract class ShotsBase {
         }
     }
     protected fun pgSettings(): @Composable () -> Unit = {
-        Frame(KTab.SETTINGS) { SettingsContent(SettingsUi("", true, true, "fa", 2, "1.17.1"), null, SettingsActions(), {}) }
+        Frame(KTab.SETTINGS) { SettingsContent(SettingsUi("", true, true, "fa", 2, "1.18.1"), null, SettingsActions(), {}) }
     }
     protected fun pgAccount(): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) }
@@ -319,27 +340,54 @@ abstract class ShotsBase {
 }
 
 /**
- * همان صفحه‌های کلیدی روی گوشی کوچک (~۳۶۰dp): چک می‌کند همه‌چیز جا می‌شود و چیزی زیر نوار پایین نمی‌رود.
- * عکس‌ها با پیشوند small- در همان پوشه‌ی build/shots ذخیره می‌شوند.
+ * کوچک‌ترین گوشی (۳۶۰×۶۴۰dp): صفحه‌ی خانه در هر شش حالت (خاموش، در حال اتصال، وصل، هوشمند با پنل باز، DNS، هشدار ربات)
+ * و گیمینگ وصل باید بدون اسکرول جا شود و چیزی زیر نوار پایین نرود. عکس‌ها با پیشوند s640-.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w360dp-h780dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "w360dp-h640dp-xxhdpi")
 class ShotsSmall : ShotsBase() {
-    @Test fun w01() = shot("small-gold-01-home-off", "gold", pgHomeOff())
-    @Test fun w02() = shot("small-gold-02-home-on", "gold", pgHomeOn())
-    @Test fun w03() = shot("small-gold-04-servers", "gold", pgServers())
-    @Test fun w04() = shot("small-gold-06-settings", "gold", pgSettings())
-    @Test fun w05() = shot("small-mono-02-home-on", "mono", pgHomeOn())
-    @Test fun w06() = shot("small-neon-02-home-on", "neon", pgHomeOn())
-    @Test fun w07() = shot("small-gold-08-gaming", "gold", pgGame())
-    @Test fun w08() = shot("small-gold-10-emergency", "gold", pgEmergency())
+    @Test fun w01() = shot("s640-gold-01-home-off", "gold", pgHomeOff())
+    @Test fun w02() = shot("s640-gold-02-home-on", "gold", pgHomeOn())
+    @Test fun w03() = shot("s640-gold-03-home-smart", "gold", pgHomeSmart())
+    @Test fun w04() = shot("s640-gold-11-home-connecting", "gold", pgHomeConnecting())
+    @Test fun w05() = shot("s640-gold-12-home-dns", "gold", pgHomeDns())
+    @Test fun w06() = shot("s640-gold-13-home-alert", "gold", pgHomeAlert())
+    @Test fun w07() = shot("s640-gold-14-home-game-on", "gold", pgHomeGameOn())
+    @Test fun w08() = shot("s640-mono-01-home-off", "mono", pgHomeOff())
+    @Test fun w09() = shot("s640-mono-02-home-on", "mono", pgHomeOn())
+    @Test fun w10() = shot("s640-neon-01-home-off", "neon", pgHomeOff())
+    @Test fun w11() = shot("s640-neon-02-home-on", "neon", pgHomeOn())
+    @Test fun w12() = shot("s640-gold-04-servers", "gold", pgServers())
 }
 
-// ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر سه تم (۴۱۱dp)
+/** گوشی‌های میانی (۳۶۰×۷۴۰ و ۳۹۳×۸۵۰): همان حالت‌های صفحه‌ی خانه، برای چک جا شدن بدون اسکرول */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "w360dp-h740dp-xxhdpi")
+class ShotsMid : ShotsBase() {
+    @Test fun a01() = shot("s740-gold-01-home-off", "gold", pgHomeOff())
+    @Test fun a02() = shot("s740-gold-02-home-on", "gold", pgHomeOn())
+    @Test fun a03() = shot("s740-gold-03-home-smart", "gold", pgHomeSmart())
+    @Test fun a04() = shot("s740-gold-12-home-dns", "gold", pgHomeDns())
+    @Test fun a05() = shot("s740-gold-13-home-alert", "gold", pgHomeAlert())
+}
+
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w393dp-h850dp-xxhdpi")
+class ShotsTall : ShotsBase() {
+    @Test fun b01() = shot("s850-gold-01-home-off", "gold", pgHomeOff())
+    @Test fun b02() = shot("s850-gold-02-home-on", "gold", pgHomeOn())
+    @Test fun b03() = shot("s850-gold-03-home-smart", "gold", pgHomeSmart())
+    @Test fun b04() = shot("s850-gold-12-home-dns", "gold", pgHomeDns())
+    @Test fun b05() = shot("s850-gold-13-home-alert", "gold", pgHomeAlert())
+}
+
+// ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر سه تم (۴۱۱×۹۱۵dp)
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w411dp-h915dp-xxhdpi")
 class Shots : ShotsBase() {
     @Test fun g01() = shot("gold-01-home-off", "gold", pgHomeOff())
     @Test fun g02() = shot("gold-02-home-on", "gold", pgHomeOn())
