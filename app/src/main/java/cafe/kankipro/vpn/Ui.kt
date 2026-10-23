@@ -54,9 +54,9 @@ class Palette(
     val ink: Color, val text: Color, val sub: Color,
     val bgTop: Color, val bgMid: Color, val bgBottom: Color,
     val surface: Color, val surface2: Color, val panel: Color, val onGold: Color, val accent: Color,
-    /** حالت «وصل»: در هر تم روشن‌ترین و درخشان‌ترین تُن همان تم (نه سبز) */
+    /** حالت «وصل» (نقطه‌ها، خط مسیر روی نقشه، کارت سرور وصل، نوشته‌ی «متصل») */
     val connected: Color,
-    /** رنگ چهار حالت: تُن‌های مختلف همان خانواده؛ آیکون و نوشته‌ی کاشی تفاوت را روشن می‌کند */
+    /** رنگ چهار حالت: چهار رنگ هماهنگ با تم (هم‌شدت و هم‌روشنی) تا کاشی‌ها از هم جدا و کنار هم یکدست باشند */
     val modeSmart: Color, val modeGame: Color, val modeAnti: Color, val modeDns: Color,
     /** KANKI MIX (و پروتکل‌های دیگر از همین تُن‌ها؛ protoColor) */
     val mix: Color,
@@ -74,59 +74,61 @@ class Palette(
 }
 
 val Themes: List<Palette> = listOf(
-    // طلایی کانکی (پیش‌فرض و هویت برند): فقط طلایی و مشکی و تُن‌های گرم بین‌شان (کهربایی، شامپاینی، کرم، مسی)
+    // طلایی کانکی (پیش‌فرض و هویت برند): طلایی روی مشکی، با رنگ‌های جواهری هماهنگ (هم‌شدت و هم‌روشنی) برای حالت‌ها و
+    // وضعیت‌ها: زمرد (وصل)، یاقوت کبود (ضد فیلتر و لهجه)، آمتیست (گیمینگ)، مرجان (DNS)
     Palette(
         "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
         Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
         Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
         Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700),
-        accent = Color(0xFFF0D49C), // شامپاینی
-        connected = Color(0xFFFFE58F), // طلایی روشن و درخشان
+        accent = Color(0xFF5C9DFF), // یاقوت کبود
+        connected = Color(0xFF3FD995), // زمرد
         modeSmart = Color(0xFFFFC72C), // طلایی
-        modeGame = Color(0xFFFFA326), // کهربایی
-        modeAnti = Color(0xFFF0D49C), // شامپاینی
-        modeDns = Color(0xFFD98C5F), // مسی
-        mix = Color(0xFFFFB238),
-        danger = Color(0xFFE8553E), warn = Color(0xFFFFA326),
-        userCountry = Color(0xFFFFF1CC), // کرم
+        modeGame = Color(0xFFB18CFF), // آمتیست
+        modeAnti = Color(0xFF5C9DFF), // یاقوت کبود
+        modeDns = Color(0xFFFF8A65), // مرجان
+        mix = Color(0xFFB18CFF),
+        danger = Color(0xFFF05D5D), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFF5C9DFF),
         toggleOn = Color(0xFFFFC72C),
-        gameAlt = Color(0xFFFFE27A), tracer = Color(0xFFFFF3C4),
+        gameAlt = Color(0xFFFFC72C), tracer = Color(0xFFFFE58F),
     ),
-    // گرافیت (تیره‌ی مینیمال): نقره‌ای، سفید و خاکستری‌های سرد؛ تنها لهجه آبی‌خاکستری ملایم
+    // گرافیت (تیره‌ی مینیمال): نقره‌ای و خاکستری‌های سرد، با همان رنگ‌های جواهری ولی کم‌رنگ و پاستلی
+    // (نعنایی، آبی فولادی، یاسی، هلویی) تا آرام بماند
     Palette(
         "mono", Color(0xFFD8DDE6), Color(0xFFFFFFFF), Color(0xFF5F6672), Color(0xFFF8FAFC),
         Color(0xFF090A0C), Color(0xFFEEF1F6), Color(0xFF89909E),
         Color(0xFF0A0B0E), Color(0xFF10131A), Color(0xFF050608),
         Color(0xE614171D), Color(0xF01B1E26), Color(0xFF12141A), Color(0xFF101216),
-        accent = Color(0xFF9DB2CC), // آبی‌خاکستری سرد
-        connected = Color(0xFFDDEBFF), // سفید یخی درخشان
+        accent = Color(0xFF8FB3E8), // آبی فولادی
+        connected = Color(0xFF8EE0BE), // نعنایی یخی
         modeSmart = Color(0xFFD8DDE6), // نقره‌ای
-        modeGame = Color(0xFFA9C0DC), // آبی‌خاکستری
-        modeAnti = Color(0xFF9198A6), // فولادی
-        modeDns = Color(0xFFF4F6FA), // سفید
-        mix = Color(0xFFB9CBE2),
-        danger = Color(0xFFD9797B), warn = Color(0xFFD8C9A6),
-        userCountry = Color(0xFF9DB2CC),
+        modeGame = Color(0xFFB9A9EC), // یاسی
+        modeAnti = Color(0xFF8FB3E8), // آبی فولادی
+        modeDns = Color(0xFFEBB79B), // هلویی
+        mix = Color(0xFFB9A9EC),
+        danger = Color(0xFFE07A7A), warn = Color(0xFFE8CB8F),
+        userCountry = Color(0xFF8FB3E8),
         toggleOn = Color(0xFFD8DDE6),
-        gameAlt = Color(0xFFF4F6FA), tracer = Color(0xFFFFFFFF),
+        gameAlt = Color(0xFFE6E9F0), tracer = Color(0xFFFFFFFF),
     ),
-    // نئون (رنگی): فیروزه‌ای و سرخابی و طیف بین‌شان (بنفش، آبی الکتریکی) روی آبی نفتی تیره
+    // نئون (رنگی، حس سینت‌ویو): فیروزه‌ای و سرخابی روی آبی نفتی تیره، با بنفش و نارنجیِ غروب؛ سبز کنار سرخابی ندارد
     Palette(
         "neon", Color(0xFF22E4FF), Color(0xFF9BF7FF), Color(0xFF0A7FA8), Color(0xFFD6FBFF),
         Color(0xFF020409), Color(0xFFEDFBFF), Color(0xFF7FA6B8),
         Color(0xFF040814), Color(0xFF0A1224), Color(0xFF020409),
         Color(0xE60A1626), Color(0xF00E1A30), Color(0xFF081020), Color(0xFF02181F),
         accent = Color(0xFFFF3DDB), // سرخابی
-        connected = Color(0xFF7AF6FF), // فیروزه‌ای روشن با درخشش شدیدتر
+        connected = Color(0xFF4DFFE1), // آبی‌آسمانی درخشان
         modeSmart = Color(0xFF22E4FF), // فیروزه‌ای
         modeGame = Color(0xFFFF3DDB), // سرخابی
-        modeAnti = Color(0xFF5B7CFF), // آبی الکتریکی
-        modeDns = Color(0xFFA970FF), // بنفش
-        mix = Color(0xFFFF5FE0),
-        danger = Color(0xFFFF4A7A), warn = Color(0xFFB98CFF),
+        modeAnti = Color(0xFF9B6BFF), // بنفش
+        modeDns = Color(0xFFFF9D4D), // نارنجی غروب
+        mix = Color(0xFFFF3DDB),
+        danger = Color(0xFFFF4A6E), warn = Color(0xFFFFC94D),
         userCountry = Color(0xFFFF3DDB),
         toggleOn = Color(0xFF22E4FF),
-        gameAlt = Color(0xFFA970FF), tracer = Color(0xFF7AF6FF),
+        gameAlt = Color(0xFF9B6BFF), tracer = Color(0xFF22E4FF),
     ),
 )
 
@@ -195,7 +197,7 @@ object K {
     val OnGold: Color get() = ThemeState.current.onGold
     val Accent: Color get() = ThemeState.current.accent
     val Ok: Color get() = ThemeState.current.connected
-    /** رنگ «وصل / فعال» (اسمش از قدیم مانده)؛ هر تم رنگ خودش را دارد، طلایی روشن، سفید یخی یا فیروزه‌ای روشن */
+    /** رنگ «وصل / فعال» (اسمش از قدیم مانده)؛ هر تم رنگ خودش را دارد: زمرد، نعنایی یخی یا آبی‌آسمانی نئونی */
     val Green: Color get() = ThemeState.current.connected
     /** خطا، با تُن همان تم */
     val Red: Color get() = ThemeState.current.danger
@@ -693,7 +695,7 @@ fun DrawScope.accountIcon(c: Color) {
 
 // ------------------------------------------------------------------ ربات کانکی
 
-/** رنگ چشم‌های ربات: لهجه‌ی همان تم (شامپاینی، آبی‌خاکستری یا سرخابی) */
+/** رنگ چشم‌های ربات: لهجه‌ی همان تم (یاقوت کبود، آبی فولادی یا سرخابی) */
 private val RobotEye: Color get() = K.Accent
 
 /** ربات بامزه‌ی طلایی با چشم‌های به رنگ لهجه‌ی تم؛ animate=false برای جاهای کوچک (مثل دکمه‌ی سربرگ) */

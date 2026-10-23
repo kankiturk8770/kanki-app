@@ -54,7 +54,7 @@ import kotlinx.coroutines.withContext
 
 // چهار کاشی حالت، پنل هوشمند، کارت DNS، پنل گیمینگ و انتخاب برنامه‌ها.
 
-/** رنگ اختصاصی هر حالت برای حلقه و نور دکمه‌ی اتصال؛ از تم (هر تم چهار تُن هم‌خانواده‌ی خودش را دارد) */
+/** رنگ اختصاصی هر حالت برای حلقه و نور دکمه‌ی اتصال؛ از تم (هر تم چهار رنگ هماهنگ خودش را دارد) */
 fun modeColor(m: KMode): Color = when (m) {
     KMode.SMART -> ThemeState.current.modeSmart
     KMode.GAME -> ThemeState.current.modeGame
@@ -741,7 +741,7 @@ fun protoColor(p: String?): Color = when (p) {
     "kankimix" -> ThemeState.current.mix
     "amneziawg", "amneziawg-direct" -> ThemeState.current.modeAnti
     "wireguard" -> ThemeState.current.modeDns
-    "hysteria2" -> K.GoldLight
+    "hysteria2" -> ThemeState.current.connected
     "xray" -> K.Gold
     else -> K.Gold
 }
