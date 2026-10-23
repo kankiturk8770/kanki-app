@@ -74,45 +74,45 @@ class Palette(
 }
 
 val Themes: List<Palette> = listOf(
-    // طلایی کانکی (پیش‌فرض و هویت برند): طلایی روی مشکی، با رنگ‌های جواهری هماهنگ (هم‌شدت و هم‌روشنی) برای حالت‌ها و
-    // وضعیت‌ها: زمرد (وصل)، یاقوت کبود (ضد فیلتر و لهجه)، آمتیست (گیمینگ)، مرجان (DNS)
+    // طلایی کانکی (پیش‌فرض و هویت برند): طلایی و مشکی با رنگ دوم یاقوت کبود (لبه‌ی کارت‌ها، خشکی نقشه، نور زمینه، ستاره‌ها)
+    // و رنگ‌های جواهری هم‌شدت برای حالت‌ها: هوشمند طلایی، گیمینگ یاقوت سرخ، ضد فیلتر یاقوت کبود، DNS آمتیست، وصل زمرد
     Palette(
         "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
         Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
         Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
         Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700),
-        accent = Color(0xFF5C9DFF), // یاقوت کبود
+        accent = Color(0xFF4D8DFF), // یاقوت کبود
         connected = Color(0xFF3FD995), // زمرد
         modeSmart = Color(0xFFFFC72C), // طلایی
-        modeGame = Color(0xFFB18CFF), // آمتیست
-        modeAnti = Color(0xFF5C9DFF), // یاقوت کبود
-        modeDns = Color(0xFFFF8A65), // مرجان
-        mix = Color(0xFFB18CFF),
-        danger = Color(0xFFF05D5D), warn = Color(0xFFFFB547),
-        userCountry = Color(0xFF5C9DFF),
+        modeGame = Color(0xFFFF3D5E), // یاقوت سرخ
+        modeAnti = Color(0xFF4D8DFF), // یاقوت کبود
+        modeDns = Color(0xFFA98BFF), // آمتیست
+        mix = Color(0xFFFF3D5E),
+        danger = Color(0xFFFF6A3D), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFF4D8DFF),
         toggleOn = Color(0xFFFFC72C),
-        gameAlt = Color(0xFFFFC72C), tracer = Color(0xFFFFE58F),
+        gameAlt = Color(0xFFFFC72C), tracer = Color(0xFFFFE27A),
     ),
-    // گرافیت (تیره‌ی مینیمال): نقره‌ای و خاکستری‌های سرد، با همان رنگ‌های جواهری ولی کم‌رنگ و پاستلی
-    // (نعنایی، آبی فولادی، یاسی، هلویی) تا آرام بماند
+    // گرافیت (تیره‌ی مینیمال): نقره‌ای و زغالی با رنگ دوم طلای رز، و همان رنگ‌های جواهری کم‌رنگ و پاستلی برای حالت‌ها
     Palette(
         "mono", Color(0xFFD8DDE6), Color(0xFFFFFFFF), Color(0xFF5F6672), Color(0xFFF8FAFC),
         Color(0xFF090A0C), Color(0xFFEEF1F6), Color(0xFF89909E),
         Color(0xFF0A0B0E), Color(0xFF10131A), Color(0xFF050608),
         Color(0xE614171D), Color(0xF01B1E26), Color(0xFF12141A), Color(0xFF101216),
-        accent = Color(0xFF8FB3E8), // آبی فولادی
+        accent = Color(0xFFE8B4A0), // طلای رز
         connected = Color(0xFF8EE0BE), // نعنایی یخی
         modeSmart = Color(0xFFD8DDE6), // نقره‌ای
-        modeGame = Color(0xFFB9A9EC), // یاسی
-        modeAnti = Color(0xFF8FB3E8), // آبی فولادی
-        modeDns = Color(0xFFEBB79B), // هلویی
-        mix = Color(0xFFB9A9EC),
-        danger = Color(0xFFE07A7A), warn = Color(0xFFE8CB8F),
-        userCountry = Color(0xFF8FB3E8),
-        toggleOn = Color(0xFFD8DDE6),
-        gameAlt = Color(0xFFE6E9F0), tracer = Color(0xFFFFFFFF),
+        modeGame = Color(0xFFEE8A9A), // سرخ پاستلی
+        modeAnti = Color(0xFF8FB8F0), // آبی یخی
+        modeDns = Color(0xFFB9A9EC), // یاسی
+        mix = Color(0xFFEE8A9A),
+        danger = Color(0xFFE5706A), warn = Color(0xFFE8CB8F),
+        userCountry = Color(0xFFE8B4A0),
+        toggleOn = Color(0xFFE8B4A0),
+        gameAlt = Color(0xFFE6E9F0), tracer = Color(0xFFE8B4A0),
     ),
-    // نئون (رنگی، حس سینت‌ویو): فیروزه‌ای و سرخابی روی آبی نفتی تیره، با بنفش و نارنجیِ غروب؛ سبز کنار سرخابی ندارد
+    // نئون (رنگی، حس سینت‌ویو): فیروزه‌ای و سرخابی که همه‌جا با هم می‌آیند (لبه‌ی کارت‌ها، نقشه، نور زمینه)، با بنفش و
+    // نارنجیِ غروب برای حالت‌ها؛ سبز کنار سرخابی ندارد
     Palette(
         "neon", Color(0xFF22E4FF), Color(0xFF9BF7FF), Color(0xFF0A7FA8), Color(0xFFD6FBFF),
         Color(0xFF020409), Color(0xFFEDFBFF), Color(0xFF7FA6B8),
@@ -343,6 +343,11 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
                     Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f),
                     size.width * .95f, c,
                 )
+                // نور خیلی ملایم رنگ دوم تم از گوشه‌ی پایین و بالا، تا زمینه تک‌رنگ نباشد
+                val c2 = Offset(size.width * .05f, size.height * .92f)
+                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .09f), Color.Transparent), c2, size.width * .9f), size.width * .9f, c2)
+                val c3 = Offset(size.width * .98f, size.height * .06f)
+                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .06f), Color.Transparent), c3, size.width * .7f), size.width * .7f, c3)
                 // وینیت: تیره شدن ملایم لبه‌ها برای عمق بیشتر
                 drawRect(
                     Brush.radialGradient(
@@ -508,8 +513,8 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
     .background(K.Surface)
     .background(
         Brush.linearGradient(
-            if (selected) listOf(tint.copy(alpha = .26f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .25f), tint.copy(alpha = .12f))
-            else listOf(tint.copy(alpha = .11f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .35f), tint.copy(alpha = .06f)),
+            if (selected) listOf(tint.copy(alpha = .26f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .25f), K.Accent.copy(alpha = .12f))
+            else listOf(tint.copy(alpha = .11f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .35f), K.Accent.copy(alpha = .08f)),
         ),
     )
     .drawWithContent {
@@ -525,8 +530,9 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
     .border(
         if (selected) 1.5.dp else 1.dp,
         Brush.linearGradient(
-            if (selected) listOf(K.Shine, K.GoldLight, tint, K.GoldLight)
-            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .45f), tint.copy(alpha = .70f)),
+            // لبه از رنگ کارت به رنگ دوم تم می‌رود (طلایی ← یاقوت کبود، نقره‌ای ← طلای رز، فیروزه‌ای ← سرخابی)
+            if (selected) listOf(K.Shine, K.GoldLight, tint, K.Accent)
+            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .40f), K.Accent.copy(alpha = .60f)),
         ),
         shape,
     )

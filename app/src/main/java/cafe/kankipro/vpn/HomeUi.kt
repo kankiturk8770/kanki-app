@@ -566,9 +566,9 @@ const val OrbFootprint = 1.7f
 
 // ------------------------------------------------------------------ لایه‌ی گیمینگ دکمه‌ی اتصال
 
-/** رنگ گیمینگ همان تم (آمتیست، یاسی یا سرخابی) و نسخه‌ی روشنش (برای سرِ نورها) */
+/** رنگ گیمینگ همان تم (یاقوت سرخ، سرخ پاستلی یا سرخابی) و نسخه‌ی روشنش به سمت gameAlt (برای آدمک‌ها و سرِ نورها) */
 private val Game get() = modeColor(KMode.GAME)
-private val GameLight get() = lerp(Game, Color.White, .35f)
+private val GameLight get() = lerp(lerp(Game, ThemeState.current.gameAlt, .3f), Color.White, .15f)
 
 /**
  * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط رنگ گیمینگ تم، نئون دومِ هم‌خانواده‌اش (gameAlt) و نسخه‌ی روشنش،
