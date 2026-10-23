@@ -1,6 +1,6 @@
 name: عکس صفحه‌های اپ
 # صفحه‌های واقعی برنامه با داده‌ی نمونه، بدون گوشی (app/src/test/.../Shots.kt، Robolectric).
-# عکس‌ها در شاخه‌ی shots گذاشته می‌شوند (و به‌عنوان Artifact هم). به فایل نصبی ربطی ندارد.
+# عکس‌ها در شاخه‌ی shots گذاشته می‌شوند (نه Artifact: سهمیه‌ی Artifacts حساب پر است). به فایل نصبی ربطی ندارد.
 on:
   workflow_dispatch:
   push:
@@ -48,16 +48,6 @@ jobs:
 
       - name: کشیدن صفحه‌ها
         run: gradle :app:testDebugUnitTest --tests "cafe.kankipro.vpn.Shots" --stacktrace
-
-      - name: گزارش تست (اگر خطا داد)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: shots
-          path: |
-            app/build/shots
-            app/build/reports/tests
-          if-no-files-found: ignore
 
       - name: گذاشتن عکس‌ها در شاخه‌ی shots
         env:
