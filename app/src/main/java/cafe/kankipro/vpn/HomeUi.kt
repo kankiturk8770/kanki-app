@@ -27,9 +27,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -37,7 +39,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 
 // صفحه‌ی اتصال (خانه) با طراحی طلایی. فقط ظاهر است؛ داده‌ها از AppState در Screens.kt می‌آیند.
@@ -295,6 +300,9 @@ private val orbStars: List<OrbStar> = run {
  * دورش حلقه‌ی نئونی طلایی با دو نور دنباله‌دار که دور آن می‌چرخند و یک حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد؛
  * خود دکمه شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان است و وسطش لوگو، عنوان و یک خط توضیح.
  * موقع اتصال همه‌چیز تند می‌چرخد و نور سفیدی دور لبه می‌دود؛ وقتی وصل است موج‌های طلایی از دکمه بیرون می‌زند.
+ * حالت گیمینگ یک لایه‌ی سبز روی همین دکمه دارد (پایین‌تر: revCounter، scanLine، hudBrackets، sparks، heartbeat): گوشه‌های نشانه‌گیری دور دکمه؛ موقع اتصال درجه‌ها
+ * پشت هم روشن می‌شوند (مثل دورسنج) و یک خط اسکن دور حلقه می‌چرخد؛ وقتی وصل است دکمه با ریتم پینگ می‌تپد
+ * و چند جرقه‌ی پیکسلی روی حلقه می‌گردند.
  */
 @Composable
 fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp, onClick: () -> Unit) {
@@ -302,8 +310,15 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
     val connecting = ui.vstate == VState.CONNECTING
     // سرعت چرخش نرم عوض می‌شود تا با تغییر وضعیت نپرد
     val speed by animateFloatAsState(if (connecting) 4.5f else if (on) 1.3f else .6f, tween(900), label = "spd")
+    val game = ui.mode == KMode.GAME
+    val gameA by animateFloatAsState(if (game) 1f else 0f, tween(500), label = "game")
+    val gCon by animateFloatAsState(if (game && connecting) 1f else 0f, tween(350), label = "gcon")
+    val gOn by animateFloatAsState(if (game && on) 1f else 0f, tween(700), label = "gon")
+    val period by rememberUpdatedState(beatPeriod(ui.livePing))
     var spin by remember { mutableFloatStateOf(0f) }
+    var tick by remember { mutableFloatStateOf(0f) }
     var time by remember { mutableFloatStateOf(0f) }
+    var beat by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) {
@@ -311,7 +326,10 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 if (last != 0L) {
                     val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
                     spin += dt * speed
+                    // حلقه‌ی درجه‌دار موقع اتصال گیمینگ آهسته‌تر می‌چرخد تا روشن شدن درجه‌ها خوانا باشد
+                    tick += dt * speed * (1f - .75f * gCon)
                     time += dt
+                    beat += dt / period
                 }
                 last = now
             }
@@ -335,6 +353,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             val gold = K.Gold
             val breathe = .5f + .5f * sin(time * 2.1f)
             val deg = Math.toDegrees(spin.toDouble()).toFloat()
+            val env = beatEnv(beat % 1f)
 
             // ---- پرتوهای نور که آرام می‌چرخند
             rotate(deg * .12f, c) {
@@ -385,7 +404,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             neonComet(K.GoldLight, deg, 80f, c, r2, 1.6.dp.toPx())
             neonComet(K.GoldLight, deg + 180f, 80f, c, r2, 1.6.dp.toPx())
             // ---- حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد
-            rotate(-deg * .35f, c) {
+            rotate(-Math.toDegrees(tick.toDouble()).toFloat() * .35f, c) {
                 val r1 = r * 1.2f
                 for (i in 0 until 72) {
                     val a = Math.toRadians(i * 5.0)
@@ -398,7 +417,11 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                         (if (major) 2f else 1.1f).dp.toPx(), StrokeCap.Round,
                     )
                 }
+                if (gCon > .01f) revCounter(time, gCon, c, r1)
             }
+            if (gCon > .01f) scanLine(time, gCon, c, r)
+            if (gameA > .01f) hudBrackets(time, gameA, gCon, gOn, env, c, r)
+            if (gOn > .01f) sparks(time, gOn, env, c, r2)
 
             // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان
             val glowA = .35f + .25f * lit * breathe
@@ -418,15 +441,16 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             if (conA > .01f) {
                 val rr = r + 1.dp.toPx()
                 drawArc(
-                    Color(0xFFFFFBEA).copy(alpha = conA), time * 344f, 69f, false,
+                    lerp(Color(0xFFFFFBEA), GameLight, gCon).copy(alpha = conA), time * 344f, 69f, false,
                     Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round),
                 )
             }
             // وصل: دو موج طلایی که از دکمه بیرون می‌زنند
             if (onA > .01f) for (k in 0 until 2) {
                 val p = ((time / 2.6f) + k * .5f) % 1f
-                drawCircle(K.GoldLight.copy(alpha = (1f - p) * .55f * onA), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
+                drawCircle(K.GoldLight.copy(alpha = (1f - p) * .55f * onA * (1f - .55f * gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
             }
+            if (gOn > .01f) heartbeat(beat % 1f, env, gOn, c, r)
         }
         // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
         Column(Modifier.width(diameter * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -446,6 +470,110 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 weight = FontWeight.Bold, ltr = num, maxLines = 1)
         }
     }
+}
+
+// ------------------------------------------------------------------ لایه‌ی گیمینگ دکمه‌ی اتصال
+
+/** سبز گیمینگ و نسخه‌ی روشنش (برای سرِ نورها) */
+private val Game get() = modeColor(KMode.GAME)
+private val GameLight get() = lerp(Game, Color.White, .35f)
+
+/** دوره‌ی هر ضربان (ثانیه) از پینگ: پینگ کم آرام و منظم، پینگ بالا تند و نگران */
+private fun beatPeriod(ping: Long?): Float = if (ping == null || ping < 0) 1.15f else (1.25f - ping / 400f).coerceIn(.55f, 1.15f)
+
+/** شدت تپش در یک دوره (۰..۱): «تاپ» قوی و پشتش «توپ» ضعیف‌تر، مثل ضربان قلب */
+private fun beatEnv(u: Float): Float {
+    fun bump(c: Float, w: Float) = (1f - abs(u - c) / w).coerceIn(0f, 1f).let { it * it }
+    return max(bump(.05f, .06f), .6f * bump(.22f, .07f))
+}
+
+/** نرم شدن آغاز و پایان (۰..۱) */
+private fun smooth(x: Float) = x * x * (3f - 2f * x)
+
+/** موقع اتصال گیمینگ: درجه‌ها یکی‌یکی از بالا سبز می‌شوند (مثل دورسنج)، پر که شد محو می‌شود و از نو */
+private fun DrawScope.revCounter(time: Float, a: Float, c: Offset, r1: Float) {
+    val ch = (time / 1.5f) % 1f
+    val n = smooth(ch) * 72f
+    val fade = if (ch > .86f) 1f - (ch - .86f) / .14f else 1f
+    for (i in 0 until kotlin.math.ceil(n).toInt().coerceAtMost(72)) {
+        val ang = Math.toRadians(i * 5.0 - 90)
+        val major = i % 6 == 0
+        val h = (if (major) 6.5f else 4f).dp.toPx()
+        val head = 1f - ((n - i) / 6f).coerceIn(0f, 1f)   // ۱ برای درجه‌های سرِ پر شدن
+        val col = lerp(Game, Color.White, .65f * head)
+        val ca = cos(ang).toFloat(); val sa = sin(ang).toFloat()
+        val p1 = Offset(c.x + (r1 - h) * ca, c.y + (r1 - h) * sa)
+        val p2 = Offset(c.x + (r1 + h) * ca, c.y + (r1 + h) * sa)
+        if (head > 0f) drawLine(Game.copy(alpha = .3f * head * a * fade), p1, p2, 5.dp.toPx(), StrokeCap.Round)
+        drawLine(col.copy(alpha = a * fade * (.6f + .4f * head)), p1, p2, (if (major) 2.4f else 1.6f).dp.toPx(), StrokeCap.Round)
+    }
+}
+
+/** خط اسکن (مثل رادار) که دور حلقه می‌چرخد و پشتش یک بادبزن سبز محو می‌آید */
+private fun DrawScope.scanLine(time: Float, a: Float, c: Offset, r: Float) {
+    val sa = (time * 250f) % 360f
+    val rb = r * 1.24f
+    val tl = Offset(c.x - rb, c.y - rb)
+    val sz = Size(rb * 2, rb * 2)
+    for (k in 0 until 12) drawArc(Game.copy(alpha = a * .14f * (1f - k / 12f)), sa - (k + 1) * 3.5f, 3.7f, false, tl, sz, style = Stroke(r * .3f))
+    val rad = Math.toRadians(sa.toDouble())
+    val d = Offset(cos(rad).toFloat(), sin(rad).toFloat())
+    val p1 = c + d * (r + 7.dp.toPx())
+    val p2 = c + d * (r * 1.4f)
+    drawLine(Game.copy(alpha = .25f * a), p1, p2, 4.dp.toPx(), StrokeCap.Round)
+    drawLine(GameLight.copy(alpha = .9f * a), p1, p2, 1.3.dp.toPx(), StrokeCap.Round)
+}
+
+/**
+ * گوشه‌های نشانه‌گیری دور دکمه و چهار علامت کوچک روی محورها. خاموش: کم‌رنگ و کمی دورتر؛ در حال اتصال: با هر دور پر شدن
+ * درجه‌ها از بیرون روی دکمه قفل می‌شوند؛ وصل: سر جایشان با ضربان کمی نفس می‌کشند.
+ */
+private fun DrawScope.hudBrackets(time: Float, a0: Float, gCon: Float, gOn: Float, env: Float, c: Offset, r: Float) {
+    val ch = smooth((time / 1.5f) % 1f)
+    val k = 1f + .2f * gCon * (1f - ch) + .025f * env * gOn + .05f * (1f - gCon) * (1f - gOn)
+    val hh = r * 1.12f * k
+    val arm = r * .2f
+    val a = a0 * (.3f + .25f * gCon + .3f * gOn + .15f * env * gOn)
+    val glow = Stroke(4.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val line = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    for (sx in listOf(-1f, 1f)) for (sy in listOf(-1f, 1f)) {
+        val p = Offset(c.x + sx * hh, c.y + sy * hh)
+        val path = Path().apply { moveTo(p.x - sx * arm, p.y); lineTo(p.x, p.y); lineTo(p.x, p.y - sy * arm) }
+        drawPath(path, Game.copy(alpha = .22f * a), style = glow)
+        drawPath(path, GameLight.copy(alpha = a), style = line)
+    }
+    for (q in 0 until 4) {
+        val rad = Math.toRadians(q * 90.0)
+        val d = Offset(cos(rad).toFloat(), sin(rad).toFloat())
+        drawLine(GameLight.copy(alpha = .8f * a), c + d * (r * 1.48f), c + d * (r * 1.56f), 1.4.dp.toPx(), StrokeCap.Round)
+    }
+}
+
+/** جرقه‌های پیکسلی کوچک (سبز و طلایی) که با دنباله‌ی کوتاه روی حلقه‌ی نئونی می‌گردند و با ضربان روشن‌تر می‌شوند */
+private fun DrawScope.sparks(time: Float, a: Float, env: Float, c: Offset, r2: Float) {
+    for (i in 0 until 8) {
+        val sp = if (i % 2 == 0) 34f + i * 6f else -(28f + i * 5f)
+        val ang = i * 58f + time * sp
+        val rr = r2 + sin(time * 2.3f + i) * 3.dp.toPx()
+        val col = if (i % 3 == 0) K.GoldLight else GameLight
+        val tw = .55f + .45f * sin(time * (3f + i * .4f) + i)
+        for (k in 0 until 4) {
+            val rad = Math.toRadians((ang - kotlin.math.sign(sp) * k * 2.6f).toDouble())
+            val o = Offset(c.x + rr * cos(rad).toFloat(), c.y + rr * sin(rad).toFloat())
+            val s = (2.4f - .45f * k).dp.toPx()
+            val al = a * tw * (1f - k * .27f) * (.7f + .3f * env)
+            if (k == 0) drawCircle(col.copy(alpha = .22f * al), s * 2.2f, o)
+            drawRect(col.copy(alpha = al), Offset(o.x - s / 2, o.y - s / 2), Size(s, s))
+        }
+    }
+}
+
+/** ضربان دکمه در حالت گیمینگ وصل: لبه با ریتم پینگ سبز می‌درخشد و با هر «تاپ» یک موج سبز تا حلقه می‌رود */
+private fun DrawScope.heartbeat(u: Float, env: Float, a: Float, c: Offset, r: Float) {
+    val e = env * a
+    for ((w, al) in listOf(9f to .08f, 5f to .16f, 2.6f to .42f)) drawCircle(Game.copy(alpha = al * e), r + 2.dp.toPx(), c, style = Stroke(w.dp.toPx()))
+    val wp = u / .7f
+    if (wp < 1f) drawCircle(GameLight.copy(alpha = (1f - wp) * .55f * a), r * (1.04f + wp * .38f), c, style = Stroke((2.2f - wp * 1.2f).dp.toPx()))
 }
 
 private fun elapsed(s: Long?): String {
@@ -516,7 +644,7 @@ private fun StatsRow(ui: HomeUi) {
                     Spacer(Modifier.width(3.dp))
                     T("ms", size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
                     Spacer(Modifier.width(6.dp))
-                    Sparkline(if (on) ui.pingHist else emptyList(), Modifier.width(40.dp).height(16.dp))
+                    PingPulse(if (on) ui.pingHist else emptyList(), p, Modifier.width(46.dp).height(20.dp))
                 }
             }
         }
@@ -555,29 +683,135 @@ private fun SpeedCell(icon: String, label: String, tint: Color, bytesPerSec: Lon
     }
 }
 
-/** نمودار خطی کوچک پینگ‌های اخیر (طلایی با کمی درخشش) */
+/** شکل یک ضربان نوار قلب (u = ۰..۱ از دوره، خروجی نسبت به خط پایه): برآمدگی کوچک، جهش بلند، فرورفتگی، موج آرام */
+private val ecgBeat: List<Pair<Float, Float>> = buildList {
+    for (i in 0..4) add(i * .025f to .12f * sin(i / 4f * PI).toFloat())
+    add(.13f to -.12f); add(.16f to 1f); add(.20f to -.35f); add(.24f to 0f); add(.30f to 0f)
+    for (i in 1..7) add(.30f + i * .02f to .22f * sin(i / 7f * PI).toFloat())
+    add(1f to 0f)
+}
+
+/**
+ * ضربان زنده‌ی پینگ (کنار عدد پینگ): نوار قلبی که از راست می‌آید و به چپ می‌رود، با ریتم پینگ (پینگ کم آرام،
+ * پینگ بالا تند) و به رنگ کیفیت پینگ. با هر ضربان یک هاله از قله‌اش بیرون می‌زند و با هر نمونه‌ی تازه‌ی پینگ
+ * (هر چند ثانیه) سرِ نمودار یک «شلیک» کوچک می‌کند. خط پایه همان پینگ‌های اخیر است (بالا و پایین رفتن پینگ).
+ * وقتی وصل نیست: یک ضربان ثابت کم‌رنگ، بدون انیمیشن.
+ */
 @Composable
-private fun Sparkline(values: List<Long>, modifier: Modifier) {
+private fun PingPulse(values: List<Long>, ping: Long?, modifier: Modifier) {
+    val live = values.size >= 2
+    val col by animateColorAsState(if (ping != null) pingColor(ping) else K.Gold, tween(600), label = "pp")
+    val period by rememberUpdatedState(beatPeriod(ping))
+    var beat by remember { mutableFloatStateOf(0f) }
+    var time by remember { mutableFloatStateOf(0f) }
+    var shotAt by remember { mutableFloatStateOf(-9f) }
+    // خط پایه با هر نمونه‌ی تازه نرم به شکل تازه می‌رود
+    var from by remember { mutableStateOf(values) }
+    var to by remember { mutableStateOf(values) }
+    val morph = remember { Animatable(1f) }
+    LaunchedEffect(values) {
+        if (values == to) return@LaunchedEffect
+        from = to; to = values
+        if (live) shotAt = time
+        morph.snapTo(0f)
+        morph.animateTo(1f, tween(700))
+    }
+    LaunchedEffect(live) {
+        if (!live) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last != 0L) {
+                    val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
+                    time += dt
+                    beat += dt / period
+                }
+                last = now
+            }
+        }
+    }
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        if (values.size < 2) {
-            drawLine(K.Gold.copy(alpha = .25f), Offset(0f, h * .6f), Offset(w, h * .6f), 1.5.dp.toPx(), StrokeCap.Round)
+        val y0 = h * .74f
+        val amp = h * .62f
+        if (!live) {
+            val path = Path()
+            ecgBeat.forEachIndexed { i, (u, v) -> val x = w * (.1f + .8f * u); val y = y0 - amp * v; if (i == 0) path.moveTo(x, y) else path.lineTo(x, y) }
+            drawPath(path, K.Gold.copy(alpha = .25f), style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             return@Canvas
         }
-        val lo = values.min().toFloat()
-        val hi = values.max().toFloat()
-        val span = (hi - lo).coerceAtLeast(8f)
-        val step = w / (values.size - 1)
-        val path = Path()
-        values.forEachIndexed { i, v ->
-            val x = i * step
-            val y = h * .9f - (v - lo) / span * h * .8f
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        // خط پایه از پینگ‌های اخیر (کم‌دامنه تا ضربان خوانا بماند)
+        fun base(vs: List<Long>, f: Float): Float {
+            if (vs.size < 2) return 0f
+            val lo = vs.min().toFloat()
+            val span = (vs.max() - lo).coerceAtLeast(10f)
+            val pos = f * (vs.size - 1)
+            val i = pos.toInt().coerceAtMost(vs.size - 2)
+            val v = vs[i] + (vs[i + 1] - vs[i]) * (pos - i)
+            return ((v - lo) / span - .5f) * h * .2f
         }
-        drawPath(path, K.Gold.copy(alpha = .18f), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawPath(path, K.Gold, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        val m = morph.value
+        fun yAt(x: Float, v: Float): Float {
+            val f = (x / w).coerceIn(0f, 1f)
+            return y0 - (base(from, f) * (1f - m) + base(to, f) * m) - amp * v
+        }
+        // فاز در هر x: دو ضربان در پهنای نمودار؛ لبه‌ی راست «الان» است
+        val beats = 2f
+        val p0 = beat
+        val path = Path()
+        var first = true
+        var k = kotlin.math.floor(p0).toInt()
+        while (k <= p0 + beats + 1) {
+            for ((u, v) in ecgBeat) {
+                val ph = k + u
+                if (ph < p0 - .05f || ph > p0 + beats + .05f) continue
+                val x = (ph - p0) / beats * w
+                val y = yAt(x, v)
+                if (first) { path.moveTo(x, y); first = false } else path.lineTo(x, y)
+            }
+            k++
+        }
+        val trace = Brush.horizontalGradient(listOf(Color.Transparent, col.copy(alpha = .55f), col), 0f, w)
+        clipRect(0f, -h, w, h * 2) {
+            drawPath(path, Brush.horizontalGradient(listOf(Color.Transparent, col.copy(alpha = .22f)), 0f, w), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(path, trace, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+        // سرِ نمودار (لبه‌ی راست، الان)
+        val uh = (p0 + beats) % 1f
+        val vh = ecgAt(uh)
+        val head = Offset(w, yAt(w, vh))
+        drawCircle(col.copy(alpha = .25f), 4.dp.toPx(), head)
+        drawCircle(Color.White.copy(alpha = .9f), 1.5.dp.toPx(), head)
+        // هاله‌ی هر ضربان: از قله بیرون می‌زند و با آن به چپ می‌رود
+        val since = ((uh - .16f) % 1f + 1f) % 1f
+        if (since < .6f) {
+            val q = since / .6f
+            val x = w - since / beats * w
+            drawCircle(col.copy(alpha = (1f - q) * .7f), (2f + 9f * q).dp.toPx(), Offset(x, yAt(x, 1f)), style = Stroke((1.4f - .8f * q).dp.toPx()))
+        }
+        // «شلیک» با هر نمونه‌ی تازه‌ی پینگ: حلقه‌ی بزرگ‌تر از سرِ نمودار و یک گلوله‌ی نور که به راست می‌پرد
+        val st = time - shotAt
+        if (st in 0f..0.7f) {
+            val q = st / .7f
+            drawCircle(col.copy(alpha = (1f - q) * .8f), (3f + 13f * q).dp.toPx(), head, style = Stroke((1.8f - 1.2f * q).dp.toPx()))
+            val b = Offset(head.x + 14.dp.toPx() * smooth(q), head.y)
+            drawCircle(col.copy(alpha = (1f - q) * .35f), 3.dp.toPx(), b)
+            drawCircle(Color.White.copy(alpha = 1f - q), 1.2.dp.toPx(), b)
+        }
     }
+}
+
+/** مقدار نوار قلب در فاز u (بین نقطه‌های ecgBeat خطی) */
+private fun ecgAt(u: Float): Float {
+    for (i in 1 until ecgBeat.size) {
+        val (u1, v1) = ecgBeat[i]
+        if (u <= u1) {
+            val (u0, v0) = ecgBeat[i - 1]
+            return v0 + (v1 - v0) * ((u - u0) / (u1 - u0).coerceAtLeast(1e-4f))
+        }
+    }
+    return 0f
 }
 
 /** نوار باریک وضعیت اشتراک: گیگ باقی‌مانده · روز باقی‌مانده · وضعیت (فقط عدد)، و زیرش نوار حجم مصرف‌شده */

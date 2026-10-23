@@ -7,7 +7,7 @@ on:
     branches-ignore: [main, shots]
     paths:
       - "app/src/test/**"
-      - "app/src/main/java/**/Ui.kt"
+      - "app/src/main/java/**/*Ui.kt"
       - ".github/workflows/shots.yml"
 
 permissions:
@@ -57,6 +57,7 @@ jobs:
           ls -la app/build/shots
           d=$(mktemp -d)
           cp app/build/shots/*.png "$d/"
+          if [ -d app/build/shots/frames ]; then cp -r app/build/shots/frames "$d/"; fi
           cd "$d"
           git init -q -b shots
           git config user.name "kanki-shots"

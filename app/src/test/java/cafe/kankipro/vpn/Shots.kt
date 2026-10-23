@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -57,11 +58,12 @@ class Shots {
         // انیمیشن‌ها (ستاره‌ها، حلقه‌ی دکمه) چند لحظه جلو می‌روند تا عکس حالت معمول را نشان دهد
         rule.mainClock.advanceTimeBy(2400)
         rule.waitForIdle()
-        val bmp: Bitmap = runCatching { rule.onRoot().captureToImage().asAndroidBitmap() }.getOrElse {
-            val v = rule.activity.window.decorView.rootView
-            Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888).also { v.draw(android.graphics.Canvas(it)) }
-        }
-        File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(out, "$name.png").outputStream().use { capture().compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun capture(): Bitmap = runCatching { rule.onRoot().captureToImage().asAndroidBitmap() }.getOrElse {
+        val v = rule.activity.window.decorView.rootView
+        Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888).also { v.draw(android.graphics.Canvas(it)) }
     }
 
     // ------------------------------------------------------------------ داده‌ی نمونه
@@ -74,13 +76,16 @@ class Shots {
         MapPin(Geo(52.4, 4.9), "NL", false), MapPin(Geo(41.0, 29.0), "TR", false),
     )
 
-    private fun home(on: Boolean, smart: SmartPanelUi = SmartPanelUi(), mode: KMode = KMode.SMART) = HomeUi(
-        vstate = if (on) VState.ON else VState.OFF,
+    private fun home(
+        on: Boolean, smart: SmartPanelUi = SmartPanelUi(), mode: KMode = KMode.SMART,
+        vs: VState = if (on) VState.ON else VState.OFF, hist: List<Long> = listOf(82, 77, 75, 79, 73, 74, 76, 74),
+    ) = HomeUi(
+        vstate = vs,
         hasAccount = true,
         loading = false,
         mode = mode,
-        livePing = if (on) 74 else null,
-        pingHist = if (on) listOf(82, 77, 75, 79, 73, 74, 76, 74) else emptyList(),
+        livePing = if (on) hist.takeLast(3).min() else null,
+        pingHist = if (on) hist else emptyList(),
         rx = if (on) 1_350_000 else 0,
         tx = if (on) 124_000 else 0,
         elapsedSec = if (on) 754 else null,
@@ -199,4 +204,54 @@ class Shots {
     @Test fun t_cyber() = shot("theme-cyber", "cyber") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
 
     @Test fun t_violet() = shot("theme-violet", "violet") { Frame(KTab.HOME, modeColor(KMode.SMART)) { HomeContent(home(true), HomeActions()) } }
+
+    // ------------------------------------------------------------------ فریم‌های انیمیشن (برای GIF)
+
+    /**
+     * صفحه‌ی اول در حالت گیمینگ، هر ۵۰ میلی‌ثانیه یک فریم (build/shots/frames/game-NNN.jpg):
+     * خاموش با «هوشمند» ← انتخاب گیمینگ ← در حال اتصال ← وصل، و هر ۳ ثانیه یک نمونه‌ی تازه‌ی پینگ.
+     */
+    @Test fun z_game_frames() {
+        ThemeState.set("gold")
+        LangState.lang = "fa"
+        val mode = mutableStateOf(KMode.SMART)
+        val vs = mutableStateOf(VState.OFF)
+        val hist = mutableStateOf(listOf<Long>(41, 39, 44, 38, 40, 37, 42, 39))
+        rule.mainClock.autoAdvance = false
+        rule.setContent {
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl,
+                LocalTextStyle provides TextStyle(fontFamily = Vazir, fontWeight = FontWeight.Bold, color = K.Text),
+            ) {
+                MaterialTheme(colorScheme = darkColorScheme(primary = K.Gold, background = K.Ink, surface = K.Ink)) {
+                    val on = vs.value == VState.ON
+                    Frame(KTab.HOME, if (on) modeColor(mode.value) else K.Gold) {
+                        HomeContent(home(on, mode = mode.value, vs = vs.value, hist = hist.value), HomeActions())
+                    }
+                }
+            }
+        }
+        val dir = File(out, "frames").apply { mkdirs() }
+        var n = 0
+        val samples = listOf<Long>(36, 43, 38, 35)
+        fun grab(count: Int, onFrame: (Int) -> Unit = {}) = repeat(count) { i ->
+            onFrame(i)
+            rule.mainClock.advanceTimeBy(50)
+            val big = capture()
+            val small = Bitmap.createScaledBitmap(big, big.width * 2 / 3, big.height * 2 / 3, true)
+            File(dir, String.format(java.util.Locale.US, "game-%03d.jpg", n++)).outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            if (small !== big) small.recycle()
+            big.recycle()
+        }
+        rule.mainClock.advanceTimeBy(1500)
+        grab(12)
+        mode.value = KMode.GAME
+        grab(18)
+        vs.value = VState.CONNECTING
+        grab(56)
+        vs.value = VState.ON
+        grab(100) { i ->
+            if (i % 30 == 20) hist.value = (hist.value + samples[(i / 30) % samples.size]).takeLast(12)
+        }
+    }
 }
