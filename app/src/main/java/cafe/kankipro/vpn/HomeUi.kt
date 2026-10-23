@@ -134,7 +134,7 @@ fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Uni
         Spacer(Modifier.width(D.S2))
         BrandTitle(15.sp)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.guideTarget("emergency")) { HeaderIcon(K.Gold, onEmergency) { emergencyChatIcon(it) } }
+        Box(Modifier.guideTarget("emergency")) { HeaderIcon(K.Accent, onEmergency) { emergencyChatIcon(it) } }
         Spacer(Modifier.width(D.S2))
         Box(Modifier.guideTarget("robot")) { HeaderIcon(K.Gold, onRobot) { drawRobot(body = false) } }
         Spacer(Modifier.width(D.S2))

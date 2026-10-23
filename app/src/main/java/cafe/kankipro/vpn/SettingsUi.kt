@@ -122,7 +122,7 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
 @Composable
 private fun Group(title: String, content: @Composable ColumnScope.() -> Unit) {
     Spacer(Modifier.height(D.S4))
-    T(title, size = 13.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.padding(start = D.S1, bottom = D.S2))
+    T(title, size = 13.sp, color = K.Accent, weight = FontWeight.Black, modifier = Modifier.padding(start = D.S1, bottom = D.S2))
     KCard(Modifier.fillMaxWidth(), padding = D.CardPad, content = content)
 }
 

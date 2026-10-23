@@ -182,7 +182,7 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions) {
             Modifier.fillMaxWidth().height(D.RowH).clickable { act.toggle(c.id) }.padding(horizontal = D.CardPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FlagBadge(c.flag, D.Flag, ring = if (lit) K.Gold else K.Gold.copy(alpha = .5f))
+            FlagBadge(c.flag, D.Flag, ring = if (lit) K.Gold else K.Accent.copy(alpha = .7f))
             Spacer(Modifier.width(D.S3))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

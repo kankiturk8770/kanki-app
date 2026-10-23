@@ -507,7 +507,7 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
     .drawBehind {
         val o = shape.createOutline(size, layoutDirection, this)
         val layers = if (selected) listOf(12f to .07f, 7f to .14f, 3.5f to .30f) else listOf(9f to .05f, 4.5f to .10f, 2f to .16f)
-        for ((m, a) in layers) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
+        for ((m, a) in layers) drawOutline(o, lerp(tint, K.Accent, .35f).copy(alpha = a), style = Stroke(m.dp.toPx()))
     }
     .clip(shape)
     .background(K.Surface)
@@ -532,7 +532,7 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         Brush.linearGradient(
             // لبه از رنگ کارت به رنگ دوم تم می‌رود (طلایی ← یاقوت کبود، نقره‌ای ← طلای رز، فیروزه‌ای ← سرخابی)
             if (selected) listOf(K.Shine, K.GoldLight, tint, K.Accent)
-            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .40f), K.Accent.copy(alpha = .60f)),
+            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .30f), K.Accent.copy(alpha = .45f), K.Accent.copy(alpha = .90f)),
         ),
         shape,
     )
