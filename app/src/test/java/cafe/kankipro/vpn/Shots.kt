@@ -214,15 +214,16 @@ class Shots {
 
     /**
      * صفحه‌ی اول در حالت گیمینگ، هر ۵۰ میلی‌ثانیه یک فریم (build/shots/frames/game-NNN.jpg):
-     * خاموش با «هوشمند» ← انتخاب گیمینگ ← در حال اتصال ← وصل، و هر ۱.۵ ثانیه یک نمونه‌ی تازه‌ی پینگ: اول آرام،
-     * بعد چند پرش بزرگ (تا تند و شدید شدن تپش دیده شود) و دوباره آرام.
+     * خاموش با «هوشمند» ← انتخاب گیمینگ ← در حال اتصال ← وصل، و هر ۱.۵ ثانیه یک نمونه‌ی تازه‌ی پینگ (یکی با پرش بزرگ).
      */
     /**
      * فقط دکمه‌ی اتصال در حالت گیمینگ از نزدیک (build/shots/frames/orb-NNN.jpg، هر ۵۰ میلی‌ثانیه): انتخاب گیمینگ ←
      * در حال اتصال ← وصل؛ هر ۱.۵ ثانیه یک نمونه‌ی پینگ (با چند پرش بزرگ) و دیتای کم ← زیاد ← کم تا تند و کند شدن
-     * تیرها دیده شود. سریع‌تر از z_game_frames (بدون نقشه).
+     * تیرها دیده شود. سریع‌تر از z_game_frames (بدون نقشه). طولانی است، پس روی گیت‌هاب اجرا نمی‌شود؛ فقط با
+     * KANKI_ORB=1 (مثلاً KANKI_ORB=1 gradle :app:testDebugUnitTest --tests "cafe.kankipro.vpn.Shots.z_orb_frames").
      */
     @Test fun z_orb_frames() {
+        org.junit.Assume.assumeTrue(System.getenv("KANKI_ORB") != null)
         ThemeState.set("gold")
         LangState.lang = "fa"
         val mode = mutableStateOf(KMode.SMART)
@@ -291,7 +292,7 @@ class Shots {
         }
         val dir = File(out, "frames").apply { mkdirs() }
         var n = 0
-        val samples = listOf<Long>(39, 41, 38, 92, 45, 150, 46, 40, 38)
+        val samples = listOf<Long>(39, 92, 45, 38)
         fun grab(count: Int, onFrame: (Int) -> Unit = {}) = repeat(count) { i ->
             onFrame(i)
             rule.mainClock.advanceTimeBy(50)
@@ -308,7 +309,7 @@ class Shots {
         vs.value = VState.CONNECTING
         grab(56)
         vs.value = VState.ON
-        grab(280) { i ->
+        grab(100) { i ->
             if (i % 30 == 20) hist.value = (hist.value + samples[(i / 30) % samples.size]).takeLast(12)
         }
     }
