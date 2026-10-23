@@ -294,7 +294,7 @@ fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
 private val neonLayers = listOf(4.5f to .07f, 3.0f to .15f, 1.9f to .32f, 1.0f to 1f)
 
 /** قوس نئونی با دنباله‌ی محوشونده (مثل ستاره‌ی دنباله‌دار) */
-fun DrawScope.neonComet(color: Color, head: Float, length: Float, c: Offset, r: Float, w: Float) {
+fun DrawScope.neonComet(color: Color, head: Float, length: Float, c: Offset, r: Float, w: Float, alpha: Float = 1f) {
     val tl = Offset(c.x - r, c.y - r)
     val sz = Size(r * 2, r * 2)
     val seg = 16
@@ -302,13 +302,13 @@ fun DrawScope.neonComet(color: Color, head: Float, length: Float, c: Offset, r: 
         val f = (i + 1f) / seg
         val start = head - length + length * i / seg
         for ((m, a) in neonLayers) {
-            drawArc(color.copy(alpha = a * f), start, length / seg + .6f, false, tl, sz, style = Stroke(w * m, cap = StrokeCap.Butt))
+            drawArc(color.copy(alpha = a * f * alpha), start, length / seg + .6f, false, tl, sz, style = Stroke(w * m, cap = StrokeCap.Butt))
         }
     }
     val rad = Math.toRadians(head.toDouble())
     val p = Offset(c.x + r * cos(rad).toFloat(), c.y + r * sin(rad).toFloat())
-    for ((m, a) in neonLayers) drawCircle(color.copy(alpha = a), w * m * .7f, p)
-    drawCircle(Color.White, w * .5f, p)
+    for ((m, a) in neonLayers) drawCircle(color.copy(alpha = a * alpha), w * m * .7f, p)
+    drawCircle(Color.White.copy(alpha = alpha), w * .5f, p)
 }
 
 /** دایره‌ی نئونی کامل */

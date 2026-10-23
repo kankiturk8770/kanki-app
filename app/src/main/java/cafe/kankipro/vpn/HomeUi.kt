@@ -43,6 +43,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 // صفحه‌ی اتصال (خانه) با طراحی طلایی. فقط ظاهر است؛ داده‌ها از AppState در Screens.kt می‌آیند.
@@ -300,9 +301,10 @@ private val orbStars: List<OrbStar> = run {
  * دورش حلقه‌ی نئونی طلایی با دو نور دنباله‌دار که دور آن می‌چرخند و یک حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد؛
  * خود دکمه شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان است و وسطش لوگو، عنوان و یک خط توضیح.
  * موقع اتصال همه‌چیز تند می‌چرخد و نور سفیدی دور لبه می‌دود؛ وقتی وصل است موج‌های طلایی از دکمه بیرون می‌زند.
- * حالت گیمینگ یک لایه‌ی سبز روی همین دکمه دارد (پایین‌تر: revCounter، scanLine، hudBrackets، sparks، heartbeat): گوشه‌های نشانه‌گیری دور دکمه؛ موقع اتصال درجه‌ها
- * پشت هم روشن می‌شوند (مثل دورسنج) و یک خط اسکن دور حلقه می‌چرخد؛ وقتی وصل است دکمه با ریتم پینگ می‌تپد
- * و چند جرقه‌ی پیکسلی روی حلقه می‌گردند.
+ * حالت گیمینگ (پایین‌تر: Chase، chaseScene، connectBlast، heartbeat): نورها و حلقه سبز می‌شوند و روی حلقه دو آدمک نئونی
+ * اندازه‌ی مورچه می‌دوند؛ یکی فرار می‌کند و دیگری با اسلحه دنبالش است. خاموش آرام راه می‌روند، در حال اتصال می‌دوند و
+ * وقتی وصل است تیرانداز تیر نارنجی می‌زند: هرچه دیتای بیشتری رد و بدل شود تندتر شلیک می‌کند، هرچه پینگ کمتر تیرها
+ * تندتر می‌روند، و با هر نمونه‌ی تازه‌ی پینگ یک رگبار زیر پای فراری می‌رسد که از رویش می‌پرد.
  */
 @Composable
 fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp, onClick: () -> Unit) {
@@ -315,10 +317,34 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
     val gCon by animateFloatAsState(if (game && connecting) 1f else 0f, tween(350), label = "gcon")
     val gOn by animateFloatAsState(if (game && on) 1f else 0f, tween(700), label = "gon")
     val period by rememberUpdatedState(beatPeriod(ui.livePing))
+    // شدت تپش گیمینگ: پایه از نوسان چند پینگ آخر، و هر نمونه‌ی تازه که با قبلی فرق دارد یک «ضربه» می‌دهد که آرام فروکش می‌کند
+    val hist = ui.pingHist
+    val calm = remember(hist, ui.livePing) { pingBase(hist, ui.livePing) }
+    val kick = remember { Animatable(0f) }
+    LaunchedEffect(hist.size, hist.lastOrNull()) {
+        if (hist.size < 2) return@LaunchedEffect
+        val k = (abs(hist[hist.size - 1] - hist[hist.size - 2]) / 20f).coerceAtMost(1f)
+        if (k < .05f) return@LaunchedEffect
+        kick.snapTo(max(kick.value, k))
+        kick.animateTo(0f, tween(3000, easing = LinearOutSlowInEasing))
+    }
+    // لحظه‌ی وصل شدن در گیمینگ: یک بار انفجار نور
+    val blast = remember { Animatable(1f) }
+    LaunchedEffect(game && on) {
+        if (game && on) { blast.snapTo(0f); blast.animateTo(1f, tween(1400, easing = LinearEasing)) }
+    }
     var spin by remember { mutableFloatStateOf(0f) }
     var tick by remember { mutableFloatStateOf(0f) }
     var time by remember { mutableFloatStateOf(0f) }
     var beat by remember { mutableFloatStateOf(0f) }
+    // تعقیب گیمینگ روی حلقه: تیرها از دیتا (چند تیر در ثانیه) و پینگ (سرعت تیر)
+    val chase = remember { Chase() }
+    val rate by rememberUpdatedState(fireRate(ui.rx + ui.tx))
+    val flight by rememberUpdatedState(bulletFlight(hist.lastOrNull() ?: ui.livePing))
+    // هر نمونه‌ی تازه‌ی پینگ: یک رگبار سه‌تیری زیر پای فراری که از رویش می‌پرد
+    LaunchedEffect(hist.size, hist.lastOrNull()) {
+        if (game && on && hist.isNotEmpty()) { chase.burst = 3; chase.jumpAt = time + flight - .07f }
+    }
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) {
@@ -326,10 +352,12 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 if (last != 0L) {
                     val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
                     spin += dt * speed
-                    // حلقه‌ی درجه‌دار موقع اتصال گیمینگ آهسته‌تر می‌چرخد تا روشن شدن درجه‌ها خوانا باشد
-                    tick += dt * speed * (1f - .75f * gCon)
+                    tick += dt * speed
                     time += dt
                     beat += dt / period
+                    // آدمک‌ها: خاموش راه می‌روند، در حال اتصال تند می‌دوند، وصل می‌دوند (پینگ که ناگهان عوض شود تندتر و نزدیک‌تر)
+                    val run = if (gCon > .5f) 1.7f else if (gOn > .5f) .9f + .7f * kick.value else .32f
+                    chase.step(dt, time, run, kick.value, gOn > .5f, rate, flight)
                 }
                 last = now
             }
@@ -353,7 +381,13 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             val gold = K.Gold
             val breathe = .5f + .5f * sin(time * 2.1f)
             val deg = Math.toDegrees(spin.toDouble()).toFloat()
-            val env = beatEnv(beat % 1f)
+            val u = beat % 1f
+            val env = beatEnv(u)
+            // گیمینگ: پرتوها و هاله سبز می‌شوند؛ amp شدت تپش از پینگ (۰.۲۵ آرام تا ۱.۳ خیلی ناآرام)
+            val amp = (calm + .8f * kick.value).coerceIn(.25f, 1.3f)
+            val rayC = lerp(gold, Game, .75f * gameA)
+            val warm = lerp(K.Warn, Game, .8f * gameA)
+            val pump = 1f + .7f * env * amp * gOn
 
             // ---- پرتوهای نور که آرام می‌چرخند
             rotate(deg * .12f, c) {
@@ -367,16 +401,16 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                             lineTo(c.x + 1.5.dp.toPx(), c.y)
                             close()
                         }
-                        val a = (.10f + .08f * lit) * (.7f + .3f * breathe)
-                        drawPath(ray, Brush.verticalGradient(0f to gold.copy(alpha = 0f), .45f to gold.copy(alpha = a), 1f to gold.copy(alpha = 0f), startY = c.y - len, endY = c.y))
+                        val a = (.10f + .08f * lit) * (.7f + .3f * breathe) * pump
+                        drawPath(ray, Brush.verticalGradient(0f to rayC.copy(alpha = 0f), .45f to rayC.copy(alpha = a), 1f to rayC.copy(alpha = 0f), startY = c.y - len, endY = c.y))
                     }
                 }
             }
             // ---- هاله‌ی گرم پشت دکمه
             drawCircle(
                 Brush.radialGradient(
-                    0f to K.Warn.copy(alpha = 0f), .45f to K.Warn.copy(alpha = (.30f + .2f * lit) * (.75f + .25f * breathe)),
-                    .72f to K.Warn.copy(alpha = .07f), 1f to Color.Transparent,
+                    0f to warm.copy(alpha = 0f), .45f to warm.copy(alpha = ((.30f + .2f * lit) * (.75f + .25f * breathe) * pump).coerceAtMost(1f)),
+                    .72f to warm.copy(alpha = .07f * pump), 1f to Color.Transparent,
                     center = c, radius = r * 2f,
                 ),
                 r * 2f, c,
@@ -386,7 +420,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 val rad = Math.toRadians((s.start + deg * .07f / s.orbit).toDouble())
                 val o = Offset(c.x + r * s.orbit * cos(rad).toFloat(), c.y + r * s.orbit * sin(rad).toFloat() * .8f)
                 val tw = .5f + .5f * sin(time * s.twinkle + s.start)
-                val col = if (s.white) Color.White else K.GoldLight
+                val col = if (s.white) Color.White else lerp(K.GoldLight, GameLight, gameA)
                 val sz = s.size.dp.toPx()
                 val a = .35f + .65f * tw
                 drawCircle(col.copy(alpha = .16f * a), sz * 4f, o)
@@ -398,11 +432,15 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 }
             }
 
-            // ---- حلقه‌ی نئونی بیرونی با دو نور دنباله‌دار
+            // ---- حلقه‌ی نئونی بیرونی با دو نور دنباله‌دار (گیمینگ: نئون سبز تا فیروزه‌ای، بی‌نورِ دنباله‌دار، جای دویدن آدمک‌ها)
             val r2 = r * 1.42f
-            neonRing(gold, c, r2, 1.2.dp.toPx(), strength = .45f + .25f * lit)
-            neonComet(K.GoldLight, deg, 80f, c, r2, 1.6.dp.toPx())
-            neonComet(K.GoldLight, deg + 180f, 80f, c, r2, 1.6.dp.toPx())
+            val goldA = 1f - gameA
+            if (goldA > .01f) neonRing(gold, c, r2, 1.2.dp.toPx(), strength = (.45f + .25f * lit) * goldA)
+            if (gameA > .01f) rgbRing(c, r2, 1.2.dp.toPx(), gameA, -deg * .6f)
+            if (goldA > .01f) {
+                neonComet(K.GoldLight, deg, 80f, c, r2, 1.6.dp.toPx(), goldA)
+                neonComet(K.GoldLight, deg + 180f, 80f, c, r2, 1.6.dp.toPx(), goldA)
+            }
             // ---- حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد
             rotate(-Math.toDegrees(tick.toDouble()).toFloat() * .35f, c) {
                 val r1 = r * 1.2f
@@ -411,28 +449,42 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                     val major = i % 6 == 0
                     val h = (if (major) 5f else 3f).dp.toPx()
                     val ca = cos(a).toFloat(); val sa = sin(a).toFloat()
+                    // گیمینگ: هر درجه رنگ همان جای حلقه‌ی نئونی
+                    val base = if (major) K.GoldLight else gold
+                    val tc = if (gameA > .01f) lerp(base, rgbAt(i / 72f), .85f * gameA) else base
                     drawLine(
-                        if (major) K.GoldLight.copy(alpha = .85f) else gold.copy(alpha = .4f),
+                        tc.copy(alpha = if (major) .85f else .4f),
                         Offset(c.x + (r1 - h) * ca, c.y + (r1 - h) * sa), Offset(c.x + (r1 + h) * ca, c.y + (r1 + h) * sa),
                         (if (major) 2f else 1.1f).dp.toPx(), StrokeCap.Round,
                     )
                 }
-                if (gCon > .01f) revCounter(time, gCon, c, r1)
             }
-            if (gCon > .01f) scanLine(time, gCon, c, r)
-            if (gameA > .01f) hudBrackets(time, gameA, gCon, gOn, env, c, r)
-            if (gOn > .01f) sparks(time, gOn, env, c, r2)
+            if (gameA > .01f) chaseScene(chase, c, r2, time, gameA, gOn)
 
-            // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان
-            val glowA = .35f + .25f * lit * breathe
-            drawCircle(Brush.radialGradient(listOf(K.Warn.copy(alpha = glowA), Color.Transparent), c, r * 1.32f), r * 1.32f, c)
+            // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان (گیمینگ: شیشه‌ی سبز-فیروزه‌ای تیره و لبه‌ی نئونی چرخان)
+            val glowA = (.35f + .25f * lit * breathe) * (1f + .4f * env * amp * gOn)
+            drawCircle(Brush.radialGradient(listOf(lerp(K.Warn, Game, .6f * gameA).copy(alpha = glowA.coerceAtMost(1f)), Color.Transparent), c, r * 1.32f), r * 1.32f, c)
             drawCircle(Color(0xFF0B0906), r + 4.dp.toPx(), c)
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF2A2112), Color(0xFF0E0B07), Color(0xFF050403)), Offset(c.x, c.y - r * .3f), r * 1.1f), r, c)
-            drawCircle(
-                Brush.verticalGradient(listOf(K.Shine, gold, K.GoldDeep, K.GoldLight), startY = c.y - r, endY = c.y + r),
-                r + 1.dp.toPx(), c, style = Stroke(5.dp.toPx()),
+            val glass = listOf(
+                lerp(Color(0xFF2A2112), Color(0xFF0F2C28), gameA), lerp(Color(0xFF0E0B07), Color(0xFF071411), gameA), lerp(Color(0xFF050403), Color(0xFF030807), gameA),
             )
-            drawCircle(K.GoldLight.copy(alpha = .5f), r - 6.dp.toPx(), c, style = Stroke(1.dp.toPx()))
+            drawCircle(Brush.radialGradient(glass, Offset(c.x, c.y - r * .3f), r * 1.1f), r, c)
+            if (goldA > .01f) drawCircle(
+                Brush.verticalGradient(listOf(K.Shine, gold, K.GoldDeep, K.GoldLight), startY = c.y - r, endY = c.y + r),
+                r + 1.dp.toPx(), c, alpha = goldA, style = Stroke(5.dp.toPx()),
+            )
+            if (gameA > .01f) {
+                // لبه‌ی نئونی: با چرخش دکمه می‌چرخد (موقع اتصال تند) و وصل با هر ضربان پینگ پررنگ‌تر می‌درخشد
+                val rgb = Brush.sweepGradient(GameRgb, c)
+                val glowUp = 1f + env * gOn * (.6f + .5f * amp)
+                rotate(deg * 1.6f, c) {
+                    drawCircle(rgb, r + 1.dp.toPx(), c, alpha = (.16f * glowUp * gameA).coerceAtMost(1f), style = Stroke(15.dp.toPx()))
+                    drawCircle(rgb, r + 1.dp.toPx(), c, alpha = (.32f * glowUp * gameA).coerceAtMost(1f), style = Stroke(9.dp.toPx()))
+                    drawCircle(rgb, r + 1.dp.toPx(), c, alpha = gameA, style = Stroke(5.dp.toPx()))
+                }
+                drawCircle(Color.White.copy(alpha = .45f * gameA), r + 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
+            }
+            drawCircle(lerp(K.GoldLight, GameCyan, gameA).copy(alpha = .5f), r - 6.dp.toPx(), c, style = Stroke(1.dp.toPx()))
             drawOval(
                 Brush.verticalGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), startY = c.y - r, endY = c.y - r * .1f),
                 Offset(c.x - r * .7f, c.y - r * .9f), Size(r * 1.4f, r * .8f),
@@ -448,9 +500,10 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             // وصل: دو موج طلایی که از دکمه بیرون می‌زنند
             if (onA > .01f) for (k in 0 until 2) {
                 val p = ((time / 2.6f) + k * .5f) % 1f
-                drawCircle(K.GoldLight.copy(alpha = (1f - p) * .55f * onA * (1f - .55f * gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
+                drawCircle(K.GoldLight.copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
             }
-            if (gOn > .01f) heartbeat(beat % 1f, env, gOn, c, r)
+            if (gOn > .01f) heartbeat(env * (.6f + .5f * amp), gOn, c, r)
+            if (game && blast.value < 1f) connectBlast(blast.value, c, r)
         }
         // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
         Column(Modifier.width(diameter * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -463,7 +516,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 VState.CONNECTING -> "در حال اتصال" to "لمس برای لغو"
                 VState.OFF -> "اتصال" to ui.mode.title
             }
-            val tc = if (on) K.Green else K.Gold
+            val tc = if (on) K.Green else lerp(K.Gold, GameLight, gameA)
             T(title, size = if (ui.vstate == VState.OFF) 22.sp else 16.sp, color = tc, weight = FontWeight.Black, shadow = glow(tc, 16f), maxLines = 1)
             val num = on && !dnsOn
             T(sub, size = if (num) 14.sp else 11.sp, color = if (num) Color.White else K.Text.copy(alpha = .85f), font = if (num) Poppins else Vazir,
@@ -478,6 +531,31 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
 private val Game get() = modeColor(KMode.GAME)
 private val GameLight get() = lerp(Game, Color.White, .35f)
 
+/**
+ * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط سبزِ گیمینگ و دو رنگ همسایه‌اش (فیروزه‌ای و سبز لیمویی) تا
+ * کنار لوگوی طلایی و تیرهای نارنجی یکدست بماند
+ */
+private val GameCyan = Color(0xFF35E0F0)
+private val GameRgb get() = listOf(Game, GameCyan, Game, Color(0xFFB4F25A), Game)
+
+/** رنگ نئونی گیمینگ در جای f (۰..۱) دور حلقه */
+private fun rgbAt(f: Float): Color {
+    val p = GameRgb
+    val x = (((f % 1f) + 1f) % 1f) * (p.size - 1)
+    val i = x.toInt().coerceAtMost(p.size - 2)
+    return lerp(p[i], p[i + 1], x - i)
+}
+
+/** حلقه‌ی نئونی گیمینگ (سبز تا فیروزه‌ای و لیمویی) که rot درجه چرخیده؛ w ضخامت خط اصلی */
+private fun DrawScope.rgbRing(c: Offset, r: Float, w: Float, a: Float, rot: Float) {
+    val b = Brush.sweepGradient(GameRgb, c)
+    rotate(rot, c) {
+        for ((m, al) in listOf(4.5f to .07f, 3f to .15f, 1.9f to .32f)) drawCircle(b, r, c, alpha = al * a, style = Stroke(w * m))
+        drawCircle(b, r, c, alpha = a, style = Stroke(w))
+    }
+    drawCircle(Color.White.copy(alpha = .4f * a), r, c, style = Stroke(w * .35f))
+}
+
 /** دوره‌ی هر ضربان (ثانیه) از پینگ: پینگ کم آرام و منظم، پینگ بالا تند و نگران */
 private fun beatPeriod(ping: Long?): Float = if (ping == null || ping < 0) 1.15f else (1.25f - ping / 400f).coerceIn(.55f, 1.15f)
 
@@ -490,90 +568,227 @@ private fun beatEnv(u: Float): Float {
 /** نرم شدن آغاز و پایان (۰..۱) */
 private fun smooth(x: Float) = x * x * (3f - 2f * x)
 
-/** موقع اتصال گیمینگ: درجه‌ها یکی‌یکی از بالا سبز می‌شوند (مثل دورسنج)، پر که شد محو می‌شود و از نو */
-private fun DrawScope.revCounter(time: Float, a: Float, c: Offset, r1: Float) {
-    val ch = (time / 1.5f) % 1f
-    val n = smooth(ch) * 72f
-    val fade = if (ch > .86f) 1f - (ch - .86f) / .14f else 1f
-    for (i in 0 until kotlin.math.ceil(n).toInt().coerceAtMost(72)) {
-        val ang = Math.toRadians(i * 5.0 - 90)
-        val major = i % 6 == 0
-        val h = (if (major) 6.5f else 4f).dp.toPx()
-        val head = 1f - ((n - i) / 6f).coerceIn(0f, 1f)   // ۱ برای درجه‌های سرِ پر شدن
-        val col = lerp(Game, Color.White, .65f * head)
-        val ca = cos(ang).toFloat(); val sa = sin(ang).toFloat()
-        val p1 = Offset(c.x + (r1 - h) * ca, c.y + (r1 - h) * sa)
-        val p2 = Offset(c.x + (r1 + h) * ca, c.y + (r1 + h) * sa)
-        if (head > 0f) drawLine(Game.copy(alpha = .3f * head * a * fade), p1, p2, 5.dp.toPx(), StrokeCap.Round)
-        drawLine(col.copy(alpha = a * fade * (.6f + .4f * head)), p1, p2, (if (major) 2.4f else 1.6f).dp.toPx(), StrokeCap.Round)
+/** یک دور کامل (رادیان) */
+private const val TAU = (2 * PI).toFloat()
+
+/** شدت پایه‌ی تپش گیمینگ از پینگ (حدود ۰.۳ تا ۰.۸): نوسان چند نمونه‌ی آخر و خود عدد پینگ */
+private fun pingBase(hist: List<Long>, ping: Long?): Float {
+    val t = hist.takeLast(6)
+    val jit = if (t.size < 2) 0f else t.zipWithNext { a, b -> abs(a - b).toFloat() }.average().toFloat()
+    val lvl = (((ping ?: 0L) - 40L).coerceAtLeast(0L) / 300f).coerceAtMost(.2f)
+    return .3f + (jit / 30f).coerceAtMost(.3f) + lvl
+}
+
+/** عدد شبه‌تصادفی ثابت (۰..۱) */
+private fun hash(a: Int, b: Int): Float {
+    var x = a * 374761393 + b * 668265263
+    x = (x xor (x ushr 13)) * 1274126177
+    return ((x xor (x ushr 16)) and 0xFFFFFF) / 16777215f
+}
+
+/** چند تیر در ثانیه از دیتای رد و بدل شده (بایت بر ثانیه): بی‌دیتا نیم تیر، چند مگ در ثانیه چهار تیر */
+private fun fireRate(bps: Long): Float = .5f + 3.5f * (kotlin.math.log10(1f + bps / 8_000f) / 2.5f).coerceIn(0f, 1f)
+
+/** زمان پرواز هر تیر (ثانیه) از پینگ: پینگ کم تیر تند، پینگ بالا تیر کند */
+private fun bulletFlight(ping: Long?): Float = (.28f + (ping ?: 60L) / 280f).coerceIn(.3f, 1.1f)
+
+/** رنگ تیرها (نارنجی کهربایی؛ با سبز آدمک‌ها قاطی نشود) و سرِ روشنشان */
+private val Tracer = Color(0xFFFF8A3D)
+private val TracerHot = Color(0xFFFFD27A)
+
+/**
+ * تعقیب گیمینگ روی حلقه: جای دو آدمک (رادیان، صفر بالا و ساعت‌گرد)، فاز قدم‌ها، تیرهای در راه و پرش فراری.
+ * هر فریم یک بار step صدا می‌شود؛ کشیدنش با chaseScene است.
+ */
+private class Chase {
+    /** یک تیر: کی و از کجا شلیک شد، کجا به زمین حلقه می‌خورد و چند ثانیه در راه است */
+    class Shot(val t0: Float, val a0: Float, val a1: Float, val dur: Float)
+
+    var pos = 0f
+    var speed = .3f
+    var stride = 0f
+    var gap = .8f
+    var lastShot = -9f
+    var jumpAt = -9f
+    var burst = 0
+    private var fireAcc = 0f
+    private var burstAcc = 0f
+    private var count = 0
+    val shots = ArrayList<Shot>()
+
+    /** target: سرعت دویدن (رادیان بر ثانیه)؛ closer: تیرانداز چقدر نزدیک‌تر شود (۰..۱)؛ firing: وصل است و تیر می‌زند */
+    fun step(dt: Float, time: Float, target: Float, closer: Float, firing: Boolean, rate: Float, flight: Float) {
+        speed += (target - speed) * min(1f, dt * 2.5f)
+        pos = (pos + dt * speed) % TAU
+        stride += dt * (speed * 14f + 4f)
+        gap += (.8f + .08f * sin(time * .6f) - .22f * closer - gap) * min(1f, dt * 2f)
+        if (firing) {
+            fireAcc += dt * rate
+            if (fireAcc >= 1f) { fireAcc -= 1f; fire(time, flight, aimed = false) }
+            if (burst > 0) {
+                burstAcc += dt
+                if (burstAcc >= .09f) { burstAcc = 0f; burst--; fire(time, flight, aimed = true) }
+            }
+        } else {
+            fireAcc = 0f; burst = 0
+        }
+        shots.removeAll { time - it.t0 > it.dur + .3f }
+    }
+
+    /** تیرهای معمولی کمی پشت پای فراری به زمین می‌خورند؛ تیرهای رگبار پینگ درست زیر پایش (او می‌پرد) */
+    private fun fire(time: Float, flight: Float, aimed: Boolean) {
+        val miss = if (aimed) 0f else .06f + .1f * hash(count++, 3)
+        shots.add(Shot(time, pos, pos + gap + speed * flight - miss, flight))
+        lastShot = time
     }
 }
 
-/** خط اسکن (مثل رادار) که دور حلقه می‌چرخد و پشتش یک بادبزن سبز محو می‌آید */
-private fun DrawScope.scanLine(time: Float, a: Float, c: Offset, r: Float) {
-    val sa = (time * 250f) % 360f
-    val rb = r * 1.24f
-    val tl = Offset(c.x - rb, c.y - rb)
-    val sz = Size(rb * 2, rb * 2)
-    for (k in 0 until 12) drawArc(Game.copy(alpha = a * .14f * (1f - k / 12f)), sa - (k + 1) * 3.5f, 3.7f, false, tl, sz, style = Stroke(r * .3f))
-    val rad = Math.toRadians(sa.toDouble())
-    val d = Offset(cos(rad).toFloat(), sin(rad).toFloat())
-    val p1 = c + d * (r + 7.dp.toPx())
-    val p2 = c + d * (r * 1.4f)
-    drawLine(Game.copy(alpha = .25f * a), p1, p2, 4.dp.toPx(), StrokeCap.Round)
-    drawLine(GameLight.copy(alpha = .9f * a), p1, p2, 1.3.dp.toPx(), StrokeCap.Round)
+/** جهت «بالا» (بیرون حلقه) و «جلو» (ساعت‌گرد) در زاویه‌ی th */
+private fun upAt(th: Float) = Offset(sin(th), -cos(th))
+private fun fwdAt(th: Float) = Offset(cos(th), sin(th))
+
+/**
+ * یک آدمک نئونی خطی روی حلقه (پا روی حلقه، سر رو به بیرون، رو به جلوی حرکت): run ۰ راه رفتن تا ۱ دویدن؛ lift: پرش (px)؛
+ * gun: اسلحه در دست (تیرانداز) با لگد شلیک recoil (۰..۱). سر لوله‌ی اسلحه را برمی‌گرداند.
+ */
+private fun DrawScope.stickman(
+    c: Offset, rr: Float, th: Float, h: Float, step: Float, run: Float, lift: Float, gun: Boolean, recoil: Float, a: Float,
+): Offset {
+    val up = upAt(th)
+    val fw = fwdAt(th)
+    val base = c + up * rr
+    fun w(p: Offset) = base + fw * (p.x * h) + up * (p.y * h)
+    fun dn(ang: Float) = Offset(sin(ang), -cos(ang))
+    val jump = (lift / (.55f * h)).coerceIn(0f, 1f)
+    val lean = .08f + .22f * run
+    val spine = Offset(sin(lean), cos(lean))
+    val hip = Offset(0f, .43f + .035f * run * cos(2 * step) + lift / h)
+    val neck = hip + spine * .3f
+    val head = neck + spine * .17f + Offset(.02f, 0f)
+    val shoulder = hip + spine * .27f
+    val body = Path()
+    fun seg(p0: Offset, p1: Offset, p2: Offset? = null) {
+        body.moveTo(w(p0).x, w(p0).y)
+        body.lineTo(w(p1).x, w(p1).y)
+        if (p2 != null) body.lineTo(w(p2).x, w(p2).y)
+    }
+    seg(hip, neck)
+    for (k in 0..1) {
+        val p = step + k * PI.toFloat()
+        val thigh = (.25f + .45f * run) * sin(p) + .5f * jump
+        val bend = .15f + (.25f + run) * max(0f, cos(p)) + 1.1f * jump
+        val knee = hip + dn(thigh) * .23f
+        seg(hip, knee, knee + dn(thigh - bend) * .23f)
+    }
+    var muzzle = Offset.Zero
+    val gunPath = Path()
+    if (gun) {
+        val grip = shoulder + Offset(.2f - .06f * recoil, -.04f)
+        val fore = grip + Offset(.13f, .01f)
+        seg(shoulder, shoulder + Offset(.06f, -.11f), grip)
+        seg(shoulder, shoulder + Offset(.12f, -.08f), fore)
+        val stock = grip + Offset(-.11f, .02f)
+        val tip = grip + Offset(.36f, .035f)
+        muzzle = w(tip)
+        gunPath.moveTo(w(stock).x, w(stock).y); gunPath.lineTo(muzzle.x, muzzle.y)
+        val mag = grip + Offset(.06f, 0f)
+        gunPath.moveTo(w(mag).x, w(mag).y); w(mag + Offset(.025f, -.09f)).let { gunPath.lineTo(it.x, it.y) }
+    } else {
+        for (k in 0..1) {
+            val q = step + k * PI.toFloat()
+            val upper = -(.2f + .6f * run) * sin(q) - .4f * jump
+            val elbow = shoulder + dn(upper) * .19f
+            seg(shoulder, elbow, elbow + dn(upper + .5f + run) * .17f)
+        }
+    }
+    val hc = w(head)
+    val hr = .13f * h
+    drawPath(body, Game.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawCircle(Game.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
+    drawPath(body, GameLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(body, Color.White.copy(alpha = .5f * a), style = Stroke(.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawCircle(GameLight.copy(alpha = a), hr, hc)
+    drawCircle(Color.White.copy(alpha = .55f * a), hr * .5f, hc)
+    if (gun) {
+        drawPath(gunPath, Color.White.copy(alpha = .22f * a), style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(gunPath, Color(0xFFDDE7EA).copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round))
+    }
+    return muzzle
 }
 
 /**
- * گوشه‌های نشانه‌گیری دور دکمه و چهار علامت کوچک روی محورها. خاموش: کم‌رنگ و کمی دورتر؛ در حال اتصال: با هر دور پر شدن
- * درجه‌ها از بیرون روی دکمه قفل می‌شوند؛ وصل: سر جایشان با ضربان کمی نفس می‌کشند.
+ * حالت گیمینگ: دو آدمک نئونی سبز اندازه‌ی مورچه روی حلقه؛ یکی فرار می‌کند و دیگری با اسلحه دنبالش می‌دود و تیر نارنجی
+ * می‌زند. تیرها دنباله دارند، کمی پشت پای فراری به زمین حلقه می‌خورند و جرقه می‌زنند؛ تیرهای رگبار پینگ زیر پای او
+ * می‌رسند و او از رویشان می‌پرد. a: پیدا بودن؛ firing: تیر زدن (وصل)
  */
-private fun DrawScope.hudBrackets(time: Float, a0: Float, gCon: Float, gOn: Float, env: Float, c: Offset, r: Float) {
-    val ch = smooth((time / 1.5f) % 1f)
-    val k = 1f + .2f * gCon * (1f - ch) + .025f * env * gOn + .05f * (1f - gCon) * (1f - gOn)
-    val hh = r * 1.12f * k
-    val arm = r * .2f
-    val a = a0 * (.3f + .25f * gCon + .3f * gOn + .15f * env * gOn)
-    val glow = Stroke(4.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-    val line = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-    for (sx in listOf(-1f, 1f)) for (sy in listOf(-1f, 1f)) {
-        val p = Offset(c.x + sx * hh, c.y + sy * hh)
-        val path = Path().apply { moveTo(p.x - sx * arm, p.y); lineTo(p.x, p.y); lineTo(p.x, p.y - sy * arm) }
-        drawPath(path, Game.copy(alpha = .22f * a), style = glow)
-        drawPath(path, GameLight.copy(alpha = a), style = line)
-    }
-    for (q in 0 until 4) {
-        val rad = Math.toRadians(q * 90.0)
-        val d = Offset(cos(rad).toFloat(), sin(rad).toFloat())
-        drawLine(GameLight.copy(alpha = .8f * a), c + d * (r * 1.48f), c + d * (r * 1.56f), 1.4.dp.toPx(), StrokeCap.Round)
-    }
-}
+private fun DrawScope.chaseScene(ch: Chase, c: Offset, ring: Float, time: Float, a: Float, firing: Float) {
+    val h = 18.dp.toPx()
+    val rr = ring + 1.dp.toPx()
+    val run = ((ch.speed - .3f) / .6f).coerceIn(0f, 1f)
+    val muzzleAng = .62f * h / rr
+    val gunH = .74f * h
 
-/** جرقه‌های پیکسلی کوچک (سبز و طلایی) که با دنباله‌ی کوتاه روی حلقه‌ی نئونی می‌گردند و با ضربان روشن‌تر می‌شوند */
-private fun DrawScope.sparks(time: Float, a: Float, env: Float, c: Offset, r2: Float) {
-    for (i in 0 until 8) {
-        val sp = if (i % 2 == 0) 34f + i * 6f else -(28f + i * 5f)
-        val ang = i * 58f + time * sp
-        val rr = r2 + sin(time * 2.3f + i) * 3.dp.toPx()
-        val col = if (i % 3 == 0) K.GoldLight else GameLight
-        val tw = .55f + .45f * sin(time * (3f + i * .4f) + i)
-        for (k in 0 until 4) {
-            val rad = Math.toRadians((ang - kotlin.math.sign(sp) * k * 2.6f).toDouble())
-            val o = Offset(c.x + rr * cos(rad).toFloat(), c.y + rr * sin(rad).toFloat())
-            val s = (2.4f - .45f * k).dp.toPx()
-            val al = a * tw * (1f - k * .27f) * (.7f + .3f * env)
-            if (k == 0) drawCircle(col.copy(alpha = .22f * al), s * 2.2f, o)
-            drawRect(col.copy(alpha = al), Offset(o.x - s / 2, o.y - s / 2), Size(s, s))
+    // تیرها و جرقه‌ی برخوردشان (پشت آدمک‌ها)
+    for (s in ch.shots) {
+        val t = time - s.t0
+        val span = s.a1 - s.a0 - muzzleAng
+        if (t <= s.dur) {
+            val p = t / s.dur
+            val tailP = (p - (12.dp.toPx() / rr) / max(.05f, span)).coerceAtLeast(0f)
+            fun at(q: Float): Offset {
+                val th = s.a0 + muzzleAng + span * q
+                return c + upAt(th) * (rr + gunH * (1f - q * q))
+            }
+            val head = at(p)
+            val tail = at(tailP)
+            drawLine(Tracer.copy(alpha = .35f * a), tail, head, 3.4.dp.toPx(), StrokeCap.Round)
+            drawLine(TracerHot.copy(alpha = a), tail, head, 1.4.dp.toPx(), StrokeCap.Round)
+            drawCircle(Color.White.copy(alpha = a), 1.1.dp.toPx(), head)
+        } else {
+            val k = ((t - s.dur) / .3f).coerceIn(0f, 1f)
+            val hit = c + upAt(s.a1) * rr
+            val up = upAt(s.a1)
+            val back = fwdAt(s.a1) * -1f
+            drawCircle(Tracer.copy(alpha = .5f * (1f - k) * a), (1.5f + 3f * k).dp.toPx(), hit)
+            for (i in 0 until 5) {
+                val ang = -.9f + .45f * i
+                val d = up * cos(ang) + back * sin(ang)
+                val len = (2f + 6f * k).dp.toPx() * (.6f + .4f * hash(i, s.t0.toBits()))
+                drawLine(TracerHot.copy(alpha = (1f - k) * a), hit + d * (len * .4f), hit + d * len, 1.dp.toPx(), StrokeCap.Round)
+            }
         }
     }
+
+    // فراری جلوتر (با پرش از روی رگبار) و تیرانداز پشت سرش با اسلحه
+    val jt = time - ch.jumpAt
+    val lift = if (jt in 0f..0.5f) .55f * h * sin(jt / .5f * PI.toFloat()) else 0f
+    stickman(c, rr, ch.pos + ch.gap, h, ch.stride + 1.3f, run, lift, gun = false, recoil = 0f, a = a)
+    val since = time - ch.lastShot
+    val recoil = if (firing > .5f) kotlin.math.exp(-since * 22f) else 0f
+    val muzzle = stickman(c, rr, ch.pos, h, ch.stride, run, 0f, gun = true, recoil = recoil, a = a)
+
+    // برق سر لوله
+    if (firing > .5f && since < .08f) {
+        val f = 1f - since / .08f
+        val fw = fwdAt(ch.pos)
+        val up = upAt(ch.pos)
+        drawCircle(Tracer.copy(alpha = .45f * f * a), 4.dp.toPx() * f, muzzle)
+        for (d in listOf(fw, fw * .8f + up * .5f, fw * .8f - up * .5f)) {
+            drawLine(TracerHot.copy(alpha = f * a), muzzle, muzzle + d * (5.dp.toPx() * f), 1.1.dp.toPx(), StrokeCap.Round)
+        }
+        drawCircle(Color.White.copy(alpha = f * a), 1.2.dp.toPx(), muzzle)
+    }
 }
 
-/** ضربان دکمه در حالت گیمینگ وصل: لبه با ریتم پینگ سبز می‌درخشد و با هر «تاپ» یک موج سبز تا حلقه می‌رود */
-private fun DrawScope.heartbeat(u: Float, env: Float, a: Float, c: Offset, r: Float) {
-    val e = env * a
-    for ((w, al) in listOf(9f to .08f, 5f to .16f, 2.6f to .42f)) drawCircle(Game.copy(alpha = al * e), r + 2.dp.toPx(), c, style = Stroke(w.dp.toPx()))
-    val wp = u / .7f
-    if (wp < 1f) drawCircle(GameLight.copy(alpha = (1f - wp) * .55f * a), r * (1.04f + wp * .38f), c, style = Stroke((2.2f - wp * 1.2f).dp.toPx()))
+/** لحظه‌ی وصل شدن در گیمینگ (p: ۰ تا ۱): برق سبز روی دکمه که آرام محو می‌شود */
+private fun DrawScope.connectBlast(p: Float, c: Offset, r: Float) {
+    val q = 1f - p
+    drawCircle(Brush.radialGradient(listOf(GameLight.copy(alpha = .5f * q * q), Color.Transparent), c, r * 1.6f), r * 1.6f, c)
+}
+
+/** لبه‌ی دکمه در گیمینگ وصل با هر ضربان سبز می‌درخشد (e: شدت همان لحظه) */
+private fun DrawScope.heartbeat(e: Float, a: Float, c: Offset, r: Float) {
+    for ((w, al) in listOf(12f to .07f, 6f to .16f, 2.6f to .45f)) drawCircle(Game.copy(alpha = (al * e * a).coerceAtMost(1f)), r + 2.dp.toPx(), c, style = Stroke(w.dp.toPx()))
 }
 
 private fun elapsed(s: Long?): String {

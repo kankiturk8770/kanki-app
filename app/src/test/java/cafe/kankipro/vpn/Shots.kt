@@ -3,21 +3,26 @@ package cafe.kankipro.vpn
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -209,8 +214,62 @@ class Shots {
 
     /**
      * صفحه‌ی اول در حالت گیمینگ، هر ۵۰ میلی‌ثانیه یک فریم (build/shots/frames/game-NNN.jpg):
-     * خاموش با «هوشمند» ← انتخاب گیمینگ ← در حال اتصال ← وصل، و هر ۳ ثانیه یک نمونه‌ی تازه‌ی پینگ.
+     * خاموش با «هوشمند» ← انتخاب گیمینگ ← در حال اتصال ← وصل، و هر ۱.۵ ثانیه یک نمونه‌ی تازه‌ی پینگ (یکی با پرش بزرگ).
      */
+    /**
+     * فقط دکمه‌ی اتصال در حالت گیمینگ از نزدیک (build/shots/frames/orb-NNN.jpg، هر ۵۰ میلی‌ثانیه): انتخاب گیمینگ ←
+     * در حال اتصال ← وصل؛ هر ۱.۵ ثانیه یک نمونه‌ی پینگ (با چند پرش بزرگ) و دیتای کم ← زیاد ← کم تا تند و کند شدن
+     * تیرها دیده شود. سریع‌تر از z_game_frames (بدون نقشه). طولانی است، پس روی گیت‌هاب اجرا نمی‌شود؛ فقط با
+     * KANKI_ORB=1 (مثلاً KANKI_ORB=1 gradle :app:testDebugUnitTest --tests "cafe.kankipro.vpn.Shots.z_orb_frames").
+     */
+    @Test fun z_orb_frames() {
+        org.junit.Assume.assumeTrue(System.getenv("KANKI_ORB") != null)
+        ThemeState.set("gold")
+        LangState.lang = "fa"
+        val mode = mutableStateOf(KMode.SMART)
+        val vs = mutableStateOf(VState.OFF)
+        val hist = mutableStateOf(listOf<Long>(41, 39, 44, 38, 40, 37, 42, 39))
+        val traffic = mutableStateOf(60_000L)
+        rule.mainClock.autoAdvance = false
+        rule.setContent {
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl,
+                LocalTextStyle provides TextStyle(fontFamily = Vazir, fontWeight = FontWeight.Bold, color = K.Text),
+            ) {
+                val on = vs.value == VState.ON
+                KankiBackground(accent = if (on) modeColor(mode.value) else K.Gold) {
+                    Box(Modifier.align(Alignment.Center).size(300.dp).testTag("orb"), contentAlignment = Alignment.Center) {
+                        val ui = home(on, mode = mode.value, vs = vs.value, hist = hist.value)
+                        OrbButton(if (on) ui.copy(rx = traffic.value, tx = traffic.value / 10) else ui, K.Gold, enabled = true) {}
+                    }
+                }
+            }
+        }
+        val dir = File(out, "frames").apply { mkdirs() }
+        var n = 0
+        val samples = listOf<Long>(39, 41, 92, 45, 150, 46, 40, 38)
+        fun grab(count: Int, onFrame: (Int) -> Unit = {}) = repeat(count) { i ->
+            onFrame(i)
+            rule.mainClock.advanceTimeBy(50)
+            val b = rule.onNodeWithTag("orb").fetchSemanticsNode().boundsInRoot
+            val full = capture()
+            val big = Bitmap.createBitmap(full, b.left.toInt(), b.top.toInt(), b.width.toInt(), b.height.toInt())
+            File(dir, String.format(java.util.Locale.US, "orb-%03d.jpg", n++)).outputStream().use { big.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            listOf(big, full).distinct().forEach { it.recycle() }
+        }
+        rule.mainClock.advanceTimeBy(1500)
+        grab(10)
+        mode.value = KMode.GAME
+        grab(24)
+        vs.value = VState.CONNECTING
+        grab(60)
+        vs.value = VState.ON
+        grab(260) { i ->
+            if (i % 30 == 20) hist.value = (hist.value + samples[(i / 30) % samples.size]).takeLast(12)
+            when (i) { 90 -> traffic.value = 3_000_000L; 190 -> traffic.value = 15_000L }
+        }
+    }
+
     @Test fun z_game_frames() {
         ThemeState.set("gold")
         LangState.lang = "fa"
@@ -233,7 +292,7 @@ class Shots {
         }
         val dir = File(out, "frames").apply { mkdirs() }
         var n = 0
-        val samples = listOf<Long>(36, 43, 38, 35)
+        val samples = listOf<Long>(39, 92, 45, 38)
         fun grab(count: Int, onFrame: (Int) -> Unit = {}) = repeat(count) { i ->
             onFrame(i)
             rule.mainClock.advanceTimeBy(50)
