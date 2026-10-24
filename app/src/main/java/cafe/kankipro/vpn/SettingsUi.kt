@@ -210,10 +210,10 @@ private fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () ->
     }
 }
 
-/** انتخاب تم: سه تم AMOLED — زرشکی (پیش‌فرض)، زرد کانکی، بنفش سلطنتی */
+/** انتخاب تم: چهار تم AMOLED — زرشکی (پیش‌فرض)، طلایی، زرد کانکی، بنفش سلطنتی */
 @Composable
 fun ThemePicker(onSet: (String) -> Unit) {
-    val items = listOf("crimson" to "زرشکی", "gold" to "زرد کانکی", "purple" to "بنفش سلطنتی")
+    val items = listOf("crimson" to "زرشکی", "gold" to "طلایی", "yellow" to "زرد کانکی", "purple" to "بنفش سلطنتی")
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingIcon("palette", K.Accent)

@@ -161,8 +161,8 @@ fun WorldMap(
                     countries?.forEach { c ->
                         if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
                         // خشکی شیشه‌ای تیره با مرز به رنگ تم؛ کشور شما userCountry، کشور سرور به رنگ لهجه (وصل: رنگ «وصل») و درخشان
-                        // خشکی تیره و کمی به رنگ تم، مرزها به رنگ تم
-                        drawPath(c.path, lerp(Color(0xFF1E1E1A), K.Gold, .06f).copy(alpha = .75f))
+                        // خشکی تقریباً مشکی (AMOLED) فقط کمی روشن‌تر از دریا، مرزها به رنگ تم
+                        drawPath(c.path, K.Panel.copy(alpha = .55f))
                         when (c.iso) {
                             selIso -> {
                                 drawPath(c.path, selColor.copy(alpha = .32f))
