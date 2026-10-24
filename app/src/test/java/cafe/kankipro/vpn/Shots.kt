@@ -129,10 +129,14 @@ abstract class ShotsBase {
         CountryCardUi(
             "de", "آلمان", "فرانکفورت", "🇩🇪", 74, expanded = true, selected = true,
             rows = listOf(
-                CfgRowUi("de", "kankimix", "KANKI MIX", 68, busy = false, selected = false, host = null),
-                CfgRowUi("de", "amneziawg", "AmneziaWG · تانل", 74, busy = false, selected = true, host = null),
-                CfgRowUi("de", "amneziawg-direct", "AmneziaWG · مستقیم", 92, busy = false, selected = false, host = null),
-                CfgRowUi("de", "wireguard", "WireGuard", -1, busy = false, selected = false, host = null),
+                // سروری که تانل دارد: کانفیگ مستقیم و کانفیگ تانل هر پروتکل؛ وایرگارد فقط تانل
+                CfgRowUi("de", "kankimix", "KANKI MIX - مستقیم", 68, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "kankimix", "KANKI MIX - تانل", 81, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "amneziawg", "AmneziaWG - تانل", 74, busy = false, selected = true, host = null),
+                CfgRowUi("de", "amneziawg-direct", "AmneziaWG - مستقیم", 92, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "wireguard", "WireGuard - تانل", 77, busy = false, selected = false, host = null),
+                CfgRowUi("de", "hysteria2", "Hysteria2 - مستقیم", 95, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "hysteria2", "Hysteria2 - تانل", -1, busy = false, selected = false, host = null),
             ),
         ),
         CountryCardUi("fr", "فرانسه", "پاریس", "🇫🇷", 88, expanded = false, selected = false, rows = emptyList()),

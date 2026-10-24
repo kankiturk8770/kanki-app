@@ -126,15 +126,15 @@ val Themes: List<Palette> = listOf(
         Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
         Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
-        accent = Color(0xFFFF9F1C), // کهربایی
-        connected = Color(0xFFFFB534), // کهربایی روشن
+        accent = Color(0xFFFF8F1F), // کهربایی پررنگ (از زرد جدا، هم‌خانواده‌اش)
+        connected = Color(0xFFFFA329), // کهربایی
         modeSmart = Color(0xFFFFD60A), // زرد
         modeGame = Color(0xFFFF8A1F), // نارنجیِ کهربایی
         modeAnti = Color(0xFFFFF1C1), // کرم
         modeDns = Color(0xFFD9935B), // مسی
         mix = Color(0xFFFF8A1F),
         danger = Color(0xFFFF4F3A), warn = Color(0xFFFFAA2B),
-        userCountry = Color(0xFFFF9F1C),
+        userCountry = Color(0xFFFF8F1F),
         toggleOn = Color(0xFFFFD60A),
         gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
         navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),

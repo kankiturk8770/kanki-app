@@ -318,18 +318,19 @@ class AppState private constructor(context: Context) {
 
     private fun nodeName(n: String) = placeName(n)
 
-    // ---------------- کانفیگ دوم KANKI MIX (از راه تانل ایران)
-    // پنل ۳.۷ به بعد برای هر سرور یک کانفیگ دوم KANKI MIX از راه تانل ایران هم می‌دهد، به شکل یک سرور
-    // جدا با شناسه‌ی «<شناسه‌ی سرور>@tunnel». کشور و شهرش همان سرور اصلی است؛ فقط برچسبش فرق دارد.
+    // ---------------- کانفیگ‌های دوم (از راه تانل ایران)
+    // پنل ۳.۷ به بعد برای هر سرور یک کانفیگ دوم KANKI MIX از راه تانل ایران هم می‌دهد، و پنل ۳.۹.۴ به بعد
+    // (وقتی ادمین تیک «این سرور تانل دارد» را بزند) از همه‌ی پروتکل‌ها: وایرگارد، امنزیا، هیستریا و KANKI MIX.
+    // همه به شکل یک سرور جدا با شناسه‌ی «<شناسه‌ی سرور>@tunnel». کشور و شهرش همان سرور اصلی است؛ فقط برچسبش فرق دارد.
     /** شناسه‌ی سرور اصلیِ کانفیگ تانل (برای بقیه همان شناسه) */
     fun parentOf(id: String) = id.removeSuffix(TUNNEL_TWIN)
     fun isTunnelTwin(id: String?) = id?.endsWith(TUNNEL_TWIN) == true
     private fun hasTwin(id: String) = account?.configs?.any { it.node == id + TUNNEL_TWIN } == true
     /**
-     * برچسب ردیف KANKI MIX: کانفیگ تانل «تانل» (یا اسمی که ادمین در پنل برایش گذاشته)، کانفیگ اصلیِ
+     * برچسب کانفیگ‌های یک سرور: کانفیگ تانل «تانل» (یا اسمی که ادمین در پنل برایش گذاشته)، کانفیگ اصلیِ
      * سروری که تانل هم دارد «مستقیم»؛ null اگر آن سرور فقط یکی دارد.
      */
-    fun kmixTag(id: String): String? = when {
+    fun tunnelTag(id: String): String? = when {
         isTunnelTwin(id) -> {
             // اسم‌هایی که خود پنل داده (nodeName حالا «کشور · شهر» است و برای هر دو یکی است)
             fun panelName(x: String) = account?.configs?.firstOrNull { it.node == x }?.nodeName?.trim().orEmpty()
@@ -340,6 +341,16 @@ class AppState private constructor(context: Context) {
         hasTwin(id) -> tr("مستقیم")
         else -> null
     }
+    /**
+     * برچسب یک کانفیگ: امنزیای سروری که تانل جدا ندارد از روی Endpoint خودش «تانل» یا «مستقیم» است؛
+     * بقیه (و امنزیای سرور تانل‌دار) برچسب tunnelTag را می‌گیرند.
+     */
+    fun cfgTag(id: String, p: String): String? = when {
+        p == "amneziawg-direct" -> tr("مستقیم")
+        p == "amneziawg" && !isTunnelTwin(id) -> tr("تانل")
+        else -> tunnelTag(id)
+    }
+
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
     fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
@@ -609,7 +620,7 @@ class AppState private constructor(context: Context) {
             if (measured[n.node to p] == null) pings["${n.node}/$p"] = -1L
             measured[n.node to p]?.let { (ping, jit) ->
                 pings["${n.node}/$p"] = ping
-                SmartRow(n.node, p, "${placeName(n.node)} · ${protoTitle(p)}" + (if (p == "kankimix") kmixTag(n.node)?.let { " · $it" } ?: "" else ""), flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
+                SmartRow(n.node, p, "${placeName(n.node)} · ${protoTitle(p)}" + (cfgTag(n.node, p)?.let { " · $it" } ?: ""), flagEmoji(isoOfNode(n.node)) ?: "🌐", ping, jit)
             }
         }.sortedBy { it.ping + 2 * it.jitter }
     }
