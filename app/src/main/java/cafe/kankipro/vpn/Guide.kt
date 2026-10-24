@@ -28,7 +28,20 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 // ربات راهنما: آموزش قدم‌به‌قدم برنامه برای کاربر تازه + هشدارهای ربات روی صفحه‌ی اتصال
@@ -189,7 +202,7 @@ private fun WelcomeAsk(onAnswer: (Boolean?) -> Unit) {
             T("می‌خوای برنامه رو قدم‌به‌قدم بهت یاد بدم؟ همه‌جا رو نشونت می‌دم: اتصال، حالت‌ها، گیمینگ و ضد فیلتر، سرورها، تست سرعت، تنظیمات، لینک اشتراک و چت اضطراری.",
                 size = 14.sp, color = K.Text, weight = FontWeight.Normal)
             Spacer(Modifier.height(16.dp))
-            GoldButton("آره، با صدا 🔊", Modifier.fillMaxWidth()) { onAnswer(true) }
+            GoldButton("آره، با صدا", Modifier.fillMaxWidth()) { onAnswer(true) }
             Spacer(Modifier.height(8.dp))
             SmallLine("آره، فقط متن", Modifier.fillMaxWidth()) { onAnswer(false) }
             Spacer(Modifier.height(4.dp))
@@ -216,9 +229,9 @@ private fun GuideBubble(
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                T(if (LangState.en) step.titleEn else step.title, size = 17.sp, color = K.Gold, weight = FontWeight.Black)
+                GuideText(if (LangState.en) step.titleEn else step.title, 17.sp, K.Gold, FontWeight.Black)
                 Spacer(Modifier.height(4.dp))
-                T(if (LangState.en) step.textEn else step.text, size = 14.sp, color = K.Text, weight = FontWeight.Normal)
+                GuideText(if (LangState.en) step.textEn else step.text, 14.sp, K.Text, FontWeight.Normal)
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -325,6 +338,64 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
             contentAlignment = Alignment.Center,
         ) { T("✕", size = 12.sp, color = K.Sub, font = Poppins, ltr = true) }
     }
+}
+
+/** نشانه‌هایی که در متن ربات به آیکون هم‌رنگ تم کشیده می‌شوند (نه ایموجی رنگی ثابت): تیک، صاعقه، چت اضطراری */
+private val guideIcons = listOf("✅", "🚀", "🆘")
+
+/** متن حباب ربات؛ مثل T، فقط ✅ / 🚀 / 🆘 آیکون‌های رنگ تم می‌شوند */
+@Composable
+private fun GuideText(text: String, size: TextUnit, color: Color, weight: FontWeight) {
+    val s = tr(text)
+    if (guideIcons.none { s.contains(it) }) {
+        T(s, size = size, color = color, weight = weight)
+        return
+    }
+    val ac = K.Gold
+    val str = buildAnnotatedString {
+        var i = 0
+        while (i < s.length) {
+            val hit = guideIcons.firstOrNull { s.startsWith(it, i) }
+            if (hit != null) { appendInlineContent(hit, hit); i += hit.length } else { append(s[i]); i++ }
+        }
+    }
+    val inline = guideIcons.associateWith { id ->
+        InlineTextContent(Placeholder(1.15.em, 1.15.em, PlaceholderVerticalAlign.TextCenter)) {
+            Canvas(Modifier.fillMaxSize()) {
+                when (id) {
+                    "✅" -> checkBadge(ac)
+                    "🚀" -> boltBadge(ac)
+                    else -> emergencyChatIcon(ac)
+                }
+            }
+        }
+    }
+    Text(
+        str, inlineContent = inline,
+        style = TextStyle(
+            fontFamily = Vazir, fontWeight = weight, fontSize = size, color = color,
+            textDirection = if (s.any { it in '\u0600'..'\u06FF' }) TextDirection.Rtl else TextDirection.Content,
+        ),
+    )
+}
+
+/** تیک داخل دایره‌ی کم‌رنگ، به رنگ تم */
+private fun DrawScope.checkBadge(c: Color) {
+    val w = size.minDimension
+    drawCircle(c.copy(alpha = .18f), w / 2)
+    drawCircle(c.copy(alpha = .75f), w / 2 - w * .04f, style = Stroke(w * .08f))
+    val p = Path().apply { moveTo(w * .28f, w * .52f); lineTo(w * .44f, w * .67f); lineTo(w * .73f, w * .36f) }
+    drawPath(p, c, style = Stroke(w * .12f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+}
+
+/** صاعقه (سرعت / شروع)، به رنگ تم */
+private fun DrawScope.boltBadge(c: Color) {
+    val w = size.minDimension
+    val p = Path().apply {
+        moveTo(w * .60f, w * .04f); lineTo(w * .20f, w * .56f); lineTo(w * .47f, w * .56f)
+        lineTo(w * .40f, w * .96f); lineTo(w * .80f, w * .42f); lineTo(w * .53f, w * .42f); close()
+    }
+    drawPath(p, c)
 }
 
 /** دکمه‌ی کوچک صدای ربات: بلندگوی طلایی با موج و «صدا»، یا بلندگوی خاموش با ضربدر و «بی‌صدا» */
