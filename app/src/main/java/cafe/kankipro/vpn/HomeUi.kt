@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -587,6 +589,10 @@ const val OrbFootprint = 1.7f
 private val Game get() = modeColor(KMode.GAME)
 private val GameLight get() = lerp(lerp(Game, ThemeState.current.gameAlt, .3f), Color.White, .15f)
 
+/** رنگ آدمک‌ها: رنگ آدمک خود تم (زرد کانکی: قرمز)، وگرنه همان رنگ گیمینگ */
+private val Runner get() = ThemeState.current.runner.takeOrElse { Game }
+private val RunnerLight get() = ThemeState.current.runner.let { if (it.isSpecified) lerp(it, Color.White, .12f) else GameLight }
+
 /**
  * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط رنگ گیمینگ تم، نئون دومِ هم‌خانواده‌اش (gameAlt) و نسخه‌ی روشنش،
  * تا کنار لوگو و تیرها یکدست بماند
@@ -759,11 +765,11 @@ private fun DrawScope.stickman(
     }
     val hc = w(head)
     val hr = .13f * h
-    drawPath(body, Game.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(Game.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
-    drawPath(body, GameLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(body, Runner.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawCircle(Runner.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
+    drawPath(body, RunnerLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     drawPath(body, Color.White.copy(alpha = .5f * a), style = Stroke(.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(GameLight.copy(alpha = a), hr, hc)
+    drawCircle(RunnerLight.copy(alpha = a), hr, hc)
     drawCircle(Color.White.copy(alpha = .55f * a), hr * .5f, hc)
     if (gun) {
         drawPath(gunPath, Color.White.copy(alpha = .22f * a), style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))

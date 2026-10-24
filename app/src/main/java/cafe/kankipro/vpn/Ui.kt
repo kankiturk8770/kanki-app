@@ -72,6 +72,8 @@ class Palette(
     val navTop: Color, val navBottom: Color, val onNav: Color,
     /** طرح اول طلایی: کارت شیشه‌ای رنگی با خط نور پایین، تب شیشه‌ای، دکمه بدون لبه‌ی خط‌چین و زمینه با هاله و وینیت */
     val classic: Boolean = false,
+    /** رنگ آدمک‌های گیمینگ (Unspecified = همان رنگ گیمینگ، مثل دکمه) */
+    val runner: Color = Color.Unspecified,
 ) {
     /** نام قدیمی رنگ «وصل» */
     val ok: Color get() = connected
@@ -119,25 +121,27 @@ val Themes: List<Palette> = listOf(
         navTop = Color(0xFFFFE27A), navBottom = Color(0xFFFFC72C), onNav = Color(0xFF241700),
         classic = true,
     ),
-    // زرد کانکی: زرد خالص روی مشکی خالص؛ رنگ دوم کهربایی (وصل، کشور شما، لبه‌ی دکمه، آدمک‌ها) که با زرد یکی می‌شود؛
-    // حالت‌ها زرد، نارنجیِ کهربایی، کرم و مسی (بدون قرمز و آبی)
+    // زرد کانکی: همان طرح زرشکی، با زرد به‌جای زرشکی و قرمز به‌جای شامپاینی: دکمه، کارت‌ها و تب زرد روی مشکی خالص؛
+    // قرمز برای «وصل» (نوشته‌ی متصل، لبه‌ی خط‌چین و موج‌های دور دکمه، کشور شما و خط مسیر روی نقشه)، آدمک‌های گیمینگ و
+    // ضد فیلتر. گیمینگ کهربایی است تا دکمه در گیمینگ هم قرمز نشود.
     Palette(
         "yellow", Color(0xFFFFD60A), Color(0xFFFFE45C), Color(0xFFB38F00), Color(0xFFFFF4B8),
         Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
         Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
-        accent = Color(0xFFFF8F1F), // کهربایی پررنگ (از زرد جدا، هم‌خانواده‌اش)
-        connected = Color(0xFFFFA329), // کهربایی
+        accent = Color(0xFFFF3B30), // قرمز
+        connected = Color(0xFFFF4A3D),
         modeSmart = Color(0xFFFFD60A), // زرد
-        modeGame = Color(0xFFFF8A1F), // نارنجیِ کهربایی
-        modeAnti = Color(0xFFFFF1C1), // کرم
+        modeGame = Color(0xFFFFB21F), // کهربایی طلایی
+        modeAnti = Color(0xFFFF3B30), // قرمز
         modeDns = Color(0xFFD9935B), // مسی
-        mix = Color(0xFFFF8A1F),
-        danger = Color(0xFFFF4F3A), warn = Color(0xFFFFAA2B),
-        userCountry = Color(0xFFFF8F1F),
+        mix = Color(0xFFFFB21F),
+        danger = Color(0xFFFF2D55), warn = Color(0xFFFFAA2B),
+        userCountry = Color(0xFFFF3B30),
         toggleOn = Color(0xFFFFD60A),
         gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
         navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+        runner = Color(0xFFFF3B30),
     ),
     // بنفش سلطنتی: بنفش با سرخابی و هم‌خانواده‌هایشان (صورتی، یاسی، آبی‌بنفش)؛ همه از یک طیف
     Palette(
@@ -176,6 +180,7 @@ fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
     gameAlt = lerp(a.gameAlt, b.gameAlt, f), tracer = lerp(a.tracer, b.tracer, f),
     navTop = lerp(a.navTop, b.navTop, f), navBottom = lerp(a.navBottom, b.navBottom, f), onNav = lerp(a.onNav, b.onNav, f),
     classic = b.classic,
+    runner = if (a.runner.isSpecified && b.runner.isSpecified) lerp(a.runner, b.runner, f) else b.runner,
 )
 
 object ThemeState {
