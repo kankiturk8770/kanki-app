@@ -27,15 +27,12 @@ object GuideVoice {
         val id = ctx.resources.getIdentifier(name, "raw", ctx.packageName)
         if (id == 0) return
         val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
-        player = runCatching {
-            MediaPlayer.create(ctx, id, attrs, 0)?.apply {
-                setOnCompletionListener { mp -> if (player === mp) player = null; mp.release() }
-                start()
-            }
-        }.getOrNull()
+        // پایان فایل خودش صدا را تمام می‌کند؛ پخش‌کننده تا قدم بعد یا stop نگه داشته می‌شود، چون آزاد کردنش
+        // درست در لحظه‌ی تمام شدن، روی بعضی گوشی‌ها ته کلمه‌ی آخر را (که هنوز در بافر صداست) می‌برید
+        player = runCatching { MediaPlayer.create(ctx, id, attrs, 0)?.apply { start() } }.getOrNull()
     }
 
     fun stop() {
