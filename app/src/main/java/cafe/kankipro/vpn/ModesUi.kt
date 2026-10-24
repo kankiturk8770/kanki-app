@@ -691,7 +691,7 @@ fun GameSheet(
     val c = familyColor(fam)
     ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
         SheetLabel("پروتکل")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        Row(Modifier.fillMaxWidth().guideTarget("game_fams"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             families.forEach { x ->
                 FamilyCard(x, x.key == fam, Modifier.weight(1f)) { fam = x.key }
             }
@@ -704,10 +704,12 @@ fun GameSheet(
         if (f == null || f.servers.isEmpty()) {
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
         } else {
-            FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
-            PairHeader(c)
-            pairsOf(f.servers).forEach { p ->
-                PairRow(p, current, currentAuto, c, !busy) { sv -> onConnect(sv.node, sv.proto) }
+            Column(Modifier.fillMaxWidth().guideTarget("game_list")) {
+                FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
+                PairHeader(c)
+                pairsOf(f.servers).forEach { p ->
+                    PairRow(p, current, currentAuto, c, !busy) { sv -> onConnect(sv.node, sv.proto) }
+                }
             }
         }
 

@@ -59,7 +59,7 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
         Heading("تنظیمات")
         tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = onCloseTip) }
 
-        Group("اتصال") {
+        Group("اتصال", Modifier.guideTarget("settings")) {
             MenuRow("dns", "DNS", dnsTitle(ui.dns), dnsOpen, tint = K.Accent) { dnsOpen = !dnsOpen }
             AnimatedVisibility(visible = dnsOpen) { DnsPicker(ui.dns, act.setDns) }
             HDivider()
@@ -120,10 +120,10 @@ fun SettingsContent(ui: SettingsUi, tip: RobotAlert?, act: SettingsActions, onCl
 }
 
 @Composable
-private fun Group(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun Group(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Spacer(Modifier.height(D.S4))
     T(title, size = 13.sp, color = K.Accent, weight = FontWeight.Black, modifier = Modifier.padding(start = D.S1, bottom = D.S2))
-    KCard(Modifier.fillMaxWidth(), padding = D.CardPad, content = content)
+    KCard(modifier.fillMaxWidth(), padding = D.CardPad, content = content)
 }
 
 @Composable

@@ -148,10 +148,31 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
             Guide.start()
         }
     }
-    // وقتی آموزش در حال اجراست، صفحه‌ی خانه نشان داده شود
+    // وقتی آموزش در حال اجراست، ربات خودش تب و پنل هر قدم را باز می‌کند (سرورها، تست سرعت، پنل گیمینگ…)
+    var guideSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Guide.step) {
-        if (Guide.active) { state.tab = KTab.HOME; state.gameSheet = false; state.filterSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false }
+        val st = Guide.current
+        if (st == null) {
+            // آموزش تمام شد یا رد شد: پنلی که ربات باز کرده بود بسته می‌شود
+            if (guideSheet) { state.gameSheet = false; guideSheet = false }
+            return@LaunchedEffect
+        }
+        state.tab = st.tab
+        state.gameSheet = st.sheet == "game"
+        guideSheet = state.gameSheet
+        state.filterSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false
     }
+
+    // صدای ربات: متن هر قدم را به زبان برنامه می‌خواند (با بلندگوی حباب خاموش / روشن می‌شود)
+    var guideVoice by remember { mutableStateOf(GuideVoice.on(ctx)) }
+    LaunchedEffect(Guide.step, guideVoice, LangState.lang) {
+        val st = Guide.current
+        if (st != null && guideVoice) {
+            delay(350)
+            GuideVoice.play(ctx, st.voice, LangState.en)
+        } else GuideVoice.stop()
+    }
+    DisposableEffect(Unit) { onDispose { GuideVoice.stop() } }
 
     fun startGuide() { state.tab = KTab.HOME; Guide.start() }
 
@@ -239,7 +260,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
         )
     }
 
-    GuideOverlay { state.guideDone = true }
+    GuideOverlay(guideVoice, onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) }) { state.guideDone = true }
 }
 
 // ================================================================== تب خانه
@@ -574,6 +595,11 @@ private fun ServersTab(state: AppState) {
             lines = lines,
         )
     }.sortedBy { c -> c.best?.takeIf { it > 0 } ?: 99_999L }
+
+    // آموزش: در قدم «کانفیگ‌های هر کشور» ربات کارت اول را باز می‌کند
+    LaunchedEffect(Guide.step) {
+        if (Guide.current?.target == "country" && state.openNode == null) cards.firstOrNull()?.let { state.openNode = it.id }
+    }
 
     ServersContent(
         cards, state.pingAllUi,

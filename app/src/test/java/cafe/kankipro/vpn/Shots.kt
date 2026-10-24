@@ -222,6 +222,16 @@ abstract class ShotsBase {
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }
+    /** یک قدم آموزش ربات روی صفحه‌ی خودش (قدم با guideShot تنظیم می‌شود) */
+    protected fun pgGuide(page: @Composable () -> Unit): @Composable () -> Unit = {
+        page()
+        GuideOverlay(voiceOn = true, onVoice = {}) {}
+    }
+    protected fun guideShot(name: String, theme: String, step: Int, page: @Composable () -> Unit) {
+        Guide.targets.clear()
+        Guide.step = step
+        try { shot(name, theme, pgGuide(page)) } finally { Guide.step = -1 }
+    }
     protected fun pgIntro(): @Composable () -> Unit = { KankiBackground { SplashVisual(.68f) } }
     protected fun pgEmergency(): @Composable () -> Unit = {
         KankiBackground { EmergencyScreen(AppState.from(ctx).apply { code = "kanki-4-demo" }, {}) }
@@ -438,6 +448,11 @@ class Shots : ShotsBase() {
     @Test fun q02() = shot("gold-11-game-on", "gold", pgHomeGameOn())
     @Test fun q03() = shot("yellow-11-game-on", "yellow", pgHomeGameOn())
     @Test fun q04() = shot("purple-11-game-on", "purple", pgHomeGameOn())
+
+    // ------------------------------------------------------------------ ربات راهنما: پنل گیمینگ، کارت کشور، دکمه‌ی اتصال
+    @Test fun r01() = guideShot("gold-12-guide-game", "gold", 4, pgGame())
+    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 8, pgServers())
+    @Test fun r03() = guideShot("crimson-12-guide-connect", "crimson", 1, pgHomeOff())
 
     // ------------------------------------------------------------------ تم بنفش سلطنتی
     @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())

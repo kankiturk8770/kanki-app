@@ -132,21 +132,21 @@ fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?
         Heading("سرورها", "یک کلیک تا کانفیگ", Modifier.padding(top = D.S1, bottom = D.S1))
         tip?.let { RobotBanner(it, onClose = act.closeTip) }
         filter?.let { FilterOptsCard(it, act) }
-        PingAllCard(ping, act.pingAll)
+        PingAllCard(ping, act.pingAll, Modifier.guideTarget("ping_all"))
         if (cards.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
         }
-        cards.forEach { c -> CountryCard(c, act) }
+        cards.forEachIndexed { i, c -> CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) }
         Spacer(Modifier.height(D.S2))
     }
 }
 
 /** کارت «تست پینگ همه»: همه‌ی کانفیگ‌ها (UDP با پینگ ICMP، TCP با زمان اتصال) با هم سنجیده می‌شوند */
 @Composable
-private fun PingAllCard(p: PingAllUi, onStart: () -> Unit) {
+private fun PingAllCard(p: PingAllUi, onStart: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(D.RL)
     Column(
-        Modifier.fillMaxWidth().goldGlass(shape)
+        modifier.fillMaxWidth().goldGlass(shape)
             .padding(horizontal = D.CardPad, vertical = D.S2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -176,11 +176,11 @@ private fun PingAllCard(p: PingAllUi, onStart: () -> Unit) {
 }
 
 @Composable
-private fun CountryCard(c: CountryCardUi, act: ServersActions) {
+private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(D.RL)
     val lit = c.expanded || c.selected
     Column(
-        Modifier.fillMaxWidth().goldGlass(shape, selected = lit),
+        modifier.fillMaxWidth().goldGlass(shape, selected = lit),
     ) {
         Row(
             Modifier.fillMaxWidth().height(D.RowH).clickable { act.toggle(c.id) }.padding(horizontal = D.CardPad),

@@ -40,6 +40,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // برنامه رفت پس‌زمینه: ربات راهنما ساکت می‌شود
+        GuideVoice.stop()
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         openFromNotification(intent)
