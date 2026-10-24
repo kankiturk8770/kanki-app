@@ -51,7 +51,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                 ui.running && (ui.phase == "down" || ui.phase == "up") -> ui.live
                 else -> ui.down ?: 0.0
             }
-            Box(Modifier.fillMaxWidth().height(232.dp), contentAlignment = Alignment.BottomCenter) {
+            Box(Modifier.fillMaxWidth().height(232.dp).guideTarget("speed"), contentAlignment = Alignment.BottomCenter) {
                 SpeedGauge(shown, gaugeColor, Modifier.fillMaxSize())
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
                     T(String.format(java.util.Locale.US, "%.1f", shown), size = 40.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(gaugeColor, 18f), ltr = true)

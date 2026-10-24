@@ -69,7 +69,6 @@ class AppState private constructor(context: Context) {
 
     /** پنل‌های باز صفحه‌ی اول؛ تا وقتی یکی باز است، دکمه‌ی اصلی اتصال کاری نمی‌کند (گیج‌کننده نباشد) */
     var gameSheet by mutableStateOf(false)
-    var appsPicker by mutableStateOf(false)
     /** پنل ضد فیلتر (نگه‌داشتن کاشی، یا لمس دوباره وقتی همین حالت انتخاب است): فقط سرورهای Xray و Amnezia */
     var filterSheet by mutableStateOf(false)
 
@@ -125,58 +124,6 @@ class AppState private constructor(context: Context) {
         prefs.edit().putBoolean("filterAuto", auto).putString("filterProto", p).putString("filterNode", n).apply()
     }
 
-    // ---------------- برنامه‌های مجاز (بازی‌ها و برنامه‌های انتخابی) برای «فقط بازی‌ها» و حالت DNS
-    /** گیمینگ: فقط بازی‌ها و برنامه‌های انتخابی اینترنت داشته باشند */
-    var gamesOnly by mutableStateOf(prefs.getBoolean("gamesOnly", false))
-        private set
-    fun changeGamesOnly(v: Boolean) { gamesOnly = v; prefs.edit().putBoolean("gamesOnly", v).apply() }
-    /** بازی‌های نصب‌شده خودکار تشخیص داده شوند */
-    var autoGames by mutableStateOf(prefs.getBoolean("autoGames", true))
-        private set
-    fun changeAutoGames(v: Boolean) { autoGames = v; prefs.edit().putBoolean("autoGames", v).apply() }
-    /** برنامه‌هایی که کاربر اضافه کرده، و بازی‌های تشخیص‌داده‌شده‌ای که کاربر برداشته */
-    val appsAdded = androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(prefs.getStringSet("appsAdded", emptySet()) ?: emptySet()) }
-    val appsRemoved = androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(prefs.getStringSet("appsRemoved", emptySet()) ?: emptySet()) }
-    /** بازی‌های نصب‌شده روی گوشی (در پس‌زمینه پیدا می‌شوند) */
-    var detectedGames by mutableStateOf<List<String>>(emptyList())
-
-    /** فهرست بازی‌ها یک بار خوانده شده (دوباره فقط از پنل انتخاب برنامه‌ها) */
-    var gamesLoaded = false
-        private set
-
-    fun loadGames() {
-        gamesLoaded = true
-        bg.launch {
-            val list = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) }
-            if (list != detectedGames) detectedGames = list
-        }
-    }
-
-    fun isAllowedApp(pkg: String): Boolean =
-        pkg in appsAdded || (autoGames && pkg in detectedGames && pkg !in appsRemoved)
-
-    fun toggleApp(pkg: String) {
-        if (isAllowedApp(pkg)) {
-            appsAdded.remove(pkg)
-            if (pkg in detectedGames && pkg !in appsRemoved) appsRemoved.add(pkg)
-        } else {
-            appsRemoved.remove(pkg)
-            if (!isAllowedApp(pkg)) appsAdded.add(pkg)
-        }
-        prefs.edit().putStringSet("appsAdded", appsAdded.toSet()).putStringSet("appsRemoved", appsRemoved.toSet()).apply()
-    }
-
-    /** فهرست برنامه‌های مجاز همین حالا (بازی‌ها دوباره از روی گوشی خوانده می‌شوند) */
-    private suspend fun allowedAppsNow(): List<String> {
-        val games = withContext(Dispatchers.IO) { Modes.gamePackages(ctx) }
-        detectedGames = games
-        val picked = ((if (autoGames) games.filter { it !in appsRemoved } else emptyList()) + appsAdded).distinct()
-        // ورود به حساب بازی‌ها از راه سرویس‌های گوگل و مرورگر است: همیشه همراهشان
-        return if (picked.isEmpty()) picked else (picked + withContext(Dispatchers.IO) { Modes.helperPackages(ctx) }).distinct()
-    }
-
-    fun allowedCount(): Int = (detectedGames.filter { autoGames && it !in appsRemoved } + appsAdded).distinct().size
-
     /** سرور DNS انتخابی ("" = خودکار: اول ریلی ایران) و سروری که الان به آن وصل است */
     var dnsPick by mutableStateOf(prefs.getString("dnsPick", "") ?: "")
         private set
@@ -201,7 +148,7 @@ class AppState private constructor(context: Context) {
 
     /** دکمه‌ی اصلی اتصال: بر اساس حالت فعال */
     fun toggleMain() {
-        if (gameSheet || appsPicker || filterSheet) return
+        if (gameSheet || filterSheet) return
         // وسط سنجش «هوشمند»: لمس یعنی لغو
         if (smartBusy && vstate == VState.OFF) { wantTry = false; smartStatus = "لغو شد"; return }
         when (vstate) {
@@ -354,6 +301,18 @@ class AppState private constructor(context: Context) {
         else -> tunnelTag(id)
     }
 
+    /**
+     * راه یک کانفیگ: «tunnel» (از آدرس ایران) یا «direct» (مستقیم به خود سرور). کانفیگ دوم هر سرور
+     * (@tunnel) و AmneziaWG تانل همیشه تانل‌اند؛ بقیه را پنل ۳.۹.۵ با via_proto می‌گوید. پنل قدیمی: وایرگارد تانل
+     * (مستقیم در ایران وصل نمی‌شود)، بقیه مستقیم.
+     */
+    fun cfgSide(id: String, p: String): String = when {
+        isTunnelTwin(id) -> "tunnel"
+        p == "amneziawg-direct" -> "direct"
+        p == "amneziawg" -> "tunnel"
+        else -> account?.viaProto?.get(id)?.get(p) ?: if (p == "wireguard") "tunnel" else "direct"
+    }
+
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
     fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
@@ -407,7 +366,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
@@ -911,7 +870,9 @@ class AppState private constructor(context: Context) {
     private var pingAfterLoad = false
 
     init {
-        loadGames()
+        // «فقط بازی‌ها اینترنت داشته باشند» برداشته شد (ورود بازی‌ها با سرویس‌های گوگل از آن رد نمی‌شد):
+        // تنظیم قدیمی پاک می‌شود تا هیچ اتصالی دیگر برنامه‌ای را بیرون نگذارد
+        prefs.edit().remove("gamesOnly").remove("autoGames").remove("appsAdded").remove("appsRemoved").apply()
         watchNetwork()
         watchState()
         watchHealth()
@@ -1307,8 +1268,6 @@ class AppState private constructor(context: Context) {
 
         vstate = VState.CONNECTING
         activeKey = link.node + "|" + link.protocol
-        // گیمینگ با «فقط بازی‌ها»: فقط بازی‌ها و برنامه‌های انتخابی از VPN رد می‌شوند
-        val onlyApps = if (mode == KMode.GAME && gamesOnly) allowedAppsNow() else emptyList()
         try {
             val finalCfg = withContext(Dispatchers.IO) {
                 var cfg = applyMtu(DnsOptions.apply(fetchConfig(link), dns), mtuFor(proto))
@@ -1316,13 +1275,6 @@ class AppState private constructor(context: Context) {
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
-                if (onlyApps.isNotEmpty()) {
-                    // خود برنامه هم داخل تونل می‌ماند تا بررسی اتصال (هندشیک) واقعاً از تونل انجام شود
-                    cfg = applyIncluded(cfg, onlyApps + ctx.packageName)
-                    // Hysteria2/Xray: بقیه‌ی برنامه‌ها اصلاً اینترنت ندارند (AppGate). موتور امنزیا/وایرگارد
-                    // این خط را نمی‌شناسد، پس فقط برای آن‌ها نوشته نمی‌شود.
-                    if (HyEngine.isHy(cfg)) cfg = applyBlockOthers(cfg)
-                }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
                 // کاربر وسط بالا آمدن «قطع» زد: همین‌جا پایین بیاید، نه اینکه بعداً «متصل» دیده شود
@@ -1605,7 +1557,7 @@ class AppState private constructor(context: Context) {
         nodeGeo.clear(); nodeIso.clear(); nodeCity.clear(); exitIso = null; userGeo = null; userIso = null
         smartRows.clear(); smartOpen = false
         pingHist.clear(); pingAllUi = PingAllUi()
-        gameSheet = false; appsPicker = false; filterSheet = false; tab = KTab.HOME
+        gameSheet = false; filterSheet = false; tab = KTab.HOME
         openNode = null; accountOpen = false
         error = null; errorDetail = null
     }

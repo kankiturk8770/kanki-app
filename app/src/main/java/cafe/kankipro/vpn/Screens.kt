@@ -140,18 +140,40 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     var countries by remember { mutableStateOf(MapData.countries) }
     LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { LightsData.load(ctx); MapData.load(ctx) } }
 
-    // آموزش ربات: بار اول بعد از ورود خودکار شروع می‌شود
+    // آموزش ربات: بار اول بعد از ورود، ربات اول می‌پرسد آموزش بدهد یا نه (با صدا یا فقط متن)
     LaunchedEffect(state.account != null) {
-        if (state.account != null && !state.guideDone && !Guide.active) {
+        if (state.account != null && !state.guideDone && !Guide.active && !Guide.asking) {
             delay(900)
             state.tab = KTab.HOME
-            Guide.start()
+            Guide.asking = true
         }
     }
-    // وقتی آموزش در حال اجراست، صفحه‌ی خانه نشان داده شود
+    // وقتی آموزش در حال اجراست، ربات خودش تب و پنل هر قدم را باز می‌کند (سرورها، تست سرعت، پنل گیمینگ…)
+    var guideSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Guide.step) {
-        if (Guide.active) { state.tab = KTab.HOME; state.gameSheet = false; state.filterSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false }
+        val st = Guide.current
+        if (st == null) {
+            // آموزش تمام شد یا رد شد: پنلی که ربات باز کرده بود بسته می‌شود
+            if (guideSheet) { state.gameSheet = false; state.filterSheet = false; guideSheet = false }
+            return@LaunchedEffect
+        }
+        state.tab = st.tab
+        state.gameSheet = st.sheet == "game"
+        state.filterSheet = st.sheet == "filter"
+        guideSheet = st.sheet != null
+        state.accountOpen = false; showSplit = false
     }
+
+    // صدای ربات: سؤال اول و متن هر قدم را به زبان برنامه می‌خواند (با «صدا / بی‌صدا» زیر ربات)
+    var guideVoice by remember { mutableStateOf(GuideVoice.on(ctx)) }
+    LaunchedEffect(Guide.step, Guide.asking, guideVoice, LangState.lang) {
+        val voice = Guide.current?.voice ?: if (Guide.asking) 0 else -1
+        if (voice >= 0 && guideVoice) {
+            delay(350)
+            GuideVoice.play(ctx, voice, LangState.en)
+        } else GuideVoice.stop()
+    }
+    DisposableEffect(Unit) { onDispose { GuideVoice.stop() } }
 
     fun startGuide() { state.tab = KTab.HOME; Guide.start() }
 
@@ -203,9 +225,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     val a = state.account
 
     // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد، بعد به تب خانه برمی‌گردد
-    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
+    androidx.activity.compose.BackHandler(enabled = state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
         when {
-            state.appsPicker -> state.appsPicker = false
             showSplit -> showSplit = false
             state.gameSheet -> state.gameSheet = false
             state.filterSheet -> state.filterSheet = false
@@ -228,18 +249,25 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     )
 
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
-    if (state.appsPicker) {
-        AppPicker(
-            detected = state.detectedGames,
-            autoGames = state.autoGames,
-            isOn = { state.isAllowedApp(it) },
-            onToggle = { state.toggleApp(it) },
-            onAutoGames = { state.changeAutoGames(it) },
-            onClose = { state.appsPicker = false },
-        )
-    }
 
-    GuideOverlay { state.guideDone = true }
+    // «برگشت» گوشی روی سؤال اول یعنی «بعداً»
+    androidx.activity.compose.BackHandler(enabled = Guide.asking) { Guide.asking = false; state.guideDone = true }
+    GuideOverlay(
+        guideVoice,
+        onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) },
+        onAnswer = { v ->
+            if (v == null) {
+                Guide.asking = false
+                state.guideDone = true
+                toast(ctx, "هر وقت خواستی، روی ربات بالای صفحه بزن 🤖")
+            } else {
+                guideVoice = v
+                GuideVoice.set(ctx, v)
+                state.tab = KTab.HOME
+                Guide.start(from = 1)
+            }
+        },
+    ) { state.guideDone = true }
 }
 
 // ================================================================== تب خانه
@@ -279,12 +307,9 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۵ دقیقه‌ای بالا آن را می‌آورد)
     LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage(5 * 60_000L) } }
-    // فقط بار اول (نه هر بار که به خانه برمی‌گردی): فهرست برنامه‌ها سنگین است
+    // اسم شبکه (وای‌فای / موبایل) فقط بار اول خوانده می‌شود، نه هر بار که به خانه برمی‌گردی
     LaunchedEffect(Unit) {
-        if (!state.gamesLoaded) {
-            state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
-            state.loadGames()
-        }
+        if (state.netName.isBlank()) state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
     }
     val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
@@ -324,7 +349,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         userIso = state.userIso,
         locationIso = locIso,
         locationIsExit = viaExit,
-        sheetOpen = state.gameSheet || state.filterSheet || state.appsPicker,
+        sheetOpen = state.gameSheet || state.filterSheet,
         smart = SmartPanelUi(
             open = state.smartOpen,
             done = state.smartDone,
@@ -424,7 +449,7 @@ private fun ModeSheets(state: AppState) {
         (flagEmoji(state.isoOfNode(id)) ?: "🌐") to state.placeName(id)
     fun server(id: String, p: String, tag: String?): SheetServer {
         val (flag, name) = place(id)
-        return SheetServer(id, p, flag, name, tag, state.protoPing(id, p))
+        return SheetServer(id, p, flag, name, tag, state.protoPing(id, p), state.cfgSide(id, p))
     }
 
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
@@ -437,6 +462,7 @@ private fun ModeSheets(state: AppState) {
             key, state.familyTitle(key),
             when (key) {
                 "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
+                "hysteria2" -> tr("روی UDP (QUIC): پرسرعت و پایدار، حتی روی اینترنت ضعیف و پرپکت‌لاس")
                 "amnezia" -> tr("عبور از فیلتر؛ مستقیم یا از تانل ایران")
                 else -> tr("سبک و سریع، روی اینترنت پایدار")
             },
@@ -452,14 +478,7 @@ private fun ModeSheets(state: AppState) {
         currentAuto = state.gameAuto,
         busy = busy,
         kmixDup = state.kmixDup,
-        gamesOnly = state.gamesOnly,
-        autoGames = state.autoGames,
-        appCount = state.allowedCount(),
-        canBlock = AppGate.supported,
         onKmixDup = { state.changeKmixDup(it) },
-        onGamesOnly = { state.changeGamesOnly(it) },
-        onAutoGames = { state.changeAutoGames(it) },
-        onPickApps = { state.appsPicker = true },
         // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
         onFamilyShown = { },
         onConnect = { n, p ->
@@ -518,17 +537,11 @@ private fun ModeSheets(state: AppState) {
 
 // ================================================================== تب سرورها
 
-/**
- * عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»، «Hysteria2 - مستقیم» یا «Xray · VLESS»)؛ اگر کشور
- * چند سرور دارد، شهر سرور هم (از روی مکان خروجی، نه اسمی که در پنل گذاشته شده)
- */
-private fun cfgTitle(state: AppState, l: ConfigLink, multi: Boolean): String {
-    val base = when (l.protocol) {
-        "amneziawg", "amneziawg-direct" -> "AmneziaWG" + (state.cfgTag(l.node, l.protocol)?.let { " - $it" } ?: "")
-        "xray" -> "Xray · " + XrayCfg.protoName(l.url.removePrefix("xray:"))
-        else -> protoTitle(l.protocol) + (state.cfgTag(l.node, l.protocol)?.let { " - $it" } ?: "")
-    }
-    return if (multi) base + " · " + (state.placeCity(l.node) ?: l.nodeName) else base
+/** اسم کانفیگ در خانه‌اش (تانل یا مستقیم بودن را ستون می‌گوید): «KANKI MIX»، «Hysteria2»، «Xray · VLESS» */
+private fun cellTitle(l: ConfigLink): String = when (l.protocol) {
+    "amneziawg", "amneziawg-direct" -> "AmneziaWG"
+    "xray" -> "Xray · " + XrayCfg.protoName(l.url.removePrefix("xray:"))
+    else -> protoTitle(l.protocol)
 }
 
 @Composable
@@ -544,14 +557,27 @@ private fun ServersTab(state: AppState) {
         val iso = key.takeIf { !it.startsWith("node:") }
         // چند سرور جدا در یک کشور (کانفیگ‌هایی که از یک IP خارج می‌شوند یک سرورند)
         val multi = links.map { state.placeCity(it.node) ?: state.parentOf(it.node) }.distinct().size > 1
-        val rows = links.sortedBy { order.indexOf(it.protocol) }.map { l ->
+        fun row(l: ConfigLink): CfgRowUi {
             val k = "${l.node}/${l.protocol}"
-            CfgRowUi(
-                node = l.node, proto = l.protocol, title = cfgTitle(state, l, multi),
+            return CfgRowUi(
+                node = l.node, proto = l.protocol, title = cellTitle(l),
                 ping = state.protoPing(l.node, l.protocol), busy = state.pinging[k] == true,
                 selected = k == selKey,
                 host = state.infos[k]?.host?.takeIf { it.isNotBlank() && it != "—" },
             )
+        }
+        val rows = links.sortedBy { order.indexOf(it.protocol) }.map { row(it) }
+        // هر پروتکل هر سرور یک ردیف: تانل و مستقیم همان سرور کنار هم (Xray: لینک و نسخه‌ی «(تانل)» همان لینک)
+        val famOrder = listOf("kankimix", "hysteria2", "amnezia", "wireguard", "xray")
+        val lines = links.groupBy { l ->
+            val fam = when (l.protocol) { "amneziawg", "amneziawg-direct" -> "amnezia"; else -> l.protocol }
+            val who = if (l.protocol == "xray") l.nodeName.removeSuffix(" (تانل)").trim() else state.parentOf(l.node)
+            Triple(if (multi) (state.placeCity(l.node) ?: state.parentOf(l.node)) else "", fam, who)
+        }.entries.sortedWith(compareBy({ it.key.first }, { famOrder.indexOf(it.key.second) })).flatMap { (key, g) ->
+            val side = { l: ConfigLink -> if (l.protocol == "xray") (if (l.nodeName.trim().endsWith("(تانل)")) "tunnel" else "direct") else state.cfgSide(l.node, l.protocol) }
+            val t = g.filter { side(it) == "tunnel" }
+            val d = g.filter { side(it) != "tunnel" }
+            (0 until maxOf(t.size, d.size)).map { i -> CfgLineUi(key.first.ifBlank { null }, t.getOrNull(i)?.let { row(it) }, d.getOrNull(i)?.let { row(it) }) }
         }
         CountryCardUi(
             id = key,
@@ -563,8 +589,14 @@ private fun ServersTab(state: AppState) {
             expanded = state.openNode == key,
             selected = rows.any { it.selected },
             rows = rows,
+            lines = lines,
         )
     }.sortedBy { c -> c.best?.takeIf { it > 0 } ?: 99_999L }
+
+    // آموزش: در قدم «کانفیگ‌های هر کشور» ربات کارت اول را باز می‌کند
+    LaunchedEffect(Guide.step) {
+        if (Guide.current?.target == "country" && state.openNode == null) cards.firstOrNull()?.let { state.openNode = it.id }
+    }
 
     ServersContent(
         cards, state.pingAllUi,

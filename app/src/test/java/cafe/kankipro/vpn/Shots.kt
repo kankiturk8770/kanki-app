@@ -125,24 +125,25 @@ abstract class ShotsBase {
         }
     }
 
-    protected fun cards(): List<CountryCardUi> = listOf(
+    protected fun cards(): List<CountryCardUi> {
+        // سروری که تانل دارد: هر پروتکل یک ردیف، تانل راست و مستقیم چپ؛ وایرگارد فقط تانل
+        fun c(n: String, p: String, t: String, ping: Long, sel: Boolean = false) = CfgRowUi(n, p, t, ping, busy = false, selected = sel, host = null)
+        val lines = listOf(
+            CfgLineUi(null, c("de@tunnel", "kankimix", "KANKI MIX", 81), c("de", "kankimix", "KANKI MIX", 68)),
+            CfgLineUi(null, c("de@tunnel", "hysteria2", "Hysteria2", -1), c("de", "hysteria2", "Hysteria2", 95)),
+            CfgLineUi(null, c("de@tunnel", "amneziawg", "AmneziaWG", 74, sel = true), c("de", "amneziawg-direct", "AmneziaWG", 92)),
+            CfgLineUi(null, c("de@tunnel", "wireguard", "WireGuard", 77), null),
+        )
+        return listOf(
         CountryCardUi(
-            "de", "آلمان", "فرانکفورت", "🇩🇪", 74, expanded = true, selected = true,
-            rows = listOf(
-                // سروری که تانل دارد: کانفیگ مستقیم و کانفیگ تانل هر پروتکل؛ وایرگارد فقط تانل
-                CfgRowUi("de", "kankimix", "KANKI MIX - مستقیم", 68, busy = false, selected = false, host = null),
-                CfgRowUi("de@tunnel", "kankimix", "KANKI MIX - تانل", 81, busy = false, selected = false, host = null),
-                CfgRowUi("de@tunnel", "amneziawg", "AmneziaWG - تانل", 74, busy = false, selected = true, host = null),
-                CfgRowUi("de", "amneziawg-direct", "AmneziaWG - مستقیم", 92, busy = false, selected = false, host = null),
-                CfgRowUi("de@tunnel", "wireguard", "WireGuard - تانل", 77, busy = false, selected = false, host = null),
-                CfgRowUi("de", "hysteria2", "Hysteria2 - مستقیم", 95, busy = false, selected = false, host = null),
-                CfgRowUi("de@tunnel", "hysteria2", "Hysteria2 - تانل", -1, busy = false, selected = false, host = null),
-            ),
+            "de", "آلمان", "فرانکفورت", "🇩🇪", 68, expanded = true, selected = true,
+            rows = lines.flatMap { listOfNotNull(it.tunnel, it.direct) }, lines = lines,
         ),
         CountryCardUi("fr", "فرانسه", "پاریس", "🇫🇷", 88, expanded = false, selected = false, rows = emptyList()),
         CountryCardUi("nl", "هلند", "آمستردام", "🇳🇱", 95, expanded = false, selected = false, rows = emptyList()),
         CountryCardUi("tr", "ترکیه", "استانبول", "🇹🇷", 61, expanded = false, selected = false, rows = emptyList()),
-    )
+        )
+    }
 
     protected val account = Account(
         username = "mahtab87", status = "Active", dataRemaining = "42.00 GB", used = "18.00 GB", connections = "2",
@@ -199,23 +200,36 @@ abstract class ShotsBase {
     }
     protected fun pgGame(): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.GAME), HomeActions()) }
+        // ترکیه: مستقیم ۶۱ و تانلش ۹۰ روبه‌رویش، حتی اگر تانل آلمان (۸۱) بهتر باشد؛ هلند فقط مستقیم
         val servers = listOf(
-            SheetServer("tr", "kankimix", "🇹🇷", "ترکیه · استانبول", null, 61),
-            SheetServer("de", "kankimix", "🇩🇪", "آلمان · فرانکفورت", "مستقیم", 68),
-            SheetServer("de@tunnel", "kankimix", "🇩🇪", "آلمان · فرانکفورت", "تانل", 81),
+            SheetServer("tr", "kankimix", "🇹🇷", "ترکیه · استانبول", "مستقیم", 61, "direct"),
+            SheetServer("tr@tunnel", "kankimix", "🇹🇷", "ترکیه · استانبول", "تانل", 90, "tunnel"),
+            SheetServer("de", "kankimix", "🇩🇪", "آلمان · فرانکفورت", "مستقیم", 68, "direct"),
+            SheetServer("de@tunnel", "kankimix", "🇩🇪", "آلمان · فرانکفورت", "تانل", 81, "tunnel"),
+            SheetServer("nl", "kankimix", "🇳🇱", "هلند · آمستردام", null, 95, "direct"),
         )
         GameSheet(
             visible = true,
             families = listOf(
                 GameFamilyUi("kankimix", "KANKI MIX", "مخصوص بازی", servers),
-                GameFamilyUi("amnezia", "Amnezia", "ضد فیلتر", servers.map { it.copy(proto = "amneziawg") }),
-                GameFamilyUi("wireguard", "WireGuard", "ساده", emptyList()),
+                GameFamilyUi("hysteria2", "Hysteria2", "روی UDP", servers.map { it.copy(proto = "hysteria2") }),
+                GameFamilyUi("amnezia", "Amnezia", "ضد فیلتر", servers.map { it.copy(proto = if (it.side == "tunnel") "amneziawg" else "amneziawg-direct") }),
+                GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
             initFamily = "kankimix", current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
-            gamesOnly = false, autoGames = true, appCount = 3, canBlock = true,
-            onKmixDup = {}, onGamesOnly = {}, onAutoGames = {}, onPickApps = {}, onFamilyShown = {},
+            onKmixDup = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
+    }
+    /** یک قدم آموزش ربات روی صفحه‌ی خودش (قدم با guideShot تنظیم می‌شود) */
+    protected fun pgGuide(page: @Composable () -> Unit): @Composable () -> Unit = {
+        page()
+        GuideOverlay(voiceOn = true, onVoice = {}) {}
+    }
+    protected fun guideShot(name: String, theme: String, step: Int, page: @Composable () -> Unit) {
+        Guide.targets.clear()
+        Guide.step = step
+        try { shot(name, theme, pgGuide(page)) } finally { Guide.step = -1 }
     }
     protected fun pgIntro(): @Composable () -> Unit = { KankiBackground { SplashVisual(.68f) } }
     protected fun pgEmergency(): @Composable () -> Unit = {
@@ -433,6 +447,16 @@ class Shots : ShotsBase() {
     @Test fun q02() = shot("gold-11-game-on", "gold", pgHomeGameOn())
     @Test fun q03() = shot("yellow-11-game-on", "yellow", pgHomeGameOn())
     @Test fun q04() = shot("purple-11-game-on", "purple", pgHomeGameOn())
+
+    // ------------------------------------------------------------------ ربات راهنما: پنل گیمینگ، کارت کشور، دکمه‌ی اتصال
+    @Test fun r01() = guideShot("gold-12-guide-game", "gold", 4, pgGame())
+    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 10, pgServers())
+    @Test fun r05() = guideShot("gold-15-guide-ping", "gold", 6, pgGame())
+    @Test fun r03() = guideShot("crimson-12-guide-connect", "crimson", 1, pgHomeOff())
+    @Test fun r04() {
+        Guide.asking = true
+        try { shot("gold-14-guide-ask", "gold", pgGuide(pgHomeOff())) } finally { Guide.asking = false }
+    }
 
     // ------------------------------------------------------------------ تم بنفش سلطنتی
     @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())

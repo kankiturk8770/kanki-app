@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 51
-        versionName = "1.18.3"
+        versionCode = 52
+        versionName = "1.18.4"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -49,7 +49,11 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: کد کاتلین/کامپوز نسخه‌ی نهایی بهینه و کوچک می‌شود (اجرای روان‌تر و فایل کوچک‌تر).
+            // کد خود برنامه و موتورهای اتصال دست نمی‌خورند (proguard-rules.pro). منابع حذف نمی‌شوند:
+            // صدای ربات با اسم پیدا می‌شود (getIdentifier).
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isDebuggable = false
             signingConfig = if (canSignRelease) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
