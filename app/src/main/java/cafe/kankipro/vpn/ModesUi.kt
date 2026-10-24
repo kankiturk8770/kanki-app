@@ -496,8 +496,25 @@ fun DrawScope.gearIcon(c: Color) {
     drawCircle(c, w * .10f, Offset(w / 2, w / 2), style = Stroke(sw))
 }
 
-/** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …) و پینگ */
-data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?)
+/** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …)، پینگ و راهش (tunnel / direct) */
+data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct")
+
+/** یک سرور با دو راهش کنار هم: کانفیگ تانل (راست) و کانفیگ مستقیم (چپ)؛ هر کدام ممکن است نباشد */
+data class SheetPair(val flag: String, val name: String, val tunnel: SheetServer?, val direct: SheetServer?) {
+    val best: Long? get() = listOfNotNull(tunnel?.ping, direct?.ping).filter { it > 0 }.minOrNull()
+}
+
+/**
+ * کانفیگ‌های یک پروتکل، هر سرور یک ردیف: تانل و مستقیم همان سرور روبه‌روی هم (حتی اگر تانل سرور دیگری پینگ بهتری
+ * داشته باشد)؛ ردیف‌ها به ترتیب بهترین پینگ هر سرور.
+ */
+fun pairsOf(list: List<SheetServer>): List<SheetPair> =
+    list.groupBy { it.node.removeSuffix(TUNNEL_TWIN) }.values.flatMap { g ->
+        val t = g.filter { it.side == "tunnel" }
+        val d = g.filter { it.side != "tunnel" }
+        val head = g.first()
+        (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
+    }.sortedBy { it.best ?: 99_999L }
 
 /** یک خانواده‌ی پروتکل در پنل گیمینگ (KANKI MIX، Amnezia، WireGuard) با سرورهای خودش */
 data class GameFamilyUi(val key: String, val title: String, val sub: String, val servers: List<SheetServer>) {
@@ -506,7 +523,7 @@ data class GameFamilyUi(val key: String, val title: String, val sub: String, val
 
 /** کارت یک خانواده‌ی پروتکل (سه کارت کنار هم بالای پنل گیمینگ) */
 @Composable
-private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modifier: Modifier, onClick: () -> Unit) {
+private fun FamilyCard(f: GameFamilyUi, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = familyColor(f.key)
     val shape = RoundedCornerShape(D.RM)
     val has = f.servers.isNotEmpty()
@@ -523,11 +540,68 @@ private fun FamilyCard(f: GameFamilyUi, selected: Boolean, badge: String?, modif
         Spacer(Modifier.height(D.S1))
         AutoText(f.title, size = 12.5.sp, color = if (selected) K.Text else K.Text.copy(alpha = .85f))
         T(if (!has) tr("در اشتراک نیست") else f.best?.let { "$it ms" } ?: trf("%d سرور", f.servers.size),
-            size = 9.5.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null)
-        badge?.let {
-            Spacer(Modifier.height(D.S1))
-            Tag(it, c, strong = true)
+            size = 9.5.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null,
+            maxLines = 1)
+    }
+}
+
+/** سرتیتر دو ستون: «تانل» راست، «مستقیم» چپ */
+@Composable
+private fun PairHeader(c: Color) {
+    Row(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
+        for (k in listOf("تانل", "مستقیم")) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                T(k, size = 11.sp, color = if (k == "تانل") c else K.Sub, weight = FontWeight.Black)
+            }
         }
+    }
+}
+
+/** یک سرور: پرچم و اسم، زیرش کانفیگ تانل (راست) و مستقیم (چپ)؛ لمس هر خانه = اتصال به همان */
+@Composable
+private fun PairRow(p: SheetPair, current: String?, auto: Boolean, color: Color, enabled: Boolean, onClick: (SheetServer) -> Unit) {
+    val shape = RoundedCornerShape(D.RS)
+    val lit = !auto && listOfNotNull(p.tunnel, p.direct).any { current == it.node + "|" + it.proto }
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = D.S2).clip(shape)
+            .background(if (lit) color.copy(alpha = .07f) else Color(0x06FFFFFF))
+            .border(1.dp, if (lit) color.copy(alpha = .6f) else K.Gold.copy(alpha = .14f), shape)
+            .padding(D.S2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = D.S1, end = D.S1, bottom = D.S1)) {
+            T(p.flag, size = 14.sp, weight = FontWeight.Normal)
+            Spacer(Modifier.width(D.S2))
+            AutoText(p.name, size = 12.5.sp, color = K.Text, modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            PairCell(p.tunnel, "تانل", !auto && p.tunnel != null && current == p.tunnel.node + "|" + p.tunnel.proto, color, enabled, Modifier.weight(1f), onClick)
+            PairCell(p.direct, "مستقیم", !auto && p.direct != null && current == p.direct.node + "|" + p.direct.proto, color, enabled, Modifier.weight(1f), onClick)
+        }
+    }
+}
+
+/** یک خانه: دکمه‌ی انتخاب، اسم راه (تانل، مستقیم یا اسمی که ادمین گذاشته) و پینگ؛ خالی وقتی این سرور آن راه را ندارد */
+@Composable
+private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: Color, enabled: Boolean, modifier: Modifier, onClick: (SheetServer) -> Unit) {
+    val shape = RoundedCornerShape(D.RT)
+    Row(
+        modifier.height(D.RowS).clip(shape)
+            .background(if (selected) color.copy(alpha = .16f) else if (sv != null) Color(0x0AFFFFFF) else Color.Transparent)
+            .border(if (selected) 1.3.dp else 1.dp, if (selected) color else if (sv != null) K.Gold.copy(alpha = .16f) else K.Gold.copy(alpha = .06f), shape)
+            .alpha(if (sv == null) .45f else if (enabled) 1f else .55f)
+            .clickable(enabled = enabled && sv != null) { sv?.let(onClick) }
+            .padding(horizontal = D.S2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (sv == null) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("—", size = 12.sp, color = K.Sub, ltr = true) }
+            return@Row
+        }
+        Radio(selected, color)
+        Spacer(Modifier.width(D.S2))
+        AutoText(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 11.5.sp, color = K.Text, modifier = Modifier.weight(1f))
+        sv.ping?.let { p -> T(if (p < 0) "✕" else "$p ms", size = 10.5.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1) }
+            ?: T("…", size = 10.5.sp, color = K.Sub, font = Poppins, ltr = true)
     }
 }
 
@@ -580,8 +654,9 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
 }
 
 /**
- * پنل گیمینگ: بالا سه پروتکل (KANKI MIX اول، Amnezia، WireGuard)؛ زیرش فقط سرورهای همان پروتکل.
- * لمس یک سرور = اتصال مستقیم به همان. «سریع‌ترین سرور» کم‌پینگ‌ترین سرور همان پروتکل را برمی‌دارد.
+ * پنل گیمینگ: بالا چهار پروتکل هم‌اندازه (KANKI MIX اول، Hysteria2، Amnezia، WireGuard)؛ زیرش سرورهای همان
+ * پروتکل در دو ستون، تانل راست و مستقیم چپ، هر سرور یک ردیف. لمس یک خانه = اتصال به همان.
+ * «سریع‌ترین سرور» کم‌پینگ‌ترین کانفیگ همان پروتکل را برمی‌دارد.
  * برای KANKI MIX کلید «ارسال دوتایی» هست؛ «تنظیمات پیشرفته» همان «فقط بازی‌ها» است.
  */
 @Composable
@@ -618,7 +693,7 @@ fun GameSheet(
         SheetLabel("پروتکل")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             families.forEach { x ->
-                FamilyCard(x, x.key == fam, if (x.key == "kankimix") tr("ویژه گیم") else null, Modifier.weight(1f)) { fam = x.key }
+                FamilyCard(x, x.key == fam, Modifier.weight(1f)) { fam = x.key }
             }
         }
         T(f?.sub ?: "", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = D.S2, start = D.S1))
@@ -630,8 +705,9 @@ fun GameSheet(
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
         } else {
             FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
-            f.servers.forEach { sv ->
-                ServerRow(sv, !currentAuto && current == sv.node + "|" + sv.proto, c, !busy) { onConnect(sv.node, sv.proto) }
+            PairHeader(c)
+            pairsOf(f.servers).forEach { p ->
+                PairRow(p, current, currentAuto, c, !busy) { sv -> onConnect(sv.node, sv.proto) }
             }
         }
 
@@ -709,7 +785,8 @@ fun FilterSheet(
         if (useAwg) {
             SheetLabel("Amnezia")
             if (amnezia.isEmpty()) T("اشتراک شما Amnezia ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            amnezia.forEach { sv -> ServerRow(sv, !auto && current == sv.node + "|" + sv.proto, protoColor("amneziawg"), !busy) { onConnect(sv.node, sv.proto) } }
+            if (amnezia.isNotEmpty()) PairHeader(protoColor("amneziawg"))
+            pairsOf(amnezia).forEach { p -> PairRow(p, current, auto, protoColor("amneziawg"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -748,11 +825,12 @@ fun protoColor(p: String?): Color = when (p) {
 
 fun familyColor(f: String): Color = when (f) {
     "kankimix" -> protoColor("kankimix")
+    "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
     else -> protoColor("wireguard")
 }
 
-/** آیکون خانواده‌ی پروتکل: KANKI MIX دسته‌ی بازی با جرقه، Amnezia سپر، WireGuard اژدهای ساده (موج) */
+/** آیکون خانواده‌ی پروتکل: KANKI MIX دسته‌ی بازی با جرقه، Hysteria2 صاعقه، Amnezia سپر، WireGuard موج */
 fun DrawScope.familyIcon(f: String, c: Color) {
     val w = size.width
     val st = Stroke(w * .09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -760,6 +838,14 @@ fun DrawScope.familyIcon(f: String, c: Color) {
         "kankimix" -> {
             modeLogo(KMode.GAME, c)
             drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
+        }
+        "hysteria2" -> {
+            // صاعقه: سرعت روی UDP
+            val bolt = Path().apply {
+                moveTo(w * .58f, w * .06f); lineTo(w * .2f, w * .56f); lineTo(w * .48f, w * .56f)
+                lineTo(w * .4f, w * .94f); lineTo(w * .8f, w * .42f); lineTo(w * .52f, w * .42f); close()
+            }
+            drawPath(bolt, c, style = st)
         }
         "amnezia" -> {
             val sh = Path().apply {

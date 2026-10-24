@@ -46,6 +46,9 @@ data class CfgRowUi(
     val host: String?,
 )
 
+/** یک ردیف داخل کارت کشور: یک پروتکل یک سرور، کانفیگ تانل (راست) و مستقیم (چپ) کنار هم؛ place: شهر وقتی کشور چند سرور دارد */
+data class CfgLineUi(val place: String?, val tunnel: CfgRowUi?, val direct: CfgRowUi?)
+
 /** کارت یک کشور */
 data class CountryCardUi(
     val id: String,
@@ -56,6 +59,7 @@ data class CountryCardUi(
     val expanded: Boolean,
     val selected: Boolean,
     val rows: List<CfgRowUi>,
+    val lines: List<CfgLineUi> = rows.map { CfgLineUi(null, null, it) },
 )
 
 /** وضعیت «تست پینگ همه» */
@@ -197,9 +201,27 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions) {
             CardPing(c.best, c.expanded)
         }
         AnimatedVisibility(visible = c.expanded, enter = fadeIn(tween(220)) + expandVertically(tween(260)), exit = fadeOut(tween(160)) + shrinkVertically(tween(200))) {
-            Column(Modifier.fillMaxWidth().padding(start = D.CardPad, end = D.CardPad, bottom = D.S2)) {
-                HDivider(Modifier.padding(bottom = D.S1))
-                c.rows.forEach { r -> CfgRow(r, act) }
+            // کانفیگ‌ها در یک کادر: سرتیتر «تانل | مستقیم»، هر پروتکل یک ردیف با دو خانه
+            val box = RoundedCornerShape(D.RM)
+            Column(
+                Modifier.fillMaxWidth().padding(start = D.CardPad, end = D.CardPad, bottom = D.CardPad).clip(box)
+                    .background(Color(0x08FFFFFF)).border(1.dp, K.Gold.copy(alpha = .18f), box).padding(D.S2),
+            ) {
+                Row(Modifier.fillMaxWidth().padding(bottom = D.S1), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                    for (k in listOf("تانل", "مستقیم")) {
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            T(k, size = 11.sp, color = if (k == "تانل") K.Gold else K.Sub, weight = FontWeight.Black)
+                        }
+                    }
+                }
+                var lastPlace: String? = null
+                c.lines.forEach { l ->
+                    if (l.place != null && l.place != lastPlace) {
+                        T(l.place, size = 11.sp, color = K.GoldLight, weight = FontWeight.Bold, modifier = Modifier.padding(top = D.S1, bottom = D.S1, start = D.S1))
+                        lastPlace = l.place
+                    }
+                    CfgLine(l, act)
+                }
             }
         }
     }
@@ -229,46 +251,60 @@ private fun CardPing(ms: Long?, expanded: Boolean) {
     }
 }
 
-/** یک کانفیگ: لمس = انتخاب و اتصال؛ نگه‌داشتن = جزئیات (سرور و MTU) */
+/** یک ردیف: خانه‌ی تانل و خانه‌ی مستقیم؛ نگه‌داشتن یک خانه جزئیاتش (سرور و MTU) را زیر ردیف باز می‌کند */
 @Composable
-private fun CfgRow(r: CfgRowUi, act: ServersActions) {
-    var details by remember { mutableStateOf(false) }
-    val pick by rememberUpdatedState(act.pick)
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().height(D.RowS).clip(RoundedCornerShape(D.RS))
-                .background(if (r.selected) K.Gold.copy(alpha = .08f) else Color.Transparent)
-                .pointerInput(r.node, r.proto) {
-                    detectTapGestures(
-                        onTap = { pick(r.node, r.proto) },
-                        onLongPress = { details = !details },
-                    )
-                }
-                .padding(horizontal = D.S2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (r.selected) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(K.Gold))
-                Spacer(Modifier.width(D.S2))
-            }
-            // عنوان لاتین (مثل Xray · VLESS) هم از سمت راست شروع شود و به پینگ نچسبد
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                AutoText(r.title, size = 13.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.width(D.S3))
-            if (r.busy) Spinner(14.dp)
-            else T(
-                when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping} ms" },
-                size = 12.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true,
-            )
+private fun CfgLine(l: CfgLineUi, act: ServersActions) {
+    var details by remember { mutableStateOf<CfgRowUi?>(null) }
+    Column(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            CfgCell(l.tunnel, Modifier.weight(1f), act) { details = if (details == it) null else it }
+            CfgCell(l.direct, Modifier.weight(1f), act) { details = if (details == it) null else it }
         }
-        AnimatedVisibility(visible = details, enter = fadeIn(tween(200)) + expandVertically(tween(240)), exit = fadeOut(tween(150)) + shrinkVertically(tween(180))) {
-            Column(Modifier.padding(start = D.S2, end = D.S2, bottom = D.S2)) {
-                T(protoDesc(r.proto), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        AnimatedVisibility(visible = details != null, enter = fadeIn(tween(200)) + expandVertically(tween(240)), exit = fadeOut(tween(150)) + shrinkVertically(tween(180))) {
+            val r = details ?: return@AnimatedVisibility
+            Column(Modifier.padding(start = D.S2, end = D.S2, top = D.S1, bottom = D.S1)) {
+                T(r.title + " · " + protoDesc(r.proto), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 r.host?.let { h -> T(trf("سرور: %s", h), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = D.S2)) }
                 if (r.proto != "xray") MtuField(act.mtu(r.proto)) { act.setMtu(r.proto, it) }
             }
         }
+    }
+}
+
+/** یک خانه: اسم پروتکل و پینگ؛ لمس = انتخاب و اتصال؛ خالی وقتی این سرور این راه را ندارد */
+@Composable
+private fun CfgCell(r: CfgRowUi?, modifier: Modifier, act: ServersActions, onLong: (CfgRowUi) -> Unit) {
+    val shape = RoundedCornerShape(D.RT)
+    val pick by rememberUpdatedState(act.pick)
+    val long by rememberUpdatedState(onLong)
+    Row(
+        modifier.height(D.RowS).clip(shape)
+            .background(if (r?.selected == true) K.Gold.copy(alpha = .12f) else if (r != null) Color(0x0AFFFFFF) else Color.Transparent)
+            .border(if (r?.selected == true) 1.3.dp else 1.dp, if (r?.selected == true) K.Gold else K.Gold.copy(alpha = if (r != null) .16f else .06f), shape)
+            .then(
+                if (r == null) Modifier
+                else Modifier.pointerInput(r.node, r.proto) { detectTapGestures(onTap = { pick(r.node, r.proto) }, onLongPress = { long(r) }) },
+            )
+            .padding(horizontal = D.S2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (r == null) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("—", size = 12.sp, color = K.Sub.copy(alpha = .5f), ltr = true) }
+            return@Row
+        }
+        if (r.selected) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(K.Gold))
+            Spacer(Modifier.width(D.S1))
+        }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            AutoText(r.title, size = 11.5.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.width(D.S1))
+        if (r.busy) Spinner(12.dp)
+        else T(
+            when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping} ms" },
+            size = 10.5.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1,
+        )
     }
 }
 

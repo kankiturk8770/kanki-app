@@ -36,11 +36,12 @@ enum class KMode(val key: String, val title: String, val sub: String) {
 
 object Modes {
     /**
-     * گیمینگ: سه خانواده‌ی پروتکل، به ترتیب نمایش (KANKI MIX، پروتکل خود کانکی، اول).
+     * گیمینگ: چهار خانواده‌ی پروتکل UDP، به ترتیب نمایش (KANKI MIX، پروتکل خود کانکی، اول).
      * Amnezia هر دو راه را دارد: مستقیم و تانل.
      */
     val GAME_FAMILIES = listOf(
         "kankimix" to listOf("kankimix"),
+        "hysteria2" to listOf("hysteria2"),
         "amnezia" to listOf("amneziawg-direct", "amneziawg"),
         "wireguard" to listOf("wireguard"),
     )

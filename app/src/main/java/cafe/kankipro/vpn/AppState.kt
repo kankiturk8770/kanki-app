@@ -354,6 +354,18 @@ class AppState private constructor(context: Context) {
         else -> tunnelTag(id)
     }
 
+    /**
+     * راه یک کانفیگ: «tunnel» (از آدرس ایران) یا «direct» (مستقیم به خود سرور). کانفیگ دوم هر سرور
+     * (@tunnel) و AmneziaWG تانل همیشه تانل‌اند؛ بقیه را پنل ۳.۹.۵ با via_proto می‌گوید. پنل قدیمی: وایرگارد تانل
+     * (مستقیم در ایران وصل نمی‌شود)، بقیه مستقیم.
+     */
+    fun cfgSide(id: String, p: String): String = when {
+        isTunnelTwin(id) -> "tunnel"
+        p == "amneziawg-direct" -> "direct"
+        p == "amneziawg" -> "tunnel"
+        else -> account?.viaProto?.get(id)?.get(p) ?: if (p == "wireguard") "tunnel" else "direct"
+    }
+
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
     fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
@@ -407,7 +419,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
