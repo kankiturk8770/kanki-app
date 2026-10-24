@@ -1,3 +1,9 @@
+# تغییرات نسخه‌ی ۱.۱۸.۳
+
+- `SubscriptionApi.parseVia`: فیلد `via_proto` هر سرور (پنل ۳.۹.۵)، پروتکل ← «tunnel» یا «direct»، در `Account.viaProto`.
+- `AppState.cfgTag`: کانفیگ اصلی‌ای که پنل گفته به آدرس ایران می‌رود «تانل» می‌گیرد (Hysteria2، WireGuard، KANKI MIX
+  با مسیر تانل)؛ پنل قدیمی همان رفتار قبلی را دارد.
+
 # تغییرات نسخه‌ی ۱.۱۸.۲
 
 ## تم‌ها
