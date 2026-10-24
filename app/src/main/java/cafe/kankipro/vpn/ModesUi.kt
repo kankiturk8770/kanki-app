@@ -710,7 +710,7 @@ fun FilterSheet(
     LaunchedEffect(visible) { if (visible) onShown() }
     ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای فیلتر شدید", onClose) {
         SheetLabel("پروتکل‌ها")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        Row(Modifier.fillMaxWidth().guideTarget("filter_list"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
             TickChip("Amnezia", trf("%d سرور", amnezia.size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
         }

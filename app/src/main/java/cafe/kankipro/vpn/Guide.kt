@@ -64,6 +64,8 @@ val guideSteps = listOf(
         "Gaming protocols", "These four protocols are made for games, all on UDP. KANKI MIX is Kanki's own protocol and the best one for gaming, with the lowest lag and packet loss. Hysteria2 is very fast and stays steady even on weak internet. Amnezia gets past filters. WireGuard is light and fast, and comes only through the tunnel.", 5, sheet = "game"),
     GuideStep("game_list", "تانل یا مستقیم", "هر سرور یه ردیفه، با دو خونه: «تانل» از سرور ایران رد می‌شه و وقتی فیلترینگ زیاده بهتر جواب می‌ده؛ «مستقیم» یک‌راست به خود سرور می‌ره و معمولاً پینگ کمتری داره. «سریع‌ترین سرور» هم خودش کم‌پینگ‌ترین رو پیدا و وصل می‌کنه.",
         "Tunnel or direct", "Each server is one row with two cells. Tunnel goes through the Iran server and works better when filtering is heavy. Direct goes straight to the server and usually has a lower ping. Fastest server finds the lowest ping and connects by itself.", 6, sheet = "game"),
+    GuideStep("filter_list", "پنل ضد فیلتر", "وقتی فیلترینگ شدیده این حالت رو بزن: با یه لمس خودش بهترین راه عبور رو پیدا می‌کنه. اگه کاشیش رو نگه داری یا دوباره بزنی، همین پنل باز می‌شه و خودت انتخاب می‌کنی: Xray برای فیلترینگ خیلی سخت، Amnezia با تانل یا مستقیم.",
+        "Anti-filter panel", "Use this mode when filtering is heavy: one tap finds the best way through by itself. Hold its tile, or tap it again, to open this panel and pick yourself: Xray for the toughest filtering, Amnezia through the tunnel or direct.", 15, sheet = "filter"),
     GuideStep("sub", "اشتراک تو", "گیگ و روزهای باقی‌مونده‌ت اینجاست. هر وقت کم شد، خودم همین‌جا خبرت می‌کنم 😉",
         "Your subscription", "Your remaining data and days are right here. When they run low, I'll let you know right here 😉", 7),
     GuideStep("ping_all", "تب سرورها", "همه‌ی کشورها اینجان. «تست پینگ همه» پینگ واقعی همه‌ی کانفیگ‌ها رو با هم می‌گیره تا ببینی کدوم بهتره.",
@@ -86,9 +88,12 @@ val guideSteps = listOf(
 object Guide {
     /** قدم فعلی؛ ‎-1 یعنی آموزش بسته است */
     var step by mutableIntStateOf(-1)
+    /** بار اول بعد از ورود: ربات اول می‌پرسد آموزش بدهد یا نه (با صدا یا فقط متن) */
+    var asking by mutableStateOf(false)
     val targets = mutableStateMapOf<String, Rect>()
     val active get() = step >= 0
-    fun start() { step = 0 }
+    /** from = 1: بعد از سؤال اول، که سلام کرده، از دکمه‌ی اتصال شروع می‌شود */
+    fun start(from: Int = 0) { asking = false; step = from }
     fun next() { step = if (step + 1 >= guideSteps.size) -1 else step + 1 }
     fun back() { if (step > 0) step-- }
     fun stop() { step = -1 }
@@ -101,13 +106,18 @@ fun Modifier.guideTarget(id: String): Modifier = onGloballyPositioned { Guide.ta
 /**
  * پرده‌ی آموزش: همه‌جا تیره، بخش مورد نظر روشن با قاب طلایی، و ربات با حباب توضیح.
  * voiceOn / onVoice: دکمه‌ی بلندگوی حباب (پخش صدا بیرون از این فایل است: GuideVoice)؛ onVoice نباشد، دکمه هم نیست.
+ * onAnswer: جواب سؤال اول (Guide.asking): true با صدا، false فقط متن، null بعداً.
  */
 @Composable
-fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onFinish: () -> Unit) {
+fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onAnswer: (Boolean?) -> Unit = {}, onFinish: () -> Unit) {
     // آخرین قدم معتبر نگه داشته می‌شود تا هنگام محو شدن پرده، متن قدم اول چشمک نزند
     var idx by remember { mutableIntStateOf(0) }
     if (Guide.step >= 0) idx = Guide.step
-    AnimatedVisibility(visible = Guide.step >= 0, enter = fadeIn(tween(250)), exit = fadeOut(tween(200))) {
+    AnimatedVisibility(visible = Guide.step >= 0 || Guide.asking, enter = fadeIn(tween(250)), exit = fadeOut(tween(200))) {
+        if (Guide.step < 0) {
+            WelcomeAsk(onAnswer)
+            return@AnimatedVisibility
+        }
         val step = guideSteps[idx.coerceIn(0, guideSteps.lastIndex)]
         val last = idx == guideSteps.lastIndex
         val density = LocalDensity.current
@@ -155,6 +165,33 @@ fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onFini
                 step, idx, last, bubbleMod.padding(horizontal = 16.dp), voiceOn, onVoice,
                 onNext = { next() }, onBack = { Guide.back() }, onSkip = { Guide.stop(); onFinish() },
             )
+        }
+    }
+}
+
+/** سؤال اول ربات بعد از ورود: «برنامه رو بهت یاد بدم؟» با صدا، فقط متن، یا بعداً */
+@Composable
+private fun WelcomeAsk(onAnswer: (Boolean?) -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color(0xD9000000)).pointerInput(Unit) { detectTapGestures { } },
+        contentAlignment = Alignment.Center,
+    ) {
+        KCard(Modifier.padding(horizontal = 16.dp).widthIn(max = 420.dp).fillMaxWidth(), padding = 18.dp, border = K.Gold.copy(alpha = .7f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RobotFace(64.dp)
+                Spacer(Modifier.width(12.dp))
+                T("سلام! من کانکی‌ام 👋", size = 18.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+            T("می‌خوای برنامه رو قدم‌به‌قدم بهت یاد بدم؟ همه‌جا رو نشونت می‌دم: اتصال، حالت‌ها، گیمینگ و ضد فیلتر، سرورها، تست سرعت، تنظیمات، لینک اشتراک و چت اضطراری.",
+                size = 14.sp, color = K.Text, weight = FontWeight.Normal)
+            Spacer(Modifier.height(16.dp))
+            GoldButton("آره، با صدا 🔊", Modifier.fillMaxWidth()) { onAnswer(true) }
+            Spacer(Modifier.height(8.dp))
+            SmallLine("آره، فقط متن", Modifier.fillMaxWidth()) { onAnswer(false) }
+            Spacer(Modifier.height(4.dp))
+            T("بعداً", size = 13.sp, color = K.Sub,
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(10.dp)).clickable { onAnswer(null) }.padding(horizontal = 16.dp, vertical = 8.dp))
         }
     }
 }

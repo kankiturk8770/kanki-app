@@ -450,8 +450,12 @@ class Shots : ShotsBase() {
 
     // ------------------------------------------------------------------ ربات راهنما: پنل گیمینگ، کارت کشور، دکمه‌ی اتصال
     @Test fun r01() = guideShot("gold-12-guide-game", "gold", 4, pgGame())
-    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 8, pgServers())
+    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 9, pgServers())
     @Test fun r03() = guideShot("crimson-12-guide-connect", "crimson", 1, pgHomeOff())
+    @Test fun r04() {
+        Guide.asking = true
+        try { shot("gold-14-guide-ask", "gold", pgGuide(pgHomeOff())) } finally { Guide.asking = false }
+    }
 
     // ------------------------------------------------------------------ تم بنفش سلطنتی
     @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())

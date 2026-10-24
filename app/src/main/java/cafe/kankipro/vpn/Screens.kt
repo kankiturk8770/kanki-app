@@ -140,12 +140,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     var countries by remember { mutableStateOf(MapData.countries) }
     LaunchedEffect(Unit) { if (countries == null) countries = withContext(Dispatchers.Default) { LightsData.load(ctx); MapData.load(ctx) } }
 
-    // آموزش ربات: بار اول بعد از ورود خودکار شروع می‌شود
+    // آموزش ربات: بار اول بعد از ورود، ربات اول می‌پرسد آموزش بدهد یا نه (با صدا یا فقط متن)
     LaunchedEffect(state.account != null) {
-        if (state.account != null && !state.guideDone && !Guide.active) {
+        if (state.account != null && !state.guideDone && !Guide.active && !Guide.asking) {
             delay(900)
             state.tab = KTab.HOME
-            Guide.start()
+            Guide.asking = true
         }
     }
     // وقتی آموزش در حال اجراست، ربات خودش تب و پنل هر قدم را باز می‌کند (سرورها، تست سرعت، پنل گیمینگ…)
@@ -154,22 +154,23 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
         val st = Guide.current
         if (st == null) {
             // آموزش تمام شد یا رد شد: پنلی که ربات باز کرده بود بسته می‌شود
-            if (guideSheet) { state.gameSheet = false; guideSheet = false }
+            if (guideSheet) { state.gameSheet = false; state.filterSheet = false; guideSheet = false }
             return@LaunchedEffect
         }
         state.tab = st.tab
         state.gameSheet = st.sheet == "game"
-        guideSheet = state.gameSheet
-        state.filterSheet = false; state.accountOpen = false; showSplit = false
+        state.filterSheet = st.sheet == "filter"
+        guideSheet = st.sheet != null
+        state.accountOpen = false; showSplit = false
     }
 
-    // صدای ربات: متن هر قدم را به زبان برنامه می‌خواند (با بلندگوی حباب خاموش / روشن می‌شود)
+    // صدای ربات: سؤال اول و متن هر قدم را به زبان برنامه می‌خواند (با «صدا / بی‌صدا» زیر ربات)
     var guideVoice by remember { mutableStateOf(GuideVoice.on(ctx)) }
-    LaunchedEffect(Guide.step, guideVoice, LangState.lang) {
-        val st = Guide.current
-        if (st != null && guideVoice) {
+    LaunchedEffect(Guide.step, Guide.asking, guideVoice, LangState.lang) {
+        val voice = Guide.current?.voice ?: if (Guide.asking) 0 else -1
+        if (voice >= 0 && guideVoice) {
             delay(350)
-            GuideVoice.play(ctx, st.voice, LangState.en)
+            GuideVoice.play(ctx, voice, LangState.en)
         } else GuideVoice.stop()
     }
     DisposableEffect(Unit) { onDispose { GuideVoice.stop() } }
@@ -249,7 +250,24 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
 
-    GuideOverlay(guideVoice, onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) }) { state.guideDone = true }
+    // «برگشت» گوشی روی سؤال اول یعنی «بعداً»
+    androidx.activity.compose.BackHandler(enabled = Guide.asking) { Guide.asking = false; state.guideDone = true }
+    GuideOverlay(
+        guideVoice,
+        onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) },
+        onAnswer = { v ->
+            if (v == null) {
+                Guide.asking = false
+                state.guideDone = true
+                toast(ctx, "هر وقت خواستی، روی ربات بالای صفحه بزن 🤖")
+            } else {
+                guideVoice = v
+                GuideVoice.set(ctx, v)
+                state.tab = KTab.HOME
+                Guide.start(from = 1)
+            }
+        },
+    ) { state.guideDone = true }
 }
 
 // ================================================================== تب خانه
