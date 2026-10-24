@@ -160,7 +160,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
         state.tab = st.tab
         state.gameSheet = st.sheet == "game"
         guideSheet = state.gameSheet
-        state.filterSheet = false; state.appsPicker = false; state.accountOpen = false; showSplit = false
+        state.filterSheet = false; state.accountOpen = false; showSplit = false
     }
 
     // صدای ربات: متن هر قدم را به زبان برنامه می‌خواند (با بلندگوی حباب خاموش / روشن می‌شود)
@@ -224,9 +224,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     val a = state.account
 
     // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد، بعد به تب خانه برمی‌گردد
-    androidx.activity.compose.BackHandler(enabled = state.appsPicker || state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
+    androidx.activity.compose.BackHandler(enabled = state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
         when {
-            state.appsPicker -> state.appsPicker = false
             showSplit -> showSplit = false
             state.gameSheet -> state.gameSheet = false
             state.filterSheet -> state.filterSheet = false
@@ -249,16 +248,6 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     )
 
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
-    if (state.appsPicker) {
-        AppPicker(
-            detected = state.detectedGames,
-            autoGames = state.autoGames,
-            isOn = { state.isAllowedApp(it) },
-            onToggle = { state.toggleApp(it) },
-            onAutoGames = { state.changeAutoGames(it) },
-            onClose = { state.appsPicker = false },
-        )
-    }
 
     GuideOverlay(guideVoice, onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) }) { state.guideDone = true }
 }
@@ -300,12 +289,9 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۵ دقیقه‌ای بالا آن را می‌آورد)
     LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage(5 * 60_000L) } }
-    // فقط بار اول (نه هر بار که به خانه برمی‌گردی): فهرست برنامه‌ها سنگین است
+    // اسم شبکه (وای‌فای / موبایل) فقط بار اول خوانده می‌شود، نه هر بار که به خانه برمی‌گردی
     LaunchedEffect(Unit) {
-        if (!state.gamesLoaded) {
-            state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
-            state.loadGames()
-        }
+        if (state.netName.isBlank()) state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
     }
     val alert = robotAlertFor(a, now, state.error, state.errorDetail, state.closedNotice)?.takeIf { it.id !in state.dismissed }
 
@@ -345,7 +331,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         userIso = state.userIso,
         locationIso = locIso,
         locationIsExit = viaExit,
-        sheetOpen = state.gameSheet || state.filterSheet || state.appsPicker,
+        sheetOpen = state.gameSheet || state.filterSheet,
         smart = SmartPanelUi(
             open = state.smartOpen,
             done = state.smartDone,
@@ -474,14 +460,7 @@ private fun ModeSheets(state: AppState) {
         currentAuto = state.gameAuto,
         busy = busy,
         kmixDup = state.kmixDup,
-        gamesOnly = state.gamesOnly,
-        autoGames = state.autoGames,
-        appCount = state.allowedCount(),
-        canBlock = AppGate.supported,
         onKmixDup = { state.changeKmixDup(it) },
-        onGamesOnly = { state.changeGamesOnly(it) },
-        onAutoGames = { state.changeAutoGames(it) },
-        onPickApps = { state.appsPicker = true },
         // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
         onFamilyShown = { },
         onConnect = { n, p ->

@@ -16,8 +16,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.*
@@ -41,16 +39,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 // چهار کاشی حالت، پنل هوشمند، کارت DNS، پنل گیمینگ و انتخاب برنامه‌ها.
 
@@ -481,21 +473,6 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
     }
 }
 
-/** آیکون چرخ‌دنده (تنظیمات پیشرفته) */
-fun DrawScope.gearIcon(c: Color) {
-    val w = size.width
-    val sw = w * .1f
-    for (i in 0 until 8) {
-        val a = Math.toRadians(i * 45.0)
-        drawLine(
-            c, Offset(w / 2 + w * .28f * kotlin.math.cos(a).toFloat(), w / 2 + w * .28f * kotlin.math.sin(a).toFloat()),
-            Offset(w / 2 + w * .44f * kotlin.math.cos(a).toFloat(), w / 2 + w * .44f * kotlin.math.sin(a).toFloat()), sw * 1.4f, StrokeCap.Round,
-        )
-    }
-    drawCircle(c, w * .30f, Offset(w / 2, w / 2), style = Stroke(sw))
-    drawCircle(c, w * .10f, Offset(w / 2, w / 2), style = Stroke(sw))
-}
-
 /** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …)، پینگ و راهش (tunnel / direct) */
 data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct")
 
@@ -657,7 +634,7 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
  * پنل گیمینگ: بالا چهار پروتکل هم‌اندازه (KANKI MIX اول، Hysteria2، Amnezia، WireGuard)؛ زیرش سرورهای همان
  * پروتکل در دو ستون، تانل راست و مستقیم چپ، هر سرور یک ردیف. لمس یک خانه = اتصال به همان.
  * «سریع‌ترین سرور» کم‌پینگ‌ترین کانفیگ همان پروتکل را برمی‌دارد.
- * برای KANKI MIX کلید «ارسال دوتایی» هست؛ «تنظیمات پیشرفته» همان «فقط بازی‌ها» است.
+ * برای KANKI MIX کلید «ارسال دوتایی» هست. همه‌ی برنامه‌ها (بازی، سرویس‌های گوگل، مرورگر) از VPN رد می‌شوند.
  */
 @Composable
 fun GameSheet(
@@ -668,14 +645,7 @@ fun GameSheet(
     currentAuto: Boolean,
     busy: Boolean,
     kmixDup: Boolean,
-    gamesOnly: Boolean,
-    autoGames: Boolean,
-    appCount: Int,
-    canBlock: Boolean,
     onKmixDup: (Boolean) -> Unit,
-    onGamesOnly: (Boolean) -> Unit,
-    onAutoGames: (Boolean) -> Unit,
-    onPickApps: () -> Unit,
     onFamilyShown: (String) -> Unit,
     onConnect: (node: String, proto: String) -> Unit,
     onFastest: (family: String) -> Unit,
@@ -685,7 +655,6 @@ fun GameSheet(
         mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
             ?: families.firstOrNull { it.servers.isNotEmpty() }?.key ?: initFamily)
     }
-    var advanced by remember(visible) { mutableStateOf(false) }
     LaunchedEffect(visible, fam) { if (visible) onFamilyShown(fam) }
     val f = families.firstOrNull { it.key == fam }
     val c = familyColor(fam)
@@ -713,37 +682,6 @@ fun GameSheet(
             }
         }
 
-        // تنظیمات پیشرفته: «فقط بازی‌ها اینترنت داشته باشند»
-        val ash = RoundedCornerShape(D.RS)
-        Row(
-            Modifier.fillMaxWidth().padding(top = D.S2).height(D.RowH).clip(ash)
-                .background(c.copy(alpha = .05f))
-                .border(1.2.dp, Brush.horizontalGradient(listOf(c.copy(alpha = .7f), K.Gold.copy(alpha = .4f))), ash)
-                .clickable { advanced = !advanced }
-                .padding(horizontal = D.S3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Canvas(Modifier.size(D.Icon)) { gearIcon(K.GoldLight) }
-            Spacer(Modifier.width(D.S3))
-            T("تنظیمات پیشرفته", size = D.TxtTitle, color = K.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            T(if (advanced) "▲" else "▼", size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
-        }
-        AnimatedVisibility(advanced, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(top = D.S2, bottom = D.S2)) {
-                SwitchRow(
-                    "فقط بازی‌ها اینترنت داشته باشند",
-                    if (appCount > 0) trf("%d برنامه مجاز است؛ بقیه تا قطع اتصال اینترنت ندارند", appCount) else "اول بازی یا برنامه‌ای انتخاب کنید",
-                    gamesOnly, c, enabled = appCount > 0 || gamesOnly, onChange = onGamesOnly,
-                )
-                SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان به فهرست اضافه می‌شوند", autoGames, c, onChange = onAutoGames)
-                SmallLine("انتخاب برنامه‌ها", Modifier.fillMaxWidth(), color = K.Gold, onClick = onPickApps)
-                if (gamesOnly && !canBlock) {
-                    Spacer(Modifier.height(D.S2))
-                    T("روی این نسخه‌ی اندروید برای بستن بقیه‌ی برنامه‌ها «مسدود کردن اتصال‌های بدون VPN» را در تنظیمات VPN گوشی روشن کنید.",
-                        size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
-                }
-            }
-        }
         Spacer(Modifier.height(D.S2))
     }
 }
@@ -867,87 +805,6 @@ fun DrawScope.familyIcon(f: String, c: Color) {
             }
             drawPath(wave, c, style = st)
             drawCircle(c, w * .08f, Offset(w * .92f, w * .45f))
-        }
-    }
-}
-
-// ================================================================== انتخاب برنامه‌ها
-
-/**
- * انتخاب بازی‌ها و برنامه‌هایی که در «فقط بازی‌ها» و حالت DNS اینترنت دارند.
- * بازی‌های تشخیص‌داده‌شده بالای فهرست‌اند و خودکار انتخاب می‌شوند؛ کاربر می‌تواند هر برنامه را اضافه یا حذف کند.
- */
-@Composable
-fun AppPicker(
-    detected: List<String>,
-    autoGames: Boolean,
-    isOn: (String) -> Boolean,
-    onToggle: (String) -> Unit,
-    onAutoGames: (Boolean) -> Unit,
-    onClose: () -> Unit,
-) {
-    val ctx = LocalContext.current
-    var apps by remember { mutableStateOf<List<AppItem>?>(null) }
-    var q by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { apps = withContext(Dispatchers.IO) { AppsRepo.load(ctx) } }
-    val mc = modeColor(KMode.DNS)
-    Box(
-        Modifier.fillMaxSize().background(K.Ink.copy(alpha = .97f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-    ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = D.PagePad, vertical = D.S3)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    T("انتخاب برنامه‌ها", size = 20.sp, color = K.Text, weight = FontWeight.Black)
-                    T("فقط برنامه‌های تیک‌خورده اینترنت دارند", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-                }
-                SmallGold("تمام", onClick = onClose)
-            }
-            Spacer(Modifier.height(D.S2))
-            SwitchRow("تشخیص خودکار بازی‌ها", "بازی‌های نصب‌شده خودشان انتخاب می‌شوند", autoGames, mc, onChange = onAutoGames)
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                OutlinedTextField(
-                    value = q, onValueChange = { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    placeholder = { T("جستجو…", size = 13.sp, color = K.Sub) },
-                    textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, color = K.Text),
-                    shape = RoundedCornerShape(D.RM),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = mc, unfocusedBorderColor = K.Line, cursorColor = mc),
-                )
-            }
-            Spacer(Modifier.height(D.S2))
-            val list = apps
-            if (list == null) {
-                Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { Spinner(D.S6, mc) }
-            } else {
-                val shown = list.filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
-                    .sortedWith(compareBy({ if (it.pkg in detected) 0 else 1 }, { if (isOn(it.pkg)) 0 else 1 }))
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
-                    items(shown.size) { idx ->
-                        val app = shown[idx]
-                        val on = isOn(app.pkg)
-                        Row(
-                            Modifier.fillMaxWidth().height(D.RowH).clickable { onToggle(app.pkg) },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            app.icon?.let { Image(it, null, Modifier.size(D.IconBox).clip(RoundedCornerShape(D.RT))) }
-                                ?: Box(Modifier.size(D.IconBox).clip(RoundedCornerShape(D.RT)).background(K.Surface))
-                            Spacer(Modifier.width(D.S3))
-                            Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    T(app.label, size = 14.sp)
-                                    if (app.pkg in detected) {
-                                        Spacer(Modifier.width(D.S2))
-                                        T("🎮 بازی", size = 9.5.sp, color = modeColor(KMode.GAME), weight = FontWeight.Bold)
-                                    }
-                                }
-                                T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
-                            }
-                            CheckMark(on, D.Icon, mc)
-                        }
-                        HDivider()
-                    }
-                }
-            }
         }
     }
 }

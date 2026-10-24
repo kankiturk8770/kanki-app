@@ -58,8 +58,8 @@ val guideSteps = listOf(
         "Connect button", "Tap it once to connect with the mode you picked. When you're connected, the ring spins and the middle says Connected. That means your internet is safe ✅", 2),
     GuideStep("map", "نقشه", "اینجا می‌بینی کجایی و به کدوم کشور وصلی. خط نورانی، مسیر اتصالته؛ سرعت و پینگ زنده‌ت هم پایین صفحه‌ست.",
         "Map", "Here you see where you are and which country you're connected to. The glowing line is your route, and your live speed and ping are at the bottom.", 3),
-    GuideStep("protocols", "حالت‌های اتصال", "چهار حالت داری: «هوشمند» پینگ همه رو می‌گیره و خودش به بهترین وصل می‌شه. «گیمینگ» برای بازیه؛ پروتکل و سرور رو خودت انتخاب می‌کنی. «ضد فیلتر» برای وقتیه که فیلترینگ شدیده. «DNS» فقط بازی‌ها و برنامه‌هایی که انتخاب کردی رو رفع تحریم می‌کنه.",
-        "Connection modes", "You have four modes. Smart pings everything and connects to the best by itself. Gaming is for games: you pick the protocol and the server. Anti-filter is for when filtering is heavy. DNS unblocks only the games and apps you choose.", 4),
+    GuideStep("protocols", "حالت‌های اتصال", "چهار حالت داری: «هوشمند» پینگ همه رو می‌گیره و خودش به بهترین وصل می‌شه. «گیمینگ» برای بازیه؛ پروتکل و سرور رو خودت انتخاب می‌کنی. «ضد فیلتر» برای وقتیه که فیلترینگ شدیده. «DNS» وی‌پی‌ان نیست: فقط سایت‌ها و بازی‌های تحریمی از سرور کانکی رد می‌شن و بقیه با سرعت کامل مستقیم می‌رن.",
+        "Connection modes", "You have four modes. Smart pings everything and connects to the best by itself. Gaming is for games: you pick the protocol and the server. Anti-filter is for when filtering is heavy. DNS is not a VPN: only sanctioned sites and games go through Kanki's server, and everything else goes direct at full speed.", 4),
     GuideStep("game_fams", "پروتکل‌های گیمینگ", "این چهار پروتکل مخصوص بازی‌ان، همه روی UDP. KANKI MIX پروتکل خود کانکیه و برای بازی از همه بهتره؛ کمترین لگ و پکت‌لاس. Hysteria2 خیلی سریعه و روی اینترنت ضعیف هم پایدار می‌مونه. Amnezia از فیلتر رد می‌شه. WireGuard سبک و سریعه و فقط از راه تانل میاد.",
         "Gaming protocols", "These four protocols are made for games, all on UDP. KANKI MIX is Kanki's own protocol and the best one for gaming, with the lowest lag and packet loss. Hysteria2 is very fast and stays steady even on weak internet. Amnezia gets past filters. WireGuard is light and fast, and comes only through the tunnel.", 5, sheet = "game"),
     GuideStep("game_list", "تانل یا مستقیم", "هر سرور یه ردیفه، با دو خونه: «تانل» از سرور ایران رد می‌شه و وقتی فیلترینگ زیاده بهتر جواب می‌ده؛ «مستقیم» یک‌راست به خود سرور می‌ره و معمولاً پینگ کمتری داره. «سریع‌ترین سرور» هم خودش کم‌پینگ‌ترین رو پیدا و وصل می‌کنه.",
@@ -166,25 +166,28 @@ private fun GuideBubble(
 ) {
     KCard(modifier.widthIn(max = 420.dp).fillMaxWidth(), padding = 16.dp, border = K.Gold.copy(alpha = .7f)) {
         Row(verticalAlignment = Alignment.Top) {
-            RobotFace(58.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RobotFace(58.dp)
+                // صدای ربات زیر خودش: «صدا» / «بی‌صدا» (یادش می‌ماند)
+                if (onVoice != null) {
+                    Spacer(Modifier.height(8.dp))
+                    VoicePill(voiceOn, onVoice)
+                }
+            }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 T(if (LangState.en) step.titleEn else step.title, size = 17.sp, color = K.Gold, weight = FontWeight.Black)
                 Spacer(Modifier.height(4.dp))
                 T(if (LangState.en) step.textEn else step.text, size = 14.sp, color = K.Text, weight = FontWeight.Normal)
             }
-            // صدای ربات: روشن / خاموش (یادش می‌ماند)
-            if (onVoice != null) Box(
-                Modifier.size(34.dp).clip(CircleShape).border(1.dp, K.Gold.copy(alpha = if (voiceOn) .8f else .3f), CircleShape).clickable(onClick = onVoice),
-                contentAlignment = Alignment.Center,
-            ) { Canvas(Modifier.size(16.dp)) { speakerIcon(if (voiceOn) K.Gold else K.Sub, voiceOn) } }
         }
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // نقطه‌های پیشرفت
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                guideSteps.indices.forEach { i ->
-                    Box(Modifier.height(6.dp).width(if (i == idx) 16.dp else 6.dp).clip(CircleShape).background(if (i == idx) K.Gold else K.Sub.copy(alpha = .35f)))
+            // پیشرفت: «۵/۱۴» و یک خط کوتاه (۱۴ نقطه روی گوشی باریک جای دکمه‌ها را می‌گرفت)
+            Column {
+                T("${idx + 1}/${guideSteps.size}", size = 11.sp, color = K.Gold, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+                Box(Modifier.padding(top = 3.dp).width(44.dp).height(3.dp).clip(CircleShape).background(K.Sub.copy(alpha = .25f))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth((idx + 1f) / guideSteps.size).clip(CircleShape).background(K.Gold))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -281,6 +284,25 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
             Modifier.size(D.S6 + D.S1).clip(CircleShape).clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) { T("✕", size = 12.sp, color = K.Sub, font = Poppins, ltr = true) }
+    }
+}
+
+/** دکمه‌ی کوچک صدای ربات: بلندگوی طلایی با موج و «صدا»، یا بلندگوی خاموش با ضربدر و «بی‌صدا» */
+@Composable
+private fun VoicePill(on: Boolean, onClick: () -> Unit) {
+    val c = if (on) K.Gold else K.Sub
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(26.dp).clip(shape)
+            .background(if (on) K.Gold.copy(alpha = .12f) else Color.Transparent)
+            .border(1.dp, c.copy(alpha = if (on) .75f else .4f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Canvas(Modifier.size(13.dp)) { speakerIcon(c, on) }
+        Spacer(Modifier.width(4.dp))
+        T(if (on) "صدا" else "بی‌صدا", size = 10.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

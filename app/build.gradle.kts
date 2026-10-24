@@ -49,7 +49,11 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: کد کاتلین/کامپوز نسخه‌ی نهایی بهینه و کوچک می‌شود (اجرای روان‌تر و فایل کوچک‌تر).
+            // کد خود برنامه و موتورهای اتصال دست نمی‌خورند (proguard-rules.pro). منابع حذف نمی‌شوند:
+            // صدای ربات با اسم پیدا می‌شود (getIdentifier).
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isDebuggable = false
             signingConfig = if (canSignRelease) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }

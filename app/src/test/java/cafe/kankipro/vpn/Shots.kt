@@ -217,8 +217,7 @@ abstract class ShotsBase {
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
             initFamily = "kankimix", current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
-            gamesOnly = false, autoGames = true, appCount = 3, canBlock = true,
-            onKmixDup = {}, onGamesOnly = {}, onAutoGames = {}, onPickApps = {}, onFamilyShown = {},
+            onKmixDup = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }

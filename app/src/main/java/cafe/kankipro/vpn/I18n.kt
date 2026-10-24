@@ -215,6 +215,8 @@ private val EN = mapOf(
     "مدیریت کامل سرورها و تست پینگ" to "All servers & ping tests",
     "تست سرعت" to "Speed test",
     "رد کردن" to "Skip",
+    "صدا" to "Sound",
+    "بی‌صدا" to "Muted",
     "قبلی" to "Back",
     "بعدی" to "Next",
     "بزن بریم!" to "Let's go!",
