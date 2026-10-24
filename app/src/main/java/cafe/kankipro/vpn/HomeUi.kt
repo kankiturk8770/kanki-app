@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -196,7 +198,7 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
         KTab.entries.forEachIndexed { i, t ->
             val sel = t == current
             val p = ThemeState.current
-            val c = if (sel) p.onNav else K.Sub
+            val c = if (sel) (if (p.classic) K.Gold else p.onNav) else K.Sub
             val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
             val ts = RoundedCornerShape(D.RM)
             // تب انتخاب‌شده: پر با گرادیان رنگ تم (navTop ← navBottom)، لبه‌ی روشن و درخشش ملایم
@@ -209,7 +211,7 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
                 .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
                 .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f), p.goldLight.copy(alpha = .25f))), ts)
             Column(
-                Modifier.weight(1f).then(if (sel) selMod else Modifier.clip(ts))
+                Modifier.weight(1f).then(if (sel) (if (p.classic) Modifier.goldGlass(ts, selected = true) else selMod) else Modifier.clip(ts))
                     .clickable { onSelect(t) }
                     .guideTarget(ids[i])
                     .padding(vertical = D.S2),
@@ -541,14 +543,15 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                         Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round),
                     )
                 }
-                // وصل: لبه‌ی خط‌چین و دو موج به رنگ دوم تم (رنگ «وصل») که از دکمه بیرون می‌زنند
-                if (onA > .01f && goldA > .01f) drawCircle(
+                // وصل: لبه‌ی خط‌چین و دو موج به رنگ دوم تم که از دکمه بیرون می‌زنند (طلایی: فقط دو موج طلایی روشن، مثل طرح اول)
+                val classic = ThemeState.current.classic
+                if (onA > .01f && goldA > .01f && !classic) drawCircle(
                     K.Accent.copy(alpha = .55f * onA * goldA), r + 1.dp.toPx(), c,
                     style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(r * .75f, r * .25f), -time * r)),
                 )
                 if (onA > .01f) for (k in 0 until 2) {
                     val p = ((time / 2.6f) + k * .5f) % 1f
-                    drawCircle(K.Accent.copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
+                    drawCircle((if (classic) K.GoldLight else K.Accent).copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
                 }
                 if (gOn > .01f) heartbeat(env * (.6f + .5f * amp), gOn, c, r)
                 if (game && blast.value < 1f) connectBlast(blast.value, c, r)
@@ -585,6 +588,10 @@ const val OrbFootprint = 1.7f
 /** رنگ گیمینگ همان تم (یاقوت سرخ، سرخ پاستلی یا سرخابی) و نسخه‌ی روشنش به سمت gameAlt (برای آدمک‌ها و سرِ نورها) */
 private val Game get() = modeColor(KMode.GAME)
 private val GameLight get() = lerp(lerp(Game, ThemeState.current.gameAlt, .3f), Color.White, .15f)
+
+/** رنگ آدمک‌ها: رنگ آدمک خود تم (زرد کانکی: قرمز)، وگرنه همان رنگ گیمینگ */
+private val Runner get() = ThemeState.current.runner.takeOrElse { Game }
+private val RunnerLight get() = ThemeState.current.runner.let { if (it.isSpecified) lerp(it, Color.White, .12f) else GameLight }
 
 /**
  * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط رنگ گیمینگ تم، نئون دومِ هم‌خانواده‌اش (gameAlt) و نسخه‌ی روشنش،
@@ -758,11 +765,11 @@ private fun DrawScope.stickman(
     }
     val hc = w(head)
     val hr = .13f * h
-    drawPath(body, Game.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(Game.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
-    drawPath(body, GameLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(body, Runner.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawCircle(Runner.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
+    drawPath(body, RunnerLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     drawPath(body, Color.White.copy(alpha = .5f * a), style = Stroke(.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(GameLight.copy(alpha = a), hr, hc)
+    drawCircle(RunnerLight.copy(alpha = a), hr, hc)
     drawCircle(Color.White.copy(alpha = .55f * a), hr * .5f, hc)
     if (gun) {
         drawPath(gunPath, Color.White.copy(alpha = .22f * a), style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))

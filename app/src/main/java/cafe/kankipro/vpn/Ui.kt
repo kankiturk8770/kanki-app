@@ -70,69 +70,97 @@ class Palette(
     val gameAlt: Color, val tracer: Color,
     /** تب انتخاب‌شده‌ی نوار پایین: گرادیان بالا به پایین و رنگ نوشته‌ی رویش */
     val navTop: Color, val navBottom: Color, val onNav: Color,
+    /** طرح اول طلایی: کارت شیشه‌ای رنگی با خط نور پایین، تب شیشه‌ای، دکمه بدون لبه‌ی خط‌چین و زمینه با هاله و وینیت */
+    val classic: Boolean = false,
+    /** رنگ آدمک‌های گیمینگ (Unspecified = همان رنگ گیمینگ، مثل دکمه) */
+    val runner: Color = Color.Unspecified,
 ) {
     /** نام قدیمی رنگ «وصل» */
     val ok: Color get() = connected
 }
 
 val Themes: List<Palette> = listOf(
-    // زرشکی (پیش‌فرض): زرشکی غنی با طلایی شامپاینی (وصل، کشور شما، خط مسیر)؛ حالت‌ها زرشکی، آتشی، شامپاینی، آلویی
+    // زرشکی (پیش‌فرض): زرشکی با طلایی شامپاینی و هم‌خانواده‌هایشان (صورتی گلی، آلویی)؛ بدون نارنجی
     Palette(
         "crimson", Color(0xFFE8203F), Color(0xFFFF5C74), Color(0xFF9E0E28), Color(0xFFFF7A8E),
         Color(0xFF000000), Color(0xFFFFF5F6), Color(0xFFA8949A),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xE60A0305), Color(0xF0120509), Color(0xFF0A0305), Color(0xFFFFFFFF),
+        Color(0xE6070203), Color(0xF00E0406), Color(0xFF070203), Color(0xFFFFFFFF),
         accent = Color(0xFFF2C879), // طلایی شامپاینی
         connected = Color(0xFFF2C879),
         modeSmart = Color(0xFFE8203F), // زرشکی
-        modeGame = Color(0xFFFF7A3D), // آتشی
-        modeAnti = Color(0xFFF2C879), // شامپاینی
+        modeGame = Color(0xFFF2C879), // طلایی شامپاینی (گیمینگ و KANKI MIX)
+        modeAnti = Color(0xFFFF6B8E), // صورتی گلی
         modeDns = Color(0xFFB565D9), // آلویی
-        mix = Color(0xFFFF7A3D),
-        danger = Color(0xFFFF4D4D), warn = Color(0xFFFFB347),
+        mix = Color(0xFFF2C879),
+        danger = Color(0xFFFF4D4D), warn = Color(0xFFF5B342),
         userCountry = Color(0xFFF2C879),
         toggleOn = Color(0xFFE8203F),
-        gameAlt = Color(0xFFF2C879), tracer = Color(0xFFFFE08A),
+        gameAlt = Color(0xFFFF5C74), tracer = Color(0xFFFFE08A),
         // تب انتخاب‌شده: زرشکی عمیق (نه صورتی روشن) با نوشته‌ی سفید
         navTop = Color(0xFFC0152F), navBottom = Color(0xFF6E0918), onNav = Color(0xFFFFFFFF),
     ),
-    // زرد کانکی: زرد خالص روی مشکی با فیروزه‌ای برقی (وصل، کشور شما، خط مسیر)؛ حالت‌ها زرد، قرمز، فیروزه‌ای، بنفش
+    // طلایی کانکی: همان طلایی اول (۱.۱۸.۱)؛ فقط طلایی و مشکی و تُن‌های گرم بین‌شان (کهربایی، شامپاینی، کرم، مسی)،
+    // کارت‌های شیشه‌ای طلایی با خط نور پایین و تب شیشه‌ای
     Palette(
-        "gold", Color(0xFFFFD60A), Color(0xFFFFE766), Color(0xFFB89600), Color(0xFFFFF6B0),
-        Color(0xFF000000), Color(0xFFF7F6F0), Color(0xFF9C998E),
-        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xE60A0A09), Color(0xF0121210), Color(0xFF0A0A09), Color(0xFF111111),
-        accent = Color(0xFF2FD9FF), // فیروزه‌ای برقی
-        connected = Color(0xFF2FD9FF),
-        modeSmart = Color(0xFFFFD60A), // زرد
-        modeGame = Color(0xFFFF3B5C), // قرمز
-        modeAnti = Color(0xFF2FD9FF), // فیروزه‌ای
-        modeDns = Color(0xFFA78BFA), // بنفش ملایم
-        mix = Color(0xFFFF3B5C),
-        danger = Color(0xFFFF5A4D), warn = Color(0xFFFFB547),
-        userCountry = Color(0xFF2FD9FF),
-        toggleOn = Color(0xFFFFD60A),
-        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFE766),
-        navTop = Color(0xFFFFE766), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
+        Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
+        Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
+        Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700),
+        accent = Color(0xFFF0D49C), // شامپاینی
+        connected = Color(0xFFFFE58F), // طلایی روشن و درخشان
+        modeSmart = Color(0xFFFFC72C), // طلایی
+        modeGame = Color(0xFFFFA326), // کهربایی
+        modeAnti = Color(0xFFF0D49C), // شامپاینی
+        modeDns = Color(0xFFD98C5F), // مسی
+        mix = Color(0xFFFFB238),
+        danger = Color(0xFFE8553E), warn = Color(0xFFFFA326),
+        userCountry = Color(0xFFFFF1CC), // کرم
+        toggleOn = Color(0xFFFFC72C),
+        gameAlt = Color(0xFFFFE27A), tracer = Color(0xFFFFF3C4),
+        navTop = Color(0xFFFFE27A), navBottom = Color(0xFFFFC72C), onNav = Color(0xFF241700),
+        classic = true,
     ),
-    // بنفش سلطنتی: بنفش روشن با نعنایی یخی (وصل، کشور شما، خط مسیر)؛ حالت‌ها بنفش، صورتی، نعنایی، کهربایی
+    // زرد کانکی: همان طرح زرشکی، با زرد به‌جای زرشکی و قرمز به‌جای شامپاینی: دکمه، کارت‌ها و تب زرد روی مشکی خالص؛
+    // قرمز برای «وصل» (نوشته‌ی متصل، لبه‌ی خط‌چین و موج‌های دور دکمه، کشور شما و خط مسیر روی نقشه)، آدمک‌های گیمینگ و
+    // ضد فیلتر. گیمینگ کهربایی است تا دکمه در گیمینگ هم قرمز نشود.
     Palette(
-        "purple", Color(0xFFA259FF), Color(0xFFC9A2FF), Color(0xFF5B21B6), Color(0xFFC9A2FF),
+        "yellow", Color(0xFFFFD60A), Color(0xFFFFE45C), Color(0xFFB38F00), Color(0xFFFFF4B8),
+        Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
+        accent = Color(0xFFFF3B30), // قرمز
+        connected = Color(0xFFFF4A3D),
+        modeSmart = Color(0xFFFFD60A), // زرد
+        modeGame = Color(0xFFFFB21F), // کهربایی طلایی
+        modeAnti = Color(0xFFFF3B30), // قرمز
+        modeDns = Color(0xFFD9935B), // مسی
+        mix = Color(0xFFFFB21F),
+        danger = Color(0xFFFF2D55), warn = Color(0xFFFFAA2B),
+        userCountry = Color(0xFFFF3B30),
+        toggleOn = Color(0xFFFFD60A),
+        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
+        navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+        runner = Color(0xFFFF3B30),
+    ),
+    // بنفش سلطنتی: بنفش با سرخابی و هم‌خانواده‌هایشان (صورتی، یاسی، آبی‌بنفش)؛ همه از یک طیف
+    Palette(
+        "purple", Color(0xFFA259FF), Color(0xFFC9A2FF), Color(0xFF5B21B6), Color(0xFFE2CCFF),
         Color(0xFF000000), Color(0xFFF6F2FF), Color(0xFF9E94B4),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xE6080512), Color(0xF00F0A1C), Color(0xFF07040E), Color(0xFFFFFFFF),
-        accent = Color(0xFF3DF5C8), // نعنایی یخی
-        connected = Color(0xFF3DF5C8),
+        Color(0xE605030B), Color(0xF00B0715), Color(0xFF05030B), Color(0xFFFFFFFF),
+        accent = Color(0xFFFF5CC8), // سرخابی
+        connected = Color(0xFFFF8AD8), // صورتی درخشان
         modeSmart = Color(0xFFA259FF), // بنفش
-        modeGame = Color(0xFFFF5FA2), // صورتی
-        modeAnti = Color(0xFF3DF5C8), // نعنایی
-        modeDns = Color(0xFFFFB84D), // کهربایی
-        mix = Color(0xFFFF5FA2),
+        modeGame = Color(0xFFFF4FC8), // سرخابی
+        modeAnti = Color(0xFF7D8BFF), // آبی‌بنفش
+        modeDns = Color(0xFFE0C2FF), // یاسی
+        mix = Color(0xFFFF4FC8),
         danger = Color(0xFFFF5A6E), warn = Color(0xFFFFB84D),
-        userCountry = Color(0xFF3DF5C8),
+        userCountry = Color(0xFFFF5CC8),
         toggleOn = Color(0xFFA259FF),
-        gameAlt = Color(0xFFC9A2FF), tracer = Color(0xFF3DF5C8),
-        navTop = Color(0xFFC9A2FF), navBottom = Color(0xFFA259FF), onNav = Color(0xFFFFFFFF),
+        gameAlt = Color(0xFFC9A2FF), tracer = Color(0xFFFFD1F0),
+        navTop = Color(0xFFB57CFF), navBottom = Color(0xFF7B3FE4), onNav = Color(0xFFFFFFFF),
     ),
 )
 
@@ -151,6 +179,8 @@ fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
     userCountry = lerp(a.userCountry, b.userCountry, f), toggleOn = lerp(a.toggleOn, b.toggleOn, f),
     gameAlt = lerp(a.gameAlt, b.gameAlt, f), tracer = lerp(a.tracer, b.tracer, f),
     navTop = lerp(a.navTop, b.navTop, f), navBottom = lerp(a.navBottom, b.navBottom, f), onNav = lerp(a.onNav, b.onNav, f),
+    classic = b.classic,
+    runner = if (a.runner.isSpecified && b.runner.isSpecified) lerp(a.runner, b.runner, f) else b.runner,
 )
 
 object ThemeState {
@@ -339,43 +369,35 @@ private val motes: List<Mote> = run {
 @Composable
 fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(K.Ink)) {
-        // مشکی خالص (AMOLED) + بافت شش‌ضلعی خیلی کم‌رنگ + هاله‌ی رنگ تم پشت دکمه و رنگ دوم از گوشه‌ی پایین (همه با کد)
+        // AMOLED: زمینه مشکی خالص و فقط یک هاله‌ی کم‌رنگ رنگ تم پشت دکمه؛ طلایی (classic) همان گرادیان و وینیت طرح اول
         Box(
             Modifier.fillMaxSize().graphicsLayer().drawBehind {
                 drawRect(Brush.verticalGradient(listOf(K.BgTop, K.BgMid, K.BgBottom)))
-                drawPath(hexGrid(size, 16.dp.toPx()), K.Gold.copy(alpha = .045f), style = Stroke(.7.dp.toPx()))
-                val c = Offset(size.width / 2, size.height * .52f)
-                drawCircle(
-                    Brush.radialGradient(listOf(accent.copy(alpha = .13f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .75f),
-                    size.width * .75f, c,
-                )
-                val c2 = Offset(0f, size.height)
-                drawCircle(Brush.radialGradient(listOf(K.Accent.copy(alpha = .07f), Color.Transparent), c2, size.width * .85f), size.width * .85f, c2)
-                val c3 = Offset(size.width, 0f)
-                drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .06f), Color.Transparent), c3, size.width * .6f), size.width * .6f, c3)
+                if (ThemeState.current.classic) {
+                    val c = Offset(size.width / 2, size.height * .40f)
+                    drawCircle(
+                        Brush.radialGradient(listOf(accent.copy(alpha = .10f), accent.copy(alpha = .03f), Color.Transparent), c, size.width * .95f),
+                        size.width * .95f, c,
+                    )
+                    // وینیت: تیره شدن ملایم لبه‌ها برای عمق بیشتر
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .38f)),
+                            Offset(size.width / 2, size.height * .52f),
+                            size.maxDimension * .72f,
+                        ),
+                    )
+                } else {
+                    val c = Offset(size.width / 2, size.height * .52f)
+                    drawCircle(
+                        Brush.radialGradient(listOf(accent.copy(alpha = .09f), accent.copy(alpha = .02f), Color.Transparent), c, size.width * .62f),
+                        size.width * .62f, c,
+                    )
+                }
             },
         )
         Twinkles(if (calm) 12 else motes.size, accent)
         content()
-    }
-}
-
-/** شبکه‌ی شش‌ضلعی (بافت زمینه)؛ r شعاع هر شش‌ضلعی */
-private fun hexGrid(size: Size, r: Float): Path = Path().apply {
-    val w = r * 1.7320508f
-    var row = 0
-    var y = -r
-    while (y < size.height + r) {
-        var x = if (row % 2 == 0) 0f else w / 2
-        while (x < size.width + w) {
-            for (k in 0..6) {
-                val a = Math.toRadians(60.0 * k - 30.0)
-                val px = x + r * cos(a).toFloat(); val py = y + r * sin(a).toFloat()
-                if (k == 0) moveTo(px, py) else lineTo(px, py)
-            }
-            x += w
-        }
-        y += r * 1.5f; row++
     }
 }
 
@@ -519,7 +541,8 @@ enum class VState { OFF, CONNECTING, ON }
  * براقی سفید بالای کارت، لبه‌ی طلایی روشن، درخشش طلایی بیرون لبه و یک خط نور طلایی وسط لبه‌ی پایین.
  * selected: لبه‌ی روشن‌تر و ضخیم‌تر، درخشش بیشتر و ته‌رنگ طلایی داخل کارت.
  */
-fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier = this
+fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean = false, tint: Color = K.Gold): Modifier =
+    if (ThemeState.current.classic) classicGlass(shape, selected, tint) else this
     // شیشه‌ی تیره روی زمینه‌ی مشکی: سایه‌ی نرم زیر کارت و درخشش کم‌رنگ لبه (انتخاب‌شده پررنگ‌تر)
     .drawBehind {
         val o = shape.createOutline(size, layoutDirection, this)
@@ -545,6 +568,38 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         Brush.linearGradient(
             if (selected) listOf(K.Shine, tint, tint.copy(alpha = .45f), tint)
             else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .15f), Color.White.copy(alpha = .08f), tint.copy(alpha = .45f)),
+        ),
+        shape,
+    )
+
+/** شیشه‌ی طرح اول طلایی: رنگ تم در خود شیشه، براقی نیمه‌ی بالا و خط نور طلایی وسط لبه‌ی پایین */
+private fun Modifier.classicGlass(shape: androidx.compose.ui.graphics.Shape, selected: Boolean, tint: Color): Modifier = this
+    .drawBehind {
+        val o = shape.createOutline(size, layoutDirection, this)
+        val layers = if (selected) listOf(12f to .07f, 7f to .14f, 3.5f to .30f) else listOf(9f to .05f, 4.5f to .10f, 2f to .16f)
+        for ((m, a) in layers) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
+    }
+    .clip(shape)
+    .background(K.Surface)
+    .background(
+        Brush.linearGradient(
+            if (selected) listOf(tint.copy(alpha = .26f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .25f), tint.copy(alpha = .12f))
+            else listOf(tint.copy(alpha = .11f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .35f), tint.copy(alpha = .06f)),
+        ),
+    )
+    .drawWithContent {
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .16f else .10f), Color.Transparent), endY = size.height * .5f))
+        drawContent()
+        val y = size.height - 1.dp.toPx()
+        val line = Brush.horizontalGradient(listOf(Color.Transparent, K.GoldLight, Color.Transparent), startX = size.width * .16f, endX = size.width * .84f)
+        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 3.dp.toPx(), alpha = .35f)
+        drawLine(line, Offset(size.width * .16f, y), Offset(size.width * .84f, y), 1.2.dp.toPx())
+    }
+    .border(
+        if (selected) 1.5.dp else 1.dp,
+        Brush.linearGradient(
+            if (selected) listOf(K.Shine, K.GoldLight, tint, K.GoldLight)
+            else listOf(tint.copy(alpha = .85f), tint.copy(alpha = .45f), tint.copy(alpha = .70f)),
         ),
         shape,
     )

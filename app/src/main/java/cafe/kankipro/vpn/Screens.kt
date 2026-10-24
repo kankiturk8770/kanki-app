@@ -357,7 +357,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         },
         server = if (state.vstate == VState.ON && state.mode != KMode.DNS) state.node?.let { n ->
             val iso = state.isoOfNode(n)
-            val tag = if (state.proto == "kankimix") state.kmixTag(n) else null
+            val tag = state.cfgTag(n, state.proto)
             ServerChipUi(flagEmoji(iso) ?: "🌐", countryName(iso) ?: state.placeName(n), listOfNotNull(state.placeCity(n), tag).joinToString(" · ").ifBlank { null }, state.proto)
         } else null,
     )
@@ -426,13 +426,12 @@ private fun ModeSheets(state: AppState) {
         val (flag, name) = place(id)
         return SheetServer(id, p, flag, name, tag, state.protoPing(id, p))
     }
-    fun awgTag(p: String) = if (p == "amneziawg-direct") tr("مستقیم") else tr("تانل")
 
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
     val families = Modes.GAME_FAMILIES.map { (key, _) ->
-        val list = state.gameConfigs(key).map { (id, p) -> server(id, p, when { key == "amnezia" -> awgTag(p); p == "kankimix" -> state.kmixTag(id); else -> null }) }
+        val list = state.gameConfigs(key).map { (id, p) -> server(id, p, state.cfgTag(id, p)) }
             .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
         GameFamilyUi(
             key, state.familyTitle(key),
@@ -482,7 +481,7 @@ private fun ModeSheets(state: AppState) {
     val xrayRows = a.configs.filter { it.protocol == "xray" && state.hasCfg(it.node, "xray") }
         .map { server(it.node, "xray", XrayCfg.protoName(it.url.removePrefix("xray:"))) }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
-    val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, awgTag(p)) } }
+    val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, state.cfgTag(n.node, p)) } }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
     FilterSheet(
         visible = state.filterSheet,
@@ -520,16 +519,14 @@ private fun ModeSheets(state: AppState) {
 // ================================================================== تب سرورها
 
 /**
- * عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»، «KANKI MIX - مستقیم» یا «Xray · VLESS»)؛ اگر کشور
+ * عنوان یک کانفیگ در کارت کشور (مثل «AmneziaWG - تانل»، «Hysteria2 - مستقیم» یا «Xray · VLESS»)؛ اگر کشور
  * چند سرور دارد، شهر سرور هم (از روی مکان خروجی، نه اسمی که در پنل گذاشته شده)
  */
 private fun cfgTitle(state: AppState, l: ConfigLink, multi: Boolean): String {
     val base = when (l.protocol) {
-        "amneziawg" -> "AmneziaWG - " + tr("تانل")
-        "amneziawg-direct" -> "AmneziaWG - " + tr("مستقیم")
-        "kankimix" -> protoTitle(l.protocol) + (state.kmixTag(l.node)?.let { " - $it" } ?: "")
+        "amneziawg", "amneziawg-direct" -> "AmneziaWG" + (state.cfgTag(l.node, l.protocol)?.let { " - $it" } ?: "")
         "xray" -> "Xray · " + XrayCfg.protoName(l.url.removePrefix("xray:"))
-        else -> protoTitle(l.protocol)
+        else -> protoTitle(l.protocol) + (state.cfgTag(l.node, l.protocol)?.let { " - $it" } ?: "")
     }
     return if (multi) base + " · " + (state.placeCity(l.node) ?: l.nodeName) else base
 }

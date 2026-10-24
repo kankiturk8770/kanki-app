@@ -129,10 +129,14 @@ abstract class ShotsBase {
         CountryCardUi(
             "de", "آلمان", "فرانکفورت", "🇩🇪", 74, expanded = true, selected = true,
             rows = listOf(
-                CfgRowUi("de", "kankimix", "KANKI MIX", 68, busy = false, selected = false, host = null),
-                CfgRowUi("de", "amneziawg", "AmneziaWG · تانل", 74, busy = false, selected = true, host = null),
-                CfgRowUi("de", "amneziawg-direct", "AmneziaWG · مستقیم", 92, busy = false, selected = false, host = null),
-                CfgRowUi("de", "wireguard", "WireGuard", -1, busy = false, selected = false, host = null),
+                // سروری که تانل دارد: کانفیگ مستقیم و کانفیگ تانل هر پروتکل؛ وایرگارد فقط تانل
+                CfgRowUi("de", "kankimix", "KANKI MIX - مستقیم", 68, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "kankimix", "KANKI MIX - تانل", 81, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "amneziawg", "AmneziaWG - تانل", 74, busy = false, selected = true, host = null),
+                CfgRowUi("de", "amneziawg-direct", "AmneziaWG - مستقیم", 92, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "wireguard", "WireGuard - تانل", 77, busy = false, selected = false, host = null),
+                CfgRowUi("de", "hysteria2", "Hysteria2 - مستقیم", 95, busy = false, selected = false, host = null),
+                CfgRowUi("de@tunnel", "hysteria2", "Hysteria2 - تانل", -1, busy = false, selected = false, host = null),
             ),
         ),
         CountryCardUi("fr", "فرانسه", "پاریس", "🇫🇷", 88, expanded = false, selected = false, rows = emptyList()),
@@ -384,7 +388,7 @@ class ShotsTall : ShotsBase() {
     @Test fun b05() = shot("s850-crimson-13-home-alert", "crimson", pgHomeAlert())
 }
 
-// ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر سه تم (۴۱۱×۹۱۵dp)
+// ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر چهار تم (۴۱۱×۹۱۵dp)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w411dp-h915dp-xxhdpi")
@@ -411,6 +415,24 @@ class Shots : ShotsBase() {
     @Test fun m08() = shot("crimson-08-gaming", "crimson", pgGame())
     @Test fun m09() = shot("crimson-09-intro", "crimson", pgIntro())
     @Test fun m10() = shot("crimson-10-emergency", "crimson", pgEmergency())
+
+    // ------------------------------------------------------------------ تم زرد کانکی
+    @Test fun y01() = shot("yellow-01-home-off", "yellow", pgHomeOff())
+    @Test fun y02() = shot("yellow-02-home-on", "yellow", pgHomeOn())
+    @Test fun y03() = shot("yellow-03-home-smart", "yellow", pgHomeSmart())
+    @Test fun y04() = shot("yellow-04-servers", "yellow", pgServers())
+    @Test fun y05() = shot("yellow-05-speed", "yellow", pgSpeed())
+    @Test fun y06() = shot("yellow-06-settings", "yellow", pgSettings())
+    @Test fun y07() = shot("yellow-07-account", "yellow", pgAccount())
+    @Test fun y08() = shot("yellow-08-gaming", "yellow", pgGame())
+    @Test fun y09() = shot("yellow-09-intro", "yellow", pgIntro())
+    @Test fun y10() = shot("yellow-10-emergency", "yellow", pgEmergency())
+
+    // ------------------------------------------------------------------ گیمینگ وصل (آدمک‌ها روی حلقه) در هر چهار تم
+    @Test fun q01() = shot("crimson-11-game-on", "crimson", pgHomeGameOn())
+    @Test fun q02() = shot("gold-11-game-on", "gold", pgHomeGameOn())
+    @Test fun q03() = shot("yellow-11-game-on", "yellow", pgHomeGameOn())
+    @Test fun q04() = shot("purple-11-game-on", "purple", pgHomeGameOn())
 
     // ------------------------------------------------------------------ تم بنفش سلطنتی
     @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())
