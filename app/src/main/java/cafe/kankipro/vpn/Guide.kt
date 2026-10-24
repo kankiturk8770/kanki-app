@@ -113,8 +113,11 @@ fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onAnsw
     // آخرین قدم معتبر نگه داشته می‌شود تا هنگام محو شدن پرده، متن قدم اول چشمک نزند
     var idx by remember { mutableIntStateOf(0) }
     if (Guide.step >= 0) idx = Guide.step
+    // سؤال اول یا قدم‌ها: همان که آخر نشان داده شد می‌ماند تا هنگام محو شدن، کارت دیگری چشمک نزند
+    var showAsk by remember { mutableStateOf(false) }
+    if (Guide.step >= 0) showAsk = false else if (Guide.asking) showAsk = true
     AnimatedVisibility(visible = Guide.step >= 0 || Guide.asking, enter = fadeIn(tween(250)), exit = fadeOut(tween(200))) {
-        if (Guide.step < 0) {
+        if (showAsk) {
             WelcomeAsk(onAnswer)
             return@AnimatedVisibility
         }
