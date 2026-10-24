@@ -342,12 +342,15 @@ class AppState private constructor(context: Context) {
         else -> null
     }
     /**
-     * برچسب یک کانفیگ: امنزیای سروری که تانل جدا ندارد از روی Endpoint خودش «تانل» یا «مستقیم» است؛
-     * بقیه (و امنزیای سرور تانل‌دار) برچسب tunnelTag را می‌گیرند.
+     * برچسب یک کانفیگ: امنزیای سروری که تانل جدا ندارد از روی Endpoint خودش «تانل» یا «مستقیم» است؛ کانفیگ اصلی
+     * پروتکل‌های دیگر که پنل گفته به آدرس ایران می‌رود «تانل»؛ بقیه برچسب tunnelTag را می‌گیرند.
      */
     fun cfgTag(id: String, p: String): String? = when {
         p == "amneziawg-direct" -> tr("مستقیم")
         p == "amneziawg" && !isTunnelTwin(id) -> tr("تانل")
+        isTunnelTwin(id) -> tunnelTag(id)
+        // پنل ۳.۹.۵ به بعد می‌گوید کانفیگ اصلی هر پروتکل به آدرس ایران می‌رود یا به خود سرور
+        account?.viaProto?.get(id)?.get(p) == "tunnel" -> tr("تانل")
         else -> tunnelTag(id)
     }
 

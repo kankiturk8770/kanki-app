@@ -41,6 +41,8 @@ data class Account(
     val exits: Map<String, ExitInfo> = emptyMap(),
     /** مسیر AmneziaWG هر سرور (پنل ۳.۹.۱ به بعد)؛ خالی یعنی پنل قدیمی (برنامه خودش حدس می‌زند) */
     val awg: Map<String, AwgRoute> = emptyMap(),
+    /** راه هر پروتکل هر سرور (شناسه‌ی نود ← پروتکل ← «tunnel» یا «direct»)؛ پنل ۳.۹.۵ به بعد، خالی یعنی پنل قدیمی */
+    val viaProto: Map<String, Map<String, String>> = emptyMap(),
 )
 
 /**
@@ -283,6 +285,7 @@ object SubscriptionApi {
             } ?: emptyList(),
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
             awg = dataJson(html)?.optJSONArray("nodes")?.let { parseAwg(it) } ?: emptyMap(),
+            viaProto = dataJson(html)?.optJSONArray("nodes")?.let { parseVia(it) } ?: emptyMap(),
         ).also {
             dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
                 ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
@@ -295,6 +298,14 @@ object SubscriptionApi {
             val id = n.optString("id")
             if (id.isBlank()) return@mapNotNull null
             exitOf(n)?.let { id to it }
+        }.toMap()
+
+    private fun parseVia(a: org.json.JSONArray): Map<String, Map<String, String>> =
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
+            val id = n.optString("id")
+            val o = n.optJSONObject("via_proto") ?: return@mapNotNull null
+            if (id.isBlank()) return@mapNotNull null
+            id to o.keys().asSequence().mapNotNull { k -> o.optString(k).takeIf { it == "tunnel" || it == "direct" }?.let { k to it } }.toMap()
         }.toMap()
 
     private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =
