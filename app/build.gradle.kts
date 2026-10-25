@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 53
-        versionName = "1.18.5"
+        versionCode = 54
+        versionName = "1.18.6"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -143,13 +143,9 @@ val fetchAssets by tasks.registering {
             logger.warn("هشدار: ${dest.name} دانلود نشد؛ برنامه با پیش‌فرض اجرا می‌شود")
         }
 
-        val v1 = "https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf"
-        val v2 = "https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf"
+        // Vazirmatn is in the repository (res/font/vazir_*.ttf)
         val g1 = "https://raw.githubusercontent.com/google/fonts/main/ofl"
         val g2 = "https://github.com/google/fonts/raw/main/ofl"
-        grab(File(fontDir, "vazir_regular.ttf"), "$v1/Vazirmatn-Regular.ttf", "$v2/Vazirmatn-Regular.ttf")
-        grab(File(fontDir, "vazir_bold.ttf"), "$v1/Vazirmatn-Bold.ttf", "$v2/Vazirmatn-Bold.ttf")
-        grab(File(fontDir, "vazir_black.ttf"), "$v1/Vazirmatn-Black.ttf", "$v2/Vazirmatn-Black.ttf")
         grab(File(fontDir, "poppins_semibold.ttf"), "$g1/poppins/Poppins-SemiBold.ttf", "$g2/poppins/Poppins-SemiBold.ttf")
         grab(File(fontDir, "poppins_bold.ttf"), "$g1/poppins/Poppins-Bold.ttf", "$g2/poppins/Poppins-Bold.ttf")
         grab(File(fontDir, "orbitron.ttf"), "$g1/orbitron/Orbitron%5Bwght%5D.ttf", "$g2/orbitron/Orbitron%5Bwght%5D.ttf")

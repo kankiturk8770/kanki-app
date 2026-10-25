@@ -16,7 +16,9 @@ captures/
 keystore.properties
 
 # --- فایل‌هایی که هنگام ساخت خودکار دانلود می‌شوند (فونت‌ها و نقشه)
-app/src/main/res/font/
+app/src/main/res/font/*
+# Vazirmatn (the Persian font) is kept in the repository, so a build never falls back to the system font
+!app/src/main/res/font/vazir_*.ttf
 app/src/main/assets/countries.geojson
 
 # ساخته‌شده در build.yml (هسته‌ی KANKI MIX)
