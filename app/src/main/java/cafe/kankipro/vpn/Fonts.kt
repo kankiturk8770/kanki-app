@@ -7,7 +7,8 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 
 // ------------------------------------------------------------------ فونت‌ها
-// فایل‌های فونت (پوشه‌ی app/src/main/res/font) هنگام ساخت دانلود می‌شوند:
+// فونت فارسی (وزیرمتن، همه‌ی وزن‌ها) داخل خود مخزن است: app/src/main/res/font/vazir_*.ttf
+// بقیه‌ی فونت‌ها (پوشه‌ی app/src/main/res/font) هنگام ساخت دانلود می‌شوند:
 //   • روی گیت‌هاب: مرحله‌ی «دریافت فونت‌ها» در build.yml
 //   • روی اندروید استودیو: تسک fetchAssets در app/build.gradle.kts
 // اگر به هر دلیل دانلود نشده باشند، برنامه به‌جای خطای ساخت یا بسته‌شدن،
@@ -26,7 +27,10 @@ private fun fontFamilyOf(vararg parts: Pair<String, FontWeight>): FontFamily {
 
 val Vazir: FontFamily = fontFamilyOf(
     "vazir_regular" to FontWeight.Normal,
+    "vazir_medium" to FontWeight.Medium,
+    "vazir_semibold" to FontWeight.SemiBold,
     "vazir_bold" to FontWeight.Bold,
+    "vazir_extrabold" to FontWeight.ExtraBold,
     "vazir_black" to FontWeight.Black,
 )
 
