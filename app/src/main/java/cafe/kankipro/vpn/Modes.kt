@@ -39,6 +39,8 @@ object Modes {
     val GAME_FAMILIES = listOf(
         "kankimix" to listOf("kankimix"),
         "kgame" to listOf("kgame"),
+        "khq" to listOf("khq"),
+        "kftcp" to listOf("kftcp"),
         "hysteria2" to listOf("hysteria2"),
         "amnezia" to listOf("amneziawg-direct", "amneziawg"),
         "wireguard" to listOf("wireguard"),

@@ -455,14 +455,17 @@ private fun ModeSheets(state: AppState) {
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
-    val families = Modes.GAME_FAMILIES.map { (key, _) ->
+    // FakeTCP only on a rooted phone (it builds raw packets)
+    val families = Modes.GAME_FAMILIES.filter { (key, _) -> KcoreCfg.usable(key) }.map { (key, _) ->
         val list = state.gameConfigs(key).map { (id, p) -> server(id, p, state.cfgTag(id, p)) }
             .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
         GameFamilyUi(
             key, state.familyTitle(key),
             when (key) {
                 "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
-                "kgame" -> tr("Game-FEC: هر بسته‌ی بازی دیتاگرام جداست و بسته‌های کوچک دو یا سه بار می‌روند؛ مخصوص پابجی")
+                "kgame" -> tr("Game-FEC: KCP سریع با FEC؛ بسته‌ی گم‌شده بدون انتظار ساخته می‌شود")
+                "khq" -> tr("HQ-QUIC: QUIC زیر ماسک؛ روی اینترنت پرلاس پایدار")
+                "kftcp" -> tr("FakeTCP: برای وقتی که UDP بسته یا کند است (گوشی روت‌شده)")
                 "hysteria2" -> tr("روی UDP (QUIC): پرسرعت و پایدار، حتی روی اینترنت ضعیف و پرپکت‌لاس")
                 "amnezia" -> tr("عبور از فیلتر؛ مستقیم یا از تانل ایران")
                 else -> tr("سبک و سریع، روی اینترنت پایدار")

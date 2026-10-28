@@ -366,7 +366,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "kgame" -> "Game-FEC"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "kgame" -> "Game-FEC"; "khq" -> "HQ-QUIC"; "kftcp" -> "FakeTCP"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
