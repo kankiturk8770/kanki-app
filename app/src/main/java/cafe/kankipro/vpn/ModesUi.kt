@@ -756,6 +756,9 @@ private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier
 /** رنگ هر پروتکل (حلقه و هاله‌ی دکمه‌ی اتصال، کارت‌ها)؛ همه از تُن‌های همان تم، تا کنار هم یکدست بمانند */
 fun protoColor(p: String?): Color = when (p) {
     "kankimix" -> ThemeState.current.mix
+    "kgame" -> ThemeState.current.connected
+    "khq" -> ThemeState.current.modeDns
+    "kftcp" -> ThemeState.current.modeAnti
     "amneziawg", "amneziawg-direct" -> ThemeState.current.modeAnti
     "wireguard" -> ThemeState.current.modeDns
     "hysteria2" -> ThemeState.current.connected
@@ -765,6 +768,7 @@ fun protoColor(p: String?): Color = when (p) {
 
 fun familyColor(f: String): Color = when (f) {
     "kankimix" -> protoColor("kankimix")
+    "kgame" -> protoColor("kgame")
     "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
     else -> protoColor("wireguard")
@@ -775,7 +779,7 @@ fun DrawScope.familyIcon(f: String, c: Color) {
     val w = size.width
     val st = Stroke(w * .09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (f) {
-        "kankimix" -> {
+        "kankimix", "kgame" -> {
             modeLogo(KMode.GAME, c)
             drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
         }

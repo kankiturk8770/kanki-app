@@ -107,6 +107,22 @@ object Probe {
         }.getOrNull()
     }
 
+    /**
+     * Game-FEC، HQ-QUIC، FakeTCP: خود هسته یک بار وصل می‌شود (با کلید همین کاربر) و رفت‌وبرگشت داخل لینک را
+     * می‌سنجد (`libkcore.so ping`). FakeTCP بدون روت سنجیده نمی‌شود.
+     */
+    fun kcore(ctx: Context, cfg: String): Long? {
+        val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
+        if (KcoreCfg.kind(link) == "faketcp") return null
+        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libkcore.so")
+        if (!bin.exists()) return null
+        return runCatching {
+            val p = ProcessBuilder(bin.path, "ping", "--url", link).redirectErrorStream(true).start()
+            if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return null }
+            p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
+        }.getOrNull()
+    }
+
     /** Xray روی TCP: زمان اتصال به پورت خود اینباند (کمترین از دو بار) */
     fun tcp(net: Network?, host: String, port: Int): Long? {
         val ip = resolve(net, host) ?: return null
