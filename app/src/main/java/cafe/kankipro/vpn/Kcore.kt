@@ -16,7 +16,7 @@ object KcoreCfg {
     fun isProto(p: String) = PROTOS.any { it.first == p }
 
     fun title(p: String) = when (p) {
-        "kgame" -> "MIX+"
+        "kgame" -> "MIX+\u200E"
         else -> p
     }
 

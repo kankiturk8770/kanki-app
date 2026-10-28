@@ -386,7 +386,7 @@ data class ConfigInfo(
             if (KcoreCfg.isKcore(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
                 val (h, p) = runCatching { KcoreCfg.endpoint(link) }.getOrDefault("—" to 0)
-                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = "KCP + FEC", transport = "UDP", cipher = "MIX+")
+                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = "KCP + FEC", transport = "UDP", cipher = "MIX+\u200E")
             }
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
