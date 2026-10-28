@@ -108,12 +108,11 @@ object Probe {
     }
 
     /**
-     * Game-FEC، HQ-QUIC، FakeTCP: خود هسته یک بار وصل می‌شود (با کلید همین کاربر) و رفت‌وبرگشت داخل لینک را
-     * می‌سنجد (`libkcore.so ping`). FakeTCP بدون روت سنجیده نمی‌شود.
+     * MIX+: خود هسته یک بار وصل می‌شود (با کلید همین کاربر) و رفت‌وبرگشت داخل لینک را می‌سنجد
+     * (`libkcore.so ping`).
      */
     fun kcore(ctx: Context, cfg: String): Long? {
         val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        if (KcoreCfg.kind(link) == "faketcp") return null
         val bin = File(ctx.applicationInfo.nativeLibraryDir, "libkcore.so")
         if (!bin.exists()) return null
         return runCatching {

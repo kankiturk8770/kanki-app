@@ -109,9 +109,7 @@ fun flagOf(name: String): String {
 
 fun protoTitle(p: String) = when (p) {
     "kankimix" -> "KANKI MIX"
-    "kgame" -> "Game-FEC"
-    "khq" -> "HQ-QUIC"
-    "kftcp" -> "FakeTCP"
+    "kgame" -> "MIX+"
     "amneziawg" -> "AmneziaWG"
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
@@ -135,9 +133,7 @@ fun dnsTitle(dns: String) = DnsOptions.list.firstOrNull { it.first == dns }?.sec
 
 fun protoShort(p: String) = when (p) {
     "kankimix" -> "KANKI MIX"
-    "kgame" -> "Game-FEC"
-    "khq" -> "HQ-QUIC"
-    "kftcp" -> "FakeTCP"
+    "kgame" -> "MIX+"
     "amneziawg" -> "Amnezia"
     "amneziawg-direct" -> "Amnezia"
     "wireguard" -> "WireGuard"

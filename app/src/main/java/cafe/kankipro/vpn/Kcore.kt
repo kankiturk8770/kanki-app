@@ -1,29 +1,22 @@
 package cafe.kankipro.vpn
 
-import java.io.File
 import java.net.URLDecoder
 
 /*
- * سه پروتکل خود کانکی کنار KANKI MIX: Game-FEC، HQ-QUIC و FakeTCP
- * ------------------------------------------------------------------
- * هر سه با یک هسته اجرا می‌شوند: libkcore.so (برنامه‌ی kanki-core از ریپوی پنل، release تگ kanki-core).
- * مثل Xray: هسته یک پراکسی SOCKS5 روی 127.0.0.1 باز می‌کند و hev-socks5-tunnel همه‌ی ترافیک گوشی را به آن
- * می‌دهد. لینک‌ها kcore://کاربر:کلید@سرور:پورت?type=game|hq|faketcp&door=… از اشتراک می‌آیند (فیلد kcore هر سرور).
- *
- *  - Game-FEC (kgame): بسته‌های بازی دیتاگرام جدا می‌روند و بسته‌های کوچک دو یا سه بار (پابجی)، سایت‌ها روی KCP + FEC.
- *  - HQ-QUIC (khq): QUIC زیر ماسک با BBR؛ برای اینترنت پرلاس.
- *  - FakeTCP (kftcp): UDP داخل TCP ساختگی؛ بسته‌ی خام لازم دارد، پس فقط روی گوشی روت‌شده (هسته با su اجرا می‌شود).
+ * MIX+: پروتکل بازی خود کانکی کنار KANKI MIX
+ * ----------------------------------------------
+ * هسته‌ی libkcore.so (برنامه‌ی kanki-core از ریپوی پنل) مثل Xray یک پراکسی SOCKS5 روی 127.0.0.1 باز می‌کند و
+ * hev-socks5-tunnel همه‌ی ترافیک گوشی را به آن می‌دهد. لینک‌ها kcore://کاربر:کلید@سرور:پورت?type=game&door=…
+ * از اشتراک می‌آیند (فیلد kcore هر سرور). KCP سریع با FEC: بسته‌ی گم‌شده بدون انتظار دوباره ساخته می‌شود.
  */
 object KcoreCfg {
     /** پروتکل‌ها به ترتیب نمایش: شناسه در اپ و پنل ← نوع هسته (type لینک) */
-    val PROTOS = listOf("kgame" to "game", "khq" to "hq", "kftcp" to "faketcp")
+    val PROTOS = listOf("kgame" to "game")
 
     fun isProto(p: String) = PROTOS.any { it.first == p }
 
     fun title(p: String) = when (p) {
-        "kgame" -> "Game-FEC"
-        "khq" -> "HQ-QUIC"
-        "kftcp" -> "FakeTCP"
+        "kgame" -> "MIX+"
         else -> p
     }
 
@@ -37,7 +30,7 @@ object KcoreCfg {
 
     fun isKcore(text: String) = text.lines().any { it.trim().equals("[Kcore]", ignoreCase = true) }
 
-    /** نوع هسته: game، hq یا faketcp */
+    /** نوع هسته (type لینک): game برای MIX+ */
     fun kind(link: String): String = query(link)["type"] ?: "game"
 
     private fun query(link: String): Map<String, String> =
@@ -72,13 +65,4 @@ object KcoreCfg {
         val q = base.substringAfter("?", "").split("&").filter { it.isNotEmpty() && !it.startsWith("copies=") } + "copies=$c"
         return base.substringBefore("?") + "?" + q.joinToString("&") + frag
     }
-
-    /** گوشی روت دارد؟ (FakeTCP بسته‌ی خام TCP می‌سازد و بدون روت ممکن نیست) */
-    val rooted: Boolean by lazy {
-        listOf("/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su", "/data/adb/magisk", "/system/app/Superuser.apk")
-            .any { runCatching { File(it).exists() }.getOrDefault(false) }
-    }
-
-    /** این پروتکل روی این گوشی کار می‌کند؟ */
-    fun usable(p: String) = p != "kftcp" || rooted
 }

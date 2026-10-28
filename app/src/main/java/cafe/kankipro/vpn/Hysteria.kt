@@ -500,9 +500,8 @@ class KankiHyService : VpnService() {
     }
 
     /**
-     * Game-FEC، HQ-QUIC و FakeTCP: هسته‌ی libkcore.so یک پراکسی SOCKS5 باز می‌کند (مثل Xray) و hev-socks5-tunnel
+     * MIX+: هسته‌ی libkcore.so یک پراکسی SOCKS5 باز می‌کند (مثل Xray) و hev-socks5-tunnel
      * ترافیک گوشی را به آن می‌دهد. هسته به آی‌پی‌ای وصل می‌شود که از مسیرهای VPN بیرون گذاشته شده.
-     * FakeTCP بسته‌ی خام TCP می‌سازد: هسته با su (روت) اجرا می‌شود.
      */
     private fun startKcore(link: String, lines: List<String>, my: Int) {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
@@ -513,7 +512,6 @@ class KankiHyService : VpnService() {
         val bin = File(applicationInfo.nativeLibraryDir, "libkcore.so")
         if (!bin.exists()) error("kcore: core is missing in this build")
 
-        val kind = KcoreCfg.kind(link)
         val (host, _) = KcoreCfg.endpoint(link)
         val addrs = InetAddress.getAllByName(host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
@@ -522,10 +520,8 @@ class KankiHyService : VpnService() {
         v("Copies")?.toIntOrNull()?.let { url = KcoreCfg.withCopies(url, it) }
         val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         val args = listOf(bin.path, "client", "--url", url, "--socks", "127.0.0.1:$socksPort")
-        val cmd = if (kind == "faketcp") listOf("su", "-c", args.joinToString(" ") { "'" + it.replace("'", "'\\''") + "'" }) else args
-        val name = KcoreCfg.title(KcoreCfg.PROTOS.firstOrNull { it.second == kind }?.first ?: "kgame")
-        launchCore(cmd, "kcore", socksPort, my, 15_000)
-        tunUp("Kanki · $name", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+        launchCore(args, "kcore", socksPort, my, 15_000)
+        tunUp("Kanki · MIX+", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
     }
 
     /**
