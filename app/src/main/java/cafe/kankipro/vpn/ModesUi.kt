@@ -660,9 +660,10 @@ fun GameSheet(
     val c = familyColor(fam)
     ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
         SheetLabel("پروتکل")
-        Row(Modifier.fillMaxWidth().guideTarget("game_fams"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        // the cards scroll sideways: every protocol keeps its whole name
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).guideTarget("game_fams"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             families.forEach { x ->
-                FamilyCard(x, x.key == fam, Modifier.weight(1f)) { fam = x.key }
+                FamilyCard(x, x.key == fam, Modifier.width(100.dp)) { fam = x.key }
             }
         }
         T(f?.sub ?: "", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = D.S2, start = D.S1))
@@ -769,6 +770,8 @@ fun protoColor(p: String?): Color = when (p) {
 fun familyColor(f: String): Color = when (f) {
     "kankimix" -> protoColor("kankimix")
     "kgame" -> protoColor("kgame")
+    "khq" -> protoColor("khq")
+    "kftcp" -> protoColor("kftcp")
     "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
     else -> protoColor("wireguard")
@@ -783,7 +786,7 @@ fun DrawScope.familyIcon(f: String, c: Color) {
             modeLogo(KMode.GAME, c)
             drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
         }
-        "hysteria2" -> {
+        "hysteria2", "khq" -> {
             // صاعقه: سرعت روی UDP
             val bolt = Path().apply {
                 moveTo(w * .58f, w * .06f); lineTo(w * .2f, w * .56f); lineTo(w * .48f, w * .56f)
@@ -791,7 +794,7 @@ fun DrawScope.familyIcon(f: String, c: Color) {
             }
             drawPath(bolt, c, style = st)
         }
-        "amnezia" -> {
+        "amnezia", "kftcp" -> {
             val sh = Path().apply {
                 moveTo(w * .5f, w * .06f); lineTo(w * .88f, w * .2f); lineTo(w * .88f, w * .48f)
                 cubicTo(w * .88f, w * .72f, w * .72f, w * .88f, w * .5f, w * .96f)
