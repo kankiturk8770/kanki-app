@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 54
-        versionName = "1.18.6"
+        versionCode = 55
+        versionName = "1.19.0"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -84,6 +84,8 @@ android {
             keepDebugSymbols += "**/libxray.so"
             // libkmix.so هم برنامه‌ی هسته‌ی KANKI MIX است
             keepDebugSymbols += "**/libkmix.so"
+            // libkcore.so هم برنامه‌ی هسته‌ی Game-FEC / HQ-QUIC / FakeTCP است
+            keepDebugSymbols += "**/libkcore.so"
         }
         resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/{AL2.0,LGPL2.1}", "META-INF/INDEX.LIST") }
     }

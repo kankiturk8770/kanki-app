@@ -101,7 +101,7 @@ object HyEngine {
     @Volatile internal var dnsBase: Pair<Long, Long>? = null
 
     /** این متن با این موتور بالا می‌آید: Hysteria2، Xray، DNS کانکی یا KANKI MIX */
-    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text)
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || KcoreCfg.isKcore(text)
 
     fun isUp() = state == UP
 
@@ -221,6 +221,7 @@ class KankiHyService : VpnService() {
         val lines = text.lines().map { it.trim() }
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         if (XrayCfg.isXray(text)) return startXray(v("URI") ?: error("xray: link missing"), lines, my)
+        if (KcoreCfg.isKcore(text)) return startKcore(v("URI") ?: error("kcore: link missing"), lines, my)
         if (KankiDns.isDns(text)) return startDns(lines, my)
         if (KmixUri.isKmix(text)) return startKmix(v("URI") ?: error("kanki mix: link missing"), lines, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
@@ -499,6 +500,35 @@ class KankiHyService : VpnService() {
     }
 
     /**
+     * Game-FEC، HQ-QUIC و FakeTCP: هسته‌ی libkcore.so یک پراکسی SOCKS5 باز می‌کند (مثل Xray) و hev-socks5-tunnel
+     * ترافیک گوشی را به آن می‌دهد. هسته به آی‌پی‌ای وصل می‌شود که از مسیرهای VPN بیرون گذاشته شده.
+     * FakeTCP بسته‌ی خام TCP می‌سازد: هسته با su (روت) اجرا می‌شود.
+     */
+    private fun startKcore(link: String, lines: List<String>, my: Int) {
+        fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
+        val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+        val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: TUN_MTU
+        val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (!TProxyService.loaded) error("kcore: tun2socks library is missing in this build")
+        val bin = File(applicationInfo.nativeLibraryDir, "libkcore.so")
+        if (!bin.exists()) error("kcore: core is missing in this build")
+
+        val kind = KcoreCfg.kind(link)
+        val (host, _) = KcoreCfg.endpoint(link)
+        val addrs = InetAddress.getAllByName(host)
+        val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
+        var url = KcoreCfg.withHost(link, ip.hostAddress ?: host)
+        // حالت گیمینگ: هر بسته‌ی بازی سه بار (پنل پیش‌فرض را می‌دهد؛ Copies در کانفیگ آن را عوض می‌کند)
+        v("Copies")?.toIntOrNull()?.let { url = KcoreCfg.withCopies(url, it) }
+        val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        val args = listOf(bin.path, "client", "--url", url, "--socks", "127.0.0.1:$socksPort")
+        val cmd = if (kind == "faketcp") listOf("su", "-c", args.joinToString(" ") { "'" + it.replace("'", "'\\''") + "'" }) else args
+        val name = KcoreCfg.title(KcoreCfg.PROTOS.firstOrNull { it.second == kind }?.first ?: "kgame")
+        launchCore(cmd, "kcore", socksPort, my, 15_000)
+        tunUp("Kanki · $name", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+    }
+
+    /**
      * اگر برنامه ناگهانی بسته شده باشد، هسته‌ی hysteria قبلی می‌تواند یتیم بماند و بی‌صدا به سرور
      * بسته بفرستد (و باتری بخورد). قبل از اجرای هسته‌ی جدید، هر هسته‌ی قدیمیِ همین برنامه کشته می‌شود.
      */
@@ -509,7 +539,7 @@ class KankiHyService : VpnService() {
             if (pid == me) return@forEach
             runCatching {
                 val cmd = File(d, "cmdline").readText()
-                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so")) android.os.Process.killProcess(pid)
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libkcore.so")) android.os.Process.killProcess(pid)
             }
         }
     }
