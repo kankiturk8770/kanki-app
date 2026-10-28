@@ -115,8 +115,6 @@ private fun FilterCheck(title: String, sub: String, on: Boolean, c: Color, onCli
 fun protoDesc(p: String) = when (p) {
     "kankimix" -> "مخصوص بازی · پینگ کم، ضد لگ"
     "kgame" -> "مخصوص پابجی · بسته‌های بازی چندتایی"
-    "khq" -> "پرسرعت · اینترنت پرلاس"
-    "kftcp" -> "وقتی UDP بسته است"
     "amneziawg" -> "عبور از فیلتر"
     "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
     "wireguard" -> "سریع · مناسب گیم"

@@ -366,7 +366,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "kgame" -> "Game-FEC"; "khq" -> "HQ-QUIC"; "kftcp" -> "FakeTCP"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "kgame" -> "MIX+"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
@@ -950,8 +950,8 @@ class AppState private constructor(context: Context) {
             x.exit?.let { xrayExits[id] = it }
             ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
-        // Game-FEC، HQ-QUIC و FakeTCP: هر کدام یک پروتکل جدای همان سرور (FakeTCP فقط روی گوشی روت‌شده)
-        val kcore = a.kcore.filter { KcoreCfg.usable(it.proto) }
+        // MIX+: پروتکل جدای همان سرور (لینک kcore://)
+        val kcore = a.kcore.filter { KcoreCfg.isProto(it.proto) }
             .map { ConfigLink(protocol = it.proto, node = it.node, nodeName = it.nodeName, url = "kcore:" + it.url) }
         return a.copy(configs = base + direct + xray + kcore, exits = a.exits + xrayExits)
     }
@@ -1504,7 +1504,7 @@ class AppState private constructor(context: Context) {
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
-                    "kgame", "khq", "kftcp" -> Probe.kcore(ctx, text)
+                    "kgame" -> Probe.kcore(ctx, text)
                     "hysteria2" -> Probe.hysteria(ctx, net, text)
                     else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
                         // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس

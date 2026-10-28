@@ -290,7 +290,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     if (!ui.hasAccount) {
                         if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
                     } else {
-                        ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), onTap = act.tapMode, onLong = act.longMode)
+                        ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), showDns = ui.dns.hasDns, onTap = act.tapMode, onLong = act.longMode)
                         ModeHint(ui.mode)
                         if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
                         StatsRow(ui)
@@ -1154,9 +1154,7 @@ fun CheckMark(on: Boolean, size: Dp = 22.dp, color: Color = K.Green) {
 /** یک خط توضیح زیر انتخاب پروتکل: تانل است یا مستقیم، و کِی به درد می‌خورد */
 fun protoHint(p: String) = when (p) {
     "kankimix" -> "پروتکل کانکی · بسته‌های بازی بدون صف و دوتایی، کمترین لگ"
-    "kgame" -> "Game-FEC · بسته‌های بازی جدا و چندتایی، مخصوص پابجی"
-    "khq" -> "HQ-QUIC · پرسرعت روی اینترنت پرلاس، شبیه هیچ پروتکلی نیست"
-    "kftcp" -> "FakeTCP · وقتی UDP بسته است (گوشی روت‌شده)"
+    "kgame" -> "MIX+ · مخصوص بازی، KCP سریع با FEC"
     "amneziawg" -> "تانل · از سرور ایران رد می‌شود و فیلتر را دور می‌زند"
     "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
     "wireguard" -> "تانل · سریع و مناسب گیم"

@@ -43,11 +43,11 @@ data class Account(
     val awg: Map<String, AwgRoute> = emptyMap(),
     /** راه هر پروتکل هر سرور (شناسه‌ی نود ← پروتکل ← «tunnel» یا «direct»)؛ پنل ۳.۹.۵ به بعد، خالی یعنی پنل قدیمی */
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
-    /** Game-FEC، HQ-QUIC و FakeTCP هر سرور (فیلد kcore؛ پنل ۳.۱۴ به بعد) */
+    /** MIX+ هر سرور (فیلد kcore؛ پنل ۳.۱۴ به بعد) */
     val kcore: List<KcoreLink> = emptyList(),
 )
 
-/** یک لینک kcore:// (proto: kgame، khq یا kftcp) */
+/** یک لینک kcore:// (proto: kgame = MIX+) */
 data class KcoreLink(val node: String, val nodeName: String, val proto: String, val url: String)
 
 /**
@@ -386,13 +386,7 @@ data class ConfigInfo(
             if (KcoreCfg.isKcore(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
                 val (h, p) = runCatching { KcoreCfg.endpoint(link) }.getOrDefault("—" to 0)
-                val kind = KcoreCfg.kind(link)
-                return ConfigInfo(
-                    endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار",
-                    obfuscation = when (kind) { "game" -> "KCP + FEC · بسته‌های بازی چندتایی"; "hq" -> "QUIC زیر ماسک · BBR"; else -> "TCP ساختگی" },
-                    transport = if (kind == "faketcp") "TCP" else "UDP",
-                    cipher = when (kind) { "game" -> "Game-FEC"; "hq" -> "HQ-QUIC"; else -> "FakeTCP" },
-                )
+                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = "KCP + FEC", transport = "UDP", cipher = "MIX+")
             }
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
