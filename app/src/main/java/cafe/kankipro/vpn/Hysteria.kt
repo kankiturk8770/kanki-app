@@ -97,11 +97,15 @@ object HyEngine {
     @Volatile internal var crashed = false
     /** اتصال فعلی KANKI MIX است (هسته‌ی Go داخل همین پروسه) */
     @Volatile internal var kmix = false
+    /** اتصال فعلی microtun است؛ دریافت و ارسال از گزارش‌های خود هسته (STAT) */
+    @Volatile internal var mtun = false
+    @Volatile internal var mtunRx = 0L
+    @Volatile internal var mtunTx = 0L
     /** حالت DNS بدون دروازه: شمارنده‌های کل گوشی در لحظه‌ی اتصال (سرعت واقعی اینترنت گوشی) */
     @Volatile internal var dnsBase: Pair<Long, Long>? = null
 
     /** این متن با این موتور بالا می‌آید: Hysteria2، Xray، DNS کانکی یا KANKI MIX */
-    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || KcoreCfg.isKcore(text)
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || MtunCfg.isMtun(text)
 
     fun isUp() = state == UP
 
@@ -150,6 +154,7 @@ object HyEngine {
     fun stats(): Pair<Long, Long>? = when {
         state != UP -> null
         kmix -> KmixCore.stats()
+        mtun -> mtunRx to mtunTx
         dnsMode && !dnsGate -> deviceStats()?.let { now ->
             val b = dnsBase ?: now.also { dnsBase = it }
             (now.first - b.first).coerceAtLeast(0) to (now.second - b.second).coerceAtLeast(0)
@@ -221,7 +226,7 @@ class KankiHyService : VpnService() {
         val lines = text.lines().map { it.trim() }
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         if (XrayCfg.isXray(text)) return startXray(v("URI") ?: error("xray: link missing"), lines, my)
-        if (KcoreCfg.isKcore(text)) return startKcore(v("URI") ?: error("kcore: link missing"), lines, my)
+        if (MtunCfg.isMtun(text)) return startMtun(v("URI") ?: error("microtun: link missing"), lines, my)
         if (KankiDns.isDns(text)) return startDns(lines, my)
         if (KmixUri.isKmix(text)) return startKmix(v("URI") ?: error("kanki mix: link missing"), lines, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
@@ -500,28 +505,139 @@ class KankiHyService : VpnService() {
     }
 
     /**
-     * MIX+: هسته‌ی libkcore.so یک پراکسی SOCKS5 باز می‌کند (مثل Xray) و hev-socks5-tunnel
-     * ترافیک گوشی را به آن می‌دهد. هسته به آی‌پی‌ای وصل می‌شود که از مسیرهای VPN بیرون گذاشته شده.
+     * microtun: هسته‌ی libmtun.so اول با سرور دست می‌دهد (VPN هنوز بالا نیست، پس مستقیم می‌رود) و آدرسی را که
+     * سرور به این گوشی داده چاپ می‌کند («ADDR ‎10.79.0.5/16 fd79:…/64»). بعد کارت VPN با همان آدرس ساخته و از راه
+     * سوکت یونیکسِ پوشه‌ی خصوصی برنامه به هسته داده می‌شود؛ بدون tun2socks. آی‌پی سرور از مسیرهای VPN بیرون است.
+     * اگر سرور بعداً آدرس این گوشی را عوض کند (ADDR تازه)، کارت VPN با آدرس تازه دوباره ساخته می‌شود.
      */
-    private fun startKcore(link: String, lines: List<String>, my: Int) {
+    private fun startMtun(link: String, lines: List<String>, my: Int) {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
-        val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: TUN_MTU
         val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        if (!TProxyService.loaded) error("kcore: tun2socks library is missing in this build")
-        val bin = File(applicationInfo.nativeLibraryDir, "libkcore.so")
-        if (!bin.exists()) error("kcore: core is missing in this build")
+        val included = included(lines)
+        val bin = File(applicationInfo.nativeLibraryDir, "libmtun.so")
+        if (!bin.exists()) error("microtun: core is missing in this build")
 
-        val (host, _) = KcoreCfg.endpoint(link)
+        val (host, _) = MtunCfg.endpoint(link)
         val addrs = InetAddress.getAllByName(host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
-        var url = KcoreCfg.withHost(link, ip.hostAddress ?: host)
-        // حالت گیمینگ: هر بسته‌ی بازی سه بار (پنل پیش‌فرض را می‌دهد؛ Copies در کانفیگ آن را عوض می‌کند)
-        v("Copies")?.toIntOrNull()?.let { url = KcoreCfg.withCopies(url, it) }
-        val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-        val args = listOf(bin.path, "client", "--url", url, "--socks", "127.0.0.1:$socksPort")
-        launchCore(args, "kcore", socksPort, my, 15_000)
-        tunUp("Kanki · MIX+", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+        val url = MtunCfg.withHost(link, ip.hostAddress ?: host)
+        val mtu = MtunCfg.mtu(link)
+        val sock = File(filesDir, "mtun.sock")
+        HyEngine.mtunRx = 0
+        HyEngine.mtunTx = 0
+
+        // خط‌های ADDR هسته؛ "" یعنی هسته بسته شد
+        val addrQ = java.util.concurrent.LinkedBlockingQueue<String>()
+        val pb = ProcessBuilder(bin.path, "client", "--url", url, "--device", MtunCfg.deviceName(this), "--sock", sock.path)
+            .directory(filesDir).redirectErrorStream(true)
+        val p = synchronized(this) {
+            if (cancelled(my)) error("microtun: cancelled")
+            killStaleCores()
+            pb.start().also { proc = it }
+        }
+        Thread({
+            runCatching {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    when {
+                        line.startsWith("ADDR ") -> addrQ.put(line.removePrefix("ADDR ").trim())
+                        line.startsWith("STAT ") -> runCatching {
+                            val o = org.json.JSONObject(line.removePrefix("STAT "))
+                            HyEngine.mtunRx = o.optLong("rx")
+                            HyEngine.mtunTx = o.optLong("tx")
+                        }
+                        else -> synchronized(log) {
+                            log.append(line).append('\n')
+                            if (log.length > 6000) log.delete(0, log.length - 4000)
+                        }
+                    }
+                }
+            }
+        }, "kanki-mtun-log").start()
+        Thread({
+            runCatching { p.waitFor() }
+            addrQ.put("")
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = "microtun core exited. " + lastLog()
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
+        }, "kanki-mtun-mon").start()
+
+        val first = addrQ.poll(15, java.util.concurrent.TimeUnit.SECONDS)
+        if (first.isNullOrEmpty()) error("microtun: " + (lastLog().ifBlank { "the server did not answer" }))
+        val fd = synchronized(this) {
+            if (cancelled(my)) error("microtun: cancelled")
+            mtunTun(first, ip, mtu, dns, excluded, included).also { tun = it }
+        }
+        sendTun(sock, fd, my)
+        synchronized(this) {
+            if (cancelled(my)) error("microtun: cancelled")
+            HyEngine.mtun = true
+            HyEngine.state = HyEngine.UP
+        }
+        // سرور آدرس این گوشی را عوض کرد: کارت تازه با آدرس تازه (کارت قبلی تا آن موقع کار می‌کند)
+        Thread({
+            while (!cancelled(my)) {
+                val a = addrQ.poll(1, java.util.concurrent.TimeUnit.SECONDS) ?: continue
+                if (a.isEmpty()) break
+                var old: ParcelFileDescriptor? = null
+                val nfd = synchronized(this) {
+                    if (cancelled(my)) null else runCatching { mtunTun(a, ip, mtu, dns, excluded, included) }.getOrNull()?.also { old = tun; tun = it }
+                } ?: continue
+                runCatching { sendTun(sock, nfd, my) }
+                runCatching { old?.close() }
+            }
+        }, "kanki-mtun-addr").start()
+    }
+
+    /** کارت VPN microtun با آدرسی که سرور داده («‎10.79.0.5/16 fd79:…/64» یا «… -») */
+    private fun mtunTun(addr: String, ip: InetAddress, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>): ParcelFileDescriptor {
+        val parts = addr.split(" ")
+        val v4 = parts[0].substringBefore("/")
+        val bits = parts[0].substringAfter("/", "32").toIntOrNull() ?: 32
+        val v6 = parts.getOrNull(1)?.takeIf { it != "-" && it.contains(":") }
+        val b = Builder()
+            .setSession("Kanki · microtun")
+            .setMtu(mtu)
+            .addAddress(v4, bits)
+        if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
+        else b.addRoute("0.0.0.0", 0)
+        if (v6 != null) {
+            // سرور IPv6 دارد: IPv6 هم از تونل می‌رود
+            runCatching { b.addAddress(v6.substringBefore("/"), 64) }
+            runCatching { b.addRoute("::", 0) }
+        } else if (ip is Inet4Address) {
+            // IPv6 بدون آدرس: هیچ برنامه‌ای از راه IPv6 بیرون از تونل نمی‌رود و فوری به IPv4 برمی‌گردد
+            runCatching { b.addRoute("::", 0) }
+        }
+        dns.forEach { d -> runCatching { b.addDnsServer(d) } }
+        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        return b.establish() ?: error("VPN permission is missing")
+    }
+
+    /** کارت VPN را از راه سوکت یونیکس (SCM_RIGHTS) به هسته می‌دهد؛ هسته سوکت را کمی بعد از ADDR باز می‌کند */
+    private fun sendTun(sock: File, fd: ParcelFileDescriptor, my: Int) {
+        val end = System.currentTimeMillis() + 5_000
+        var last: Exception? = null
+        while (System.currentTimeMillis() < end && !cancelled(my)) {
+            try {
+                android.net.LocalSocket().use { s ->
+                    s.connect(android.net.LocalSocketAddress(sock.path, android.net.LocalSocketAddress.Namespace.FILESYSTEM))
+                    s.setFileDescriptorsForSend(arrayOf(fd.fileDescriptor))
+                    s.outputStream.write(1)
+                    s.outputStream.flush()
+                }
+                return
+            } catch (e: Exception) {
+                last = e
+                Thread.sleep(100)
+            }
+        }
+        error("microtun: core did not take the VPN (${last?.message ?: "cancelled"})")
     }
 
     /**
@@ -535,7 +651,7 @@ class KankiHyService : VpnService() {
             if (pid == me) return@forEach
             runCatching {
                 val cmd = File(d, "cmdline").readText()
-                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libkcore.so")) android.os.Process.killProcess(pid)
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libmtun.so")) android.os.Process.killProcess(pid)
             }
         }
     }
@@ -616,6 +732,7 @@ class KankiHyService : VpnService() {
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) KmixCore.stopAsync()
         else KmixCore.stop()
         HyEngine.kmix = false
+        HyEngine.mtun = false
         dnsFwd?.stop()
         dnsFwd = null
         HyEngine.dnsMode = false

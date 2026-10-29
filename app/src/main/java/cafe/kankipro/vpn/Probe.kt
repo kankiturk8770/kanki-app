@@ -108,12 +108,12 @@ object Probe {
     }
 
     /**
-     * MIX+: خود هسته یک بار وصل می‌شود (با کلید همین کاربر) و رفت‌وبرگشت داخل لینک را می‌سنجد
-     * (`libkcore.so ping`).
+     * microtun: خود هسته یک بار با کلید همین کاربر دست می‌دهد و رفت‌وبرگشت آن را می‌سنجد
+     * (`libmtun.so ping`؛ دستگاهی روی سرور ساخته نمی‌شود).
      */
-    fun kcore(ctx: Context, cfg: String): Long? {
+    fun mtun(ctx: Context, cfg: String): Long? {
         val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libkcore.so")
+        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libmtun.so")
         if (!bin.exists()) return null
         return runCatching {
             val p = ProcessBuilder(bin.path, "ping", "--url", link).redirectErrorStream(true).start()

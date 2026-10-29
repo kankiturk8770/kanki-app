@@ -43,12 +43,12 @@ data class Account(
     val awg: Map<String, AwgRoute> = emptyMap(),
     /** راه هر پروتکل هر سرور (شناسه‌ی نود ← پروتکل ← «tunnel» یا «direct»)؛ پنل ۳.۹.۵ به بعد، خالی یعنی پنل قدیمی */
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
-    /** MIX+ هر سرور (فیلد kcore؛ پنل ۳.۱۴ به بعد) */
-    val kcore: List<KcoreLink> = emptyList(),
+    /** microtun هر سرور (فیلد mtun؛ پنل ۳.۱۸ به بعد). ورودی تانل هر سرور هم لینک خودش را دارد. */
+    val mtun: List<MtunLink> = emptyList(),
 )
 
-/** یک لینک kcore:// (proto: kgame = MIX+) */
-data class KcoreLink(val node: String, val nodeName: String, val proto: String, val url: String)
+/** یک لینک mtun:// */
+data class MtunLink(val node: String, val nodeName: String, val url: String)
 
 /**
  * via: کانفیگ AmneziaWG همین سرور از تانل (سرور ایران) می‌رود یا مستقیم به خود سرور.
@@ -291,7 +291,7 @@ object SubscriptionApi {
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
             awg = dataJson(html)?.optJSONArray("nodes")?.let { parseAwg(it) } ?: emptyMap(),
             viaProto = dataJson(html)?.optJSONArray("nodes")?.let { parseVia(it) } ?: emptyMap(),
-            kcore = dataJson(html)?.optJSONArray("nodes")?.let { parseKcore(it) } ?: emptyList(),
+            mtun = dataJson(html)?.optJSONArray("nodes")?.let { parseMtun(it) } ?: emptyList(),
         ).also {
             dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
                 ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
@@ -314,16 +314,13 @@ object SubscriptionApi {
             id to o.keys().asSequence().mapNotNull { k -> o.optString(k).takeIf { it == "tunnel" || it == "direct" }?.let { k to it } }.toMap()
         }.toMap()
 
-    private fun parseKcore(a: org.json.JSONArray): List<KcoreLink> =
-        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.flatMap { n ->
+    private fun parseMtun(a: org.json.JSONArray): List<MtunLink> =
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
             val id = n.optString("id")
-            val list = n.optJSONArray("kcore") ?: return@flatMap emptyList()
-            (0 until list.length()).mapNotNull { j -> list.optJSONObject(j) }.mapNotNull { k ->
-                val proto = k.optString("proto")
-                val url = k.optString("url").trim()
-                if (id.isBlank() || !KcoreCfg.isProto(proto) || !KcoreCfg.supported(url)) null
-                else KcoreLink(id, n.optString("name").ifBlank { id }, proto, url)
-            }
+            // null در JSON = این سرور برای این کاربر microtun ندارد
+            val url = if (n.isNull("mtun")) "" else n.optString("mtun").trim()
+            if (id.isBlank() || !MtunCfg.supported(url)) null
+            else MtunLink(id, n.optString("name").ifBlank { id }, url)
         }
 
     private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =
@@ -383,10 +380,14 @@ data class ConfigInfo(
                     transport = "UDP", cipher = "KANKI MIX",
                 )
             }
-            if (KcoreCfg.isKcore(text)) {
+            if (MtunCfg.isMtun(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
-                val (h, p) = runCatching { KcoreCfg.endpoint(link) }.getOrDefault("—" to 0)
-                return ConfigInfo(endpoint = "$h:$p", address = "—", dns = "—", mtu = "خودکار", obfuscation = "KCP + FEC", transport = "UDP", cipher = "MIX+\u200E")
+                val (h, p) = runCatching { MtunCfg.endpoint(link) }.getOrDefault("—" to 0)
+                val q = MtunCfg.query(link)
+                return ConfigInfo(
+                    endpoint = "$h:$p", address = q["ip"] ?: "—", dns = "—", mtu = MtunCfg.mtu(link).toString(),
+                    obfuscation = "AES-256-GCM · ${q["burst"] ?: "300"}B ×2", transport = "UDP", cipher = "microtun",
+                )
             }
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
