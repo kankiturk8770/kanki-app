@@ -131,18 +131,6 @@ fun pingColor(ms: Long) = when {
 
 fun dnsTitle(dns: String) = DnsOptions.list.firstOrNull { it.first == dns }?.second ?: "دلخواه · $dns"
 
-fun protoShort(p: String) = when (p) {
-    "kankimix" -> "KANKI MIX"
-    "mtun" -> "microtun"
-    "amneziawg" -> "Amnezia"
-    "amneziawg-direct" -> "Amnezia"
-    "wireguard" -> "WireGuard"
-    "hysteria2" -> "Hysteria2"
-    "xray" -> "Xray"
-    "ikev2", "ikev2-direct" -> "IKEv2"
-    else -> p
-}
-
 /** اسم کشور از روی کد ISO (فارسی، یا انگلیسی وقتی زبان انگلیسی است)؛ null اگر ناشناخته باشد */
 fun countryName(iso: String?): String? {
     val f = flagEmoji(iso) ?: return null

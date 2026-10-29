@@ -492,10 +492,6 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
     }
 }
 
-/** لوگوی ساده (بدون چرخش) برای جاهای کوچک */
-@Composable
-fun ShieldLogo(size: Dp) = Logo3D(size, animate = false)
-
 @Composable
 fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
     T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
@@ -604,17 +600,6 @@ private fun Modifier.classicGlass(shape: androidx.compose.ui.graphics.Shape, sel
     )
 
 @Composable
-fun Glass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(D.RX)
-    Column(
-        modifier
-            .goldGlass(shape)
-            .padding(D.S4),
-        content = content,
-    )
-}
-
-@Composable
 fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RL)
     Box(
@@ -651,11 +636,6 @@ fun Pill(text: String, color: Color = K.Gold, modifier: Modifier = Modifier, onC
     var m = modifier.clip(shape).background(color.copy(alpha = .10f)).border(1.dp, color.copy(alpha = .7f), shape)
     if (onClick != null) m = m.clickable(onClick = onClick)
     Box(m.padding(horizontal = D.S3, vertical = D.S1)) { T(text, size = 12.sp, color = color) }
-}
-
-@Composable
-fun SectionTitle(text: String) {
-    T(text, size = 17.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp))
 }
 
 @Composable
@@ -732,31 +712,6 @@ fun SpeedGauge(value: Double, color: Color, modifier: Modifier = Modifier) {
 
 
 // ------------------------------------------------------------------ آیکون‌ها
-
-/** آیکون گرد کوچک (بدون متن) */
-@Composable
-fun IconCircle(size: Dp = 40.dp, onClick: () -> Unit, draw: DrawScope.(Color) -> Unit) {
-    Box(
-        Modifier.size(size).clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
-            .border(1.2.dp, K.Gold.copy(alpha = .7f), CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(size * .5f)) { this.draw(K.Gold) }
-    }
-}
-
-/** آیکون بروزرسانی */
-fun DrawScope.refreshIcon(c: Color) {
-    val w = size.width
-    val sw = w * .13f
-    drawArc(c, 40f, 280f, false, topLeft = Offset(w * .1f, w * .1f), size = Size(w * .8f, w * .8f), style = Stroke(sw, cap = StrokeCap.Round))
-    val a = Math.toRadians(40.0)
-    val tip = Offset(w / 2 + w * .4f * cos(a).toFloat(), w / 2 + w * .4f * sin(a).toFloat())
-    drawLine(c, tip, Offset(tip.x + w * .02f, tip.y - w * .30f), sw, cap = StrokeCap.Round)
-    drawLine(c, tip, Offset(tip.x - w * .28f, tip.y - w * .06f), sw, cap = StrokeCap.Round)
-}
 
 /** آیکون حساب کاربری */
 fun DrawScope.accountIcon(c: Color) {

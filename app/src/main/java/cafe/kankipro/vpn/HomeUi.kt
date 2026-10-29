@@ -897,23 +897,6 @@ private fun ConnectedCard(s: ServerChipUi, c: Color, modifier: Modifier = Modifi
     }
 }
 
-/** نوار کوچک «رمزنگاری شده | اتصال پایدار و بدون قطعی» وقتی وصل است */
-@Composable
-private fun SecureStrip(c: Color, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier.fillMaxWidth().goldGlass(shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-    ) {
-        Dot(K.Green, 7.dp)
-        Spacer(Modifier.width(6.dp))
-        T("رمزنگاری شده", size = 11.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
-        Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(14.dp).background(c.copy(alpha = .35f)))
-        T("اتصال پایدار و بدون قطعی", size = 11.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
 /** یک کارت شیشه‌ای با سه خانه‌ی هم‌اندازه: پینگ (با نمودار زنده)، دانلود، آپلود */
 @Composable
 private fun StatsRow(ui: HomeUi) {
@@ -1165,14 +1148,3 @@ fun CheckMark(on: Boolean, size: Dp = 22.dp, color: Color = K.Green) {
     }
 }
 
-/** یک خط توضیح زیر انتخاب پروتکل: تانل است یا مستقیم، و کِی به درد می‌خورد */
-fun protoHint(p: String) = when (p) {
-    "kankimix" -> "پروتکل کانکی · بسته‌های بازی بدون صف و دوتایی، کمترین لگ"
-    "mtun" -> "microtun · مخصوص بازی، بسته‌های کوچک دوتایی، حجم اضافه نمی‌خورد"
-    "amneziawg" -> "تانل · از سرور ایران رد می‌شود و فیلتر را دور می‌زند"
-    "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
-    "wireguard" -> "تانل · سریع و مناسب گیم"
-    "hysteria2" -> "تانل · پرسرعت روی اینترنت ضعیف"
-    "xray" -> "Xray · برای فیلتر شدید، سخت‌ترین برای مسدود شدن"
-    else -> protoDesc(p)
-}

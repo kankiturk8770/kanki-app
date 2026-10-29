@@ -371,17 +371,6 @@ private fun dnsRowTag(r: DnsRowUi): String = tr(when (r.role) { "relay" -> "تا
 
 private fun dnsRowLabel(r: DnsRowUi): String = dnsRowTitle(r) + " · " + dnsRowTag(r)
 
-/** چهار مربع (آیکون برنامه‌ها) */
-fun DrawScope.appsGridIcon(c: Color) {
-    val w = size.width
-    val s = w * .38f
-    val r = CornerRadius(w * .1f)
-    drawRoundRect(c, Offset(w * .06f, w * .06f), Size(s, s), r)
-    drawRoundRect(c.copy(alpha = .6f), Offset(w * .56f, w * .06f), Size(s, s), r)
-    drawRoundRect(c.copy(alpha = .6f), Offset(w * .06f, w * .56f), Size(s, s), r)
-    drawRoundRect(c, Offset(w * .56f, w * .56f), Size(s, s), r)
-}
-
 // ================================================================== پنل‌های پایین (گیمینگ و ضد فیلتر)
 
 /** قاب پنل پایین با پرده‌ی تیره روی نقشه؛ با لمس بیرون بسته می‌شود */

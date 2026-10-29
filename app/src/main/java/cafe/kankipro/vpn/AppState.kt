@@ -141,8 +141,6 @@ class AppState private constructor(context: Context) {
         prefs.edit().putBoolean("filterUseX", xray).apply()
         changeFilterXray(!amnezia)
     }
-    /** «خودکار» در تب سرورها: ضد فیلتر خودش بهترین را انتخاب کند (انتخاب دستی کنار می‌رود) */
-    fun changeFilterAuto(v: Boolean) { if (v) setFilter(true, "", null) else setFilter(false, filterProto, filterNode) }
 
     fun setFilter(auto: Boolean, p: String, n: String?) {
         filterAuto = auto; filterProto = p; filterNode = n
@@ -153,13 +151,6 @@ class AppState private constructor(context: Context) {
     var dnsPick by mutableStateOf(prefs.getString("dnsPick", "") ?: "")
         private set
     fun changeDnsPick(id: String) { dnsPick = id; prefs.edit().putString("dnsPick", id).apply() }
-    /**
-     * DNS: بقیه‌ی برنامه‌ها اینترنت نداشته باشند. پیش‌فرض خاموش: برنامه‌های انتخابی فقط DNS کانکی را می‌گیرند
-     * و ترافیکشان مستقیم می‌رود (پینگ کم)؛ روشن کردنش ترافیک آن‌ها را از tun2socks داخل گوشی رد می‌کند.
-     */
-    var dnsBlock by mutableStateOf(prefs.getBoolean("dnsBlock", false))
-        private set
-    fun changeDnsBlock(v: Boolean) { dnsBlock = v; prefs.edit().putBoolean("dnsBlock", v).apply() }
     var dnsActive by mutableStateOf<DnsServer?>(null)
     /** اسم شبکه‌ی فعلی (Wi-Fi، ایرانسل …) */
     var netName by mutableStateOf("")
@@ -1070,13 +1061,6 @@ class AppState private constructor(context: Context) {
         if (hasCfg(nodeId, "xray")) add("xray")
     }
 
-    /** تغییر مسیر بین تانل و مستقیم */
-    fun changeRoute(r: String) {
-        route = r
-        prefs.edit().putString("route", r).apply()
-        fixProto()
-    }
-
     /** سوییچ سریع سرور (اگر وصل است، قطع و به سرور جدید وصل می‌شود) */
     suspend fun switchNode(n: String) {
         if (n == node) return
@@ -1382,13 +1366,6 @@ class AppState private constructor(context: Context) {
         val k = "$nodeId/$p"
         return listOfNotNull(udpPings[k], tcpPings[k], pings[k]).firstOrNull { it > 0 }
             ?: listOfNotNull(udpPings[k], tcpPings[k], pings[k]).firstOrNull()
-    }
-
-    /** بهترین پینگ یک سرور از بین همه‌ی کانفیگ‌هایش */
-    fun nodePing(nodeId: String): Long? {
-        val fromTests = (udpPings.entries + tcpPings.entries + pings.entries)
-            .filter { it.key.startsWith("$nodeId/") && it.value > 0 }.minOfOrNull { it.value }
-        return fromTests ?: smartRows.filter { it.node == nodeId }.minOfOrNull { it.ping }
     }
 
     // ---------------- تست سرعت (در محدوده‌ی خود برنامه، تا با عوض کردن تب قطع نشود)

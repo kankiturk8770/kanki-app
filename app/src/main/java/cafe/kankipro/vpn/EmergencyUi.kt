@@ -75,34 +75,6 @@ fun EmergencyIcon(size: Dp = 28.dp) {
     }
 }
 
-/** دکمه‌ی کوچک گرد اضطراری (سربرگ برنامه) */
-@Composable
-fun EmergencyButton(size: Dp = 40.dp, onClick: () -> Unit) {
-    Box(
-        Modifier.size(size).clip(CircleShape).background(K.Red.copy(alpha = .10f))
-            .border(1.dp, K.Red.copy(alpha = .45f), CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { EmergencyIcon(size * 0.62f) }
-}
-
-/** کادر کوچک گوشه‌ی صفحه‌ی ورود */
-@Composable
-fun EmergencyBox(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier.widthIn(max = 190.dp).clip(shape).background(K.Red.copy(alpha = .08f))
-            .border(1.dp, K.Red.copy(alpha = .40f), shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        EmergencyIcon(26.dp)
-        Spacer(Modifier.width(6.dp))
-        Column {
-            T("ارتباط اضطراری", size = 11.sp, color = K.Red, weight = FontWeight.Black)
-            T("فقط وقتی اینترنت ملی شده", size = 9.sp, color = K.Sub, weight = FontWeight.Normal)
-        }
-    }
-}
-
 // ================================================================== صفحه‌ی چت اضطراری
 
 @Composable
@@ -295,7 +267,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     OutlinedTextField(
                         value = codeText, onValueChange = { codeText = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
-                        placeholder = { Text("kanki-4-…", color = K.Sub.copy(alpha = .5f)) },
+                        placeholder = { Text("- - - - - - - - - -", color = K.Sub.copy(alpha = .5f)) },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
                     )

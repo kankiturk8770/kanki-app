@@ -67,6 +67,11 @@
 6. هوشمند: `GAME_ONLY` و ترتیب تازه در `runSmart`.
 7. فایروال: `AppGate` (reject: RST/ICMP فقط برای صاحب معلوم، کش منفی ۲۵۰ms، اولویت رشته‌ها)، `gameOnly`/`gameApps` در AppState، `GameAppsPanel`، سوییچ در `GameSheet`.
 8. ربات راهنما: صدا و فایل‌هایش حذف (`GuideVoice.kt`، `res/raw/guide_*.mp3`)، متن‌ها از نو، حباب تازه (`GuideBubble`، `GuideBody`، `GuidePoint`)، قدم «فقط بازی» (`guideTarget("game_only")`).
+10. صفحه‌ی ورود: نمونه‌ی کد `kanki-…` جایش ۱۰ خط تیره (`Screens.kt`، `EmergencyUi.kt`). پاک‌سازی ۱۹ تابع بی‌استفاده.
+11. بازبینی موتورها (WireGuard/AmneziaWG با GoBackend، Hysteria2/Xray با tun2socks، KANKI MIX، microtun، DNS): فقط یک VPN
+    هم‌زمان بالاست (`VpnEngine.up` اول موتور دیگر را پایین می‌آورد)، آی‌پی سرور از مسیرهای تونل بیرون است، IPv6 بدون
+    آدرس در تونل بسته است (نه نشت، نه معطلی)، اتصال فقط با جواب واقعی از داخل تونل «متصل» می‌شود (`awaitHandshake`)،
+    عوض شدن شبکه سلامت تونل را می‌سنجد و لازم شد دوباره وصل می‌کند (`watchNetwork`، `revive`). ایراد تازه‌ای پیدا نشد.
 9. بازبینی دوباره‌ی اتصال‌ها: یک ایراد پیدا شد و درست شد (جواب RST/ICMP به اتصالی که صاحبش لحظه‌ای معلوم نشده بود می‌توانست بازی را قطع کند).
 
 تست: محیط ابری Android SDK ندارد؛ ساخت و عکس‌ها در CI (`build.yml`، `shots.yml`).

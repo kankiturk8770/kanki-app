@@ -88,7 +88,7 @@ fun LoginScreen(state: AppState) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
-                    placeholder = { T("kanki-1-xY7q2", size = 16.sp, color = K.Sub.copy(alpha = .45f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
+                    placeholder = { T("- - - - - - - - - -", size = 16.sp, color = K.Sub.copy(alpha = .45f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     colors = OutlinedTextFieldDefaults.colors(

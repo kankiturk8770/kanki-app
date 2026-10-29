@@ -211,12 +211,6 @@ fun ProgressLine(fraction: Float, color: Color, modifier: Modifier = Modifier, h
     }
 }
 
-/** خط جداکننده‌ی عمودی */
-@Composable
-fun VDivider(height: Dp = 30.dp) {
-    Box(Modifier.width(1.dp).height(height).background(K.Gold.copy(alpha = .14f)))
-}
-
 /** خط جداکننده‌ی افقی */
 @Composable
 fun HDivider(modifier: Modifier = Modifier) {

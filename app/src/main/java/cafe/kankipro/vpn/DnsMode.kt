@@ -66,22 +66,6 @@ object KankiDns {
         }.getOrNull()
     }
 
-    /** آدرس Private DNS (DoT) سرور انتخابی */
-    fun dotOf(info: DnsInfo?, id: String?): String? =
-        info?.let { ordered(it, id).firstOrNull { s -> s.dot.isNotBlank() }?.dot }
-
-    /** صفحه‌ی تنظیمات شبکه (اندروید راه مستقیمی به Private DNS نمی‌دهد) */
-    fun openPrivateDnsSettings(ctx: Context) {
-        val intents = listOf(
-            Intent("android.settings.PRIVATE_DNS_SETTINGS"),
-            Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS),
-            Intent(android.provider.Settings.ACTION_SETTINGS),
-        )
-        for (i in intents) {
-            if (runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
-        }
-    }
-
     // ------------------------------------------------------------------ the DNS-only VPN
 
     class Target(val ip: InetAddress, val register: String)
