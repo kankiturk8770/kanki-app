@@ -1317,7 +1317,7 @@ class AppState private constructor(context: Context) {
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
                 if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
-                    cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx) })
+                    cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
                 }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
