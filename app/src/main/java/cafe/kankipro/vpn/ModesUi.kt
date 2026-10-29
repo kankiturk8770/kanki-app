@@ -102,7 +102,7 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
             drawCircle(c, w * .05f, Offset(w * .76f, w * .53f))
         }
         KMode.FILTER -> {
-            // سپر با یک موشک کوچک داخلش (عبور از فیلتر)
+            // سپر با یک موشک کوچک داخلش (پایدار روی شبکه‌ی محدود)
             val sh = Path().apply {
                 moveTo(w * .5f, w * .05f); lineTo(w * .88f, w * .19f); lineTo(w * .88f, w * .48f)
                 cubicTo(w * .88f, w * .72f, w * .72f, w * .88f, w * .5f, w * .96f)
@@ -371,17 +371,6 @@ private fun dnsRowTag(r: DnsRowUi): String = tr(when (r.role) { "relay" -> "تا
 
 private fun dnsRowLabel(r: DnsRowUi): String = dnsRowTitle(r) + " · " + dnsRowTag(r)
 
-/** چهار مربع (آیکون برنامه‌ها) */
-fun DrawScope.appsGridIcon(c: Color) {
-    val w = size.width
-    val s = w * .38f
-    val r = CornerRadius(w * .1f)
-    drawRoundRect(c, Offset(w * .06f, w * .06f), Size(s, s), r)
-    drawRoundRect(c.copy(alpha = .6f), Offset(w * .56f, w * .06f), Size(s, s), r)
-    drawRoundRect(c.copy(alpha = .6f), Offset(w * .06f, w * .56f), Size(s, s), r)
-    drawRoundRect(c, Offset(w * .56f, w * .56f), Size(s, s), r)
-}
-
 // ================================================================== پنل‌های پایین (گیمینگ و ضد فیلتر)
 
 /** قاب پنل پایین با پرده‌ی تیره روی نقشه؛ با لمس بیرون بسته می‌شود */
@@ -499,27 +488,33 @@ data class GameFamilyUi(val key: String, val title: String, val sub: String, val
     val best: Long? get() = servers.mapNotNull { it.ping }.filter { it > 0 }.minOrNull()
 }
 
-/** کارت یک خانواده‌ی پروتکل (سه کارت کنار هم بالای پنل گیمینگ) */
+/**
+ * کارت یک خانواده‌ی پروتکل: دو کارت هم‌اندازه در هر ردیف (روی هر عرض گوشی کامل دیده می‌شوند، بدون اسکرول کناری)؛
+ * آیکون، اسم و زیرش بهترین پینگ یا تعداد سرورها.
+ */
 @Composable
 private fun FamilyCard(f: GameFamilyUi, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = familyColor(f.key)
-    val shape = RoundedCornerShape(D.RM)
+    val shape = RoundedCornerShape(D.RS)
     val has = f.servers.isNotEmpty()
-    Column(
-        modifier.clip(shape)
-            .background(Brush.verticalGradient(listOf(c.copy(alpha = if (selected) .22f else .07f), K.Panel.copy(alpha = .6f))))
+    Row(
+        modifier.height(D.RowH).clip(shape)
+            .background(Brush.horizontalGradient(listOf(c.copy(alpha = if (selected) .22f else .07f), K.Panel.copy(alpha = .6f))))
             .border(if (selected) 1.6.dp else 1.dp, if (selected) c else c.copy(alpha = .28f), shape)
             .alpha(if (has) 1f else .4f)
             .clickable(enabled = has, onClick = onClick)
-            .padding(horizontal = D.S2, vertical = D.S3),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = D.S3),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(Modifier.size(D.S6)) { familyIcon(f.key, c) }
-        Spacer(Modifier.height(D.S1))
-        AutoText(f.title, size = 12.5.sp, color = if (selected) K.Text else K.Text.copy(alpha = .85f))
-        T(if (!has) tr("در اشتراک نیست") else f.best?.let { "$it ms" } ?: trf("%d سرور", f.servers.size),
-            size = 9.5.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null,
-            maxLines = 1)
+        Canvas(Modifier.size(D.Icon)) { familyIcon(f.key, c) }
+        Spacer(Modifier.width(D.S2))
+        Column(Modifier.weight(1f)) {
+            AutoText(f.title, size = 12.5.sp, color = if (selected) K.Text else K.Text.copy(alpha = .85f))
+            T(if (!has) tr("در اشتراک نیست") else f.best?.let { "$it ms" } ?: trf("%d سرور", f.servers.size),
+                size = 10.sp, color = f.best?.let { pingColor(it) } ?: K.Sub, font = if (f.best != null) Poppins else Vazir, weight = FontWeight.SemiBold, ltr = f.best != null,
+                maxLines = 1)
+        }
+        if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(c))
     }
 }
 
@@ -647,6 +642,10 @@ fun GameSheet(
     busy: Boolean,
     kmixDup: Boolean,
     onKmixDup: (Boolean) -> Unit,
+    gameOnly: Boolean,
+    gameCount: Int,
+    onGameOnly: (Boolean) -> Unit,
+    onPickGames: () -> Unit,
     onFamilyShown: (String) -> Unit,
     onConnect: (node: String, proto: String) -> Unit,
     onFastest: (family: String) -> Unit,
@@ -661,15 +660,28 @@ fun GameSheet(
     val c = familyColor(fam)
     ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
         SheetLabel("پروتکل")
-        // the cards scroll sideways: every protocol keeps its whole name
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).guideTarget("game_fams"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            families.forEach { x ->
-                FamilyCard(x, x.key == fam, Modifier.width(100.dp)) { fam = x.key }
+        // دو کارت در هر ردیف: هیچ پروتکلی نصفه یا بیرون از صفحه نیست
+        Column(Modifier.fillMaxWidth().guideTarget("game_fams"), verticalArrangement = Arrangement.spacedBy(D.S2)) {
+            families.chunked(2).forEach { two ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                    two.forEach { x -> FamilyCard(x, x.key == fam, Modifier.weight(1f)) { fam = x.key } }
+                    if (two.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
         T(f?.sub ?: "", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = D.S2, start = D.S1))
         if (fam == "kankimix" && f?.servers?.isNotEmpty() == true) {
             SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
+        }
+        // فایروال «فقط بازی»: فقط پروتکل‌های مخصوص بازی (KANKI MIX و microtun)، اندروید ۱۰ به بالا
+        if ((fam == "kankimix" || fam == "mtun") && f?.servers?.isNotEmpty() == true) {
+            val ok = AppGate.supported
+            Box(Modifier.guideTarget("game_only")) { SwitchRow(
+                "فقط بازی اینترنت داشته باشد",
+                if (!ok) "روی اندروید ۱۰ به بالا" else trf("%d بازی · سرویس‌های گوگل و DNS هم باز می‌مانند؛ بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند", gameCount),
+                gameOnly && ok, c, enabled = ok, onChange = onGameOnly,
+            ) }
+            if (gameOnly && ok) SmallLine("انتخاب بازی‌ها", onClick = onPickGames)
         }
         SheetLabel(trf("سرورهای %s", f?.title ?: ""))
         if (f == null || f.servers.isEmpty()) {
@@ -710,7 +722,7 @@ fun FilterSheet(
 ) {
     val mc = modeColor(KMode.FILTER)
     LaunchedEffect(visible) { if (visible) onShown() }
-    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای فیلتر شدید", onClose) {
+    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای محدودیت شدید شبکه", onClose) {
         SheetLabel("پروتکل‌ها")
         Row(Modifier.fillMaxWidth().guideTarget("filter_list"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }

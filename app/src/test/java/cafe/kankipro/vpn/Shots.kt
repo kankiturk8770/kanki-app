@@ -188,7 +188,7 @@ abstract class ShotsBase {
     }
     protected fun pgSpeed(): @Composable () -> Unit = {
         Frame(KTab.TEST) {
-            SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
+            SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, loss = 0, udpTarget = "Cloudflare DNS", server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
         }
     }
     protected fun pgSettings(): @Composable () -> Unit = {
@@ -217,14 +217,14 @@ abstract class ShotsBase {
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
             initFamily = "kankimix", current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
-            onKmixDup = {}, onFamilyShown = {},
+            onKmixDup = {}, gameOnly = true, gameCount = 2, onGameOnly = {}, onPickGames = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }
     /** یک قدم آموزش ربات روی صفحه‌ی خودش (قدم با guideShot تنظیم می‌شود) */
     protected fun pgGuide(page: @Composable () -> Unit): @Composable () -> Unit = {
         page()
-        GuideOverlay(voiceOn = true, onVoice = {}) {}
+        GuideOverlay {}
     }
     protected fun guideShot(name: String, theme: String, step: Int, page: @Composable () -> Unit) {
         Guide.targets.clear()
@@ -450,9 +450,11 @@ class Shots : ShotsBase() {
 
     // ------------------------------------------------------------------ ربات راهنما: پنل گیمینگ، کارت کشور، دکمه‌ی اتصال
     @Test fun r01() = guideShot("gold-12-guide-game", "gold", 4, pgGame())
-    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 10, pgServers())
-    @Test fun r05() = guideShot("gold-15-guide-ping", "gold", 6, pgGame())
+    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 11, pgServers())
+    @Test fun r05() = guideShot("gold-15-guide-ping", "gold", 7, pgGame())
     @Test fun r03() = guideShot("crimson-12-guide-connect", "crimson", 1, pgHomeOff())
+    @Test fun r06() = guideShot("yellow-12-guide-modes", "yellow", 3, pgHomeOff())
+    @Test fun r07() = guideShot("yellow-13-guide-game-only", "yellow", 5, pgGame())
     @Test fun r04() {
         Guide.asking = true
         try { shot("gold-14-guide-ask", "gold", pgGuide(pgHomeOff())) } finally { Guide.asking = false }

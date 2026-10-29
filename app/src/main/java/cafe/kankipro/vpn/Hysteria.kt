@@ -305,6 +305,15 @@ class KankiHyService : VpnService() {
     private fun blockOthers(lines: List<String>): Boolean =
         lines.any { it.startsWith("BlockOthers", ignoreCase = true) && it.substringAfter("=", "").trim() == "1" }
 
+    /** «فقط بازی» گیمینگ (KANKI MIX و microtun): برنامه‌هایی که اینترنت دارند؛ null یعنی این حالت خاموش است یا اندروید ۹ و قدیمی‌تر */
+    private fun gameOnly(lines: List<String>): List<String>? =
+        (lines.firstOrNull { it.startsWith("GameOnly", ignoreCase = true) && it.contains("=") }?.substringAfter("=") ?: "")
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() && AppGate.supported }
+
+    /** دروازه‌ی «فقط بازی» روی کارت شبکه‌ی fd: بقیه‌ی برنامه‌ها بسته، با جواب فوری «اینترنت نیست» */
+    private fun gameGate(fd: ParcelFileDescriptor, apps: List<String>): AppGate =
+        AppGate(this, fd, AppGate.uidsOf(this, apps) + android.os.Process.myUid(), reject = true)
+
     /** برنامه‌هایی که فقط آن‌ها از VPN رد می‌شوند (حالت «فقط بازی‌ها»)؛ خالی = همه */
     private fun included(lines: List<String>): List<String> =
         (lines.firstOrNull { it.startsWith("IncludedApplications", ignoreCase = true) && it.contains("=") }?.substringAfter("=") ?: "")
@@ -515,6 +524,7 @@ class KankiHyService : VpnService() {
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val included = included(lines)
+        val games = gameOnly(lines)
         val bin = File(applicationInfo.nativeLibraryDir, "libmtun.so")
         if (!bin.exists()) error("microtun: core is missing in this build")
 
@@ -569,9 +579,9 @@ class KankiHyService : VpnService() {
         if (first.isNullOrEmpty()) error("microtun: " + (lastLog().ifBlank { "the server did not answer" }))
         val fd = synchronized(this) {
             if (cancelled(my)) error("microtun: cancelled")
-            mtunTun(first, ip, mtu, dns, excluded, included).also { tun = it }
+            mtunTun(first, ip, mtu, dns, excluded, included, games != null).also { tun = it }
         }
-        sendTun(sock, fd, my)
+        sendTun(sock, gated(fd, games, my), my)
         synchronized(this) {
             if (cancelled(my)) error("microtun: cancelled")
             HyEngine.mtun = true
@@ -583,21 +593,35 @@ class KankiHyService : VpnService() {
                 val a = addrQ.poll(1, java.util.concurrent.TimeUnit.SECONDS) ?: continue
                 if (a.isEmpty()) break
                 var old: ParcelFileDescriptor? = null
+                val oldGate = gate
                 val nfd = synchronized(this) {
-                    if (cancelled(my)) null else runCatching { mtunTun(a, ip, mtu, dns, excluded, included) }.getOrNull()?.also { old = tun; tun = it }
+                    if (cancelled(my)) null else runCatching { mtunTun(a, ip, mtu, dns, excluded, included, games != null) }.getOrNull()?.also { old = tun; tun = it }
                 } ?: continue
-                runCatching { sendTun(sock, nfd, my) }
+                runCatching { sendTun(sock, gated(nfd, games, my), my) }
+                if (games != null) runCatching { oldGate?.stop() }
                 runCatching { old?.close() }
             }
         }, "kanki-mtun-addr").start()
     }
 
-    /** کارت VPN microtun با آدرسی که سرور داده («‎10.79.0.5/16 fd79:…/64» یا «… -») */
-    private fun mtunTun(addr: String, ip: InetAddress, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>): ParcelFileDescriptor {
+    /** «فقط بازی»: دروازه‌ی تازه روی کارت fd و سر دیگرش برای هسته؛ وگرنه خود کارت */
+    private fun gated(fd: ParcelFileDescriptor, games: List<String>?, my: Int): ParcelFileDescriptor {
+        if (games == null) return fd
+        return synchronized(this) {
+            if (cancelled(my)) error("microtun: cancelled")
+            gameGate(fd, games).also { gate = it; it.start() }.inner
+        }
+    }
+
+    /**
+     * کارت VPN microtun با آدرسی که سرور داده («‎10.79.0.5/16 fd79:…/64» یا «… -»).
+     * gateMode («فقط بازی»): همه‌ی برنامه‌ها داخل VPN و بدون IPv6 (دروازه فقط IPv4 را می‌شناسد؛ برنامه‌ها فوری به IPv4 برمی‌گردند).
+     */
+    private fun mtunTun(addr: String, ip: InetAddress, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, gateMode: Boolean = false): ParcelFileDescriptor {
         val parts = addr.split(" ")
         val v4 = parts[0].substringBefore("/")
         val bits = parts[0].substringAfter("/", "32").toIntOrNull() ?: 32
-        val v6 = parts.getOrNull(1)?.takeIf { it != "-" && it.contains(":") }
+        val v6 = parts.getOrNull(1)?.takeIf { !gateMode && it != "-" && it.contains(":") }
         val b = Builder()
             .setSession("Kanki · microtun")
             .setMtu(mtu)
@@ -613,8 +637,10 @@ class KankiHyService : VpnService() {
             runCatching { b.addRoute("::", 0) }
         }
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
-        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
-        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        if (!gateMode) {
+            if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+            else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
         return b.establish() ?: error("VPN permission is missing")
     }
@@ -683,6 +709,7 @@ class KankiHyService : VpnService() {
         val excluded = (v("ExcludedApplications") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val included = included(lines)
         val gaming = v("Gaming")?.let { it == "1" } ?: u.gaming
+        val games = gameOnly(lines)
 
         val addrs = InetAddress.getAllByName(u.host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
@@ -696,8 +723,11 @@ class KankiHyService : VpnService() {
         else b.addRoute("0.0.0.0", 0)
         if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
-        if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
-        else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        // «فقط بازی»: همه‌ی برنامه‌ها (حتی مستثنی‌ها) داخل VPN می‌مانند تا دروازه بقیه را ببندد
+        if (games == null) {
+            if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
+            else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
 
         val bin = KmixCore.binary(this)
@@ -707,8 +737,13 @@ class KankiHyService : VpnService() {
             killStaleCores()
             (b.establish() ?: error("VPN permission is missing")).also { tun = it }
         }
+        // «فقط بازی»: هسته به‌جای کارت شبکه سر دیگر دروازه را می‌گیرد
+        val coreFd = if (games != null) synchronized(this) {
+            if (cancelled(my)) error("kanki mix: cancelled")
+            gameGate(fd, games).also { gate = it; it.start() }.inner
+        } else fd
         // تا ~۲۲ ثانیه: هسته بالا می‌آید و سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
-        KmixCore.start(bin, fd, server, u.key, u.fecData, u.fecParity, gaming) { why ->
+        KmixCore.start(bin, coreFd, server, u.key, u.fecData, u.fecParity, gaming) { why ->
             // هسته بعد از اتصال خودش از بین رفت (مثلاً اندروید پروسه‌اش را کشت): تونل بسته و وضعیت گزارش می‌شود
             if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
                 HyEngine.crashed = true

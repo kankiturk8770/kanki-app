@@ -72,74 +72,75 @@ class ServersActions(
     val mtu: (String) -> String = { "" },
     val setMtu: (String, String) -> Unit = { _, _ -> },
     val closeTip: () -> Unit = {},
-    val filterAuto: (Boolean) -> Unit = {},
-    val filterXray: (Boolean) -> Unit = {},
 )
-
-/** گزینه‌های ضد فیلتر (فقط وقتی حالت ضد فیلتر انتخاب است در تب سرورها دیده می‌شود) */
-data class FilterOptsUi(val auto: Boolean, val xrayFirst: Boolean)
-
-@Composable
-private fun FilterOptsCard(u: FilterOptsUi, act: ServersActions) {
-    val mc = modeColor(KMode.FILTER)
-    val shape = RoundedCornerShape(D.RL)
-    Column(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(mc.copy(alpha = .10f), mc.copy(alpha = .03f))))
-            .border(1.dp, mc.copy(alpha = .45f), shape)
-            .padding(D.CardPad),
-    ) {
-        T("ضد فیلتر", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black)
-        Spacer(Modifier.height(D.S1))
-        FilterCheck("خودکار", "بهترین راه را خودش پیدا و وصل می‌کند؛ با لمس یک کانفیگ، همان دستی انتخاب می‌شود", u.auto, mc) { act.filterAuto(!u.auto) }
-        FilterCheck("اولویت Xray", if (u.xrayFirst) "فقط اینباندهای Xray امتحان می‌شوند" else "Xray، AmneziaWG مستقیم و تانل، همه با هم به ترتیب پینگ", u.xrayFirst, mc) { act.filterXray(!u.xrayFirst) }
-    }
-}
-
-@Composable
-private fun FilterCheck(title: String, sub: String, on: Boolean, c: Color, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(D.RS)).clickable(onClick = onClick).padding(vertical = D.S1),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CheckMark(on, D.Icon, c)
-        Spacer(Modifier.width(D.S3))
-        Column(Modifier.weight(1f)) {
-            T(title, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
-            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
-        }
-    }
-}
 
 /** توضیح کوتاه هر پروتکل */
 fun protoDesc(p: String) = when (p) {
     "kankimix" -> "مخصوص بازی · پینگ کم، ضد لگ"
     "mtun" -> "مخصوص بازی · بسته‌های کوچک دوتایی، کم‌حجم"
-    "amneziawg" -> "عبور از فیلتر"
+    "amneziawg" -> "پایدار روی شبکه‌ی محدود"
     "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
     "wireguard" -> "سریع · مناسب گیم"
     "hysteria2" -> "پرسرعت · مناسب اینترنت ضعیف"
-    "xray" -> "فیلتر شدید · سخت برای مسدود شدن"
+    "xray" -> "محدودیت شدید شبکه · سخت برای مسدود شدن"
     "openvpn/tcp" -> "پایدار"
     else -> "سازگاری بالا"
 }
 
 @Composable
-fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions, filter: FilterOptsUi? = null) {
+fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad),
         verticalArrangement = Arrangement.spacedBy(D.CardGap),
     ) {
-        Heading("سرورها", "یک کلیک تا کانفیگ", Modifier.padding(top = D.S1, bottom = D.S1))
+        ServersHero(cards.size, cards.sumOf { c -> c.lines.count { it.tunnel != null } + c.lines.count { it.direct != null } }, Modifier.padding(top = D.S1))
         tip?.let { RobotBanner(it, onClose = act.closeTip) }
-        filter?.let { FilterOptsCard(it, act) }
         PingAllCard(ping, act.pingAll, Modifier.guideTarget("ping_all"))
         if (cards.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
         }
-        cards.forEachIndexed { i, c -> CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) }
+        // کلید هر کارت اسم کشور است: وقتی ترتیب با پینگ تازه عوض می‌شود یا کارتی بسته می‌شود،
+        // کانفیگ‌های باز یک کشور هیچ‌وقت زیر کارت کشور دیگری نمی‌مانند
+        cards.forEachIndexed { i, c -> key(c.id) { CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) } }
         Spacer(Modifier.height(D.S2))
     }
+}
+
+/** سربرگ صفحه‌ی سرورها: لوگوی کانکی، عنوان، یک خط و شمار کشورها و کانفیگ‌ها */
+@Composable
+private fun ServersHero(countries: Int, configs: Int, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(D.RL)
+    Row(
+        modifier.fillMaxWidth().clip(shape)
+            .background(Brush.linearGradient(listOf(K.Gold.copy(alpha = .20f), K.Gold.copy(alpha = .04f), K.Accent.copy(alpha = .08f))))
+            .border(1.dp, Brush.linearGradient(listOf(K.Gold.copy(alpha = .7f), K.Gold.copy(alpha = .12f), K.Accent.copy(alpha = .45f))), shape)
+            .padding(D.CardPad),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(R.drawable.kanki_logo), contentDescription = null,
+            modifier = Modifier.size(60.dp).clip(CircleShape).border(1.5.dp, K.Gold.copy(alpha = .6f), CircleShape),
+        )
+        Spacer(Modifier.width(D.S3))
+        Column(Modifier.weight(1f)) {
+            T("سرورهای کانکی", size = D.TxtPage, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T("پرسرعت، امن و همیشه آماده؛ با یک لمس وصل شو", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+            Spacer(Modifier.height(D.S1))
+            Row(horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                HeroChip(trf("%d کشور", countries))
+                HeroChip(trf("%d کانفیگ", configs))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroChip(text: String) {
+    val sh = RoundedCornerShape(D.RT)
+    T(
+        text, size = 11.sp, color = K.GoldLight, weight = FontWeight.Bold, maxLines = 1,
+        modifier = Modifier.clip(sh).background(K.Gold.copy(alpha = .12f)).border(1.dp, K.Gold.copy(alpha = .3f), sh).padding(horizontal = D.S2, vertical = 2.dp),
+    )
 }
 
 /** کارت «تست پینگ همه»: همه‌ی کانفیگ‌ها (UDP با پینگ ICMP، TCP با زمان اتصال) با هم سنجیده می‌شوند */
@@ -216,12 +217,12 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifie
                     }
                 }
                 var lastPlace: String? = null
-                c.lines.forEach { l ->
+                c.lines.forEachIndexed { i, l ->
                     if (l.place != null && l.place != lastPlace) {
                         T(l.place, size = 11.sp, color = K.GoldLight, weight = FontWeight.Bold, modifier = Modifier.padding(top = D.S1, bottom = D.S1, start = D.S1))
                         lastPlace = l.place
                     }
-                    CfgLine(l, act)
+                    key(l.tunnel?.let { it.node + "|" + it.proto } ?: "", l.direct?.let { it.node + "|" + it.proto } ?: "", i) { CfgLine(l, act) }
                 }
             }
         }
@@ -272,40 +273,68 @@ private fun CfgLine(l: CfgLineUi, act: ServersActions) {
     }
 }
 
-/** یک خانه: اسم پروتکل و پینگ؛ لمس = انتخاب و اتصال؛ خالی وقتی این سرور این راه را ندارد */
+/**
+ * یک خانه: نوار رنگ پروتکل، اسم، نشانگر سیگنال (سه میله از روی پینگ) و پینگ (میلی‌ثانیه)؛ انتخاب‌شده با زمینه و لبه‌ی طلایی.
+ * لمس = انتخاب و اتصال؛ نگه‌داشتن = جزئیات. خالی وقتی این سرور این راه را ندارد.
+ */
 @Composable
 private fun CfgCell(r: CfgRowUi?, modifier: Modifier, act: ServersActions, onLong: (CfgRowUi) -> Unit) {
-    val shape = RoundedCornerShape(D.RT)
+    val shape = RoundedCornerShape(D.RS)
     val pick by rememberUpdatedState(act.pick)
     val long by rememberUpdatedState(onLong)
+    val sel = r?.selected == true
     Row(
-        modifier.height(D.RowS).clip(shape)
-            .background(if (r?.selected == true) K.Gold.copy(alpha = .12f) else if (r != null) Color(0x0AFFFFFF) else Color.Transparent)
-            .border(if (r?.selected == true) 1.3.dp else 1.dp, if (r?.selected == true) K.Gold else K.Gold.copy(alpha = if (r != null) .16f else .06f), shape)
+        modifier.height(44.dp).clip(shape)
+            .background(
+                if (sel) Brush.horizontalGradient(listOf(K.Gold.copy(alpha = .26f), K.Gold.copy(alpha = .07f)))
+                else Brush.horizontalGradient(listOf(Color(0x12FFFFFF), Color(0x05FFFFFF))),
+            )
+            .border(if (sel) 1.4.dp else 1.dp, if (sel) K.Gold else K.Gold.copy(alpha = if (r != null) .14f else .05f), shape)
             .then(
                 if (r == null) Modifier
                 else Modifier.pointerInput(r.node, r.proto) { detectTapGestures(onTap = { pick(r.node, r.proto) }, onLongPress = { long(r) }) },
             )
-            .padding(horizontal = D.S2),
+            .padding(start = D.S2, end = D.S2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (r == null) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("—", size = 12.sp, color = K.Sub.copy(alpha = .5f), ltr = true) }
             return@Row
         }
-        if (r.selected) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(K.Gold))
-            Spacer(Modifier.width(D.S1))
-        }
+        Box(Modifier.size(width = 3.dp, height = 20.dp).clip(CircleShape).background(protoColor(r.proto)))
+        Spacer(Modifier.width(D.S2))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            AutoText(r.title, size = 11.5.sp, color = if (r.selected) K.GoldLight else K.Text, weight = FontWeight.SemiBold)
+            AutoText(r.title, size = 12.sp, color = if (sel) K.GoldLight else K.Text, weight = FontWeight.Bold)
         }
         Spacer(Modifier.width(D.S1))
         if (r.busy) Spinner(12.dp)
-        else T(
-            when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping} ms" },
-            size = 10.5.sp, color = r.ping?.let { pingColor(it) } ?: K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1,
-        )
+        else {
+            val col = r.ping?.let { pingColor(it) } ?: K.Sub
+            SignalBars(r.ping, col)
+            Spacer(Modifier.width(D.S1))
+            T(
+                when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping}" },
+                size = 12.sp, color = col, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1,
+            )
+        }
+    }
+}
+
+/** سه میله‌ی سیگنال از روی پینگ: زیر ۸۰ سه، زیر ۱۶۰ دو، بیشتر یک، ناموفق یا نامعلوم هیچ */
+@Composable
+private fun SignalBars(ping: Long?, c: Color) {
+    val n = when { ping == null || ping < 0 -> 0; ping < 80 -> 3; ping < 160 -> 2; else -> 1 }
+    Canvas(Modifier.size(width = 12.dp, height = 11.dp)) {
+        val bw = size.width / 4.2f
+        for (i in 0 until 3) {
+            val h = size.height * (.4f + .3f * i)
+            val x = i * bw * 1.6f
+            drawRoundRect(
+                if (i < n) c else c.copy(alpha = .22f),
+                topLeft = Offset(x, size.height - h), size = androidx.compose.ui.geometry.Size(bw, h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(bw / 2),
+            )
+        }
     }
 }
 

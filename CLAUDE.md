@@ -19,10 +19,12 @@
 | پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
 | چت اضطراری | `Emergency.kt`، `EmergencyUi.kt`، `EmergencyNotify.kt` |
 | DNS کانکی (رفع تحریم) | `DnsMode.kt` |
+| دروازه‌ی برنامه‌ها: «فقط بازی» گیمینگ (KMIX/microtun)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt` |
+| سقف فریم انیمیشن‌ها (گوشی ضعیف ۳۰، بقیه ۶۰) | `Motion` و `motionTime()` در `Kit.kt` |
 | ترجمه (فارسی → انگلیسی) | `I18n.kt` |
 | اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
 | نقشه | `MapView.kt`، `WorldMap.kt` |
-| ربات راهنما و صدایش | `Guide.kt`، `GuideVoice.kt` |
+| ربات راهنما (فقط متن) | `Guide.kt` (`guideSteps`، `GuideOverlay`، `robotAlertFor`) |
 | تست سرعت | `Speed.kt`، `SpeedUi.kt` |
 
 ## هسته‌های Go
@@ -45,3 +47,39 @@
 
 ## زبان
 صاحب پروژه فارسی‌زبان است و دارد برنامه‌نویسی یاد می‌گیرد: جواب‌ها فارسی، کوتاه و ساده.
+
+## طراحی
+اسکیل `frontend-design` (رسمی Anthropic) در `.claude/skills/frontend-design/`؛ برای هر کار UI اول آن را بخوان.
+عکس صفحه‌ها بعد از push در شاخه‌ی `shots` (کار `shots.yml`).
+
+## گزارش کارها
+
+### 2026-10-29 — نسخه‌ی ۱.۲۲.۰
+خواسته‌ی صاحب اپ: انیمیشن‌های بی‌لگ، تم زرد، گیمینگ استاندارد، صفحه‌ی سرورها (بدون تیک‌های اضافه، سربرگ با لوگو، باگ
+بیرون ماندن کانفیگ‌ها، کارت‌های مدرن)، تست سرعت UDP، هوشمند بدون KMIX/microtun با رفتن به تانل، فایروال «فقط بازی».
+
+انجام شد (جزئیات در `CHANGES.md`):
+1. تم زرد پیش‌فرض (`Ui.kt`، مهاجرت یک‌باره `theme122` در `AppState`).
+2. انیمیشن‌ها: `Motion`/`motionTime` (Kit.kt)، دکمه‌ی اتصال با `drawWithCache`، نقشه هنگام بزرگ‌نمایی عکس آماده را بزرگ می‌کند (`WorldMap.kt`).
+3. گیمینگ: کارت‌های پروتکل دوتا در ردیف (`ModesUi.kt` `FamilyCard`).
+4. سرورها: `ServersHero` با لوگوی `res/drawable-nodpi/kanki_logo.webp`، `CfgCell` و `SignalBars` تازه، `key()` برای کارت‌ها و ردیف‌ها.
+5. تست سرعت: `UdpSeries` (Speed.kt)، `Probe.kmixSeries`، `udpLatency()` در AppState.
+6. هوشمند: `GAME_ONLY` و ترتیب تازه در `runSmart`.
+7. فایروال: `AppGate` (reject: RST/ICMP فقط برای صاحب معلوم، کش منفی ۲۵۰ms، اولویت رشته‌ها)، `gameOnly`/`gameApps` در AppState، `GameAppsPanel`، سوییچ در `GameSheet`.
+8. ربات راهنما: صدا و فایل‌هایش حذف (`GuideVoice.kt`، `res/raw/guide_*.mp3`)، متن‌ها از نو، حباب تازه (`GuideBubble`، `GuideBody`، `GuidePoint`)، قدم «فقط بازی» (`guideTarget("game_only")`).
+10. صفحه‌ی ورود: نمونه‌ی کد `kanki-…` جایش ۱۰ خط تیره (`Screens.kt`، `EmergencyUi.kt`). پاک‌سازی ۱۹ تابع بی‌استفاده.
+12. اشتراک: `loadAccount` جواب بی‌کانفیگ را جای نسخه‌ی سالم ذخیره نمی‌کند؛ `loadInfos` و `startupLoad` با کانفیگ خراب کرش
+    نمی‌کنند؛ `syncLock` (بروزرسانی دستی و ۳ ساعته هم‌زمان نه)؛ `pruneOld` بعد از هر بروزرسانی سالم و ورود.
+13. چت اضطراری بازطراحی (`EmergencyUi.kt` `EmergencyScreen`، `Bubble`)؛ استیکر کوچک (`Stickers.SIZE` = 320، نمایش ۱۱۲dp).
+14. چت اضطراری: نشان تازه (`EmergencyIcon`)، صدای پیام (`chat_in`/`chat_out`)، بررسی سریع ۹۰ ثانیه‌ای (`EmergencyStore.watch`/`poll`)؛ متن‌های بی‌طرف به‌جای «فیلترینگ / اینترنت ملی».
+11. بازبینی موتورها (WireGuard/AmneziaWG با GoBackend، Hysteria2/Xray با tun2socks، KANKI MIX، microtun، DNS): فقط یک VPN
+    هم‌زمان بالاست (`VpnEngine.up` اول موتور دیگر را پایین می‌آورد)، آی‌پی سرور از مسیرهای تونل بیرون است، IPv6 بدون
+    آدرس در تونل بسته است (نه نشت، نه معطلی)، اتصال فقط با جواب واقعی از داخل تونل «متصل» می‌شود (`awaitHandshake`)،
+    عوض شدن شبکه سلامت تونل را می‌سنجد و لازم شد دوباره وصل می‌کند (`watchNetwork`، `revive`). ایراد تازه‌ای پیدا نشد.
+9. بازبینی دوباره‌ی اتصال‌ها: یک ایراد پیدا شد و درست شد (جواب RST/ICMP به اتصالی که صاحبش لحظه‌ای معلوم نشده بود می‌توانست بازی را قطع کند).
+
+تست: محیط ابری Android SDK ندارد؛ ساخت و عکس‌ها در CI (`build.yml`، `shots.yml`).
+تصمیم‌ها: تست پهنای باند روی UDP بدون سرور UDP مخصوص ممکن نیست؛ دانلود/آپلود همان Speedtest است که وقتی وصلی از تونل UDP
+می‌رود. فایروال فقط با دروازه‌ی داخل برنامه شدنی است (اندروید اجازه‌ی بستن بقیه را جور دیگری نمی‌دهد)؛ کار هر بسته فقط یک
+جست‌وجوی جدول است.
+مانده: تست فایروال روی گوشی واقعی با پابجی (ورود، پینگ، مسابقه).

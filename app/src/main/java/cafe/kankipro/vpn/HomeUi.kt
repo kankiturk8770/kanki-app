@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.takeOrElse
@@ -390,6 +391,8 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
         var last = 0L
         while (true) {
             withFrameNanos { now ->
+                // فقط سر فاصله‌ی Motion.frameNs جلو می‌رود (گوشی ضعیف ۳۰ فریم، بقیه ۶۰)
+                if (last != 0L && now - last < Motion.frameNs) return@withFrameNanos
                 if (last != 0L) {
                     val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
                     spin += dt * speed
@@ -421,7 +424,20 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.requiredSize(OrbBase + halo).graphicsLayer { scaleX = scale; scaleY = scale }, contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
+            // شکل پرتوها یک بار برای هر اندازه ساخته می‌شود، نه در هر فریم (کمتر کار برای حافظه و رشته‌ی اصلی)
+            Spacer(Modifier.fillMaxSize().drawWithCache {
+                val c0 = Offset(size.width / 2, size.height / 2)
+                val r0 = OrbBase.toPx() / 2
+                fun rayPath(len: Float) = Path().apply {
+                    moveTo(c0.x - 1.5.dp.toPx(), c0.y)
+                    lineTo(c0.x - r0 * .13f, c0.y - len)
+                    lineTo(c0.x + r0 * .13f, c0.y - len)
+                    lineTo(c0.x + 1.5.dp.toPx(), c0.y)
+                    close()
+                }
+                val rayShort = rayPath(r0 * 1.5f)
+                val rayLong = rayPath(r0 * 1.78f)
+                onDrawBehind {
                 val c = center
                 val r = OrbBase.toPx() / 2
                 val gold = K.Gold
@@ -436,19 +452,14 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 val pump = 1f + .7f * env * amp * gOn
 
                 // ---- پرتوهای نور که آرام می‌چرخند
+                val rayA = ((.10f + .08f * lit) * (.7f + .3f * breathe) * pump).coerceIn(0f, 1f)
+                fun rayBrush(len: Float) = Brush.verticalGradient(0f to rayC.copy(alpha = 0f), .45f to rayC, 1f to rayC.copy(alpha = 0f), startY = c.y - len, endY = c.y)
+                val brushShort = rayBrush(r * 1.5f)
+                val brushLong = rayBrush(r * 1.78f)
                 rotate(deg * .12f, c) {
                     for (i in 0 until 16) {
                         rotate(i * 22.5f, c) {
-                            val len = r * (if (i % 2 == 1) 1.5f else 1.78f)
-                            val ray = Path().apply {
-                                moveTo(c.x - 1.5.dp.toPx(), c.y)
-                                lineTo(c.x - r * .13f, c.y - len)
-                                lineTo(c.x + r * .13f, c.y - len)
-                                lineTo(c.x + 1.5.dp.toPx(), c.y)
-                                close()
-                            }
-                            val a = (.10f + .08f * lit) * (.7f + .3f * breathe) * pump
-                            drawPath(ray, Brush.verticalGradient(0f to rayC.copy(alpha = 0f), .45f to rayC.copy(alpha = a), 1f to rayC.copy(alpha = 0f), startY = c.y - len, endY = c.y))
+                            if (i % 2 == 1) drawPath(rayShort, brushShort, alpha = rayA) else drawPath(rayLong, brushLong, alpha = rayA)
                         }
                     }
                 }
@@ -555,7 +566,8 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 }
                 if (gOn > .01f) heartbeat(env * (.6f + .5f * amp), gOn, c, r)
                 if (game && blast.value < 1f) connectBlast(blast.value, c, r)
-            }
+                }
+            })
             // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
             Column(Modifier.width(OrbBase * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Logo3D(30.dp, animate = on)
@@ -885,23 +897,6 @@ private fun ConnectedCard(s: ServerChipUi, c: Color, modifier: Modifier = Modifi
     }
 }
 
-/** نوار کوچک «رمزنگاری شده | اتصال پایدار و بدون قطعی» وقتی وصل است */
-@Composable
-private fun SecureStrip(c: Color, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier.fillMaxWidth().goldGlass(shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-    ) {
-        Dot(K.Green, 7.dp)
-        Spacer(Modifier.width(6.dp))
-        T("رمزنگاری شده", size = 11.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
-        Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(14.dp).background(c.copy(alpha = .35f)))
-        T("اتصال پایدار و بدون قطعی", size = 11.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
 /** یک کارت شیشه‌ای با سه خانه‌ی هم‌اندازه: پینگ (با نمودار زنده)، دانلود، آپلود */
 @Composable
 private fun StatsRow(ui: HomeUi) {
@@ -996,6 +991,8 @@ private fun PingPulse(values: List<Long>, ping: Long?, modifier: Modifier) {
         var last = 0L
         while (true) {
             withFrameNanos { now ->
+                // فقط سر فاصله‌ی Motion.frameNs جلو می‌رود (گوشی ضعیف ۳۰ فریم، بقیه ۶۰)
+                if (last != 0L && now - last < Motion.frameNs) return@withFrameNanos
                 if (last != 0L) {
                     val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
                     time += dt
@@ -1151,14 +1148,3 @@ fun CheckMark(on: Boolean, size: Dp = 22.dp, color: Color = K.Green) {
     }
 }
 
-/** یک خط توضیح زیر انتخاب پروتکل: تانل است یا مستقیم، و کِی به درد می‌خورد */
-fun protoHint(p: String) = when (p) {
-    "kankimix" -> "پروتکل کانکی · بسته‌های بازی بدون صف و دوتایی، کمترین لگ"
-    "mtun" -> "microtun · مخصوص بازی، بسته‌های کوچک دوتایی، حجم اضافه نمی‌خورد"
-    "amneziawg" -> "تانل · از سرور ایران رد می‌شود و فیلتر را دور می‌زند"
-    "amneziawg-direct" -> "مستقیم · بدون تانل؛ وقتی تانل‌ها وصل نمی‌شوند همین را بزنید"
-    "wireguard" -> "تانل · سریع و مناسب گیم"
-    "hysteria2" -> "تانل · پرسرعت روی اینترنت ضعیف"
-    "xray" -> "Xray · برای فیلتر شدید، سخت‌ترین برای مسدود شدن"
-    else -> protoDesc(p)
-}

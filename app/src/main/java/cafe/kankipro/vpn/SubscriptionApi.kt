@@ -184,19 +184,6 @@ object SubscriptionApi {
         }
     }
 
-    /** دریافت فایل به‌صورت خام (برای گواهی‌ها) */
-    fun fetchBytes(url: String): ByteArray {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 15000
-        c.readTimeout = 20000
-        try {
-            if (c.responseCode != 200) throw IOException("HTTP ${c.responseCode}")
-            return c.inputStream.use { it.readBytes() }
-        } finally {
-            c.disconnect()
-        }
-    }
-
     fun load(base: String, code: String): Account = parse(fetch("$base/sub/$code"), base)
 
     private fun decode(s: String) = s

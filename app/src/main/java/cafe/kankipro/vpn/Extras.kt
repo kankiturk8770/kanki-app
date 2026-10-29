@@ -170,3 +170,26 @@ object AppsRepo {
         return list
     }
 }
+
+/** بازی‌های نصب‌شده‌ی گوشی: دسته‌ی «بازی» خود اندروید، یا بازی‌های آنلاین معروف که این دسته را نگذاشته‌اند */
+object GameApps {
+    private val KNOWN = setOf(
+        "com.tencent.ig", "com.pubg.imobile", "com.pubg.krmobile", "com.vng.pubgmobile", "com.rekoo.pubgm", "com.pubg.newstate",
+        "com.activision.callofduty.shooter", "com.garena.game.codm", "com.dts.freefireth", "com.dts.freefiremax",
+        "com.supercell.clashofclans", "com.supercell.clashroyale", "com.supercell.brawlstars", "com.mobile.legends",
+        "com.miHoYo.GenshinImpact", "com.riotgames.league.wildrift", "com.ea.gp.fifamobile", "com.netease.newspike",
+    )
+
+    @Suppress("DEPRECATION")
+    private fun isGameFlag(ai: android.content.pm.ApplicationInfo) = ai.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME != 0
+
+    fun detect(ctx: Context): List<String> = runCatching {
+        val pm = ctx.packageManager
+        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        pm.queryIntentActivities(main, 0).map { it.activityInfo.applicationInfo }.distinctBy { it.packageName }
+            .filter { ai ->
+                ai.packageName in KNOWN || ai.category == android.content.pm.ApplicationInfo.CATEGORY_GAME || isGameFlag(ai)
+            }
+            .map { it.packageName }
+    }.getOrDefault(emptyList())
+}

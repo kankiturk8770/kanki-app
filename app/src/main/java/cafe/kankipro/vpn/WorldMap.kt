@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
 import kotlin.math.min
@@ -116,15 +117,15 @@ fun WorldMap(
     val sel = if (dns) null else pins.firstOrNull { it.selected }
     val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
     val draw by animateFloatAsState(if (connected) 1f else 0f, tween(if (connected) 1400 else 150, delayMillis = if (connected) 700 else 0), label = "d")
-    val t = rememberInfiniteTransition(label = "map")
-    val flow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "f")
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "p")
+    val clock by motionTime()
 
     // لایه‌ی ثابت (پس‌زمینه‌ی تیره، کشورها و نور شهرها) یک بار در یک عکس کشیده می‌شود و فقط وقتی نما یا رنگ‌ها
     // عوض شوند دوباره ساخته می‌شود؛ هر فریم فقط سنجاق‌ها و کمان متحرک کشیده می‌شوند (وگرنه ده‌ها هزار نقطه
     // و مرز کشورها ۶۰ بار در ثانیه کشیده می‌شد و صفحه کند می‌شد)
     val cache = remember { MapCache() }
     androidx.compose.foundation.layout.Spacer(modifier.drawBehind {
+        val flow = clock / 1.8f % 1f
+        val pulse = clock / 2f % 1f
         val w = size.width
         val h = size.height
         val aspect = (w / h).toDouble()
@@ -139,10 +140,16 @@ fun WorldMap(
 
         val selIso = sel?.iso
         val selColor = if (connected) K.Gold else accent
-        val border = 1f / sx
         // کشور شما: رنگ userCountry تم؛ با DNS وصل، رنگ DNS
         val youColor = if (dns && connected) accent else K.UserCountry
-        val key = listOf(size, zoom, pins, user, userIso, connected, accent, dns, countries?.size, ThemeState.current.id)
+        // وسط بزرگ‌نمایی (اتصال و قطع) لایه‌ی ثابت هر فریم از نو کشیده نمی‌شود: عکس نمای دور یک بار ساخته و فقط
+        // جابه‌جا و بزرگ می‌شود (کشیدن همه‌ی کشورها در هر فریم همان لحظه‌ی اتصال صفحه را کند می‌کرد)؛
+        // آخر بزرگ‌نمایی عکس نمای دقیق یک بار دیگر ساخته می‌شود
+        val still = zoom == 0f || zoom == 1f
+        val bv = if (still) v else far
+        val bsx = (w / (bv.lon1 - bv.lon0)).toFloat()
+        val bsy = (h / (bv.lat0 - bv.lat1)).toFloat()
+        val key = listOf(size, if (still) zoom else -1f, pins, user, userIso, connected, accent, dns, countries?.size, ThemeState.current.id)
         val old = cache.bmp
         // لایه‌ی ثابت فقط وقتی کلید عوض شود از نو روی بیت‌مپ تازه (شفاف) کشیده می‌شود؛ پاک‌کردن با Clear لازم نیست
         val redraw = cache.key != key || old == null ||
@@ -151,15 +158,16 @@ fun WorldMap(
         if (redraw) {
         cache.key = key
         cache.bmp = bmp
+        val border = 1f / bsx
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
             // زمینه‌ی جدا ندارد: فقط خشکی‌ها و مرزها روی بیت‌مپ شفاف کشیده می‌شوند و پشتش خود پس‌زمینه‌ی صفحه است
             clipRect {
                 withTransform({
-                    translate((-v.lon0 * sx).toFloat(), (v.lat0 * sy).toFloat())
-                    scale(sx, sy, pivot = Offset.Zero)
+                    translate((-bv.lon0 * bsx).toFloat(), (bv.lat0 * bsy).toFloat())
+                    scale(bsx, bsy, pivot = Offset.Zero)
                 }) {
                     countries?.forEach { c ->
-                        if (c.maxLon < v.lon0 || c.minLon > v.lon1 || c.maxLat < v.lat1 || c.minLat > v.lat0) return@forEach
+                        if (c.maxLon < bv.lon0 || c.minLon > bv.lon1 || c.maxLat < bv.lat1 || c.minLat > bv.lat0) return@forEach
                         // خشکی شیشه‌ای تیره با مرز به رنگ تم؛ کشور شما userCountry، کشور سرور به رنگ لهجه (وصل: رنگ «وصل») و درخشان
                         // خشکی تقریباً مشکی (AMOLED) فقط کمی روشن‌تر از دریا، مرزها به رنگ تم
                         drawPath(c.path, K.Panel.copy(alpha = .55f))
@@ -188,7 +196,17 @@ fun WorldMap(
         }
         }
 
-        drawImage(bmp)
+        if (still) drawImage(bmp) else {
+            // عکس نمای دور، جابه‌جا و بزرگ‌شده تا نمای این لحظه؛ لبه‌ها دوباره محو می‌شوند
+            drawIntoCanvas { it.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint()) }
+            withTransform({
+                translate(((bv.lon0 - v.lon0) * sx).toFloat(), ((v.lat0 - bv.lat0) * sy).toFloat())
+                scale(sx / bsx, sy / bsy, pivot = Offset.Zero)
+            }) { drawImage(bmp) }
+            drawRect(edgeMaskV, blendMode = BlendMode.DstIn)
+            drawRect(edgeMaskH, blendMode = BlendMode.DstIn)
+            drawIntoCanvas { it.restore() }
+        }
         // پیش از اتصال: خط‌چین کم‌رنگ از شما تا سرور انتخابی
         if (user != null && sel != null && draw < 1f) {
             val a = proj(user)
