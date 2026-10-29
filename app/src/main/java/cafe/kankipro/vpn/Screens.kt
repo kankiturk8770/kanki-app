@@ -455,7 +455,7 @@ private fun ModeSheets(state: AppState) {
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
-    // only the protocols this subscription really has (MIX+ and the rest show up when they are in it)
+    // only the protocols this subscription really has (microtun and the rest show up when they are in it)
     val families = Modes.GAME_FAMILIES.filter { (key, _) -> state.gameConfigs(key).isNotEmpty() }.map { (key, _) ->
         val list = state.gameConfigs(key).map { (id, p) -> server(id, p, state.cfgTag(id, p)) }
             .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
@@ -463,7 +463,7 @@ private fun ModeSheets(state: AppState) {
             key, state.familyTitle(key),
             when (key) {
                 "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
-                "kgame" -> tr("MIX+\u200E: KCP سریع با FEC؛ بسته‌ی گم‌شده بدون انتظار ساخته می‌شود")
+                "mtun" -> tr("microtun: VPN سبک بازی؛ بسته‌های کوچک بازی دو بار می‌روند تا یک بسته‌ی گم‌شده لگ نیاورد، دانلود یک بار")
                 "hysteria2" -> tr("روی UDP (QUIC): پرسرعت و پایدار، حتی روی اینترنت ضعیف و پرپکت‌لاس")
                 "amnezia" -> tr("عبور از فیلتر؛ مستقیم یا از تانل ایران")
                 else -> tr("سبک و سریع، روی اینترنت پایدار")
@@ -549,7 +549,7 @@ private fun cellTitle(l: ConfigLink): String = when (l.protocol) {
 @Composable
 private fun ServersTab(state: AppState) {
     val a = state.account
-    val order = listOf("kankimix", "kgame", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
+    val order = listOf("kankimix", "mtun", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
     val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
     // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
     // کشور هر کانفیگ = کشور خروجی واقعی سرورش (از پنل یا از داخل تونل)، نه کشور Endpoint
@@ -570,7 +570,7 @@ private fun ServersTab(state: AppState) {
         }
         val rows = links.sortedBy { order.indexOf(it.protocol) }.map { row(it) }
         // هر پروتکل هر سرور یک ردیف: تانل و مستقیم همان سرور کنار هم (Xray: لینک و نسخه‌ی «(تانل)» همان لینک)
-        val famOrder = listOf("kankimix", "kgame", "hysteria2", "amnezia", "wireguard", "xray")
+        val famOrder = listOf("kankimix", "mtun", "hysteria2", "amnezia", "wireguard", "xray")
         val lines = links.groupBy { l ->
             val fam = when (l.protocol) { "amneziawg", "amneziawg-direct" -> "amnezia"; else -> l.protocol }
             val who = if (l.protocol == "xray") l.nodeName.removeSuffix(" (تانل)").trim() else state.parentOf(l.node)

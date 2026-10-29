@@ -366,7 +366,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "kgame" -> "MIX+\u200E"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "mtun" -> "microtun"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
@@ -950,10 +950,9 @@ class AppState private constructor(context: Context) {
             x.exit?.let { xrayExits[id] = it }
             ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
-        // MIX+: پروتکل جدای همان سرور (لینک kcore://)
-        val kcore = a.kcore.filter { KcoreCfg.isProto(it.proto) }
-            .map { ConfigLink(protocol = it.proto, node = it.node, nodeName = it.nodeName, url = "kcore:" + it.url) }
-        return a.copy(configs = base + direct + xray + kcore, exits = a.exits + xrayExits)
+        // microtun: پروتکل جدای همان سرور (لینک mtun://)
+        val mtun = a.mtun.map { ConfigLink(protocol = MtunCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
+        return a.copy(configs = base + direct + xray + mtun, exits = a.exits + xrayExits)
     }
 
     /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
@@ -974,7 +973,7 @@ class AppState private constructor(context: Context) {
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
     private fun fetchConfig(l: ConfigLink, forceNet: Boolean = false): String {
         if (l.protocol == "xray") return XrayCfg.wrap(l.url.removePrefix("xray:"))
-        if (l.url.startsWith("kcore:")) return KcoreCfg.wrap(l.url.removePrefix("kcore:"))
+        if (l.url.startsWith("mtun:")) return MtunCfg.wrap(l.url.removePrefix("mtun:"))
         val url = l.url.substringBefore("#direct=")
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
@@ -1028,7 +1027,7 @@ class AppState private constructor(context: Context) {
         if (hasCfg(nodeId, "amneziawg-direct")) add("amneziawg-direct")
     } else buildList {
         if (hasCfg(nodeId, "kankimix")) add("kankimix")
-        KcoreCfg.PROTOS.forEach { (p, _) -> if (hasCfg(nodeId, p)) add(p) }
+        if (hasCfg(nodeId, MtunCfg.PROTO)) add(MtunCfg.PROTO)
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "hysteria2")) add("hysteria2")
@@ -1231,7 +1230,7 @@ class AppState private constructor(context: Context) {
 
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
-        for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray") || KcoreCfg.isProto(it.protocol) }) {
+        for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray", MtunCfg.PROTO) }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
@@ -1240,7 +1239,7 @@ class AppState private constructor(context: Context) {
                 l.protocol == "hysteria2" -> txt.contains("hysteria2://")
                 l.protocol == "kankimix" -> KmixUri.isKmix(txt)
                 l.protocol == "xray" -> XrayCfg.isXray(txt)
-                KcoreCfg.isProto(l.protocol) -> KcoreCfg.isKcore(txt)
+                MtunCfg.isProto(l.protocol) -> MtunCfg.isMtun(txt)
                 else -> txt.contains("[Interface]") && txt.contains("[Peer]")
             }
             if (ok) { infos[key] = ConfigInfo.parse(txt!!); badCfg.remove(key) }
@@ -1504,7 +1503,7 @@ class AppState private constructor(context: Context) {
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
-                    "kgame" -> Probe.kcore(ctx, text)
+                    MtunCfg.PROTO -> Probe.mtun(ctx, text)
                     "hysteria2" -> Probe.hysteria(ctx, net, text)
                     else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
                         // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس
