@@ -49,9 +49,8 @@ import androidx.compose.ui.unit.sp
 // ------------------------------------------------------------------ آموزش قدم‌به‌قدم
 
 /**
- * یک قدم آموزش: کدام بخش روشن شود، ربات چه بگوید (فارسی و انگلیسی) و کجا باشد (تب، پنل گیمینگ).
- * voice: شماره‌ی فایل صدای همین قدم (res/raw/guide_fa_NN و guide_en_NN)؛ ربات همان متن حباب را می‌خواند
- * (بدون ایموجی، اسم‌های لاتین به فارسی).
+ * یک قدم آموزش: کدام بخش روشن شود، ربات چه بگوید (فارسی و انگلیسی) و کجا باشد (تب، پنل گیمینگ / ضد فیلتر).
+ * points: چند خط کوتاه «اسم: توضیح» زیر متن (مثل حالت‌ها یا پروتکل‌ها)، هر کدام جدا تا متن یکجا شلوغ نشود.
  */
 class GuideStep(
     val target: String?,
@@ -59,51 +58,78 @@ class GuideStep(
     val text: String,
     val titleEn: String,
     val textEn: String,
-    val voice: Int,
+    val points: List<Pair<String, String>> = emptyList(),
+    val pointsEn: List<Pair<String, String>> = emptyList(),
     val tab: KTab = KTab.HOME,
     val sheet: String? = null,
 )
 
 val guideSteps = listOf(
-    GuideStep(null, "سلام! من کانکی‌ام 👋", "دستیار کوچولوی تو! بیا با هم یه دور کامل توی برنامه بزنیم تا همه‌چیز رو بشناسی.",
-        "Hi! I'm Kanki 👋", "Your little helper! Let's take a full tour of the app together, so you know where everything is.", 1),
-    GuideStep("connect", "دکمه‌ی اتصال", "یه بار لمسش کن تا با حالتی که انتخاب کردی وصل شی. وقتی وصلی، حلقه‌ش می‌چرخه و وسطش نوشته «متصل»؛ یعنی اینترنتت امنه ✅",
-        "Connect button", "Tap it once to connect with the mode you picked. When you're connected, the ring spins and the middle says Connected. That means your internet is safe ✅", 2),
-    GuideStep("map", "نقشه", "اینجا می‌بینی کجایی و به کدوم کشور وصلی. خط نورانی، مسیر اتصالته؛ سرعت و پینگ زنده‌ت هم پایین صفحه‌ست.",
-        "Map", "Here you see where you are and which country you're connected to. The glowing line is your route, and your live speed and ping are at the bottom.", 3),
-    GuideStep("protocols", "حالت‌های اتصال", "چهار حالت داری: «هوشمند» پینگ همه رو می‌گیره و خودش به بهترین وصل می‌شه. «گیمینگ» برای بازیه؛ پروتکل و سرور رو خودت انتخاب می‌کنی. «ضد فیلتر» برای وقتیه که فیلترینگ شدیده. «DNS» وی‌پی‌ان نیست: فقط سایت‌ها و بازی‌های تحریمی از سرور کانکی رد می‌شن و بقیه با سرعت کامل مستقیم می‌رن.",
-        "Connection modes", "You have four modes. Smart pings everything and connects to the best by itself. Gaming is for games: you pick the protocol and the server. Anti-filter is for when filtering is heavy. DNS is not a VPN: only sanctioned sites and games go through Kanki's server, and everything else goes direct at full speed.", 4),
-    GuideStep("game_fams", "پروتکل‌های گیمینگ", "این چهار پروتکل مخصوص بازی‌ان، همه روی UDP. KANKI MIX پروتکل خود کانکیه و برای بازی از همه بهتره؛ کمترین لگ و پکت‌لاس. Hysteria2 خیلی سریعه و روی اینترنت ضعیف هم پایدار می‌مونه. Amnezia از فیلتر رد می‌شه. WireGuard سبک و سریعه و فقط از راه تانل میاد.",
-        "Gaming protocols", "These four protocols are made for games, all on UDP. KANKI MIX is Kanki's own protocol and the best one for gaming, with the lowest lag and packet loss. Hysteria2 is very fast and stays steady even on weak internet. Amnezia gets past filters. WireGuard is light and fast, and comes only through the tunnel.", 5, sheet = "game"),
-    GuideStep("game_list", "تانل یا مستقیم", "هر سرور یه ردیفه، با دو خونه: «تانل» از سرور ایران رد می‌شه و وقتی فیلترینگ زیاده بهتر جواب می‌ده؛ «مستقیم» یک‌راست به خود سرور می‌ره و معمولاً پینگ کمتری داره. «سریع‌ترین سرور» هم خودش کم‌پینگ‌ترین رو پیدا و وصل می‌کنه.",
-        "Tunnel or direct", "Each server is one row with two cells. Tunnel goes through the Iran server and works better when filtering is heavy. Direct goes straight to the server and usually has a lower ping. Fastest server finds the lowest ping and connects by itself.", 6, sheet = "game"),
-    GuideStep(null, "یه نکته درباره‌ی پینگ", "پروتکل‌های گیمینگ روی UDP کار می‌کنن. هر وقت اینترنت آزاد باشه، بهترین پینگ و کمترین لگ رو برات می‌گیریم. فقط بعضی وقت‌ها توی ایران اینترنت یا UDP محدود می‌شه؛ اون موقع ممکنه پینگ یه کم بالا بره یا اتصال لحظه‌ای ضعیف بشه. ما همیشه کنارتیم و کانکی تا جای ممکن پایدار می‌مونه. اگه پینگت بالا بود، بیشتر وقت‌ها به خاطر همین محدودیته؛ کافیه تانل یا یه پروتکل دیگه رو امتحان کنی.",
-        "A note about ping", "Gaming protocols run on UDP. Whenever the internet is open, we get you the best ping and the lowest lag. Sometimes, though, the internet or UDP gets restricted in Iran; then your ping may rise a little, or the connection may weaken for a moment. We're always with you, and Kanki stays as stable as it can. If your ping is high, it's usually because of that restriction; just try the tunnel or another protocol.", 16, sheet = "game"),
-    GuideStep("filter_list", "پنل ضد فیلتر", "وقتی فیلترینگ شدیده این حالت رو بزن: با یه لمس خودش بهترین راه عبور رو پیدا می‌کنه. اگه کاشیش رو نگه داری یا دوباره بزنی، همین پنل باز می‌شه و خودت انتخاب می‌کنی: Xray برای فیلترینگ خیلی سخت، Amnezia با تانل یا مستقیم.",
-        "Anti-filter panel", "Use this mode when filtering is heavy: one tap finds the best way through by itself. Hold its tile, or tap it again, to open this panel and pick yourself: Xray for the toughest filtering, Amnezia through the tunnel or direct.", 15, sheet = "filter"),
-    GuideStep("sub", "اشتراک تو", "گیگ و روزهای باقی‌مونده‌ت اینجاست. هر وقت کم شد، خودم همین‌جا خبرت می‌کنم 😉",
-        "Your subscription", "Your remaining data and days are right here. When they run low, I'll let you know right here 😉", 7),
-    GuideStep("ping_all", "تب سرورها", "همه‌ی کشورها اینجان. «تست پینگ همه» پینگ واقعی همه‌ی کانفیگ‌ها رو با هم می‌گیره تا ببینی کدوم بهتره.",
-        "Servers tab", "Every country is here. Ping all measures the real ping of every config at once, so you can see which one is best.", 8, tab = KTab.SERVERS),
-    GuideStep("country", "کانفیگ‌های هر کشور", "روی پرچم هر کشور بزن تا کانفیگ‌هاش باز بشه. هر پروتکل یه ردیفه: تانل و مستقیم کنار هم، با پینگ هر کدوم. با یه لمس وصل می‌شی؛ اگه نگهش داری، جزئیات و MTU رو می‌بینی.",
-        "Each country's configs", "Tap a country's flag to open its configs. Each protocol is one row, tunnel and direct side by side, each with its ping. One tap connects; hold it to see the details and MTU.", 9, tab = KTab.SERVERS),
-    GuideStep("speed", "تست سرعت", "سرعت واقعی دانلود، آپلود و پینگت رو اینجا بسنج. اول وصل شو تا سرعت از داخل VPN اندازه گرفته بشه.",
-        "Speed test", "Measure your real download, upload and ping here. Connect first, so the speed is measured through the VPN.", 10, tab = KTab.TEST),
-    GuideStep("settings", "تنظیمات", "DNS، تم و رنگ برنامه، زبان، تونل‌زنی انتخابی برای برنامه‌هایی مثل بانک، و کیل‌سوییچ، همه اینجاست.",
-        "Settings", "DNS, the app's theme and colors, the language, split tunneling for apps like your bank, and the kill switch are all here.", 11, tab = KTab.SETTINGS),
-    GuideStep("account", "لینک اشتراک", "اطلاعات اشتراک، کپی لینک و تمدید سرویس، همه با یه لمس.",
-        "Subscription link", "Your subscription details, copying your link and renewing, all with one tap.", 12),
-    GuideStep("emergency", "ارتباط اضطراری 🆘", "این حباب گفتگو فقط برای وقتیه که اینترنت ملی شد. اون موقع از اینجا مستقیم با پشتیبانی حرف می‌زنی و کانفیگی که از فیلتر رد می‌شه رو می‌گیری.",
-        "Emergency chat 🆘", "This chat bubble is only for when the internet goes national-only. Then you talk to support right here and get a config that passes the filter.", 13),
-    GuideStep("robot", "من همیشه اینجام!", "هر وقت سوال داشتی روی من بزن تا دوباره راهنماییت کنم. اینترنت آزاد مبارکت 🚀",
-        "I'm always here!", "Tap me whenever you have a question and I'll guide you again. Enjoy your free internet 🚀", 14),
+    GuideStep(null, "سلام، من کانکی‌ام", "یه دور کوتاه توی برنامه می‌زنیم تا بدونی هر چیزی کجاست. هر جای صفحه رو بزنی، می‌ریم قدم بعد.",
+        "Hi, I'm Kanki", "Let's take a short tour so you know where everything is. Tap anywhere to go to the next step."),
+    GuideStep("connect", "دکمه‌ی اتصال", "یه بار بزن تا با حالتی که پایین انتخاب کردی وصل شی. وقتی وصلی وسطش «متصل» و زمان اتصال نوشته می‌شه. وسط اتصال دوباره بزنی، لغو می‌شه.",
+        "Connect button", "Tap once to connect with the mode you picked below. When you're connected it says Connected with the time. Tap again while connecting to cancel."),
+    GuideStep("map", "نقشه", "می‌بینی کجایی و به کدوم کشور وصلی. پینگ، دانلود و آپلود زنده زیر نقشه‌ست.",
+        "Map", "Shows where you are and which country you're connected to. Live ping, download and upload are below the map."),
+    GuideStep("protocols", "حالت‌های اتصال", "هر حالت برای یه کاره:",
+        "Connection modes", "Each mode has one job:",
+        points = listOf(
+            "هوشمند" to "پینگ همه رو می‌گیره و به کم‌پینگ‌ترین وصل می‌شه؛ اگه شبکه بد باشه خودش می‌ره سراغ تانل.",
+            "گیمینگ" to "برای بازی؛ پروتکل و سرور رو خودت انتخاب می‌کنی.",
+            "ضد فیلتر" to "وقتی فیلترینگ شدیده؛ با یه لمس بهترین راه رو پیدا می‌کنه.",
+            "DNS" to "VPN نیست؛ فقط سایت‌ها و بازی‌های تحریمی رو باز می‌کنه و بقیه مستقیم می‌رن.",
+        ),
+        pointsEn = listOf(
+            "Smart" to "Pings everything and connects to the lowest ping; on a bad network it moves to a tunnel by itself.",
+            "Gaming" to "For games; you pick the protocol and the server.",
+            "Anti-filter" to "For heavy filtering; one tap finds the best way through.",
+            "DNS" to "Not a VPN; it only unblocks sanctioned sites and games, everything else goes direct.",
+        )),
+    GuideStep("game_fams", "پروتکل‌های گیمینگ", "همه روی UDP‌ان، مثل خود بازی. فقط اونایی که توی اشتراکت هست دیده می‌شن:",
+        "Gaming protocols", "All run on UDP, like the game itself. Only the ones in your subscription are shown:",
+        points = listOf(
+            "KANKI MIX" to "پروتکل خود کانکی؛ کمترین لگ و پکت‌لاس. با «ارسال دوتایی» هر بسته‌ی بازی دو بار می‌ره و پکت‌لاس اثر نمی‌کنه.",
+            "microtun" to "سبک و کم‌حجم؛ بسته‌های کوچیک بازی دو بار می‌رن و دانلود یه بار.",
+            "Hysteria2" to "پرسرعت و روی اینترنت ضعیف هم پایدار.",
+            "Amnezia / WireGuard" to "Amnezia از فیلتر رد می‌شه؛ WireGuard سبک و سریعه.",
+        ),
+        pointsEn = listOf(
+            "KANKI MIX" to "Kanki's own protocol, the lowest lag and packet loss. With Duplicate packets every game packet goes twice, so packet loss doesn't hurt.",
+            "microtun" to "Light and small; small game packets go twice, downloads once.",
+            "Hysteria2" to "Fast, and steady even on weak internet.",
+            "Amnezia / WireGuard" to "Amnezia gets past filters; WireGuard is light and fast.",
+        ), sheet = "game"),
+    GuideStep("game_only", "فقط بازی اینترنت داشته باشد", "با KANKI MIX و microtun روشنش کن: تا وقتی وصلی فقط بازی‌هات اینترنت دارن و بقیه‌ی برنامه‌ها پهنای باند رو نمی‌گیرن، پس پینگ پایدارتر می‌مونه. سرویس‌های گوگل (برای ورود به بازی) باز می‌مونن. با «انتخاب بازی‌ها» فهرست رو عوض کن. اندروید ۱۰ به بالا.",
+        "Only the game gets internet", "Turn it on with KANKI MIX or microtun: while you're connected only your games get internet and other apps can't take the bandwidth, so your ping stays steadier. Google services stay open for game login. Change the list with Choose games. Android 10 and later.", sheet = "game"),
+    GuideStep("game_list", "تانل یا مستقیم", "هر سرور یه ردیفه با دو خونه: «تانل» از سرور ایران رد می‌شه و وقتی فیلترینگ زیاده بهتره؛ «مستقیم» معمولاً پینگ کمتری داره. «سریع‌ترین سرور» خودش کم‌پینگ‌ترین رو وصل می‌کنه.",
+        "Tunnel or direct", "Each server is one row with two cells: Tunnel goes through the Iran server and is better when filtering is heavy; Direct usually has a lower ping. Fastest server connects the lowest ping by itself.", sheet = "game"),
+    GuideStep(null, "اگه پینگ بالا رفت", "گاهی توی ایران UDP محدود می‌شه و پینگ یه کم بالا می‌ره. اون موقع تانل یا یه پروتکل دیگه رو امتحان کن.",
+        "If your ping goes up", "Sometimes UDP is restricted in Iran and your ping rises a little. Then try the tunnel or another protocol.", sheet = "game"),
+    GuideStep("filter_list", "پنل ضد فیلتر", "یه لمس روی کاشی ضد فیلتر، خودش بهترین راه رو پیدا می‌کنه. دوباره بزنی یا نگهش داری، این پنل باز می‌شه: Xray برای فیلترینگ خیلی سخت، Amnezia از تانل یا مستقیم.",
+        "Anti-filter panel", "One tap on the Anti-filter tile finds the best way by itself. Tap it again or hold it to open this panel: Xray for the toughest filtering, Amnezia through the tunnel or direct.", sheet = "filter"),
+    GuideStep("sub", "اشتراک تو", "حجم و روزهای باقی‌مونده اینجاست. وقتی کم بشه همین‌جا خبرت می‌کنم.",
+        "Your subscription", "Your remaining data and days are here. When they run low, I'll tell you right here."),
+    GuideStep("ping_all", "تب سرورها", "همه‌ی کشورها اینجان. «تست پینگ همه» پینگ واقعی همه‌ی کانفیگ‌ها رو با هم می‌گیره.",
+        "Servers tab", "Every country is here. Ping all measures the real ping of every config at once.", tab = KTab.SERVERS),
+    GuideStep("country", "کانفیگ‌های هر کشور", "روی کشور بزن تا باز بشه: تانل و مستقیم کنار هم، با میله‌های سیگنال و پینگ. یه لمس وصل می‌کنه؛ نگه داری، جزئیات و MTU رو می‌بینی.",
+        "Each country's configs", "Tap a country to open it: tunnel and direct side by side, with signal bars and ping. One tap connects; hold for details and MTU.", tab = KTab.SERVERS),
+    GuideStep("speed", "تست سرعت", "اول پینگ، جیتر و پکت‌لاس روی UDP (همونی که بازی حس می‌کنه)، بعد دانلود و آپلود. وصل باشی، از داخل VPN سنجیده می‌شه.",
+        "Speed test", "First ping, jitter and packet loss over UDP (what your game feels), then download and upload. If you're connected, it's measured through the VPN.", tab = KTab.TEST),
+    GuideStep("settings", "تنظیمات", "DNS، اتصال خودکار، کیل‌سوییچ، تونل‌زنی انتخابی (مثلاً برای بانک)، تم، زبان و صداهای اپ.",
+        "Settings", "DNS, auto connect, kill switch, split tunneling (for your bank, say), theme, language and app sounds.", tab = KTab.SETTINGS),
+    GuideStep("account", "لینک اشتراک", "اطلاعات اشتراک، کپی لینک و تمدید.",
+        "Subscription link", "Your subscription details, copying your link and renewing."),
+    GuideStep("emergency", "چت اضطراری", "فقط برای وقتی که اینترنت ملی شد: از اینجا مستقیم با پشتیبانی حرف می‌زنی و کانفیگی که رد می‌شه رو می‌گیری.",
+        "Emergency chat", "Only for when the internet goes national-only: talk to support right here and get a config that gets through."),
+    GuideStep("robot", "من همین‌جام", "هر وقت سؤال داشتی روی من بزن تا این راهنما دوباره باز بشه.",
+        "I'm right here", "Tap me whenever you have a question and this guide opens again."),
 )
 
 /** وضعیت آموزش و جای بخش‌هایی که باید روشن شوند */
 object Guide {
     /** قدم فعلی؛ ‎-1 یعنی آموزش بسته است */
     var step by mutableIntStateOf(-1)
-    /** بار اول بعد از ورود: ربات اول می‌پرسد آموزش بدهد یا نه (با صدا یا فقط متن) */
+    /** بار اول بعد از ورود: ربات اول می‌پرسد آموزش بدهد یا نه */
     var asking by mutableStateOf(false)
     val targets = mutableStateMapOf<String, Rect>()
     val active get() = step >= 0
@@ -119,12 +145,11 @@ object Guide {
 fun Modifier.guideTarget(id: String): Modifier = onGloballyPositioned { Guide.targets[id] = it.boundsInRoot() }
 
 /**
- * پرده‌ی آموزش: همه‌جا تیره، بخش مورد نظر روشن با قاب طلایی، و ربات با حباب توضیح.
- * voiceOn / onVoice: دکمه‌ی بلندگوی حباب (پخش صدا بیرون از این فایل است: GuideVoice)؛ onVoice نباشد، دکمه هم نیست.
- * onAnswer: جواب سؤال اول (Guide.asking): true با صدا، false فقط متن، null بعداً.
+ * پرده‌ی آموزش: همه‌جا تیره، بخش مورد نظر روشن با قاب طلایی، و حباب ربات کنارش.
+ * onAnswer: جواب سؤال اول (Guide.asking): true «نشونم بده»، false «بعداً».
  */
 @Composable
-fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onAnswer: (Boolean?) -> Unit = {}, onFinish: () -> Unit) {
+fun GuideOverlay(onAnswer: (Boolean) -> Unit = {}, onFinish: () -> Unit) {
     // آخرین قدم معتبر نگه داشته می‌شود تا هنگام محو شدن پرده، متن قدم اول چشمک نزند
     var idx by remember { mutableIntStateOf(0) }
     if (Guide.step >= 0) idx = Guide.step
@@ -180,79 +205,113 @@ fun GuideOverlay(voiceOn: Boolean = false, onVoice: (() -> Unit)? = null, onAnsw
                 else -> Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { (box.height - hole.top + 14.dp.toPx()).coerceAtLeast(0f).toDp() })
             }
             GuideBubble(
-                step, idx, last, bubbleMod.padding(horizontal = 16.dp), voiceOn, onVoice,
+                step, idx, last, bubbleMod.padding(horizontal = D.PagePad),
                 onNext = { next() }, onBack = { Guide.back() }, onSkip = { Guide.stop(); onFinish() },
             )
         }
     }
 }
 
-/** سؤال اول ربات بعد از ورود: «برنامه رو بهت یاد بدم؟» با صدا، فقط متن، یا بعداً */
+/** سؤال اول ربات بعد از ورود: «برنامه رو نشونت بدم؟» */
 @Composable
-private fun WelcomeAsk(onAnswer: (Boolean?) -> Unit) {
+private fun WelcomeAsk(onAnswer: (Boolean) -> Unit) {
     Box(
         Modifier.fillMaxSize().background(Color(0xD9000000)).pointerInput(Unit) { detectTapGestures { } },
         contentAlignment = Alignment.Center,
     ) {
-        KCard(Modifier.padding(horizontal = 16.dp).widthIn(max = 420.dp).fillMaxWidth(), padding = 18.dp, border = K.Gold.copy(alpha = .7f)) {
+        KCard(Modifier.padding(horizontal = D.PagePad).widthIn(max = 420.dp).fillMaxWidth(), padding = D.S5, border = K.Gold.copy(alpha = .7f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RobotFace(64.dp)
-                Spacer(Modifier.width(12.dp))
-                T("سلام! من کانکی‌ام 👋", size = 18.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
+                RobotFace(52.dp)
+                Spacer(Modifier.width(D.S3))
+                T("سلام، من کانکی‌ام", size = 20.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
             }
-            Spacer(Modifier.height(10.dp))
-            T("می‌خوای برنامه رو قدم‌به‌قدم بهت یاد بدم؟ همه‌جا رو نشونت می‌دم: اتصال، حالت‌ها، گیمینگ و ضد فیلتر، سرورها، تست سرعت، تنظیمات، لینک اشتراک و چت اضطراری.",
-                size = 14.sp, color = K.Text, weight = FontWeight.Normal)
-            Spacer(Modifier.height(16.dp))
-            GoldButton("آره، با صدا", Modifier.fillMaxWidth()) { onAnswer(true) }
-            Spacer(Modifier.height(8.dp))
-            SmallLine("آره، فقط متن", Modifier.fillMaxWidth()) { onAnswer(false) }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(D.S3))
+            GuideBody("برنامه رو قدم‌به‌قدم نشونت بدم؟ اتصال، حالت‌ها، گیمینگ، سرورها، تست سرعت و تنظیمات؛ کمتر از یه دقیقه.")
+            Spacer(Modifier.height(D.S5))
+            GoldButton("آره، نشونم بده", Modifier.fillMaxWidth()) { onAnswer(true) }
+            Spacer(Modifier.height(D.S1))
             T("بعداً", size = 13.sp, color = K.Sub,
-                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(10.dp)).clickable { onAnswer(null) }.padding(horizontal = 16.dp, vertical = 8.dp))
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(D.RS)).clickable { onAnswer(false) }
+                    .padding(horizontal = D.S4, vertical = D.S3))
         }
     }
 }
 
+/**
+ * حباب هر قدم: بالا نوار پیشرفت (یک تکه برای هر قدم)، بعد ربات کوچک و عنوان با «۵ از ۱۷»؛ متن تمام‌عرض زیرش
+ * (نه فشرده کنار ربات) و نکته‌ها هر کدام یک خط جدا با نوار طلایی کنارش؛ پایین «رد کردن»، «قبلی» و «بعدی».
+ */
 @Composable
 private fun GuideBubble(
-    step: GuideStep, idx: Int, last: Boolean, modifier: Modifier, voiceOn: Boolean,
-    onVoice: (() -> Unit)?, onNext: () -> Unit, onBack: () -> Unit, onSkip: () -> Unit,
+    step: GuideStep, idx: Int, last: Boolean, modifier: Modifier,
+    onNext: () -> Unit, onBack: () -> Unit, onSkip: () -> Unit,
 ) {
-    KCard(modifier.widthIn(max = 420.dp).fillMaxWidth(), padding = 16.dp, border = K.Gold.copy(alpha = .7f)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                RobotFace(58.dp)
-                // صدای ربات زیر خودش: «صدا» / «بی‌صدا» (یادش می‌ماند)
-                if (onVoice != null) {
-                    Spacer(Modifier.height(8.dp))
-                    VoicePill(voiceOn, onVoice)
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                GuideText(if (LangState.en) step.titleEn else step.title, 17.sp, K.Gold, FontWeight.Black)
-                Spacer(Modifier.height(4.dp))
-                GuideText(if (LangState.en) step.textEn else step.text, 14.sp, K.Text, FontWeight.Normal)
+    val en = LangState.en
+    KCard(modifier.widthIn(max = 440.dp).fillMaxWidth(), padding = D.S4, border = K.Gold.copy(alpha = .7f)) {
+        Row(Modifier.fillMaxWidth().height(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            guideSteps.indices.forEach { i ->
+                Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (i <= idx) K.Gold else K.Sub.copy(alpha = .22f)))
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(D.S3))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // پیشرفت: «۵/۱۴» و یک خط کوتاه (۱۴ نقطه روی گوشی باریک جای دکمه‌ها را می‌گرفت)
-            Column {
-                T("${idx + 1}/${guideSteps.size}", size = 11.sp, color = K.Gold, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
-                Box(Modifier.padding(top = 3.dp).width(44.dp).height(3.dp).clip(CircleShape).background(K.Sub.copy(alpha = .25f))) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth((idx + 1f) / guideSteps.size).clip(CircleShape).background(K.Gold))
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            if (!last) {
-                T("رد کردن", size = 12.sp, color = K.Sub, modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onSkip).padding(horizontal = 8.dp, vertical = 6.dp))
-                Spacer(Modifier.width(4.dp))
-            }
-            if (idx > 0) { SmallLine("قبلی", onClick = onBack); Spacer(Modifier.width(8.dp)) }
-            SmallGold(if (last) "بزن بریم!" else "بعدی", onClick = onNext)
+            RobotFace(36.dp, animate = false)
+            Spacer(Modifier.width(D.S2))
+            T(if (en) step.titleEn else step.title, size = 16.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(D.S2))
+            T(trf("%d از %d", idx + 1, guideSteps.size), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
+        Spacer(Modifier.height(D.S2))
+        GuideBody(if (en) step.textEn else step.text)
+        val points = if (en) step.pointsEn else step.points
+        if (points.isNotEmpty()) {
+            Spacer(Modifier.height(D.S2))
+            points.forEach { (name, what) -> GuidePoint(name, what) }
+        }
+        Spacer(Modifier.height(D.S3))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!last) T("رد کردن", size = 12.sp, color = K.Sub, modifier = Modifier.clip(RoundedCornerShape(D.RS)).clickable(onClick = onSkip).padding(horizontal = D.S2, vertical = D.S2))
+            Spacer(Modifier.weight(1f))
+            if (idx > 0) { SmallLine("قبلی", onClick = onBack); Spacer(Modifier.width(D.S2)) }
+            SmallGold(if (last) "تمام" else "بعدی", onClick = onNext)
+        }
+    }
+}
+
+/** متن بدنه‌ی ربات: فاصله‌ی خط بیشتر برای وزیرمتن، تا جمله‌های بلند فارسی خوانا بمانند */
+@Composable
+private fun GuideBody(text: String) {
+    val s = tr(text)
+    Text(
+        s,
+        style = TextStyle(
+            fontFamily = Vazir, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 23.sp, color = K.Text,
+            textDirection = if (s.any { it in '؀'..'ۿ' }) TextDirection.Rtl else TextDirection.Content,
+        ),
+    )
+}
+
+/** یک نکته: نوار طلایی باریک کنار خط، اسم پررنگ به رنگ تم و توضیحش پشت سرش */
+@Composable
+private fun GuidePoint(name: String, what: String) {
+    val n = tr(name)
+    val w = tr(what)
+    Row(Modifier.fillMaxWidth().padding(vertical = D.S1).height(IntrinsicSize.Min)) {
+        Box(Modifier.width(2.dp).fillMaxHeight().clip(CircleShape).background(K.Gold.copy(alpha = .7f)))
+        Spacer(Modifier.width(D.S2))
+        Text(
+            buildAnnotatedString {
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = K.Gold, fontWeight = FontWeight.Bold))
+                append(n)
+                pop()
+                append(if (LangState.en) ": " else "‏: ")
+                append(w)
+            },
+            style = TextStyle(
+                fontFamily = Vazir, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 21.sp, color = K.Text,
+                textDirection = if (LangState.en) TextDirection.Ltr else TextDirection.Rtl,
+            ),
+        )
     }
 }
 
@@ -339,100 +398,5 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
             Modifier.size(D.S6 + D.S1).clip(CircleShape).clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) { T("✕", size = 12.sp, color = K.Sub, font = Poppins, ltr = true) }
-    }
-}
-
-/** نشانه‌هایی که در متن ربات به آیکون هم‌رنگ تم کشیده می‌شوند (نه ایموجی رنگی ثابت): تیک، صاعقه، چت اضطراری */
-private val guideIcons = listOf("✅", "🚀", "🆘")
-
-/** متن حباب ربات؛ مثل T، فقط ✅ / 🚀 / 🆘 آیکون‌های رنگ تم می‌شوند */
-@Composable
-private fun GuideText(text: String, size: TextUnit, color: Color, weight: FontWeight) {
-    val s = tr(text)
-    if (guideIcons.none { s.contains(it) }) {
-        T(s, size = size, color = color, weight = weight)
-        return
-    }
-    val ac = K.Gold
-    val str = buildAnnotatedString {
-        var i = 0
-        while (i < s.length) {
-            val hit = guideIcons.firstOrNull { s.startsWith(it, i) }
-            if (hit != null) { appendInlineContent(hit, hit); i += hit.length } else { append(s[i]); i++ }
-        }
-    }
-    val inline = guideIcons.associateWith { id ->
-        InlineTextContent(Placeholder(1.15.em, 1.15.em, PlaceholderVerticalAlign.TextCenter)) {
-            Canvas(Modifier.fillMaxSize()) {
-                when (id) {
-                    "✅" -> checkBadge(ac)
-                    "🚀" -> boltBadge(ac)
-                    else -> emergencyChatIcon(ac)
-                }
-            }
-        }
-    }
-    Text(
-        str, inlineContent = inline,
-        style = TextStyle(
-            fontFamily = Vazir, fontWeight = weight, fontSize = size, color = color,
-            textDirection = if (s.any { it in '\u0600'..'\u06FF' }) TextDirection.Rtl else TextDirection.Content,
-        ),
-    )
-}
-
-/** تیک داخل دایره‌ی کم‌رنگ، به رنگ تم */
-private fun DrawScope.checkBadge(c: Color) {
-    val w = size.minDimension
-    drawCircle(c.copy(alpha = .18f), w / 2)
-    drawCircle(c.copy(alpha = .75f), w / 2 - w * .04f, style = Stroke(w * .08f))
-    val p = Path().apply { moveTo(w * .28f, w * .52f); lineTo(w * .44f, w * .67f); lineTo(w * .73f, w * .36f) }
-    drawPath(p, c, style = Stroke(w * .12f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-}
-
-/** صاعقه (سرعت / شروع)، به رنگ تم */
-private fun DrawScope.boltBadge(c: Color) {
-    val w = size.minDimension
-    val p = Path().apply {
-        moveTo(w * .60f, w * .04f); lineTo(w * .20f, w * .56f); lineTo(w * .47f, w * .56f)
-        lineTo(w * .40f, w * .96f); lineTo(w * .80f, w * .42f); lineTo(w * .53f, w * .42f); close()
-    }
-    drawPath(p, c)
-}
-
-/** دکمه‌ی کوچک صدای ربات: بلندگوی طلایی با موج و «صدا»، یا بلندگوی خاموش با ضربدر و «بی‌صدا» */
-@Composable
-private fun VoicePill(on: Boolean, onClick: () -> Unit) {
-    val c = if (on) K.Gold else K.Sub
-    val shape = RoundedCornerShape(50)
-    Row(
-        Modifier.height(26.dp).clip(shape)
-            .background(if (on) K.Gold.copy(alpha = .12f) else Color.Transparent)
-            .border(1.dp, c.copy(alpha = if (on) .75f else .4f), shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Canvas(Modifier.size(13.dp)) { speakerIcon(c, on) }
-        Spacer(Modifier.width(4.dp))
-        T(if (on) "صدا" else "بی‌صدا", size = 10.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
-/** آیکون بلندگو؛ on: با موج صدا، خاموش: با خط ضربدر */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.speakerIcon(c: Color, on: Boolean) {
-    val w = size.width
-    val body = androidx.compose.ui.graphics.Path().apply {
-        moveTo(w * .08f, w * .36f); lineTo(w * .28f, w * .36f); lineTo(w * .52f, w * .14f)
-        lineTo(w * .52f, w * .86f); lineTo(w * .28f, w * .64f); lineTo(w * .08f, w * .64f); close()
-    }
-    drawPath(body, c)
-    val st = Stroke(w * .09f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-    if (on) {
-        drawArc(c, -45f, 90f, false, Offset(w * .44f, w * .3f), Size(w * .28f, w * .4f), style = st)
-        drawArc(c, -50f, 100f, false, Offset(w * .44f, w * .14f), Size(w * .52f, w * .72f), style = st)
-    } else {
-        drawLine(c, Offset(w * .66f, w * .34f), Offset(w * .94f, w * .66f), w * .09f, androidx.compose.ui.graphics.StrokeCap.Round)
-        drawLine(c, Offset(w * .94f, w * .34f), Offset(w * .66f, w * .66f), w * .09f, androidx.compose.ui.graphics.StrokeCap.Round)
     }
 }

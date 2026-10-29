@@ -687,11 +687,11 @@ fun GameSheet(
         // فایروال «فقط بازی»: فقط پروتکل‌های مخصوص بازی (KANKI MIX و microtun)، اندروید ۱۰ به بالا
         if ((fam == "kankimix" || fam == "mtun") && f?.servers?.isNotEmpty() == true) {
             val ok = AppGate.supported
-            SwitchRow(
+            Box(Modifier.guideTarget("game_only")) { SwitchRow(
                 "فقط بازی اینترنت داشته باشد",
                 if (!ok) "روی اندروید ۱۰ به بالا" else trf("%d بازی · سرویس‌های گوگل و DNS هم باز می‌مانند؛ بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند", gameCount),
                 gameOnly && ok, c, enabled = ok, onChange = onGameOnly,
-            )
+            ) }
             if (gameOnly && ok) SmallLine("انتخاب بازی‌ها", onClick = onPickGames)
         }
         SheetLabel(trf("سرورهای %s", f?.title ?: ""))

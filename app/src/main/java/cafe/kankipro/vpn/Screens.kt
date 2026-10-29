@@ -164,17 +164,6 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
         state.accountOpen = false; showSplit = false
     }
 
-    // صدای ربات: سؤال اول و متن هر قدم را به زبان برنامه می‌خواند (با «صدا / بی‌صدا» زیر ربات)
-    var guideVoice by remember { mutableStateOf(GuideVoice.on(ctx)) }
-    LaunchedEffect(Guide.step, Guide.asking, guideVoice, LangState.lang) {
-        val voice = Guide.current?.voice ?: if (Guide.asking) 0 else -1
-        if (voice >= 0 && guideVoice) {
-            delay(350)
-            GuideVoice.play(ctx, voice, LangState.en)
-        } else GuideVoice.stop()
-    }
-    DisposableEffect(Unit) { onDispose { GuideVoice.stop() } }
-
     fun startGuide() { state.tab = KTab.HOME; Guide.start() }
 
     MainFrame(tab, onTab = { state.tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
@@ -255,16 +244,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     // «برگشت» گوشی روی سؤال اول یعنی «بعداً»
     androidx.activity.compose.BackHandler(enabled = Guide.asking) { Guide.asking = false; state.guideDone = true }
     GuideOverlay(
-        guideVoice,
-        onVoice = { guideVoice = !guideVoice; GuideVoice.set(ctx, guideVoice) },
-        onAnswer = { v ->
-            if (v == null) {
+        onAnswer = { yes ->
+            if (!yes) {
                 Guide.asking = false
                 state.guideDone = true
-                toast(ctx, "هر وقت خواستی، روی ربات بالای صفحه بزن 🤖")
+                toast(ctx, "هر وقت خواستی، روی ربات بالای صفحه بزن")
             } else {
-                guideVoice = v
-                GuideVoice.set(ctx, v)
                 state.tab = KTab.HOME
                 Guide.start(from = 1)
             }

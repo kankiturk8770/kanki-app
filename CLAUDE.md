@@ -24,7 +24,7 @@
 | ترجمه (فارسی → انگلیسی) | `I18n.kt` |
 | اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
 | نقشه | `MapView.kt`، `WorldMap.kt` |
-| ربات راهنما و صدایش | `Guide.kt`، `GuideVoice.kt` |
+| ربات راهنما (فقط متن) | `Guide.kt` (`guideSteps`، `GuideOverlay`، `robotAlertFor`) |
 | تست سرعت | `Speed.kt`، `SpeedUi.kt` |
 
 ## هسته‌های Go
@@ -65,7 +65,9 @@
 4. سرورها: `ServersHero` با لوگوی `res/drawable-nodpi/kanki_logo.webp`، `CfgCell` و `SignalBars` تازه، `key()` برای کارت‌ها و ردیف‌ها.
 5. تست سرعت: `UdpSeries` (Speed.kt)، `Probe.kmixSeries`، `udpLatency()` در AppState.
 6. هوشمند: `GAME_ONLY` و ترتیب تازه در `runSmart`.
-7. فایروال: `AppGate` (reject: RST/ICMP، کش منفی، اولویت رشته‌ها)، `gameOnly`/`gameApps` در AppState، `GameAppsPanel`، سوییچ در `GameSheet`.
+7. فایروال: `AppGate` (reject: RST/ICMP فقط برای صاحب معلوم، کش منفی ۲۵۰ms، اولویت رشته‌ها)، `gameOnly`/`gameApps` در AppState، `GameAppsPanel`، سوییچ در `GameSheet`.
+8. ربات راهنما: صدا و فایل‌هایش حذف (`GuideVoice.kt`، `res/raw/guide_*.mp3`)، متن‌ها از نو، حباب تازه (`GuideBubble`، `GuideBody`، `GuidePoint`)، قدم «فقط بازی» (`guideTarget("game_only")`).
+9. بازبینی دوباره‌ی اتصال‌ها: یک ایراد پیدا شد و درست شد (جواب RST/ICMP به اتصالی که صاحبش لحظه‌ای معلوم نشده بود می‌توانست بازی را قطع کند).
 
 تست: محیط ابری Android SDK ندارد؛ ساخت و عکس‌ها در CI (`build.yml`، `shots.yml`).
 تصمیم‌ها: تست پهنای باند روی UDP بدون سرور UDP مخصوص ممکن نیست؛ دانلود/آپلود همان Speedtest است که وقتی وصلی از تونل UDP

@@ -446,4 +446,9 @@ private val PHRASES = listOf(
     "انتخاب بازی‌ها" to "Choose games",
     "بازی‌های مجاز" to "Allowed games",
     "فقط این بازی‌ها (و سرویس‌های گوگل برای ورود) اینترنت دارند؛ بقیه‌ی برنامه‌ها تا قطع VPN نه" to "Only these games (and Google services for login) get internet; other apps don't until you disconnect",
+    "%d از %d" to "%d of %d",
+    "آره، نشونم بده" to "Yes, show me",
+    "سلام، من کانکی‌ام" to "Hi, I'm Kanki",
+    "برنامه رو قدم‌به‌قدم نشونت بدم؟ اتصال، حالت‌ها، گیمینگ، سرورها، تست سرعت و تنظیمات؛ کمتر از یه دقیقه." to "Want a quick step-by-step tour? Connecting, modes, gaming, servers, speed test and settings, in under a minute.",
+    "هر وقت خواستی، روی ربات بالای صفحه بزن" to "Tap the robot at the top whenever you like",
 )
