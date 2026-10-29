@@ -24,9 +24,9 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * بی‌اثر روی پینگ بازی:
  *   - صاحب هر اتصال فقط بار اول پرسیده می‌شود و در حافظه می‌ماند (بسته‌های بعدی بازی فقط یک جست‌وجوی جدول‌اند)؛
- *     اتصالی که صاحبش معلوم نشد دو ثانیه دیگر دوباره پرسیده نمی‌شود.
+ *     اتصالی که صاحبش معلوم نشد تا ۲۵۰ میلی‌ثانیه دوباره پرسیده نمی‌شود.
  *   - بسته‌ی برنامه‌ی بسته‌شده همان‌جا دور ریخته می‌شود و به هسته نمی‌رسد.
- *   - reject: به TCP برنامه‌ی بسته‌شده فوری RST و به UDP آن «پورت در دسترس نیست» (ICMP) برمی‌گردد، تا برنامه
+ *   - reject: به TCP برنامه‌ی بسته‌شده (فقط وقتی صاحبش معلوم است) فوری RST و به UDP آن «پورت در دسترس نیست» (ICMP) برمی‌گردد، تا برنامه
  *     بفهمد اینترنت ندارد و پشت سر هم دوباره نفرستد (پردازنده و صف کارت شبکه برای بازی خالی می‌ماند).
  *   - دو رشته‌ی دروازه اولویت بالا دارند.
  */
@@ -92,7 +92,9 @@ class AppGate(
             if (n == 0) continue
             if (dns != null && dns.handle(buf, n)) continue
             if (!pass(buf, n)) {
-                if (reject) runCatching { refuse(buf, n) }
+                // فقط برنامه‌ای که صاحبش معلوم است و مجاز نیست جواب «اینترنت نیست» می‌گیرد؛ اتصالی که صاحبش
+                // (لحظه‌ای) معلوم نشد بی‌صدا دور ریخته می‌شود، تا بازی با یک جواب اشتباه قطع نشود
+                if (reject && refusable) runCatching { refuse(buf, n) }
                 continue
             }
             try { out.write(buf, 0, n) } catch (e: Exception) { if (!running) break }
@@ -113,8 +115,12 @@ class AppGate(
 
     private fun b(p: ByteArray, i: Int) = p[i].toInt() and 0xff
 
+    /** آخرین بسته‌ی ردشده مال برنامه‌ای بود که صاحبش معلوم است (فقط روی رشته‌ی خروجی خوانده و نوشته می‌شود) */
+    private var refusable = false
+
     /** این بسته از برنامه‌ی مجاز است؟ */
     private fun pass(p: ByteArray, n: Int): Boolean {
+        refusable = false
         if (n < 20 || (b(p, 0) shr 4) != 4) return false      // IPv6 روی این کارت آدرس ندارد
         val proto = b(p, 9)
         if (proto != 6 && proto != 17) return false
@@ -139,12 +145,14 @@ class AppGate(
                     unknown.remove(key)
                 } else {
                     if (unknown.size > 4096) unknown.clear()
-                    unknown[key] = now + 2000
+                    unknown[key] = now + 250
                 }
             }
         }
         // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) همیشه رد می‌شوند
-        return uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID)
+        val ok = uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID)
+        refusable = !ok && uid >= 0
+        return ok
     }
 
     /** جمع متمم یک (چک‌سام IP، TCP و ICMP) */
