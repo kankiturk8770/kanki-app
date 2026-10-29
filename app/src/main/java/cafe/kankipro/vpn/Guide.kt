@@ -259,7 +259,7 @@ private fun GuideBubble(
             Spacer(Modifier.width(D.S2))
             T(if (en) step.titleEn else step.title, size = 16.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(D.S2))
-            T(trf("%d از %d", idx + 1, guideSteps.size), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            T(trf("%d از %d", idx + 1, guideSteps.size).let { if (en) it else faDigits(it) }, size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         Spacer(Modifier.height(D.S2))
         GuideBody(if (en) step.textEn else step.text)
