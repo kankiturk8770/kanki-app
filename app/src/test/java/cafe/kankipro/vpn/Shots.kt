@@ -188,7 +188,7 @@ abstract class ShotsBase {
     }
     protected fun pgSpeed(): @Composable () -> Unit = {
         Frame(KTab.TEST) {
-            SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
+            SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, loss = 0, udpTarget = "Cloudflare DNS", server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
         }
     }
     protected fun pgSettings(): @Composable () -> Unit = {
@@ -217,7 +217,7 @@ abstract class ShotsBase {
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
             initFamily = "kankimix", current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
-            onKmixDup = {}, onFamilyShown = {},
+            onKmixDup = {}, gameOnly = true, gameCount = 2, onGameOnly = {}, onPickGames = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }

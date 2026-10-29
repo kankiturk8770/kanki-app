@@ -26,6 +26,47 @@ import androidx.compose.ui.unit.sp
 
 // اجزای مشترک طراحی جدید (کارت، دکمه‌ی چندگزینه‌ای، پرچم، پینگ و …)
 
+/**
+ * سقف فریم انیمیشن‌های تزئینی (دکمه‌ی اتصال، ستاره‌ها، نقشه، لوگو).
+ * گوشی ضعیف (رم کم، چهار هسته یا کمتر): ۳۰ فریم؛ بقیه ۶۰ فریم، حتی روی صفحه‌ی ۹۰ و ۱۲۰ هرتز.
+ * انیمیشن‌ها فقط سر همین فاصله‌ها عوض می‌شوند، پس صفحه کمتر دوباره کشیده می‌شود و رشته‌ی اصلی برای لمس و اتصال آزاد می‌ماند.
+ */
+object Motion {
+    @Volatile var lowEnd = false
+        private set
+
+    /** فاصله‌ی دو فریم (نانوثانیه)، با ۲ میلی‌ثانیه جا برای لرزش ساعت فریم */
+    val frameNs: Long get() = if (lowEnd) 31_000_000L else 14_500_000L
+
+    fun init(ctx: android.content.Context) {
+        val am = ctx.getSystemService(android.app.ActivityManager::class.java) ?: return
+        val mem = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        lowEnd = am.isLowRamDevice || mem.totalMem < 3L * 1024 * 1024 * 1024 ||
+            Runtime.getRuntime().availableProcessors() <= 4
+    }
+}
+
+/** ساعت مشترک انیمیشن‌های تزئینی (ثانیه)، فقط سر فاصله‌ی Motion.frameNs جلو می‌رود */
+@Composable
+fun motionTime(): State<Float> {
+    val s = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var start = 0L
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (start == 0L) { start = now; last = now }
+                if (now - last >= Motion.frameNs) {
+                    // هر ساعت از صفر؛ دقت عدد اعشاری بعد از ساعت‌ها باز بودن برنامه کم نمی‌شود
+                    s.floatValue = ((now - start) % 3_600_000_000_000L) / 1e9f
+                    last = now
+                }
+            }
+        }
+    }
+    return s
+}
+
 /** متن فقط لاتین/عدد است؟ (برای انتخاب فونت Poppins و جهت چپ‌به‌راست) */
 fun isLatin(s: String) = s.any { it.isLetterOrDigit() } && s.none { it in '؀'..'ۿ' }
 

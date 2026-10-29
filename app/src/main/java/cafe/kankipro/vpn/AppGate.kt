@@ -19,7 +19,16 @@ import java.util.concurrent.ConcurrentHashMap
  *   برنامه‌ی دیگر ← بسته دور ریخته می‌شود (آن برنامه اینترنت ندارد)
  * بین این کلاس و hev یک جفت سوکت SEQPACKET است که مرز بسته‌ها را مثل کارت شبکه نگه می‌دارد.
  * سؤال‌های DNS (پورت ۵۳/۸۵۳) همیشه رد می‌شوند، چون از طرف سرویس DNS خود اندروید فرستاده می‌شوند.
- * موتور امنزیا/وایرگارد از این استفاده نمی‌کند؛ فقط Hysteria2، Xray و حالت DNS کانکی.
+ * موتور امنزیا/وایرگارد از این استفاده نمی‌کند؛ فقط Hysteria2، Xray، حالت DNS کانکی و «فقط بازی» گیمینگ
+ * (KANKI MIX و microtun، که هسته‌شان به‌جای کارت شبکه سر دیگر همین جفت سوکت را می‌گیرد).
+ *
+ * بی‌اثر روی پینگ بازی:
+ *   - صاحب هر اتصال فقط بار اول پرسیده می‌شود و در حافظه می‌ماند (بسته‌های بعدی بازی فقط یک جست‌وجوی جدول‌اند)؛
+ *     اتصالی که صاحبش معلوم نشد دو ثانیه دیگر دوباره پرسیده نمی‌شود.
+ *   - بسته‌ی برنامه‌ی بسته‌شده همان‌جا دور ریخته می‌شود و به هسته نمی‌رسد.
+ *   - reject: به TCP برنامه‌ی بسته‌شده فوری RST و به UDP آن «پورت در دسترس نیست» (ICMP) برمی‌گردد، تا برنامه
+ *     بفهمد اینترنت ندارد و پشت سر هم دوباره نفرستد (پردازنده و صف کارت شبکه برای بازی خالی می‌ماند).
+ *   - دو رشته‌ی دروازه اولویت بالا دارند.
  */
 class AppGate(
     private val svc: VpnService,
@@ -27,6 +36,8 @@ class AppGate(
     allowedUids: Set<Int>,
     /** حالت DNS کانکی: سؤال‌های DNS به آدرس ساختگی همین‌جا جواب داده می‌شوند */
     private val dns: KankiDns.Forwarder? = null,
+    /** به بسته‌های برنامه‌های بسته‌شده جواب «اینترنت نیست» داده شود (RST / ICMP) */
+    private val reject: Boolean = false,
 ) {
     companion object {
         /** شناختن صاحب هر اتصال از اندروید ۱۰ ممکن است */
@@ -42,18 +53,25 @@ class AppGate(
     private val allowed: Set<Int> = allowedUids
     private val pair: Array<ParcelFileDescriptor> = ParcelFileDescriptor.createReliableSocketPair()
 
-    /** سر دیگر جفت سوکت؛ به‌جای کارت شبکه به hev داده می‌شود */
+    /** سر دیگر جفت سوکت؛ به‌جای کارت شبکه به hev (یا هسته‌ی KANKI MIX / microtun) داده می‌شود */
     val innerFd: Int get() = pair[1].fd
+    val inner: ParcelFileDescriptor get() = pair[1]
 
     private val cm: ConnectivityManager? = svc.getSystemService(ConnectivityManager::class.java)
     private val tcpOwners = ConcurrentHashMap<Long, Int>()
     private val udpOwners = ConcurrentHashMap<Long, Int>()
+    /** اتصال‌هایی که صاحبشان معلوم نشد ← زمانی که دوباره پرسیده شوند */
+    private val unknown = ConcurrentHashMap<Long, Long>()
     private val tunOut = FileOutputStream(tun.fileDescriptor)
     @Volatile private var running = true
 
     fun start() {
-        Thread({ outbound() }, "kanki-gate-out").start()
-        Thread({ inbound() }, "kanki-gate-in").start()
+        Thread({ urgent(); outbound() }, "kanki-gate-out").start()
+        Thread({ urgent(); inbound() }, "kanki-gate-in").start()
+    }
+
+    private fun urgent() {
+        runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY) }
     }
 
     /** بعد از خاموش شدن hev صدا زده شود */
@@ -73,7 +91,10 @@ class AppGate(
             if (n < 0) break
             if (n == 0) continue
             if (dns != null && dns.handle(buf, n)) continue
-            if (!pass(buf, n)) continue
+            if (!pass(buf, n)) {
+                if (reject) runCatching { refuse(buf, n) }
+                continue
+            }
             try { out.write(buf, 0, n) } catch (e: Exception) { if (!running) break }
         }
     }
@@ -107,14 +128,96 @@ class AppGate(
         val dst = (b(p, 16).toLong() shl 24) or (b(p, 17).toLong() shl 16) or (b(p, 18).toLong() shl 8) or b(p, 19).toLong()
         val key = (dst shl 32) or (dport.toLong() shl 16) or sport.toLong()
         val map = if (proto == 6) tcpOwners else udpOwners
-        val uid = map[key] ?: owner(proto, p, sport, dport).also { u ->
-            if (u >= 0) {
-                if (map.size > 4096) map.clear()
-                map[key] = u
+        val uid = map[key] ?: run {
+            val now = System.currentTimeMillis()
+            val retry = unknown[key]
+            if (retry != null && now < retry) return false
+            owner(proto, p, sport, dport).also { u ->
+                if (u >= 0) {
+                    if (map.size > 4096) map.clear()
+                    map[key] = u
+                    unknown.remove(key)
+                } else {
+                    if (unknown.size > 4096) unknown.clear()
+                    unknown[key] = now + 2000
+                }
             }
         }
         // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) همیشه رد می‌شوند
         return uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID)
+    }
+
+    /** جمع متمم یک (چک‌سام IP، TCP و ICMP) */
+    private fun sum(p: ByteArray, from: Int, len: Int, start: Long = 0): Long {
+        var s = start
+        var i = from
+        while (i + 1 < from + len) { s += (b(p, i) shl 8 or b(p, i + 1)).toLong(); i += 2 }
+        if (i < from + len) s += (b(p, i) shl 8).toLong()
+        return s
+    }
+
+    private fun fold(s0: Long): Int {
+        var s = s0
+        while (s shr 16 != 0L) s = (s and 0xffff) + (s shr 16)
+        return (s.inv() and 0xffff).toInt()
+    }
+
+    private fun put16(p: ByteArray, i: Int, v: Int) { p[i] = (v shr 8).toByte(); p[i + 1] = v.toByte() }
+    private fun put32(p: ByteArray, i: Int, v: Long) { put16(p, i, (v shr 16).toInt() and 0xffff); put16(p, i + 2, (v and 0xffff).toInt()) }
+    private fun get32(p: ByteArray, i: Int): Long = (b(p, i).toLong() shl 24) or (b(p, i + 1).toLong() shl 16) or (b(p, i + 2).toLong() shl 8) or b(p, i + 3).toLong()
+
+    /** سرآیند IPv4 بسته‌ی جواب: مبدأ و مقصد جابه‌جا */
+    private fun ipHeader(out: ByteArray, orig: ByteArray, proto: Int) {
+        out[0] = 0x45
+        put16(out, 2, out.size)
+        out[6] = 0x40          // تکه نشود
+        out[8] = 64
+        out[9] = proto.toByte()
+        System.arraycopy(orig, 16, out, 12, 4)
+        System.arraycopy(orig, 12, out, 16, 4)
+        put16(out, 10, fold(sum(out, 0, 20)))
+    }
+
+    /** جواب «اینترنت نیست» به بسته‌ی برنامه‌ی بسته‌شده: RST برای TCP، ICMP «پورت در دسترس نیست» برای UDP */
+    private fun refuse(p: ByteArray, n: Int) {
+        if (n < 20 || (b(p, 0) shr 4) != 4) return
+        val hl = (b(p, 0) and 0xf) * 4
+        val out: ByteArray = when (b(p, 9)) {
+            6 -> {
+                if (n < hl + 20) return
+                val flags = b(p, hl + 13)
+                if (flags and 0x04 != 0) return                     // به RST جواب داده نمی‌شود
+                val dataOff = (b(p, hl + 12) shr 4) * 4
+                val total = (b(p, 2) shl 8) or b(p, 3)
+                val segLen = (total - hl - dataOff).coerceAtLeast(0) + (if (flags and 0x02 != 0) 1 else 0) + (if (flags and 0x01 != 0) 1 else 0)
+                val o = ByteArray(40)
+                ipHeader(o, p, 6)
+                System.arraycopy(p, hl + 2, o, 20, 2)               // پورت مبدأ = پورت مقصد بسته
+                System.arraycopy(p, hl, o, 22, 2)
+                if (flags and 0x10 != 0) {
+                    put32(o, 24, get32(p, hl + 8))                  // seq = ack بسته
+                    o[33] = 0x04                                     // RST
+                } else {
+                    put32(o, 28, (get32(p, hl + 4) + segLen) and 0xffffffffL)
+                    o[33] = 0x14                                     // RST + ACK
+                }
+                o[32] = 0x50
+                val pseudo = sum(o, 12, 8) + 6 + 20
+                put16(o, 36, fold(sum(o, 20, 20, pseudo)))
+                o
+            }
+            17 -> {
+                val copy = minOf(n, hl + 8)
+                val o = ByteArray(28 + copy)
+                ipHeader(o, p, 1)
+                o[20] = 3; o[21] = 3                                 // مقصد در دسترس نیست / پورت
+                System.arraycopy(p, 0, o, 28, copy)
+                put16(o, 22, fold(sum(o, 20, 8 + copy)))
+                o
+            }
+            else -> return
+        }
+        synchronized(tunOut) { tunOut.write(out) }
     }
 
     /** صاحب اتصال؛ -1 اگر معلوم نشد */

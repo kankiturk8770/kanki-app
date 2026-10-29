@@ -225,9 +225,10 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     val a = state.account
 
     // دکمه‌ی «برگشت» گوشی اول پنل باز را می‌بندد، بعد به تب خانه برمی‌گردد
-    androidx.activity.compose.BackHandler(enabled = state.gameSheet || state.filterSheet || state.accountOpen || showSplit || tab != KTab.HOME) {
+    androidx.activity.compose.BackHandler(enabled = state.gameSheet || state.filterSheet || state.accountOpen || showSplit || state.gameAppsOpen || tab != KTab.HOME) {
         when {
             showSplit -> showSplit = false
+            state.gameAppsOpen -> state.gameAppsOpen = false
             state.gameSheet -> state.gameSheet = false
             state.filterSheet -> state.filterSheet = false
             state.accountOpen -> state.accountOpen = false
@@ -249,6 +250,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
     )
 
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
+    if (state.gameAppsOpen) GameAppsPanel(state) { state.gameAppsOpen = false }
 
     // «برگشت» گوشی روی سؤال اول یعنی «بعداً»
     androidx.activity.compose.BackHandler(enabled = Guide.asking) { Guide.asking = false; state.guideDone = true }
@@ -481,6 +483,10 @@ private fun ModeSheets(state: AppState) {
         busy = busy,
         kmixDup = state.kmixDup,
         onKmixDup = { state.changeKmixDup(it) },
+        gameOnly = state.gameOnly,
+        gameCount = state.gameApps.size,
+        onGameOnly = { state.changeGameOnly(it) },
+        onPickGames = { state.gameAppsOpen = true },
         // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
         onFamilyShown = { },
         onConnect = { n, p ->
@@ -610,10 +616,7 @@ private fun ServersTab(state: AppState) {
             mtu = { p -> state.mtuFor(p) },
             setMtu = { p, v -> state.setMtu(p, v) },
             closeTip = { state.markTip("servers") },
-            filterAuto = { state.changeFilterAuto(it) },
-            filterXray = { state.changeFilterXray(it) },
         ),
-        filter = if (state.mode == KMode.FILTER) FilterOptsUi(state.filterAuto, state.filterXray) else null,
     )
 }
 
@@ -621,7 +624,23 @@ private fun ServersTab(state: AppState) {
 
 /** صفحه‌ی تونل‌زنی انتخابی: برنامه‌هایی که از VPN رد نمی‌شوند */
 @Composable
-fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) {
+fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) =
+    AppPickerPanel(
+        "تونل‌زنی انتخابی", "برنامه‌های روشن‌شده مستقیم و بدون VPN وصل می‌شوند (مثل بانک و اسنپ)",
+        selected = state.excluded, onToggle = { state.toggleExcluded(it) }, onClose = onClose,
+    )
+
+/** گیمینگ «فقط بازی»: بازی‌هایی که اینترنت دارند (سرویس‌های گوگل و DNS همیشه باز می‌مانند) */
+@Composable
+fun GameAppsPanel(state: AppState, onClose: () -> Unit) =
+    AppPickerPanel(
+        "بازی‌های مجاز", "فقط این بازی‌ها (و سرویس‌های گوگل برای ورود) اینترنت دارند؛ بقیه‌ی برنامه‌ها تا قطع VPN نه",
+        selected = state.gameApps, onToggle = { state.toggleGameApp(it) }, onClose = onClose,
+    )
+
+/** فهرست برنامه‌های گوشی با کلید روشن/خاموش (روشن‌ها بالای فهرست) */
+@Composable
+private fun AppPickerPanel(title: String, sub: String, selected: List<String>, onToggle: (String) -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var apps by remember { mutableStateOf<List<AppItem>?>(null) }
     var q by remember { mutableStateOf("") }
@@ -633,8 +652,8 @@ fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    T("تونل‌زنی انتخابی", size = 20.sp, color = K.Text, weight = FontWeight.Black)
-                    T("برنامه‌های روشن‌شده مستقیم و بدون VPN وصل می‌شوند (مثل بانک و اسنپ)", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                    T(title, size = 20.sp, color = K.Text, weight = FontWeight.Black)
+                    T(sub, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
                 SmallLine("بستن", onClick = onClose)
             }
@@ -654,13 +673,13 @@ fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) {
                 Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = K.Gold) }
             } else {
                 val shown = list.filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
-                    .sortedByDescending { it.pkg in state.excluded }
+                    .sortedByDescending { it.pkg in selected }
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
                     items(shown.size) { idx ->
                         val app = shown[idx]
-                        val on = app.pkg in state.excluded
+                        val on = app.pkg in selected
                         Row(
-                            Modifier.fillMaxWidth().clickable { state.toggleExcluded(app.pkg) }.padding(vertical = 8.dp),
+                            Modifier.fillMaxWidth().clickable { onToggle(app.pkg) }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             app.icon?.let { Image(it, null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))) }
@@ -671,7 +690,7 @@ fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) {
                                 T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
                             }
                             Switch(
-                                checked = on, onCheckedChange = { state.toggleExcluded(app.pkg) },
+                                checked = on, onCheckedChange = { onToggle(app.pkg) },
                                 colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold, uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF)),
                             )
                         }

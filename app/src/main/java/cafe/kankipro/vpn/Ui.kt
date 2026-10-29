@@ -80,7 +80,28 @@ class Palette(
 }
 
 val Themes: List<Palette> = listOf(
-    // زرشکی (پیش‌فرض): زرشکی با طلایی شامپاینی و هم‌خانواده‌هایشان (صورتی گلی، آلویی)؛ بدون نارنجی
+    // زرد کانکی (پیش‌فرض): زرد زنده روی مشکی خالص با سبز نئونی لوگو؛ قرمز فقط برای خطا.
+    // سبز برای «وصل» (نوشته‌ی متصل، لبه‌ی خط‌چین و موج‌های دور دکمه، کشور شما و خط مسیر روی نقشه) و ضد فیلتر،
+    // کهربایی برای گیمینگ و KANKI MIX، مسی برای DNS.
+    Palette(
+        "yellow", Color(0xFFFFD60A), Color(0xFFFFE45C), Color(0xFFB38F00), Color(0xFFFFF4B8),
+        Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
+        accent = Color(0xFF2EE06F), // سبز نئونی لوگو
+        connected = Color(0xFF3BE67C),
+        modeSmart = Color(0xFFFFD60A), // زرد
+        modeGame = Color(0xFFFFB21F), // کهربایی طلایی
+        modeAnti = Color(0xFF2EE06F), // سبز
+        modeDns = Color(0xFFD9935B), // مسی
+        mix = Color(0xFFFFB21F),
+        danger = Color(0xFFFF3B30), warn = Color(0xFFFFAA2B),
+        userCountry = Color(0xFF2EE06F),
+        toggleOn = Color(0xFFFFD60A),
+        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
+        navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+    ),
+    // زرشکی: زرشکی با طلایی شامپاینی و هم‌خانواده‌هایشان (صورتی گلی، آلویی)؛ بدون نارنجی
     Palette(
         "crimson", Color(0xFFE8203F), Color(0xFFFF5C74), Color(0xFF9E0E28), Color(0xFFFF7A8E),
         Color(0xFF000000), Color(0xFFFFF5F6), Color(0xFFA8949A),
@@ -120,28 +141,6 @@ val Themes: List<Palette> = listOf(
         gameAlt = Color(0xFFFFE27A), tracer = Color(0xFFFFF3C4),
         navTop = Color(0xFFFFE27A), navBottom = Color(0xFFFFC72C), onNav = Color(0xFF241700),
         classic = true,
-    ),
-    // زرد کانکی: همان طرح زرشکی، با زرد به‌جای زرشکی و قرمز به‌جای شامپاینی: دکمه، کارت‌ها و تب زرد روی مشکی خالص؛
-    // قرمز برای «وصل» (نوشته‌ی متصل، لبه‌ی خط‌چین و موج‌های دور دکمه، کشور شما و خط مسیر روی نقشه)، آدمک‌های گیمینگ و
-    // ضد فیلتر. گیمینگ کهربایی است تا دکمه در گیمینگ هم قرمز نشود.
-    Palette(
-        "yellow", Color(0xFFFFD60A), Color(0xFFFFE45C), Color(0xFFB38F00), Color(0xFFFFF4B8),
-        Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
-        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
-        accent = Color(0xFFFF3B30), // قرمز
-        connected = Color(0xFFFF4A3D),
-        modeSmart = Color(0xFFFFD60A), // زرد
-        modeGame = Color(0xFFFFB21F), // کهربایی طلایی
-        modeAnti = Color(0xFFFF3B30), // قرمز
-        modeDns = Color(0xFFD9935B), // مسی
-        mix = Color(0xFFFFB21F),
-        danger = Color(0xFFFF2D55), warn = Color(0xFFFFAA2B),
-        userCountry = Color(0xFFFF3B30),
-        toggleOn = Color(0xFFFFD60A),
-        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
-        navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
-        runner = Color(0xFFFF3B30),
     ),
     // بنفش سلطنتی: بنفش با سرخابی و هم‌خانواده‌هایشان (صورتی، یاسی، آبی‌بنفش)؛ همه از یک طیف
     Palette(
@@ -404,12 +403,12 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
 /** ستاره‌های چشمک‌زن در لایه‌ی جدا (عکس پشتش دوباره کشیده نمی‌شود) */
 @Composable
 private fun Twinkles(count: Int, accent: Color) {
-    val t = rememberInfiniteTransition(label = "bg")
-    val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "tw")
+    val clock by motionTime()
     Canvas(Modifier.fillMaxSize().graphicsLayer()) {
         val w = size.width
         val h = size.height
         val u = 1.dp.toPx()
+        val twinkle = clock / 9f
         for (i in 0 until count) {
             val m = motes[i]
             val tw = (sin((twinkle * m.speed + m.phase) * 6.2832f) + 1f) / 2f
@@ -455,12 +454,12 @@ private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().a
  */
 @Composable
 fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float = 0f) {
-    val t = rememberInfiniteTransition(label = "logo")
-    val loop by t.animateFloat(0f, 1f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "s")
+    // ساعت فقط برای لوگوی متحرک؛ لوگوی ثابت هیچ فریمی نمی‌گیرد
+    val clock = if (animate && sweep < 0f) motionTime() else null
     Canvas(Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
-        val sw = if (sweep >= 0f) sweep else if (animate) loop * 2.4f - .4f else -1f
+        val sw = if (sweep >= 0f) sweep else if (clock != null) (clock.value / 5.2f % 1f) * 2.4f - .4f else -1f
         if (glow > 0f) {
             val gr = w * .8f
             drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .32f * glow), Color.Transparent), center, gr), gr, center)

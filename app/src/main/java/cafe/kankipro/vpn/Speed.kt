@@ -252,3 +252,64 @@ object SpeedEngine {
         return mbps to sent.get()
     }
 }
+
+/**
+ * پینگ، جیتر و پکت‌لاس روی UDP (بیشتر پروتکل‌های کانکی و بازی‌ها روی UDP اند؛ پینگ HTTP روی TCP این‌ها را نمی‌سنجد).
+ * هر بسته فقط یک بار فرستاده می‌شود و اگر تا waitMs جواب نیامد گم‌شده حساب می‌شود.
+ */
+object UdpSeries {
+    /** make: یک بسته‌ی تازه و تابعی که جواب همان بسته را می‌شناسد (جواب دیر بسته‌ی قبلی قاطی نمی‌شود) */
+    fun run(
+        s: java.net.DatagramSocket, to: java.net.InetSocketAddress, count: Int, gapMs: Long, waitMs: Int = 1000,
+        make: () -> Pair<ByteArray, (ByteArray) -> Boolean>,
+    ): List<Long?> {
+        val out = ArrayList<Long?>(count)
+        val buf = ByteArray(2048)
+        repeat(count) { i ->
+            val (pkt, ok) = make()
+            val t0 = System.nanoTime()
+            s.send(java.net.DatagramPacket(pkt, pkt.size, to))
+            var got: Long? = null
+            val end = t0 + waitMs * 1_000_000L
+            while (got == null) {
+                val left = ((end - System.nanoTime()) / 1_000_000L).toInt()
+                if (left <= 0) break
+                s.soTimeout = left
+                val dp = java.net.DatagramPacket(buf, buf.size)
+                try { s.receive(dp) } catch (e: java.net.SocketTimeoutException) { break }
+                if (ok(buf.copyOf(dp.length))) got = ((System.nanoTime() - t0) / 1_000_000L).coerceAtLeast(1)
+            }
+            out.add(got)
+            if (i < count - 1) Thread.sleep(gapMs)
+        }
+        return out
+    }
+
+    /** پینگ (میانه)، جیتر (میانگین فرق نمونه‌های پشت‌سرهم) و پکت‌لاس (درصد)؛ null اگر هیچ جوابی نیامد */
+    fun summary(r: List<Long?>): Triple<Long, Long, Int>? {
+        val ok = r.filterNotNull()
+        if (ok.isEmpty()) return null
+        val ping = ok.sorted()[ok.size / 2]
+        val jitter = if (ok.size < 2) 0L else ok.zipWithNext { a, b -> abs(a - b) }.average().toLong()
+        val loss = (r.count { it == null } * 100 + r.size / 2) / r.size
+        return Triple(ping, jitter, loss)
+    }
+
+    /** سؤال DNS (رکورد A برای one.one.one.one) با شناسه‌ی تصادفی و تابعی که فقط جواب همین سؤال را می‌شناسد */
+    fun dnsQuery(): Pair<ByteArray, (ByteArray) -> Boolean> {
+        val id = (0..0xffff).random()
+        val q = java.io.ByteArrayOutputStream()
+        q.write(id shr 8); q.write(id and 0xff)
+        q.write(byteArrayOf(0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0))
+        for (label in listOf("one", "one", "one", "one")) { q.write(label.length); q.write(label.toByteArray()) }
+        q.write(byteArrayOf(0, 0, 1, 0, 1))
+        return q.toByteArray() to { p: ByteArray ->
+            p.size >= 12 && ((p[0].toInt() and 0xff) shl 8 or (p[1].toInt() and 0xff)) == id && (p[2].toInt() and 0x80) != 0
+        }
+    }
+
+    /** سری سؤال DNS روی UDP به 1.1.1.1 (وقتی VPN وصل است از داخل تونل می‌رود) */
+    fun dns(count: Int, gapMs: Long): List<Long?>? = runCatching {
+        java.net.DatagramSocket().use { s -> run(s, java.net.InetSocketAddress("1.1.1.1", 53), count, gapMs) { dnsQuery() } }
+    }.getOrNull()
+}

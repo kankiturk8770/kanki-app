@@ -108,6 +108,24 @@ object Probe {
     }
 
     /**
+     * سری پینگ UDP برای تست سرعت: count بسته‌ی پینگ KANKI MIX (هر کدام یک بار، بدون فرستادن دوباره) با gapMs فاصله؛
+     * هر عنصر زمان رفت و برگشت یا null برای بسته‌ی گم‌شده (پکت‌لاس واقعی).
+     */
+    fun kmixSeries(net: Network?, cfg: String, count: Int, gapMs: Long): List<Long?>? {
+        val u = runCatching { KmixUri.parse(cfg) }.getOrNull() ?: return null
+        val ip = resolve(net, u.host) ?: return null
+        val to = InetSocketAddress(ip, u.port)
+        return runCatching {
+            udp(net).use { s ->
+                UdpSeries.run(s, to, count, gapMs) {
+                    val h = KmixHello.ping(u.key)
+                    h.packet to { p: ByteArray -> KmixHello.isPong(p, h) }
+                }
+            }
+        }.getOrNull()
+    }
+
+    /**
      * microtun: خود هسته یک بار با کلید همین کاربر دست می‌دهد و رفت‌وبرگشت آن را می‌سنجد
      * (`libmtun.so ping`؛ دستگاهی روی سرور ساخته نمی‌شود).
      */

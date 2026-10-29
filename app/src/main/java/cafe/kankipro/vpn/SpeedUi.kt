@@ -26,6 +26,9 @@ data class SpeedUi(
     val up: Double? = null,
     val ping: Long? = null,
     val jitter: Long? = null,
+    /** پکت‌لاس UDP (درصد) و مقصد سنجش UDP */
+    val loss: Int? = null,
+    val udpTarget: String? = null,
     val server: String? = null,
     val viaVpn: Boolean = false,
     val usedBytes: Long? = null,
@@ -42,7 +45,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
         KCard(Modifier.fillMaxWidth(), padding = D.CardPad) {
             // مرحله‌ها
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                PhaseChip("ping", "پینگ", ui, Modifier.weight(1f))
+                PhaseChip("ping", "پینگ UDP", ui, Modifier.weight(1f))
                 PhaseChip("down", "دانلود", ui, Modifier.weight(1f))
                 PhaseChip("up", "آپلود", ui, Modifier.weight(1f))
             }
@@ -58,7 +61,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                     T(
                         when (ui.phase) {
                             "server" -> "در حال پیدا کردن نزدیک‌ترین سرور…"
-                            "ping" -> "در حال سنجش پینگ…"
+                            "ping" -> "در حال سنجش پینگ UDP…"
                             "down" -> "دانلود · Mbps"
                             "up" -> "آپلود · Mbps"
                             "done" -> "دانلود · Mbps"
@@ -75,11 +78,21 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
             }
             Spacer(Modifier.height(D.S2))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                ResultTile("ping", "پینگ", ui.ping?.toString(), "ms", ui.ping?.let { pingColor(it) } ?: K.Sub, Modifier.weight(1f))
+                ResultTile("ping", if (ui.udpTarget != null) "پینگ UDP" else "پینگ", ui.ping?.toString(), "ms", ui.ping?.let { pingColor(it) } ?: K.Sub, Modifier.weight(1f))
                 ResultTile("clock", "جیتر", ui.jitter?.toString(), "ms", K.Sub, Modifier.weight(1f))
             }
-            ui.server?.let {
+            ui.udpTarget?.let {
                 Spacer(Modifier.height(D.S3))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MiniIcon("status", ui.loss?.let { l -> if (l == 0) K.Green else if (l < 5) K.Warn else K.Red } ?: K.Sub, 10.dp)
+                    Spacer(Modifier.width(D.S2))
+                    T(trf("پکت‌لاس UDP: %s", ltr("${ui.loss ?: 0}%")), size = 11.sp, color = K.Text, weight = FontWeight.Bold)
+                    Spacer(Modifier.width(D.S2))
+                    AutoText(it, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
+            }
+            ui.server?.let {
+                Spacer(Modifier.height(if (ui.udpTarget != null) D.S1 else D.S3))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MiniIcon("status", K.Green, 10.dp)
                     Spacer(Modifier.width(D.S2))
@@ -101,7 +114,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
             Spacer(Modifier.height(D.S2))
             T(
                 ui.usedBytes?.let { trf("مصرف اینترنت این تست: %s", ltr(formatBytes(it))) }
-                    ?: "با سرورهای Speedtest by Ookla و چند اتصال همزمان، مثل اپ اصلی Speedtest",
+                    ?: "پینگ، جیتر و پکت‌لاس روی UDP (مثل بازی)؛ دانلود و آپلود با سرورهای Speedtest by Ookla و چند اتصال همزمان",
                 size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
             )
         }

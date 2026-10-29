@@ -19,6 +19,21 @@ fun applyExcluded(cfg: String, pkgs: Set<String>): String {
 }
 
 /**
+ * «فقط بازی اینترنت داشته باشد» (گیمینگ، فقط KANKI MIX و microtun): فقط این برنامه‌ها و پیش‌نیازهای ورود بازی
+ * (سرویس‌های گوگل و پلی‌استور) اینترنت دارند؛ DNS همیشه رد می‌شود و بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند.
+ */
+fun applyGameOnly(cfg: String, games: Set<String>): String {
+    if (games.isEmpty()) return cfg
+    val lines = cfg.lines().filterNot { it.trim().startsWith("GameOnly", ignoreCase = true) }.toMutableList()
+    val i = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
+    if (i >= 0) lines.add(i + 1, "GameOnly = " + (games + GAME_NEEDS).sorted().joinToString(", "))
+    return lines.joinToString("\n")
+}
+
+/** بدون این‌ها ورود به بازی (حساب گوگل / پلی) و خرید داخل بازی کار نمی‌کند */
+val GAME_NEEDS = setOf("com.google.android.gms", "com.google.android.gsf", "com.android.vending")
+
+/**
  * بستن کامل IPv6 در کانفیگ وایرگارد/امنزیا: آدرس، مسیر (AllowedIPs) و DNS ای‌پی‌وی‌شش حذف می‌شوند.
  * در ایران IPv6 کار نمی‌کند و برنامه‌ها پیش از برگشتن به IPv4 معطل می‌مانند (پینگ بالا و کندی).
  */

@@ -19,6 +19,8 @@
 | پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
 | چت اضطراری | `Emergency.kt`، `EmergencyUi.kt`، `EmergencyNotify.kt` |
 | DNS کانکی (رفع تحریم) | `DnsMode.kt` |
+| دروازه‌ی برنامه‌ها: «فقط بازی» گیمینگ (KMIX/microtun)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt` |
+| سقف فریم انیمیشن‌ها (گوشی ضعیف ۳۰، بقیه ۶۰) | `Motion` و `motionTime()` در `Kit.kt` |
 | ترجمه (فارسی → انگلیسی) | `I18n.kt` |
 | اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
 | نقشه | `MapView.kt`، `WorldMap.kt` |
@@ -45,3 +47,28 @@
 
 ## زبان
 صاحب پروژه فارسی‌زبان است و دارد برنامه‌نویسی یاد می‌گیرد: جواب‌ها فارسی، کوتاه و ساده.
+
+## طراحی
+اسکیل `frontend-design` (رسمی Anthropic) در `.claude/skills/frontend-design/`؛ برای هر کار UI اول آن را بخوان.
+عکس صفحه‌ها بعد از push در شاخه‌ی `shots` (کار `shots.yml`).
+
+## گزارش کارها
+
+### 2026-10-29 — نسخه‌ی ۱.۲۲.۰
+خواسته‌ی صاحب اپ: انیمیشن‌های بی‌لگ، تم زرد، گیمینگ استاندارد، صفحه‌ی سرورها (بدون تیک‌های اضافه، سربرگ با لوگو، باگ
+بیرون ماندن کانفیگ‌ها، کارت‌های مدرن)، تست سرعت UDP، هوشمند بدون KMIX/microtun با رفتن به تانل، فایروال «فقط بازی».
+
+انجام شد (جزئیات در `CHANGES.md`):
+1. تم زرد پیش‌فرض (`Ui.kt`، مهاجرت یک‌باره `theme122` در `AppState`).
+2. انیمیشن‌ها: `Motion`/`motionTime` (Kit.kt)، دکمه‌ی اتصال با `drawWithCache`، نقشه هنگام بزرگ‌نمایی عکس آماده را بزرگ می‌کند (`WorldMap.kt`).
+3. گیمینگ: کارت‌های پروتکل دوتا در ردیف (`ModesUi.kt` `FamilyCard`).
+4. سرورها: `ServersHero` با لوگوی `res/drawable-nodpi/kanki_logo.webp`، `CfgCell` و `SignalBars` تازه، `key()` برای کارت‌ها و ردیف‌ها.
+5. تست سرعت: `UdpSeries` (Speed.kt)، `Probe.kmixSeries`، `udpLatency()` در AppState.
+6. هوشمند: `GAME_ONLY` و ترتیب تازه در `runSmart`.
+7. فایروال: `AppGate` (reject: RST/ICMP، کش منفی، اولویت رشته‌ها)، `gameOnly`/`gameApps` در AppState، `GameAppsPanel`، سوییچ در `GameSheet`.
+
+تست: محیط ابری Android SDK ندارد؛ ساخت و عکس‌ها در CI (`build.yml`، `shots.yml`).
+تصمیم‌ها: تست پهنای باند روی UDP بدون سرور UDP مخصوص ممکن نیست؛ دانلود/آپلود همان Speedtest است که وقتی وصلی از تونل UDP
+می‌رود. فایروال فقط با دروازه‌ی داخل برنامه شدنی است (اندروید اجازه‌ی بستن بقیه را جور دیگری نمی‌دهد)؛ کار هر بسته فقط یک
+جست‌وجوی جدول است.
+مانده: تست فایروال روی گوشی واقعی با پابجی (ورود، پینگ، مسابقه).

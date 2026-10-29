@@ -81,6 +81,31 @@ class AppState private constructor(context: Context) {
         if (HyEngine.kmix) KmixCore.setGaming(v)
     }
 
+    /**
+     * گیمینگ «فقط بازی اینترنت داشته باشد»: فقط با KANKI MIX و microtun و اندروید ۱۰ به بالا (AppGate).
+     * بازی‌های انتخابی، سرویس‌های گوگل و DNS اینترنت دارند و بقیه‌ی برنامه‌ها تا قطع VPN نه.
+     */
+    var gameOnly by mutableStateOf(prefs.getBoolean("gameFirewall", false))
+        private set
+    fun changeGameOnly(v: Boolean) {
+        gameOnly = v
+        prefs.edit().putBoolean("gameFirewall", v).apply()
+        if (v && !prefs.contains("gameApps")) bg.launch {
+            val found = withContext(Dispatchers.IO) { GameApps.detect(ctx) }
+            if (!prefs.contains("gameApps")) { gameApps.clear(); gameApps.addAll(found); saveGameApps() }
+        }
+    }
+    /** بازی‌های مجاز «فقط بازی» (بار اول: بازی‌های نصب‌شده‌ی گوشی، خودکار) */
+    val gameApps = androidx.compose.runtime.mutableStateListOf<String>().apply {
+        addAll(prefs.getStringSet("gameApps", emptySet()) ?: emptySet())
+    }
+    fun toggleGameApp(pkg: String) {
+        if (pkg in gameApps) gameApps.remove(pkg) else gameApps.add(pkg)
+        saveGameApps()
+    }
+    private fun saveGameApps() { prefs.edit().putStringSet("gameApps", gameApps.toSet()).apply() }
+    var gameAppsOpen by mutableStateOf(false)
+
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
     var gameAuto by mutableStateOf(prefs.getBoolean("gameAuto", true))
         private set
@@ -558,10 +583,15 @@ class AppState private constructor(context: Context) {
     var smartCurrent by mutableStateOf<String?>(null)
 
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
+    /** پروتکل‌های فقط گیمینگ: نه در هوشمند، نه در ضد فیلتر خودکار */
+    private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO)
+
     private suspend fun smartMeasure(): List<SmartRow> {
         val a = account ?: return emptyList()
         val cands = a.configs.distinctBy { it.node }.flatMap { n ->
             (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
+                // KANKI MIX و microtun فقط مال گیمینگ‌اند و هوشمند هیچ‌وقت به آن‌ها وصل نمی‌شود
+                if (p in GAME_ONLY) return@mapNotNull null
                 infos["${n.node}/$p"]?.takeIf { it.host != "—" }?.let { i -> Triple(n, p, i) }
             }
         }
@@ -622,8 +652,12 @@ class AppState private constructor(context: Context) {
                 error = "هیچ سروری جواب پینگ نداد. اینترنت را بررسی کنید."
                 return
             }
-            // کمترین پینگ اول؛ اتصال واقعاً آزمایش می‌شود (پاسخ از داخل تونل) و اگر نشد، بعدی
-            val order = rows.sortedBy { it.ping }.distinctBy { it.node + "|" + it.proto }.take(5)
+            // کمترین پینگ اول (جیتر کمتر وقتی پینگ برابر است)؛ اتصال واقعاً آزمایش می‌شود (پاسخ از داخل تونل) و اگر نشد، بعدی.
+            // شبکه‌ی بد (بهترین راه مستقیم پینگ بالای ۲۵۰ یا جیتر بالای ۶۰ دارد یا اصلاً جواب نداد): اول تانل‌ها.
+            val scored = rows.sortedWith(compareBy({ it.ping }, { it.jitter })).distinctBy { it.node + "|" + it.proto }
+            val bestDirect = scored.firstOrNull { cfgSide(it.node, it.proto) != "tunnel" }
+            val weak = bestDirect == null || bestDirect.ping > 250 || bestDirect.jitter > 60
+            val order = (if (weak) scored.sortedBy { if (cfgSide(it.node, it.proto) == "tunnel") 0 else 1 } else scored).take(5)
             for ((i, r) in order.withIndex()) {
                 if (!wantTry) return
                 smartCurrent = r.node + "|" + r.proto
@@ -877,7 +911,9 @@ class AppState private constructor(context: Context) {
         watchState()
         watchHealth()
         watchSync()
-        ThemeState.set(prefs.getString("theme", "crimson") ?: "crimson")
+        // نسخه‌ی ۱.۲۲: تم زرد کانکی پیش‌فرض است و یک بار برای همه انتخاب می‌شود (بعدش انتخاب خود کاربر می‌ماند)
+        if (!prefs.getBoolean("theme122", false)) prefs.edit().putString("theme", "yellow").putBoolean("theme122", true).apply()
+        ThemeState.set(prefs.getString("theme", "yellow") ?: "yellow")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
 
@@ -1280,6 +1316,9 @@ class AppState private constructor(context: Context) {
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
+                if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
+                    cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx) })
+                }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
                 // کاربر وسط بالا آمدن «قطع» زد: همین‌جا پایین بیاید، نه اینکه بعداً «متصل» دیده شود
@@ -1363,15 +1402,24 @@ class AppState private constructor(context: Context) {
         speedLive = 0.0
         bg.launch {
             try {
+                // ۱) پینگ، جیتر و پکت‌لاس روی UDP (مثل بازی و پروتکل‌های کانکی)
+                speed = speed.copy(phase = "ping")
+                val udp = withContext(Dispatchers.IO) { udpLatency() }
+                if (udp != null) speed = speed.copy(ping = udp.second.first, jitter = udp.second.second, loss = udp.second.third, udpTarget = udp.first)
+                // ۲) سرور دانلود و آپلود (Speedtest؛ وقتی وصلی همین هم از داخل تونل UDP کانکی می‌رود)
                 var srv = withContext(Dispatchers.IO) { SpeedEngine.pickServer() } ?: SpeedEngine.CLOUDFLARE
-                speed = speed.copy(phase = "ping", server = srv.title)
-                var lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
-                if (lat == null && srv.kind != "cf") {
-                    srv = SpeedEngine.CLOUDFLARE
-                    speed = speed.copy(server = srv.title)
-                    lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
+                speed = speed.copy(server = srv.title)
+                if (udp == null) {
+                    // UDP جواب نداد (مثلاً شبکه UDP را بسته): همان پینگ HTTP
+                    var lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
+                    if (lat == null && srv.kind != "cf") {
+                        srv = SpeedEngine.CLOUDFLARE
+                        speed = speed.copy(server = srv.title)
+                        lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
+                    }
+                    speed = speed.copy(ping = lat?.first, jitter = lat?.second)
                 }
-                speed = speed.copy(phase = "down", ping = lat?.first, jitter = lat?.second)
+                speed = speed.copy(phase = "down")
                 // اگر سرور Ookla جواب نداد: یک بار با آدرس‌های قدیمی Ookla، بعد با Cloudflare
                 suspend fun <T> withFallback(block: (SpeedEngine.Server) -> T): T = withContext(Dispatchers.IO) {
                     try { block(srv) } catch (e: java.io.IOException) {
@@ -1394,6 +1442,22 @@ class AppState private constructor(context: Context) {
                 speed = speed.copy(running = false, phase = "", error = "تست ناموفق بود. اینترنت را بررسی کنید.")
             }
         }
+    }
+
+    /**
+     * پینگ UDP تست سرعت (مقصد، (پینگ، جیتر، پکت‌لاس)):
+     * VPN خاموش: ۲۰ بسته‌ی پینگ KANKI MIX به کم‌پینگ‌ترین سرور KANKI MIX این اشتراک (همان مسیر UDP که بازی می‌رود)؛
+     * VPN روشن یا بدون KANKI MIX: ۲۰ سؤال DNS روی UDP به 1.1.1.1 (وقتی وصلی از داخل تونل).
+     */
+    private suspend fun udpLatency(): Pair<String, Triple<Long, Long, Int>>? {
+        if (vstate == VState.OFF) {
+            val l = account?.configs?.filter { it.protocol == "kankimix" }?.minByOrNull { protoPing(it.node, it.protocol)?.takeIf { p -> p > 0 } ?: 99_999L }
+            if (l != null) runCatching {
+                val r = Probe.kmixSeries(Probe.underlying(ctx), fetchConfig(l), 20, 60)
+                r?.let { UdpSeries.summary(it) }?.let { return (l.nodeName + " · KANKI MIX") to it }
+            }
+        }
+        return UdpSeries.dns(20, 60)?.let { UdpSeries.summary(it) }?.let { "Cloudflare DNS" to it }
     }
 
     /** بروزرسانی اطلاعات کانفیگ‌های یک سرور */
