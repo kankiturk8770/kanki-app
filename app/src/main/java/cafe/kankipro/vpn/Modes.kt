@@ -18,7 +18,7 @@ import android.content.Context
 enum class KMode(val key: String, val title: String, val sub: String) {
     SMART("smart", "هوشمند", "پینگ همه را می‌گیرد و به بهترین وصل می‌شود"),
     GAME("game", "گیمینگ", "کمترین پینگ برای بازی · پروتکل و کشور با شما"),
-    FILTER("filter", "ضد فیلتر", "یک لمس: بهترین راه عبور از فیلتر · لمس دوباره: انتخاب دستی"),
+    FILTER("filter", "ضد فیلتر", "یک لمس: بهترین راه اتصال · لمس دوباره: انتخاب دستی"),
     DNS("dns", "DNS", "رفع تحریم بازی‌ها و برنامه‌ها با DNS کانکی");
 
     companion object {

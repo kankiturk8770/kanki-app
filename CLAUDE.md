@@ -71,6 +71,7 @@
 12. اشتراک: `loadAccount` جواب بی‌کانفیگ را جای نسخه‌ی سالم ذخیره نمی‌کند؛ `loadInfos` و `startupLoad` با کانفیگ خراب کرش
     نمی‌کنند؛ `syncLock` (بروزرسانی دستی و ۳ ساعته هم‌زمان نه)؛ `pruneOld` بعد از هر بروزرسانی سالم و ورود.
 13. چت اضطراری بازطراحی (`EmergencyUi.kt` `EmergencyScreen`، `Bubble`)؛ استیکر کوچک (`Stickers.SIZE` = 320، نمایش ۱۱۲dp).
+14. چت اضطراری: نشان تازه (`EmergencyIcon`)، صدای پیام (`chat_in`/`chat_out`)، بررسی سریع ۹۰ ثانیه‌ای (`EmergencyStore.watch`/`poll`)؛ متن‌های بی‌طرف به‌جای «فیلترینگ / اینترنت ملی».
 11. بازبینی موتورها (WireGuard/AmneziaWG با GoBackend، Hysteria2/Xray با tun2socks، KANKI MIX، microtun، DNS): فقط یک VPN
     هم‌زمان بالاست (`VpnEngine.up` اول موتور دیگر را پایین می‌آورد)، آی‌پی سرور از مسیرهای تونل بیرون است، IPv6 بدون
     آدرس در تونل بسته است (نه نشت، نه معطلی)، اتصال فقط با جواب واقعی از داخل تونل «متصل» می‌شود (`awaitHandshake`)،

@@ -16,6 +16,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -225,6 +226,49 @@ object EmergencyStore {
         runCatching { WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("kanki-emergency", ExistingPeriodicWorkPolicy.KEEP, req) }
     }
 
+    /**
+     * یک بار بررسی و اعلان (کار پس‌زمینه‌ی ۱۵ دقیقه‌ای و بررسی سریع داخل برنامه هر دو همین را صدا می‌زنند؛
+     * یکی در هر لحظه، تا یک پیام دو بار اعلان نشود)
+     */
+    // قفل جدا (نه قفل خود EmergencyStore): نوشتن پیام در صف روی رشته‌ی اصلی پشت یک درخواست شبکه منتظر نمی‌ماند
+    private val pollLock = Any()
+
+    fun poll(ctx: Context) = synchronized(pollLock) {
+        runCatching {
+            val fresh = check(ctx)
+            if (fresh.isNotEmpty() && !chatOpen) {
+                notify(ctx, fresh)
+                setNotified(ctx, fresh.maxOf { it.id })
+            }
+        }
+    }
+
+    /**
+     * بررسی سریع: تا وقتی پروسه‌ی برنامه زنده است (برنامه در پس‌زمینه یا VPN روشن) هر ۹۰ ثانیه، فقط وقتی
+     * چت باز نیست، اینترنت هست و آدرس سرور اضطراری را داریم. پیام تازه همان لحظه در اعلان‌های گوشی می‌افتد
+     * (نه فقط وقتی برنامه باز شود)؛ کار ۱۵ دقیقه‌ای برای وقتی است که اندروید پروسه را بسته باشد.
+     */
+    fun watch(ctx: Context) {
+        val app = ctx.applicationContext
+        if (watching) return
+        watching = true
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO).launch {
+            while (true) {
+                kotlinx.coroutines.delay(90_000)
+                if (chatOpen || !online(app)) continue
+                if (Emergency.base(app) == null) continue
+                poll(app)
+            }
+        }
+    }
+
+    @Volatile private var watching = false
+
+    private fun online(ctx: Context): Boolean = runCatching {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+        cm?.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }.getOrDefault(false)
+
     /** پیام‌های تازه را از سرور می‌گیرد و ذخیره می‌کند؛ پیام‌های تازه‌ی ادمین (برای اعلان) برمی‌گردد */
     fun check(ctx: Context): List<EMsg> {
         // فقط تنظیمات ذخیره‌شده (نه AppState): کار پس‌زمینه نباید کل برنامه را در پروسه‌ی سرد راه بیندازد
@@ -243,13 +287,7 @@ object EmergencyStore {
 
 class EmergencyWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        runCatching {
-            val fresh = EmergencyStore.check(applicationContext)
-            if (fresh.isNotEmpty() && !EmergencyStore.chatOpen) {
-                EmergencyStore.notify(applicationContext, fresh)
-                EmergencyStore.setNotified(applicationContext, fresh.maxOf { it.id })
-            }
-        }
+        EmergencyStore.poll(applicationContext)
         // خطای شبکه یعنی سرور در دسترس نبود؛ دفعه‌ی بعد دوباره (کار دوره‌ای خودش تکرار می‌شود)
         Result.success()
     }

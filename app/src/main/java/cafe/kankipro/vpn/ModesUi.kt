@@ -102,7 +102,7 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
             drawCircle(c, w * .05f, Offset(w * .76f, w * .53f))
         }
         KMode.FILTER -> {
-            // سپر با یک موشک کوچک داخلش (عبور از فیلتر)
+            // سپر با یک موشک کوچک داخلش (پایدار روی شبکه‌ی محدود)
             val sh = Path().apply {
                 moveTo(w * .5f, w * .05f); lineTo(w * .88f, w * .19f); lineTo(w * .88f, w * .48f)
                 cubicTo(w * .88f, w * .72f, w * .72f, w * .88f, w * .5f, w * .96f)
@@ -722,7 +722,7 @@ fun FilterSheet(
 ) {
     val mc = modeColor(KMode.FILTER)
     LaunchedEffect(visible) { if (visible) onShown() }
-    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای فیلتر شدید", onClose) {
+    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای محدودیت شدید شبکه", onClose) {
         SheetLabel("پروتکل‌ها")
         Row(Modifier.fillMaxWidth().guideTarget("filter_list"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
             TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }

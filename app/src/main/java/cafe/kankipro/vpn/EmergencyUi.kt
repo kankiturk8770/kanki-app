@@ -55,23 +55,38 @@ import java.io.ByteArrayOutputStream
 
 // ================================================================== لوگوی اضطراری
 
-/** نشان اضطراری: حلقه‌ی نجات قرمز و سفید */
+/**
+ * نشان ارتباط اضطراری: حباب گفتگوی طلایی که داخلش یک نقطه با دو موج (پیام از راه دور) است، و یک نقطه‌ی قرمز
+ * کوچک بالای آن (حالت اضطراری). به رنگ تم، نه حلقه‌ی نجات.
+ */
 @Composable
 fun EmergencyIcon(size: Dp = 28.dp) {
+    val gold = K.Gold
+    val red = K.Red
     Canvas(Modifier.size(size)) {
-        val r = this.size.minDimension / 2f
-        val ring = r * 0.36f
-        val mid = r - ring / 2f
-        drawCircle(K.Red, mid, center, style = Stroke(ring))
-        // چهار نوار سفید روی حلقه
-        for (i in 0 until 4) {
-            drawArc(
-                Color.White, startAngle = 45f + i * 90f - 16f, sweepAngle = 32f, useCenter = false,
-                topLeft = Offset(center.x - mid, center.y - mid), size = androidx.compose.ui.geometry.Size(mid * 2, mid * 2),
-                style = Stroke(ring),
-            )
+        val w = this.size.minDimension
+        val sw = w * .075f
+        val l = w * .08f; val t = w * .14f; val r = w * .86f; val b = w * .72f
+        val cr = w * .16f
+        val bubble = Path().apply {
+            moveTo(l + cr, t); lineTo(r - cr, t); quadraticBezierTo(r, t, r, t + cr)
+            lineTo(r, b - cr); quadraticBezierTo(r, b, r - cr, b)
+            lineTo(w * .42f, b); lineTo(w * .24f, w * .92f); lineTo(w * .28f, b)
+            lineTo(l + cr, b); quadraticBezierTo(l, b, l, b - cr)
+            lineTo(l, t + cr); quadraticBezierTo(l, t, l + cr, t); close()
         }
-        drawCircle(K.Red.copy(alpha = .9f), r, center, style = Stroke(r * 0.07f))
+        drawPath(bubble, gold.copy(alpha = .14f))
+        drawPath(bubble, gold, style = Stroke(sw, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        // نقطه و دو موج وسط حباب
+        val c = Offset(w * .47f, (t + b) / 2 + w * .05f)
+        drawCircle(gold, w * .055f, c)
+        for (k in 1..2) {
+            val rr = w * (.10f + .09f * k)
+            drawArc(gold.copy(alpha = 1f - .3f * k), -135f, 90f, false, Offset(c.x - rr, c.y - rr), androidx.compose.ui.geometry.Size(rr * 2, rr * 2), style = Stroke(sw * .85f, cap = StrokeCap.Round))
+        }
+        // نقطه‌ی قرمز حالت اضطراری
+        drawCircle(Color.Black, w * .15f, Offset(r, t))
+        drawCircle(red, w * .11f, Offset(r, t))
     }
 }
 
@@ -93,6 +108,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
     var sending by remember { mutableStateOf(false) }
     var stickersOpen by remember { mutableStateOf(false) }
     val loadLock = remember { kotlinx.coroutines.sync.Mutex() }
+    /** بعد از اولین خواندن از سرور: پیام تازه‌ی پشتیبانی صدا می‌دهد (مثل پیام‌رسان‌ها)، نه تاریخچه‌ی قدیمی */
+    var primed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { Sfx.preload(ctx, R.raw.chat_in); Sfx.preload(ctx, R.raw.chat_out) }
     var helpOpen by remember { mutableStateOf(true) }
     val images = remember { mutableStateMapOf<Long, ImageBitmap>() }
     val imageOk = remember { mutableStateMapOf<Long, Boolean>() }
@@ -151,9 +169,12 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
             readUpto = maxOf(readUpto, page.readUpto)
             withContext(Dispatchers.IO) { EmergencyStore.save(ctx, c, u, fresh, page.readUpto) }
             if (fresh.isNotEmpty()) {
-                msgs.addAll(fresh.filter { f -> msgs.none { it.id == f.id } }.distinctBy { it.id })
+                val added = fresh.filter { f -> msgs.none { it.id == f.id } }.distinctBy { it.id }
+                msgs.addAll(added)
                 helpOpen = false
+                if (primed && added.any { it.admin } && Sfx.soundOn(ctx)) Sfx.play(ctx, R.raw.chat_in, .8f)
             }
+            primed = true
             // پیام‌های ادمین روی صفحه است: «خوانده شد» (ادمین در پنل تیک آبی می‌بیند)
             val lastAdmin = msgs.filter { it.admin }.maxOfOrNull { it.id } ?: 0L
             if (lastAdmin > readSent) {
@@ -260,9 +281,9 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
             ) {
                 Box(Modifier.width(3.dp).fillMaxHeight().background(K.Red.copy(alpha = .85f)))
                 Column(Modifier.weight(1f).padding(D.CardPad)) {
-                    T("فقط وقتی اینترنت ملی شد", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+                    T("فقط وقتی اینترنت بین‌الملل کامل قطع شد", size = 14.sp, color = K.Text, weight = FontWeight.Black)
                     Spacer(Modifier.height(D.S1))
-                    T("وقتی اینترنت بین‌الملل قطع است، اینجا با پشتیبانی کانکی حرف می‌زنی و کانفیگی که رد می‌شه رو می‌گیری.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                    T("وقتی اینترنت بین‌الملل قطع است، اینجا با پشتیبانی کانکی حرف می‌زنی و کانفیگی که وصل می‌شه رو می‌گیری.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
                     Spacer(Modifier.height(D.S2))
                     listOf(
                         "مشکل رو بنویس؛ اسکرین‌شات هم می‌شه فرستاد.",
@@ -400,6 +421,7 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                         if (t.isNotEmpty() && c != null && !sending) {
                             // مثل تلگرام: پیام فوراً در صف و روی صفحه (🕓)، و هر وقت سرور در دسترس بود فرستاده می‌شود
                             EmergencyStore.queueText(ctx, c, t)
+                            if (Sfx.soundOn(ctx)) Sfx.play(ctx, R.raw.chat_out, .6f)
                             text = ""
                             refreshPending()
                             scope.launch { load() }
