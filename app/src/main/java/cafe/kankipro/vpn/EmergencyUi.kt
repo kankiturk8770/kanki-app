@@ -230,49 +230,71 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         }
     }
 
-    // مثل تلگرام: با باز شدن کیبورد، کادر نوشتن بالای کیبورد می‌ماند و متن دیده می‌شود
-    Column(Modifier.fillMaxSize().imePadding().padding(horizontal = 14.dp)) {
-        // سربرگ
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // مثل تلگرام: با باز شدن کیبورد، کادر نوشتن بالای کیبورد می‌ماند و متن دیده می‌شود.
+    // حاشیه‌ی کناری همه‌جا D.PagePad؛ سربرگ، راهنما، پیام‌ها و کادر نوشتن روی یک خط عمودی‌اند.
+    Column(Modifier.fillMaxSize().imePadding().padding(horizontal = D.PagePad)) {
+        // سربرگ: برگشت، نشان اضطراری، عنوان و یک خط؛ «راهنما» دکمه‌ی کوچک کناری
+        Row(Modifier.fillMaxWidth().padding(top = D.S2, bottom = D.S3), verticalAlignment = Alignment.CenterVertically) {
             RoundIcon(D.IconBox + D.S1, onClick = onClose) { Canvas(Modifier.size(18.dp)) { backArrow(K.Gold) } }
-            Spacer(Modifier.width(10.dp))
-            EmergencyIcon(30.dp)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(D.S3))
+            EmergencyIcon(28.dp)
+            Spacer(Modifier.width(D.S2))
             Column(Modifier.weight(1f)) {
-                T("ارتباط اضطراری", size = 18.sp, weight = FontWeight.Black)
-                T(if (user.isNotEmpty()) "حساب: $user" else "گفتگو با ادمین کانکی", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+                T("ارتباط اضطراری", size = 17.sp, weight = FontWeight.Black, maxLines = 1)
+                T(if (user.isNotEmpty()) trf("حساب: %s", user) else "گفتگو با پشتیبانی کانکی", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
             }
-            T(if (helpOpen) "بستن راهنما" else "راهنما", size = 12.sp, color = K.Gold, modifier = Modifier.clickable { helpOpen = !helpOpen }.padding(6.dp))
+            val hs = RoundedCornerShape(50)
+            T(
+                if (helpOpen) "بستن" else "راهنما", size = 12.sp, color = K.Gold, maxLines = 1,
+                modifier = Modifier.clip(hs).border(1.dp, K.Gold.copy(alpha = .4f), hs).clickable { helpOpen = !helpOpen }
+                    .padding(horizontal = D.S3, vertical = D.S1 + 2.dp),
+            )
         }
 
-        // راهنما
+        // راهنما: کارت آرام با نوار قرمز باریک؛ سه قدم پشت سر هم (واقعاً ترتیب دارند)
         if (helpOpen) {
-            KCard(Modifier.fillMaxWidth(), padding = 12.dp, border = K.Red.copy(alpha = .35f)) {
-                T("این بخش برای وقتی است که اینترنت ملی شده", size = 14.sp, color = K.Red, weight = FontWeight.Black)
-                Spacer(Modifier.height(6.dp))
-                T("وقتی اینترنت بین‌الملل قطع است، اینجا مستقیم با ادمین کانکی حرف می‌زنید و کانفیگ‌هایی که از این اختلال و فیلترینگ رد می‌شوند را تحویل می‌گیرید.", size = 12.sp, color = K.Text, weight = FontWeight.Normal)
-                Spacer(Modifier.height(4.dp))
-                T("• مشکل را بنویسید؛ می‌توانید اسکرین‌شات هم بفرستید.\n• جواب ادمین همین‌جا می‌آید. کانفیگ را با دکمه‌ی «کپی کانفیگ» بردارید.\n• پیام‌های ادمین امضا دارند: فقط پیامی که «✓ از طرف ادمین» دارد را قبول کنید.\n• در حالت عادی (اینترنت وصل) به این بخش نیازی ندارید.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            val hs = RoundedCornerShape(D.RM)
+            Row(
+                Modifier.fillMaxWidth().clip(hs).background(K.Surface).border(1.dp, K.Gold.copy(alpha = .14f), hs)
+                    .height(IntrinsicSize.Min),
+            ) {
+                Box(Modifier.width(3.dp).fillMaxHeight().background(K.Red.copy(alpha = .85f)))
+                Column(Modifier.weight(1f).padding(D.CardPad)) {
+                    T("فقط وقتی اینترنت ملی شد", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+                    Spacer(Modifier.height(D.S1))
+                    T("وقتی اینترنت بین‌الملل قطع است، اینجا با پشتیبانی کانکی حرف می‌زنی و کانفیگی که رد می‌شه رو می‌گیری.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                    Spacer(Modifier.height(D.S2))
+                    listOf(
+                        "مشکل رو بنویس؛ اسکرین‌شات هم می‌شه فرستاد.",
+                        "جواب همین‌جا میاد؛ کانفیگ رو با «کپی کانفیگ» بردار.",
+                        "فقط به پیامی اعتماد کن که «✓ از طرف ادمین» داره.",
+                    ).forEachIndexed { n, line ->
+                        Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
+                            T(faDigits("${n + 1}"), size = 12.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.width(D.S4))
+                            T(line, size = 12.sp, color = K.Text, weight = FontWeight.Normal)
+                        }
+                    }
+                }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(D.S2))
         }
 
         if (code == null) {
             // کاربر هنوز وارد نشده: کد اشتراکش را می‌خواهیم
-            KCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+            KCard(Modifier.fillMaxWidth(), padding = D.CardPad) {
                 T("کد اشتراک خود را وارد کنید", size = 14.sp, weight = FontWeight.Black)
                 T("فقط مشتری‌های کانکی می‌توانند پیام بدهند.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(D.S3))
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     OutlinedTextField(
                         value = codeText, onValueChange = { codeText = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
                         placeholder = { Text("- - - - - - - - - -", color = K.Sub.copy(alpha = .5f)) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(D.RS),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(D.S3))
                 GoldButton("ادامه", Modifier.fillMaxWidth()) {
                     val c = SubscriptionApi.normalize(codeText)?.second
                     if (c == null) status = "کد اشتراک درست نیست."
@@ -281,12 +303,22 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
             }
         }
 
+        // خطا: یک خط کوچک با نقطه‌ی قرمز، نه یک بند متن قرمز
         status?.let {
-            Spacer(Modifier.height(6.dp))
-            T(it, size = 12.sp, color = K.Red, weight = FontWeight.Normal)
+            Spacer(Modifier.height(D.S1))
+            val es = RoundedCornerShape(D.RS)
+            Row(
+                Modifier.fillMaxWidth().clip(es).background(K.Red.copy(alpha = .08f)).border(1.dp, K.Red.copy(alpha = .25f), es)
+                    .padding(horizontal = D.S3, vertical = D.S2),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Box(Modifier.padding(top = 6.dp).size(6.dp).clip(CircleShape).background(K.Red))
+                Spacer(Modifier.width(D.S2))
+                T(it, size = 12.sp, color = K.Text, weight = FontWeight.Normal)
+            }
             // کد اشتباه بود: بشود دوباره نوشت (فقط وقتی کد از خود حساب نیامده)
             if (badCode && state.code == null) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(D.S2))
                 LineButton("عوض کردن کد", Modifier.fillMaxWidth()) {
                     Emergency.saveCode(ctx, ""); code = null; badCode = false; status = null; msgs.clear(); pending.clear()
                 }
@@ -294,9 +326,16 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
         }
 
         // پیام‌ها
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
-            if (code != null && msgs.isEmpty() && status == null) {
-                item { T("هنوز پیامی نیست. مشکل را بنویسید تا ادمین جواب بدهد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(8.dp)) }
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(D.S2), contentPadding = PaddingValues(vertical = D.S3)) {
+            if (code != null && msgs.isEmpty() && pending.isEmpty() && status == null) {
+                item {
+                    Column(Modifier.fillMaxWidth().padding(top = D.S6 * 2), horizontalAlignment = Alignment.CenterHorizontally) {
+                        EmergencyIcon(40.dp)
+                        Spacer(Modifier.height(D.S3))
+                        T("هنوز پیامی نیست", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+                        T("مشکل رو بنویس تا پشتیبانی جواب بده.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                    }
+                }
             }
             items(msgs, key = { it.id }) { m ->
                 // عکس ادمین تا دانلود نشده «در حال بررسی» است، نه «امضا تأیید نشد»
@@ -309,12 +348,16 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
 
         // نوشتن
         if (code != null) {
-            // استیکرهای کانکی
+            val bar = RoundedCornerShape(D.RL)
+            // استیکرهای کانکی: یک ردیف کوچک بالای کادر نوشتن
             if (stickersOpen) {
-                LazyRow(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyRow(
+                    Modifier.fillMaxWidth().padding(bottom = D.S2).clip(bar).background(K.Surface).border(1.dp, K.Gold.copy(alpha = .14f), bar),
+                    horizontalArrangement = Arrangement.spacedBy(D.S2), contentPadding = PaddingValues(D.S2),
+                ) {
                     items(Stickers.all, key = { it.key }) { s ->
                         val bmp = remember(s.key) { Stickers.bitmap(ctx, s, 160).asImageBitmap() }
-                        Image(bmp, s.text, Modifier.size(76.dp).clip(RoundedCornerShape(14.dp)).clickable {
+                        Image(bmp, s.text, Modifier.size(56.dp).clip(RoundedCornerShape(D.RS)).clickable {
                             stickersOpen = false
                             val c = code
                             if (c != null) scope.launch {
@@ -326,75 +369,107 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                RoundIcon(D.IconBox + D.S1, onClick = { stickersOpen = !stickersOpen }) { T("😊", size = 18.sp) }
-                Spacer(Modifier.width(6.dp))
-                RoundIcon(D.IconBox + D.S1, onClick = { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                    Canvas(Modifier.size(20.dp)) { pictureIcon(K.Gold) }
+            // یک نوار: استیکر و عکس، متن، دکمه‌ی ارسال طلایی
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = D.S3).clip(bar).background(K.Surface)
+                    .border(1.dp, K.Gold.copy(alpha = .22f), bar).padding(horizontal = D.S1, vertical = D.S1),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable { stickersOpen = !stickersOpen }, contentAlignment = Alignment.Center) {
+                    T("😊", size = 18.sp, weight = FontWeight.Normal)
                 }
-                Spacer(Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = text, onValueChange = { if (it.length <= 2000) text = it }, modifier = Modifier.weight(1f), maxLines = 4,
-                    textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, color = K.Text),
-                    placeholder = { Text("پیام به ادمین…", color = K.Sub.copy(alpha = .6f), fontFamily = Vazir) },
-                    shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = K.Gold, unfocusedBorderColor = K.Line, cursorColor = K.Gold),
-                )
-                Spacer(Modifier.width(8.dp))
-                RoundIcon(D.IconBox + D.S1, filled = true, onClick = {
-                    val c = code
-                    val t = text.trim()
-                    if (t.isNotEmpty() && c != null && !sending) {
-                        // مثل تلگرام: پیام فوراً در صف و روی صفحه (🕓)، و هر وقت سرور در دسترس بود فرستاده می‌شود
-                        EmergencyStore.queueText(ctx, c, t)
-                        text = ""
-                        refreshPending()
-                        scope.launch { load() }
-                    }
-                }) { Canvas(Modifier.size(20.dp)) { sendArrow(if (sending) K.Sub else K.Gold) } }
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).clickable { if (!sending) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    contentAlignment = Alignment.Center,
+                ) { Canvas(Modifier.size(20.dp)) { pictureIcon(K.Gold) } }
+                Box(Modifier.weight(1f).heightIn(min = 40.dp).padding(horizontal = D.S2), contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) T("پیام به پشتیبانی…", size = 14.sp, color = K.Sub.copy(alpha = .6f), weight = FontWeight.Normal)
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = text, onValueChange = { if (it.length <= 2000) text = it }, maxLines = 4,
+                        textStyle = TextStyle(fontFamily = Vazir, fontSize = 14.sp, lineHeight = 21.sp, color = K.Text,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Content),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(K.Gold),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = D.S2),
+                    )
+                }
+                val canSend = text.isNotBlank() && !sending
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(if (canSend) K.Gold else K.Gold.copy(alpha = .18f)).clickable {
+                        val c = code
+                        val t = text.trim()
+                        if (t.isNotEmpty() && c != null && !sending) {
+                            // مثل تلگرام: پیام فوراً در صف و روی صفحه (🕓)، و هر وقت سرور در دسترس بود فرستاده می‌شود
+                            EmergencyStore.queueText(ctx, c, t)
+                            text = ""
+                            refreshPending()
+                            scope.launch { load() }
+                        }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { Canvas(Modifier.size(18.dp)) { sendArrow(if (canSend) K.OnGold else K.Sub) } }
             }
         }
     }
 }
 
+/**
+ * یک پیام. مال کاربر: طلایی کم‌رنگ، طرف شروع؛ پشتیبانی: کارت تیره با لبه‌ی سبز (امضا درست) یا قرمز، طرف دیگر.
+ * گوشه‌ی سمت فرستنده تیزتر است تا معلوم باشد پیام از کدام طرف آمده. استیکر (عکس مربعی کوچک) کوچک نشان داده می‌شود.
+ */
 @Composable
 private fun Bubble(m: EMsg, img: ImageBitmap?, okOrNull: Boolean?, read: Boolean = false, waiting: Boolean = false, onCopy: (String) -> Unit) {
     val ok = okOrNull ?: true
     val checking = m.admin && okOrNull == null
     val mine = !m.admin
-    val shape = RoundedCornerShape(16.dp)
-    val bg = if (mine) K.Gold.copy(alpha = .14f) else if (ok) K.Green.copy(alpha = .10f) else K.Red.copy(alpha = .10f)
+    val r = D.RM
+    val shape = if (mine) RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 4.dp, bottomEnd = r)
+        else RoundedCornerShape(topStart = r, topEnd = r, bottomStart = r, bottomEnd = 4.dp)
+    val edge = when { mine -> K.Gold.copy(alpha = .25f); checking -> K.Sub.copy(alpha = .25f); ok -> K.Green.copy(alpha = .45f); else -> K.Red.copy(alpha = .6f) }
+    val bg = if (mine) K.Gold.copy(alpha = .12f) else K.Surface
+    val sticker = m.img && img != null && img.width == img.height && img.width <= 512
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterStart else Alignment.CenterEnd) {
-        Column(Modifier.widthIn(max = 300.dp).clip(shape).background(bg).padding(10.dp)) {
+        Column(
+            Modifier.fillMaxWidth(.82f).wrapContentWidth(if (mine) Alignment.Start else Alignment.End)
+                .clip(shape).background(bg).border(1.dp, edge, shape).padding(horizontal = D.S3, vertical = D.S2),
+        ) {
             if (m.admin) {
-                T(when { checking -> "از طرف ادمین · در حال دریافت…"; ok -> "✓ از طرف ادمین"; else -> "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید" }, size = 11.sp, color = if (checking) K.Sub else if (ok) K.Green else K.Red, weight = FontWeight.Black)
-                Spacer(Modifier.height(4.dp))
+                T(when { checking -> "پشتیبانی · در حال دریافت…"; ok -> "✓ از طرف ادمین"; else -> "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید" },
+                    size = 11.sp, color = if (checking) K.Sub else if (ok) K.Green else K.Red, weight = FontWeight.Black)
+                Spacer(Modifier.height(D.S1))
             }
             when {
                 m.img -> {
-                    if (img != null) Image(img, null, Modifier.widthIn(max = 240.dp).heightIn(max = 320.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Fit)
+                    if (img != null) Image(
+                        img, null,
+                        if (sticker) Modifier.size(112.dp).clip(RoundedCornerShape(D.RS))
+                        else Modifier.widthIn(max = 220.dp).heightIn(max = 280.dp).clip(RoundedCornerShape(D.RT)),
+                        contentScale = ContentScale.Fit,
+                    )
                     else T("در حال دریافت عکس…", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
                 m.kind == "config" -> {
                     T("کانفیگ", size = 12.sp, color = K.Gold, weight = FontWeight.Black)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(D.S1))
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Text(m.body, maxLines = 3, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = K.Text))
                     }
                     if (ok) {
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(D.S2))
                         LineButton("کپی کانفیگ", Modifier.fillMaxWidth()) { onCopy(m.body) }
                     }
                 }
-                else -> T(m.body, size = 14.sp, color = K.Text, weight = FontWeight.Normal)
+                else -> Text(
+                    m.body,
+                    style = TextStyle(fontFamily = Vazir, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 21.sp, color = K.Text,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Content),
+                )
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(D.S1))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(PanelTime.jalali(m.ts * 1000), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
-                // پیام خود کاربر: ✓ رسید به سرور، ✓✓ آبی ادمین خواند
+                // پیام خود کاربر: 🕓 در صف (هنوز به سرور نرسیده)، ✓ رسید، ✓✓ ادمین خواند
                 if (mine) {
-                    Spacer(Modifier.width(6.dp))
-                    // 🕓 در صف (هنوز به سرور نرسیده)، ✓ رسید، ✓✓ آبی ادمین خواند
+                    Spacer(Modifier.width(D.S1))
                     T(if (waiting) "🕓" else if (read) "✓✓" else "✓", size = 11.sp, color = if (read && !waiting) K.Accent else K.Sub, weight = FontWeight.Black)
                 }
             }

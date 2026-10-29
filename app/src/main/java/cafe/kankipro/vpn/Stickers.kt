@@ -20,6 +20,9 @@ import java.io.ByteArrayOutputStream
 object Stickers {
     data class Sticker(val key: String, val text: String, val color: Int)
 
+    /** اندازه‌ی استیکر فرستاده‌شده (پیکسل، مربع)؛ چت هر عکس مربعی تا ۵۱۲ (استیکرهای قدیمی) را استیکر کوچک نشان می‌دهد */
+    const val SIZE = 320
+
     val all = listOf(
         Sticker("ok", "وصل شد، دمت گرم! 🚀", 0xFF3DD68C.toInt()),
         Sticker("fail", "وصل نمی‌شه 😕", 0xFFFF5A5A.toInt()),
@@ -34,7 +37,7 @@ object Stickers {
         if (id != 0) ResourcesCompat.getFont(ctx, id) else null
     }.getOrNull() ?: Typeface.DEFAULT_BOLD
 
-    /** تصویر استیکر (۵۱۲×۵۱۲) */
+    /** تصویر استیکر (size×size؛ طرح روی ۵۱۲ کشیده و به اندازه برده می‌شود) */
     fun bitmap(ctx: Context, s: Sticker, size: Int = 512): Bitmap {
         val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(b)
@@ -63,7 +66,7 @@ object Stickers {
     /** همان استیکر به شکل JPEG برای فرستادن */
     fun jpeg(ctx: Context, s: Sticker): ByteArray {
         val out = ByteArrayOutputStream()
-        bitmap(ctx, s).compress(Bitmap.CompressFormat.JPEG, 88, out)
+        bitmap(ctx, s, SIZE).compress(Bitmap.CompressFormat.JPEG, 85, out)
         return out.toByteArray()
     }
 }
