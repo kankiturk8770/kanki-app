@@ -104,6 +104,7 @@
 
                 <!-- the chosen server; opens the list -->
                 <Button x:Name="ServerBtn" Grid.Row="3" Margin="0,24,0,0" Cursor="Hand" Click="ServerBtn_Click"
+                        Foreground="{StaticResource Text}"
                         HorizontalContentAlignment="Stretch">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
@@ -194,6 +195,7 @@
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Foreground" Value="{StaticResource Text}"/>
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
