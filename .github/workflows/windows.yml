@@ -70,7 +70,7 @@ jobs:
         working-directory: windows/service
         env:
           KANKI_ADMIN_TESTS: "1"
-        run: go test -v ./internal/firewall/ ./internal/tunnel/ ./internal/core/ ./internal/ipc/
+        run: go test -count=1 -v ./internal/firewall/ ./internal/tunnel/ ./internal/core/ ./internal/ipc/
 
       - name: ساخت برنامه (WPF)
         run: dotnet publish windows\ui\KankiVPN\KankiVPN.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:Version=${{ env.VERSION }} -o publish
@@ -82,7 +82,7 @@ jobs:
           $p = Start-Process -FilePath dist\KankiVPN.exe -ArgumentList '--shot', "$PWD\shots" -PassThru -Wait
           if (Test-Path shots\crash.log) { Get-Content shots\crash.log }
           $n = (Get-ChildItem shots -Filter *.png).Count
-          if ($n -ne 20) { throw "expected 20 screenshots, got $n (exit $($p.ExitCode))" }
+          if ($n -ne 21) { throw "expected 21 screenshots, got $n (exit $($p.ExitCode))" }
 
       - name: تست نصب سرویس و پایپ
         shell: pwsh
@@ -118,7 +118,7 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
-          $names = 'fa-400-home', 'fa-400-servers', 'fa-400-settings', 'en-400-home'
+          $names = 'fa-400-home', 'fa-400-servers', 'fonts', 'en-400-home'
           $sheet = New-Object System.Drawing.Bitmap 800, 360
           $g = [System.Drawing.Graphics]::FromImage($sheet)
           $g.InterpolationMode = 'HighQualityBicubic'

@@ -146,10 +146,43 @@ namespace KankiVPN
             Shutdown();
         }
 
+        /// <summary>Persian text in each font and mode, to see which one shapes right.</summary>
+        async Task FontCheck(string file)
+        {
+            var panel = new System.Windows.Controls.StackPanel { Background = Brushes.Black, Width = 400 };
+            void Add(string label, System.Windows.Media.FontFamily f, TextFormattingMode mode)
+            {
+                var t = new System.Windows.Controls.TextBlock
+                {
+                    Text = label + ": وصل است کانکی",
+                    FontFamily = f, FontSize = 20, Foreground = Brushes.White, Margin = new Thickness(8),
+                    FlowDirection = FlowDirection.RightToLeft,
+                };
+                TextOptions.SetTextFormattingMode(t, mode);
+                panel.Children.Add(t);
+            }
+            var vazir = (System.Windows.Media.FontFamily)Resources["Vazir"];
+            Add("1", vazir, TextFormattingMode.Display);
+            Add("2", vazir, TextFormattingMode.Ideal);
+            Add("3", new System.Windows.Media.FontFamily("Segoe UI"), TextFormattingMode.Display);
+            Add("4", new System.Windows.Media.FontFamily("Tahoma"), TextFormattingMode.Ideal);
+            var w = new Window { Content = panel, SizeToContent = SizeToContent.WidthAndHeight, Left = -30000, Top = -30000, ShowInTaskbar = false };
+            w.Show();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var bmp = new RenderTargetBitmap((int)panel.ActualWidth, (int)panel.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(panel);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var f = File.Create(file))
+                enc.Save(f);
+            w.Close();
+        }
+
         /// <summary>--shot DIR: saves each page in both languages as PNG with sample data.</summary>
         async Task Shots(string dir)
         {
             Directory.CreateDirectory(dir);
+            await FontCheck(Path.Combine(dir, "fonts.png"));
             foreach (var lang in new[] { "fa", "en" })
             {
                 Strings.Persian = lang == "fa";
