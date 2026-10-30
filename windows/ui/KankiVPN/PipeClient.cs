@@ -68,7 +68,19 @@ namespace KankiVPN
             catch (TimeoutException)
             {
                 p.Dispose();
-                throw new IOException("service not running");
+                // the service is stopped (it crashed too often, or someone stopped it): start it ourselves
+                // (the installer lets normal users start it) and wait for its pipe
+                if (!StartService()) throw new IOException("service not running");
+                p = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                try
+                {
+                    await p.ConnectAsync(10000).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    p.Dispose();
+                    throw new IOException("service not running");
+                }
             }
             if (!Trusted(p.SafePipeHandle))
             {
@@ -83,7 +95,7 @@ namespace KankiVPN
         {
             var id = ++nextId;
             var req = new JsonObject { ["id"] = id, ["cmd"] = cmd };
-            if (args != null) req["args"] = JsonSerializer.SerializeToNode(args);
+            if (args != null) req["args"] = Args(args);
             var line = Encoding.UTF8.GetBytes(req.ToJsonString() + "\n");
             using var cts = new CancellationTokenSource(timeoutMs);
             await pipe!.WriteAsync(line, cts.Token).ConfigureAwait(false);
@@ -98,6 +110,18 @@ namespace KankiVPN
                     throw new ServiceException(resp["error"]?.GetValue<string>() ?? "error");
                 return resp["data"];
             }
+        }
+
+        // The callers pass anonymous objects (new { server = id }). System.Text.Json cannot read those in the
+        // obfuscated build (their constructor loses its parameter names), so their properties, whose names
+        // are kept, are copied one by one; each value (string, array, Settings) serializes normally.
+        static JsonNode? Args(object args)
+        {
+            if (args is JsonNode n) return n;
+            var o = new JsonObject();
+            foreach (var p in args.GetType().GetProperties())
+                o[p.Name] = JsonSerializer.SerializeToNode(p.GetValue(args), p.PropertyType);
+            return o;
         }
 
         public async Task<T?> Call<T>(string cmd, object? args = null, int timeoutMs = 60000) where T : class
@@ -115,6 +139,46 @@ namespace KankiVPN
         }
 
         public void Dispose() => Close();
+
+        // ---- start a stopped service
+
+        static bool StartService()
+        {
+            var scm = OpenSCManager(null, null, ScConnect);
+            if (scm == IntPtr.Zero) return false;
+            try
+            {
+                var svc = OpenServiceW(scm, "KankiVPN", ServiceStart);
+                if (svc == IntPtr.Zero) return false;
+                try
+                {
+                    // 1056 = already running (its pipe is just slow)
+                    return StartServiceW(svc, 0, IntPtr.Zero) || Marshal.GetLastWin32Error() == 1056;
+                }
+                finally
+                {
+                    CloseServiceHandle(svc);
+                }
+            }
+            finally
+            {
+                CloseServiceHandle(scm);
+            }
+        }
+
+        const uint ScConnect = 0x0001, ServiceStart = 0x0010;
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "OpenSCManagerW")]
+        static extern IntPtr OpenSCManager(string? machine, string? db, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        static extern IntPtr OpenServiceW(IntPtr scm, string name, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern bool StartServiceW(IntPtr svc, uint argc, IntPtr argv);
+
+        [DllImport("advapi32.dll")]
+        static extern bool CloseServiceHandle(IntPtr h);
 
         // ---- who is on the other end of the pipe
 

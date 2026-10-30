@@ -63,6 +63,22 @@ namespace KankiVPN
                 {
                     using var p = new PipeClient();
                     await p.Call("hello", null, 5000);
+                    // optional: log in with this code, like the login button; the service may refuse the
+                    // code, but it must answer (and still be there afterwards)
+                    if (check + 2 < args.Length)
+                    {
+                        try
+                        {
+                            await p.Call("set_sub", new { input = args[check + 2] });
+                        }
+                        catch (ServiceException)
+                        {
+                            // an answer: fine
+                        }
+                        await p.Call("account", null, 5000);
+                        await p.Call("settings", null, 5000);
+                        await p.Call("status", null, 5000);
+                    }
                     result = "ok";
                 }
                 catch (Exception ex)
