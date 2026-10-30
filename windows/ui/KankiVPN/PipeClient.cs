@@ -68,7 +68,19 @@ namespace KankiVPN
             catch (TimeoutException)
             {
                 p.Dispose();
-                throw new IOException("service not running");
+                // the service is stopped (it crashed too often, or someone stopped it): start it ourselves
+                // (the installer lets normal users start it) and wait for its pipe
+                if (!StartService()) throw new IOException("service not running");
+                p = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                try
+                {
+                    await p.ConnectAsync(10000).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    p.Dispose();
+                    throw new IOException("service not running");
+                }
             }
             if (!Trusted(p.SafePipeHandle))
             {
@@ -115,6 +127,46 @@ namespace KankiVPN
         }
 
         public void Dispose() => Close();
+
+        // ---- start a stopped service
+
+        static bool StartService()
+        {
+            var scm = OpenSCManager(null, null, ScConnect);
+            if (scm == IntPtr.Zero) return false;
+            try
+            {
+                var svc = OpenServiceW(scm, "KankiVPN", ServiceStart);
+                if (svc == IntPtr.Zero) return false;
+                try
+                {
+                    // 1056 = already running (its pipe is just slow)
+                    return StartServiceW(svc, 0, IntPtr.Zero) || Marshal.GetLastWin32Error() == 1056;
+                }
+                finally
+                {
+                    CloseServiceHandle(svc);
+                }
+            }
+            finally
+            {
+                CloseServiceHandle(scm);
+            }
+        }
+
+        const uint ScConnect = 0x0001, ServiceStart = 0x0010;
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "OpenSCManagerW")]
+        static extern IntPtr OpenSCManager(string? machine, string? db, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        static extern IntPtr OpenServiceW(IntPtr scm, string name, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern bool StartServiceW(IntPtr svc, uint argc, IntPtr argv);
+
+        [DllImport("advapi32.dll")]
+        static extern bool CloseServiceHandle(IntPtr h);
 
         // ---- who is on the other end of the pipe
 

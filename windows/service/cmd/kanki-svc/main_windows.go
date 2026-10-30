@@ -34,6 +34,9 @@ const serviceName = "KankiVPN"
 
 // Pipe access: SYSTEM and Administrators full, signed-in (interactive) users
 // read/write, and nobody over the network.
+// SY and BA all; interactive users query and start (RP) only
+const serviceSDDL = "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)"
+
 const pipeSDDL = "D:P(D;;GA;;;NU)(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)"
 
 func main() {
@@ -148,14 +151,15 @@ func install() error {
 		s.Close()
 		waitGone(m)
 	}
-	s, err := m.CreateService(serviceName, exe, mgr.Config{
-		DisplayName:  "Kanki VPN",
-		Description:  "Kanki VPN tunnel service (WireGuard / AmneziaWG, kill switch, DNS leak protection)",
-		StartType:    mgr.StartAutomatic,
-		ErrorControl: mgr.ErrorNormal,
-		Dependencies: []string{"Nsi", "TcpIp"},
-		SidType:      windows.SERVICE_SID_TYPE_UNRESTRICTED,
-	})
+	// an old copy that is still being removed (marked for delete) refuses a new one for a moment
+	var s *mgr.Service
+	for i := 0; ; i++ {
+		s, err = m.CreateService(serviceName, exe, serviceConfig)
+		if err == nil || i >= 50 || !errors.Is(err, windows.ERROR_SERVICE_MARKED_FOR_DELETE) && !errors.Is(err, windows.ERROR_SERVICE_EXISTS) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 	if err != nil {
 		return err
 	}
@@ -166,7 +170,34 @@ func install() error {
 		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
 	}, 60)
 	_ = s.SetRecoveryActionsOnNonCrashFailures(true)
-	return s.Start()
+	// normal users may start it (the app does when it finds the service stopped), not stop or change it
+	if sd, err := windows.SecurityDescriptorFromString(serviceSDDL); err == nil {
+		if dacl, _, err := sd.DACL(); err == nil {
+			_ = windows.SetSecurityInfo(s.Handle, windows.SE_SERVICE, windows.DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+		}
+	}
+	if err := s.Start(); err != nil {
+		return fmt.Errorf("start: %w", err)
+	}
+	// started is not enough: it must stay running (a crash at start would leave the user with no service)
+	time.Sleep(2 * time.Second)
+	st, err := s.Query()
+	if err != nil {
+		return err
+	}
+	if st.State != svc.Running {
+		return fmt.Errorf("the service is %d after start, not running", st.State)
+	}
+	return nil
+}
+
+var serviceConfig = mgr.Config{
+	DisplayName:  "Kanki VPN",
+	Description:  "Kanki VPN tunnel service (WireGuard / AmneziaWG, kill switch, DNS leak protection)",
+	StartType:    mgr.StartAutomatic,
+	ErrorControl: mgr.ErrorNormal,
+	Dependencies: []string{"Nsi", "TcpIp"},
+	SidType:      windows.SERVICE_SID_TYPE_UNRESTRICTED,
 }
 
 func uninstall() error {

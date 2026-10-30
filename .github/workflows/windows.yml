@@ -36,7 +36,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      VERSION: "1.2.3"
+      VERSION: "1.2.4"
       # the same core versions as the Android app (build.yml)
       XRAY_VERSION: v26.3.27
       HY_VERSION: v2.12.3
@@ -141,6 +141,18 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           & $iscc /DAppVersion=$env:VERSION /DSrc=..\..\dist windows\installer\kanki.iss
           if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+      # مثل کاربر واقعی: نسخه‌ی قبلی از Releases، نصب نسخه‌ی تازه روی آن، ورود با کاربر عادی، حذف
+      - name: تست نصب روی نسخه‌ی قبلی
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force old | Out-Null
+          gh release download windows-v1.2.1 -p "*.exe" -D old 2>$null
+          $old = Get-ChildItem old -Filter *.exe | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $old) { Write-Host "no previous release found: fresh install only" }
+          .\windows\installer\upgrade.ps1 $old "$PWD\dist\KankiVPN-Setup-$env:VERSION.exe" $env:VERSION
 
       # the setup file in Releases (not counted in the Actions storage); a pre-release, so the Android
       # app's latest release stays the latest

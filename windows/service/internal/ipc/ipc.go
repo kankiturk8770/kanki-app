@@ -12,7 +12,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
+	"runtime/debug"
 	"time"
 
 	"kankivpn/internal/core"
@@ -68,13 +70,25 @@ func handle(c net.Conn, m *core.Manager, log *logx.Log, version string) {
 		if err := json.Unmarshal(sc.Bytes(), &req); err != nil {
 			resp.Error = "bad request"
 		} else {
-			resp = Do(req, m, log, version)
+			resp = safeDo(req, m, log, version)
 		}
 		resp.ID = req.ID
 		if err := enc.Encode(resp); err != nil {
 			return
 		}
 	}
+}
+
+// safeDo runs one command; a bug in it answers with an error instead of
+// taking the whole service (and the user's connection) down.
+func safeDo(req Request, m *core.Manager, log *logx.Log, version string) (resp Response) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("ipc %s: panic: %v\n%s", req.Cmd, r, debug.Stack())
+			resp = Response{Error: fmt.Sprintf("internal error in %s: %v", req.Cmd, r)}
+		}
+	}()
+	return Do(req, m, log, version)
 }
 
 // Do runs one command.

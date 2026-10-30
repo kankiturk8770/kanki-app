@@ -156,9 +156,10 @@ namespace KankiVPN
         void ServiceDown(Exception e)
         {
             serviceVersion = "";
-            ServiceText.Text = e is ServiceException se && se.Message == Strings.T("The VPN service could not be verified. Reinstall Kanki VPN.")
-                ? se.Message
-                : Strings.T("The VPN service is not running. Reinstall Kanki VPN, or start the \"Kanki VPN\" service in Windows Services.");
+            // only a missing pipe means "not running"; anything else is shown as it is, so the real cause is visible
+            ServiceText.Text = e is System.IO.IOException or TimeoutException or OperationCanceledException
+                ? Strings.T("The VPN service is not running. Reinstall Kanki VPN, or start the \"Kanki VPN\" service in Windows Services.")
+                : e.Message;
             ServiceBanner.Visibility = Visibility.Visible;
         }
 
@@ -870,7 +871,9 @@ namespace KankiVPN
             catch (Exception ex)
             {
                 LoginError.SetResourceReference(TextBlock.ForegroundProperty, "Danger");
-                LoginError.Text = ex is ServiceException ? ex.Message : Strings.T("The VPN service is not running. Reinstall Kanki VPN, or start the \"Kanki VPN\" service in Windows Services.");
+                LoginError.Text = ex is System.IO.IOException or TimeoutException or OperationCanceledException
+                    ? Strings.T("The VPN service is not running. Reinstall Kanki VPN, or start the \"Kanki VPN\" service in Windows Services.")
+                    : ex.Message;
             }
             AddSubBtn.IsEnabled = true;
         }
