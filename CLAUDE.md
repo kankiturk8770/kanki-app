@@ -29,14 +29,16 @@
 
 ## هسته‌های Go
 - `kmix-core/` هسته‌ی KANKI MIX (`libkmix.so`)، تست: `cd kmix-core && go test ./...`
-- `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`
+- `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`. خود کلاینت در پکیج `mtun-core/mtun` است
+  (`main.go` فقط برنامه‌ی اندروید است)؛ نسخه‌ی ویندوز همان پکیج را استفاده می‌کند. KANKI MIX هم `StartDevice` دارد (ویندوز).
 - هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
 
 ## نسخه‌ی ویندوز (`windows/`)
 - سرویس Go (`windows/service`، اجرا به‌عنوان SYSTEM: Wintun + amneziawg-go، مسیرها، WFP) و برنامه‌ی WPF
   (`windows/ui/KankiVPN`، کاربر عادی) که با JSON خط‌به‌خط روی `\\.\pipe\KankiVPN` حرف می‌زنند. نقشه‌ی کامل در `windows/README.md`.
 - اشتراک را `windows/service/internal/sub` می‌خواند (مثل `SubscriptionApi.kt`): هر تغییر شکل صفحه‌ی اشتراک پنل هر دو را
-  عوض می‌کند. فقط WireGuard و AmneziaWG.
+  عوض می‌کند. پروتکل‌ها: WireGuard، AmneziaWG، KANKI MIX، microtun، VLESS، Hysteria2 (OpenVPN نه).
+- ظاهر ویندوز کپی اندروید است (تم زرد و زرشکی، `Theme.cs`)؛ هر تغییر ظاهر اندروید باید در `windows/ui` هم بیاید.
 - تست: `cd windows/service && go test -race ./...` و `GOOS=windows go vet ./...`. ساخت C# و تست‌های ادمین (کارت شبکه، WFP)
   فقط در CI (`.github/workflows/windows.yml`). متن UI در `Strings.cs` (انگلیسی ← فارسی). نسخه: `VERSION` در همان workflow،
   `Version` در `KankiVPN.csproj` و `windows/CHANGES.md`.
@@ -62,6 +64,25 @@
 عکس صفحه‌ها بعد از push در شاخه‌ی `shots` (کار `shots.yml`).
 
 ## گزارش کارها
+
+### 2026-10-30 — نسخه‌ی ویندوز ۱.۱.۰
+خواسته‌ی صاحب اپ: ظاهر ویندوز مو به مو مثل اندروید (فقط تم زرد و زرشکی، بدون چت اضطراری و بدون انتخاب برنامه‌ها)، اسم
+«KANKI VPN» انگلیسی، هسته‌های WireGuard / AmneziaWG / KANKI MIX / microtun / VLESS / Hysteria2 (بدون OpenVPN)، کانفیگ
+رمزشده‌ی AES، سرویس جدا، Wintun و WFP، شناسه‌ی دستگاه و DPAPI، محافظت کد بدون پکر.
+
+انجام شد (جزئیات: `windows/README.md`، `windows/CHANGES.md`):
+1. هسته‌ها: `kmix-core/mobile.StartDevice` و پکیج `mtun-core/mtun` (برنامه‌ی اندروید فقط `main.go` نازک)؛ Xray و Hysteria
+   برنامه‌های رسمی همان نسخه‌ی اندروید با SOCKS روی 127.0.0.1 و tun2socks روی Wintun، در Job Object سرویس.
+2. پینگ واقعی هر پروتکل (پورت WgHello و KmixHello)، با تست handshake در برابر سرور واقعی amneziawg-go.
+3. امنیت: DPAPI برای فایل وضعیت، شناسه‌ی دستگاه در هر درخواست، کانفیگ مهرشده‌ی `kseal1` (AES-256-GCM، کلید از HKDF کد
+   اشتراک و شناسه‌ی دستگاه؛ پنل باید بعداً سمت خودش را بسازد، مرجع: `sub.Seal`)، garble برای سرویس، Obfuscar برای برنامه.
+4. UI: خانه با نقشه، دکمه‌ی حلقه‌ای، سه حالت، کارت‌ها؛ سرورها با کشور و ستون تانل/مستقیم؛ تست سرعت با عقربه؛ تنظیمات؛
+   پنجره‌ی حساب. ۲۸ عکس در CI (دو تم × دو زبان × هفت صفحه).
+
+باگ‌هایی که CI پیدا کرد و درست شد: «?» در کانفیگ Obfuscar برای MSBuild ستاره بود؛ اسم استایل‌ها با اسم رنگ‌های تم یکی بود؛
+جای چند جزء در فارسی برعکس اندروید بود.
+تست: Go با race روی لینوکس، تست‌های ادمین روی ویندوز (کارت شبکه، مسیر، DNS، WFP، DPAPI، پینگ)، ساخت اندروید سبز.
+مانده: اتصال واقعی هر پروتکل روی یک ویندوز واقعی با سرور واقعی؛ سمت پنل کانفیگ مهرشده؛ امضای کد.
 
 ### 2026-10-30 — نسخه‌ی ویندوز ۱.۰.۰ (پوشه‌ی `windows/`)
 خواسته‌ی صاحب اپ: نسخه‌ی ویندوز کلاینت، با شش معیار: پروتکل استاندارد، کارت شبکه‌ی مجازی (Wintun/TAP)، مسیریابی و

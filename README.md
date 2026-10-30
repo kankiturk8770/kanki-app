@@ -2,7 +2,12 @@
 
 اپ اندروید (Kotlin + Jetpack Compose) با موتور AmneziaWG / WireGuard و اشتراک از پنل `kankipro.cafe`.
 
-## تازه: نسخه‌ی ویندوز ۱.۰.۰ (`windows/`)
+## تازه: نسخه‌ی ویندوز ۱.۱.۰ (`windows/`)
+
+- ظاهر همان اپ اندروید (تم زرد و زرشکی)، شش پروتکل (WireGuard، AmneziaWG، KANKI MIX، microtun، VLESS، Hysteria2)،
+  پینگ همه، تست سرعت، DPAPI، کانفیگ رمزشده‌ی AES-256-GCM.
+
+## نسخه‌ی ویندوز ۱.۰.۰
 
 - برنامه‌ی ویندوز با سرویس جدا (SYSTEM) و رابط WPF؛ WireGuard و AmneziaWG روی Wintun.
 - کیل سوییچ واقعی (WFP)، جلوگیری از نشت DNS و IPv6، تقسیم ترافیک بر اساس IP. جزئیات: `windows/README.md`.
