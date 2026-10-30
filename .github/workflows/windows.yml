@@ -157,6 +157,24 @@ jobs:
           Compress-Archive -Path shots\*.png -DestinationPath KankiVPN-screenshots.zip
           gh release upload $tag KankiVPN-screenshots.zip --clobber
 
+      # خبر ویندوز در تلگرام ادمین: فایل نصبی ۹۰+ مگ است و از سقف ۵۰ مگ ربات بزرگ‌تر، پس فقط لینک Releases
+      # فرستاده می‌شود (نه خود فایل). همان Secrets اندروید: TG_BOT_TOKEN و TG_CHAT_ID (اگر نباشند، رد می‌شود)
+      - name: خبر نسخه‌ی ویندوز به تلگرام
+        if: github.ref_name == 'main'
+        shell: pwsh
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          if (-not $env:TG_BOT_TOKEN -or -not $env:TG_CHAT_ID) { Write-Host "TG secrets not set: skipped"; exit 0 }
+          $tag  = "windows-v$env:VERSION"
+          $link = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/KankiVPN-Setup-$env:VERSION.exe"
+          $notes = (((Get-Content windows/CHANGES.md -Raw) -split "`n## ")[1] -replace '\*\*','').Trim()
+          if ($notes.Length -gt 700) { $notes = $notes.Substring(0,700) }
+          $text = "🖥 Kanki VPN Windows $env:VERSION`n`n$notes`n`n⬇️ فایل نصبی (نصب با دسترسی ادمین؛ هشدار ویندوز ← More info ← Run anyway):`n$link"
+          Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$env:TG_BOT_TOKEN/sendMessage" -Body @{ chat_id = $env:TG_CHAT_ID; text = $text; disable_web_page_preview = "false" } | Out-Null
+          Write-Host "Windows release link sent to Telegram"
+
       # when the account's artifact storage is full the build itself still counts
       - uses: actions/upload-artifact@v4
         continue-on-error: true
