@@ -95,7 +95,7 @@ namespace KankiVPN
         {
             var id = ++nextId;
             var req = new JsonObject { ["id"] = id, ["cmd"] = cmd };
-            if (args != null) req["args"] = JsonSerializer.SerializeToNode(args);
+            if (args != null) req["args"] = Args(args);
             var line = Encoding.UTF8.GetBytes(req.ToJsonString() + "\n");
             using var cts = new CancellationTokenSource(timeoutMs);
             await pipe!.WriteAsync(line, cts.Token).ConfigureAwait(false);
@@ -110,6 +110,18 @@ namespace KankiVPN
                     throw new ServiceException(resp["error"]?.GetValue<string>() ?? "error");
                 return resp["data"];
             }
+        }
+
+        // The callers pass anonymous objects (new { server = id }). System.Text.Json cannot read those in the
+        // obfuscated build (their constructor loses its parameter names), so their properties, whose names
+        // are kept, are copied one by one; each value (string, array, Settings) serializes normally.
+        static JsonNode? Args(object args)
+        {
+            if (args is JsonNode n) return n;
+            var o = new JsonObject();
+            foreach (var p in args.GetType().GetProperties())
+                o[p.Name] = JsonSerializer.SerializeToNode(p.GetValue(args), p.PropertyType);
+            return o;
         }
 
         public async Task<T?> Call<T>(string cmd, object? args = null, int timeoutMs = 60000) where T : class
