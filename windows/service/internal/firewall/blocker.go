@@ -48,6 +48,9 @@ type Options struct {
 	DNS []netip.Addr
 	// Bypass: destinations allowed outside the tunnel while blocking.
 	Bypass []netip.Prefix
+	// Apps: programs this service runs (the Xray and Hysteria cores) whose
+	// own packets, like the service's, carry the encrypted tunnel.
+	Apps []string
 }
 
 // Session is one installed rule set.
@@ -142,6 +145,11 @@ func Enable(o Options) (*Session, error) {
 		if err = permitWireGuardService(session, bo, 15); err != nil {
 			return wrapErr(err)
 		}
+		for _, app := range o.Apps {
+			if err = permitApp(session, bo, 15, app); err != nil {
+				return wrapErr(err)
+			}
+		}
 
 		if len(o.DNS) > 0 {
 			if err = blockDNS(o.DNS, session, bo, 15, 14); err != nil {
@@ -194,6 +202,50 @@ func (s *Session) Close() {
 		fwpmEngineClose0(s.handle)
 		s.handle = 0
 	}
+}
+
+// permitApp lets one program's traffic pass everywhere (by its path).
+func permitApp(session uintptr, baseObjects *baseObjects, weight uint8, path string) error {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return wrapErr(err)
+	}
+	var appID *wtFwpByteBlob
+	if err := fwpmGetAppIdFromFileName0(p, unsafe.Pointer(&appID)); err != nil {
+		return wrapErr(err)
+	}
+	defer fwpmFreeMemory0(unsafe.Pointer(&appID))
+	cond := wtFwpmFilterCondition0{
+		fieldKey:  cFWPM_CONDITION_ALE_APP_ID,
+		matchType: cFWP_MATCH_EQUAL,
+		conditionValue: wtFwpConditionValue0{
+			_type: cFWP_BYTE_BLOB_TYPE,
+			value: uintptr(unsafe.Pointer(appID)),
+		},
+	}
+	displayData, err := createWtFwpmDisplayData0("Permit the tunnel core program", "")
+	if err != nil {
+		return wrapErr(err)
+	}
+	filter := wtFwpmFilter0{
+		displayData:         *displayData,
+		providerKey:         &baseObjects.provider,
+		subLayerKey:         baseObjects.filters,
+		weight:              filterWeight(weight),
+		flags:               cFWPM_FILTER_FLAG_CLEAR_ACTION_RIGHT,
+		numFilterConditions: 1,
+		filterCondition:     &cond,
+		action:              wtFwpmAction0{_type: cFWP_ACTION_PERMIT},
+	}
+	filterID := uint64(0)
+	for _, l := range []windows.GUID{cFWPM_LAYER_ALE_AUTH_CONNECT_V4, cFWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4, cFWPM_LAYER_ALE_AUTH_CONNECT_V6, cFWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6} {
+		filter.layerKey = l
+		if err := fwpmFilterAdd0(session, &filter, 0, &filterID); err != nil {
+			return wrapErr(err)
+		}
+	}
+	runtime.KeepAlive(appID)
+	return nil
 }
 
 // permitRemote lets traffic to and from the given ranges pass outside the

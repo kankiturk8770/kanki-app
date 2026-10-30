@@ -4,6 +4,8 @@
 package state
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -94,6 +96,8 @@ type Saved struct {
 	Account      *sub.Account `json:"account,omitempty"`
 	LastServer   string       `json:"last_server,omitempty"`
 	WasConnected bool         `json:"was_connected"` // the user wanted the VPN on when the service stopped
+	// DeviceID: made once per install, sent to the panel with every request
+	DeviceID string `json:"device_id"`
 }
 
 // Store reads and writes the file.
@@ -115,7 +119,14 @@ func (s *Store) Load() Saved {
 	v := Saved{Settings: Defaults()}
 	b, err := os.ReadFile(s.path)
 	if err == nil {
-		_ = json.Unmarshal(b, &v)
+		if b, err = unprotect(b); err == nil {
+			_ = json.Unmarshal(b, &v)
+		}
+	}
+	if len(v.DeviceID) != 32 {
+		var r [16]byte
+		_, _ = rand.Read(r[:])
+		v.DeviceID = hex.EncodeToString(r[:])
 	}
 	if v.Settings.Check() != nil {
 		v.Settings = Defaults()
@@ -127,7 +138,12 @@ func (s *Store) Load() Saved {
 func (s *Store) Save(v Saved) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	// the subscription code and config links are secrets: sealed by the OS before they touch the disk
+	b, err = protect(b)
 	if err != nil {
 		return err
 	}

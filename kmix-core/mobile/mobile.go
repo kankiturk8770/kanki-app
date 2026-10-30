@@ -44,7 +44,7 @@ const (
 )
 
 var (
-	tunFile *os.File
+	tunFile io.ReadWriteCloser
 
 	// connMu از mux و rawConn (مسیر TCP) محافظت می‌کند
 	connMu     sync.Mutex
@@ -103,29 +103,27 @@ type dgramConn struct {
 // Start تونل را راه‌اندازی می‌کند. tunFd فایل‌دیسکریپتور TUN ساخته‌شده توسط VpnService است.
 // این تابع تا ۱۰ ثانیه ممکن است بلاک شود؛ از ترد اصلی صدا نزن.
 func Start(tunFd int, serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool) error {
-	if atomic.LoadInt32(&running) == 1 {
-		return errors.New("از قبل روشن است")
+	if err := setup(serverAddr, keyHex, fecShards, fecParity, gamingMode); err != nil {
+		return err
 	}
-	k, err := hex.DecodeString(keyHex)
-	if err != nil || len(k) != 32 {
-		return errors.New("کلید نامعتبر — باید hex با ۶۴ کاراکتر باشد")
-	}
-	if fecShards <= 0 || fecParity < 0 {
-		return errors.New("تنظیمات FEC نامعتبر")
-	}
-	psk, server, fecData, fecPty = k, serverAddr, fecShards, fecParity
-	gaming.Store(gamingMode)
-	var sid [8]byte
-	rand.Read(sid[:])
-	sessionID = binary.BigEndian.Uint64(sid[:])
-	lastPing.Store(-1)
-	txBytes.Store(0)
-	rxBytes.Store(0)
-
 	tf := os.NewFile(uintptr(tunFd), "tun")
 	if tf == nil {
 		return errors.New("TUN fd نامعتبر")
 	}
+	return start(tf)
+}
+
+// StartDevice همان Start است برای TUNی که فایل‌دیسکریپتور ندارد (ویندوز: Wintun). هر Read یک بسته‌ی IP
+// برمی‌گرداند و هر Write یک بسته می‌نویسد. (gomobile این تابع را برای اندروید رد می‌کند.)
+func StartDevice(tf io.ReadWriteCloser, serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool) error {
+	if err := setup(serverAddr, keyHex, fecShards, fecParity, gamingMode); err != nil {
+		tf.Close()
+		return err
+	}
+	return start(tf)
+}
+
+func start(tf io.ReadWriteCloser) error {
 	if err := openDgram(tf); err != nil {
 		tf.Close()
 		return err
@@ -133,7 +131,7 @@ func Start(tunFd int, serverAddr, keyHex string, fecShards, fecParity int, gamin
 
 	// اتصال KCP هم کلید را واقعاً امتحان می‌کند (کلید غلط = سرور هیچ جوابی نمی‌دهد)
 	connMu.Lock()
-	err = connectLocked()
+	err := connectLocked()
 	connMu.Unlock()
 	if err != nil {
 		closeDgram()
@@ -156,6 +154,30 @@ func Start(tunFd int, serverAddr, keyHex string, fecShards, fecParity int, gamin
 	go readTUNLoop(tf)
 	go cleanerLoop(stop)
 	go pingLoop(stop)
+	return nil
+}
+
+// setup چک و ذخیره‌ی تنظیمات، مشترک Start و StartDevice
+func setup(serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool) error {
+	if atomic.LoadInt32(&running) == 1 {
+		return errors.New("از قبل روشن است")
+	}
+	k, err := hex.DecodeString(keyHex)
+	if err != nil || len(k) != 32 {
+		return errors.New("کلید نامعتبر — باید hex با ۶۴ کاراکتر باشد")
+	}
+	if fecShards <= 0 || fecParity < 0 {
+		return errors.New("تنظیمات FEC نامعتبر")
+	}
+	psk, server, fecData, fecPty = k, serverAddr, fecShards, fecParity
+	gaming.Store(gamingMode)
+	var sid [8]byte
+	rand.Read(sid[:])
+	sessionID = binary.BigEndian.Uint64(sid[:])
+	lastPing.Store(-1)
+	txBytes.Store(0)
+	rxBytes.Store(0)
+
 	return nil
 }
 
@@ -207,7 +229,7 @@ func Reconnect() {
 
 // ---- مسیر سریع UDP ----
 
-func openDgram(tf *os.File) error {
+func openDgram(tf io.ReadWriteCloser) error {
 	srv, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
 		return fmt.Errorf("آدرس سرور نامعتبر: %w", err)
@@ -235,7 +257,7 @@ func closeDgram() {
 	}
 }
 
-func dgramReadLoop(dc *dgramConn, tf *os.File) {
+func dgramReadLoop(dc *dgramConn, tf io.ReadWriteCloser) {
 	buf := make([]byte, 65535)
 	for {
 		kind, n, _, err := dc.pc.ReadPacket(buf)
@@ -538,7 +560,7 @@ func (w *byteWriter) Write(p []byte) (int, error) { w.b = append(w.b, p...); ret
 
 // ---- خواندن بسته‌ها از TUN ----
 
-func readTUNLoop(tf *os.File) {
+func readTUNLoop(tf io.ReadWriteCloser) {
 	buf := make([]byte, 65535)
 	out := make([]byte, 0, obfs.MaxPayload)
 	for atomic.LoadInt32(&running) == 1 {

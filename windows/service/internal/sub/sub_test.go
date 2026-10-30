@@ -22,6 +22,8 @@ const page = `<!doctype html><html><head><style>h3{}</style></head><body>
 <div class="row proto" data-proto="amneziawg"><div class="acts">
 <a class="btn" href="/api/config/12/amneziawg?sub=kanki-12-abcd1234&amp;node=local">Download config</a></div></div>
 <div class="row proto" data-proto="hysteria2"><button data-url="/api/config/12/hysteria2/qr?sub=kanki-12-abcd1234&amp;node=local">QR</button></div>
+<div class="row proto" data-proto="kankimix"><i hidden data-url="/api/config/12/kankimix?sub=kanki-12-abcd1234&amp;node=local"></i></div>
+<div class="row proto" data-proto="openvpn"><a href="/api/config/12/openvpn?sub=kanki-12-abcd1234&amp;node=local">x</a></div>
 </section>
 <section class="node" data-node="n3"><h3>FINLAND</h3>
 <a class="btn" href="/api/config/12/amneziawg?sub=kanki-12-abcd1234&amp;node=n3@tunnel">Download config</a>
@@ -29,7 +31,9 @@ const page = `<!doctype html><html><head><style>h3{}</style></head><body>
 </section>
 </main>
 <script id="data" type="application/json">{"sub_base":"https://s9.example.com:2053/","app_msg":{"id":"1","text":" hello "},
-"nodes":[{"id":"local","exit_cc":"de","exit_city":"Frankfurt"},{"id":"n3","exit_cc":"FI"}]}</script>
+"support":"https://t.me/kanki","max_conn":2,
+"nodes":[{"id":"local","name":"GERMANY-GAMING","exit_cc":"de","exit_city":"Frankfurt","exit_lat":50.1,"exit_lon":8.7,"mtun":"mtun://K@1.2.3.4:5000?ip=10.79.0.2/16"},{"id":"n3","exit_cc":"FI","mtun":null}],
+"xray":[{"name":"KANKI-XRAY Reality","link":"vless://id@de1.kanki.pro:443?security=reality","exit_cc":"DE"},{"name":"vm","link":"vmess://abc"}]}</script>
 </body></html>`
 
 func TestParse(t *testing.T) {
@@ -43,10 +47,32 @@ func TestParse(t *testing.T) {
 	if a.SubBase != "https://s9.example.com:2053" || a.Notice != "hello" {
 		t.Fatalf("data json: %+v", a)
 	}
-	if len(a.Servers) != 3 {
-		t.Fatalf("want 3 servers (wg, awg, awg tunnel), got %+v", a.Servers)
+	byProto := map[string]Server{}
+	for _, s := range a.Servers {
+		byProto[s.Proto+map[bool]string{true: "@t"}[s.Tunnel]] = s
 	}
-	wg, awg, tun := a.Servers[0], a.Servers[1], a.Servers[2]
+	if len(a.Servers) != 7 {
+		t.Fatalf("want wg, awg, hy2, kmix, awg tunnel, microtun, vless; got %+v", a.Servers)
+	}
+	if byProto["openvpn"].ID != "" {
+		t.Fatal("OpenVPN must not be offered")
+	}
+	if h := byProto["hysteria2"]; h.URL != "https://p.example.com:2053/api/config/12/hysteria2?sub=kanki-12-abcd1234&node=local" {
+		t.Fatalf("hy2: %+v", h)
+	}
+	if k := byProto["kankimix"]; k.URL == "" || k.Lat != 50.1 {
+		t.Fatalf("kmix: %+v", k)
+	}
+	if m := byProto["microtun"]; m.Link == "" || m.Name != "GERMANY-GAMING" || m.Country != "DE" {
+		t.Fatalf("mtun: %+v", m)
+	}
+	if v := byProto["vless"]; v.Link == "" || v.Country != "DE" || v.Name != "KANKI-XRAY Reality" {
+		t.Fatalf("vless: %+v", v)
+	}
+	if a.Support != "https://t.me/kanki" || a.MaxConn != 2 {
+		t.Fatalf("account: %+v", a)
+	}
+	wg, awg, tun := byProto["wireguard"], byProto["amneziawg"], byProto["amneziawg@t"]
 	if wg.Proto != "wireguard" || wg.Name != "GERMANY-GAMING" || wg.Country != "DE" || wg.City != "Frankfurt" {
 		t.Fatalf("wg: %+v", wg)
 	}
@@ -102,11 +128,37 @@ func TestLoadAndConfig(t *testing.T) {
 	c := NewClient()
 	c.HTTP = srv.Client()
 	a, err := c.Load(context.Background(), srv.URL, "kanki-12-abcd1234")
-	if err != nil || len(a.Servers) != 3 {
+	if err != nil || len(a.Servers) != 7 {
 		t.Fatal(a, err)
 	}
 	text, err := c.Config(context.Background(), a, a.Servers[0])
 	if err != nil || text != "[Interface]\n" {
 		t.Fatal(text, err)
+	}
+}
+
+func TestSealedConfig(t *testing.T) {
+	sealed, err := Seal([]byte("[Interface]\nPrivateKey = x\n"), "kanki-12-abcd1234", "dev-1", make([]byte, 12))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Kanki-Device") == "" || r.Header.Get("X-Kanki-Seal") != "kseal1" {
+			http.Error(w, "headers", 400)
+			return
+		}
+		fmt.Fprint(w, sealed)
+	}))
+	defer srv.Close()
+	c := NewClient()
+	c.HTTP, c.DeviceID = srv.Client(), "dev-1"
+	text, err := c.get(context.Background(), srv.URL+"/api/config/12/wireguard?sub=kanki-12-abcd1234&node=local")
+	if err != nil || text != "[Interface]\nPrivateKey = x\n" {
+		t.Fatal(text, err)
+	}
+	// another device (or a wrong code) cannot open it
+	c.DeviceID = "dev-2"
+	if _, err := c.get(context.Background(), srv.URL+"/api/config/12/wireguard?sub=kanki-12-abcd1234"); err == nil {
+		t.Fatal("opened with the wrong device")
 	}
 }

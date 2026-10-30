@@ -10,19 +10,26 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 	"time"
 
 	"kankivpn/internal/conf"
+	"kankivpn/internal/cores"
 	"kankivpn/internal/logx"
 	"kankivpn/internal/route"
 	"kankivpn/internal/state"
 	"kankivpn/internal/sub"
+
+	"mtuncore/mtun"
 )
 
 // Tunnel is everything the engine needs to bring one tunnel up.
 type Tunnel struct {
-	Config     *conf.Config
+	Proto      string       // cores.WireGuard, cores.KankiMix, ...
+	Config     *conf.Config // WireGuard / AmneziaWG
+	Text       string       // the link of the other protocols
+	DeviceID   string       // microtun keeps one device per install
 	Endpoint   netip.AddrPort
 	Plan       route.Plan
 	DNS        []netip.Addr
@@ -120,6 +127,8 @@ func New(eng Engine, store *state.Store, log *logx.Log, sc *sub.Client) *Manager
 	m := &Manager{eng: eng, store: store, log: log, sub: sc, lastConf: map[string]string{}, lastIP: map[string]netip.Addr{}}
 	m.saved = store.Load()
 	m.st = Status{State: Disconnected}
+	sc.DeviceID = m.saved.DeviceID
+	m.save() // keeps a newly made device id
 	return m
 }
 
@@ -188,7 +197,7 @@ func public(a *sub.Account) *sub.Account {
 	c.Code = ""
 	c.Servers = append([]sub.Server(nil), a.Servers...)
 	for i := range c.Servers {
-		c.Servers[i].URL = ""
+		c.Servers[i].URL, c.Servers[i].Link = "", ""
 	}
 	return &c
 }
@@ -300,7 +309,7 @@ func (m *Manager) Connect(id string) error {
 	m.saved.WasConnected = true
 	m.save()
 	pub := *srv
-	pub.URL = ""
+	pub.URL, pub.Link = "", ""
 	m.st = Status{State: Connecting, Server: &pub, Proto: srv.Proto}
 	acc := *a
 	set := m.saved.Settings
@@ -424,40 +433,223 @@ func (m *Manager) watch(ctx context.Context, gen int, up time.Time) string {
 	return ""
 }
 
-// prepare downloads the config and makes the tunnel plan.
-func (m *Manager) prepare(ctx context.Context, a *sub.Account, srv sub.Server, set state.Settings) (*Tunnel, error) {
+// configText is the server's config: the link inside the page (microtun,
+// VLESS) or the text the panel gives for it, with the last good one as a
+// fallback when the panel cannot be reached.
+func (m *Manager) configText(ctx context.Context, a *sub.Account, srv sub.Server) (string, error) {
+	if srv.Link != "" {
+		return srv.Link, nil
+	}
 	fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	text, err := m.sub.Config(fctx, a, srv)
 	cancel()
-	cfg, perr := conf.Parse(text)
-	m.mu.Lock()
-	if err == nil && perr == nil {
-		m.lastConf[srv.ID] = text
-	} else if old, ok := m.lastConf[srv.ID]; ok {
-		m.log.Printf("config download failed (%v); using the last good one", firstErr(err, perr))
-		err = nil
-		cfg, perr = conf.Parse(old)
-	}
-	m.mu.Unlock()
-	if err != nil {
-		return nil, fmt.Errorf("could not download the config: %w", err)
-	}
-	if perr != nil {
-		return nil, fmt.Errorf("bad config from the panel: %w", perr)
-	}
-	ep, err := resolve(ctx, cfg.Peer.Host, cfg.Peer.Port)
-	m.mu.Lock()
 	if err == nil {
-		m.lastIP[cfg.Peer.Host] = ep.Addr()
-	} else if old, ok := m.lastIP[cfg.Peer.Host]; ok {
-		m.log.Printf("%v; using the last address", err)
-		ep, err = netip.AddrPortFrom(old, cfg.Peer.Port), nil
+		_, _, err = endpointOf(srv.Proto, text)
 	}
-	m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err == nil {
+		m.lastConf[srv.ID] = text
+		return text, nil
+	}
+	if old, ok := m.lastConf[srv.ID]; ok {
+		m.log.Printf("config of %s: %v; using the last good one", srv.Name, err)
+		return old, nil
+	}
+	return "", fmt.Errorf("could not get the config: %w", err)
+}
+
+// endpointOf reads the server address out of a config of any protocol.
+func endpointOf(proto, text string) (string, uint16, error) {
+	switch proto {
+	case cores.WireGuard, cores.AmneziaWG:
+		c, err := conf.Parse(text)
+		if err != nil {
+			return "", 0, err
+		}
+		return c.Peer.Host, c.Peer.Port, nil
+	case cores.KankiMix:
+		k, err := cores.ParseKmix(text)
+		if err != nil {
+			return "", 0, err
+		}
+		return k.Host, uint16(k.PickPort()), nil
+	case cores.Hysteria2:
+		h, err := cores.ParseHy2(text)
+		if err != nil {
+			return "", 0, err
+		}
+		return h.Host, uint16(h.Port), nil
+	case cores.VLESS:
+		v, err := cores.ParseVless(text)
+		if err != nil {
+			return "", 0, err
+		}
+		return v.Host, uint16(v.Port), nil
+	case cores.Microtun:
+		l, err := mtun.ParseLink(text)
+		if err != nil {
+			return "", 0, err
+		}
+		h, p, err := net.SplitHostPort(l.Server)
+		if err != nil {
+			return "", 0, err
+		}
+		n, err := strconv.ParseUint(p, 10, 16)
+		return h, uint16(n), err
+	}
+	return "", 0, fmt.Errorf("protocol %q does not run on Windows", proto)
+}
+
+// resolveCached resolves, falling back to the last good address of the host.
+func (m *Manager) resolveCached(ctx context.Context, host string, port uint16) (netip.AddrPort, error) {
+	ep, err := resolve(ctx, host, port)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err == nil {
+		m.lastIP[host] = ep.Addr()
+	} else if old, ok := m.lastIP[host]; ok {
+		m.log.Printf("%v; using the last address", err)
+		ep, err = netip.AddrPortFrom(old, port), nil
+	}
+	return ep, err
+}
+
+// prepare gets the config and makes the tunnel plan.
+func (m *Manager) prepare(ctx context.Context, a *sub.Account, srv sub.Server, set state.Settings) (*Tunnel, error) {
+	text, err := m.configText(ctx, a, srv)
 	if err != nil {
 		return nil, err
 	}
-	return Build(cfg, ep, set)
+	host, port, err := endpointOf(srv.Proto, text)
+	if err != nil {
+		return nil, fmt.Errorf("bad config from the panel: %w", err)
+	}
+	ep, err := m.resolveCached(ctx, host, port)
+	if err != nil {
+		return nil, err
+	}
+	var t *Tunnel
+	if srv.Proto == cores.WireGuard || srv.Proto == cores.AmneziaWG {
+		cfg, err := conf.Parse(text)
+		if err != nil {
+			return nil, fmt.Errorf("bad config from the panel: %w", err)
+		}
+		t, err = Build(cfg, ep, set)
+		if err != nil {
+			return nil, err
+		}
+	} else if t, err = BuildLink(srv.Proto, text, ep, set); err != nil {
+		return nil, err
+	}
+	t.Proto, t.DeviceID = srv.Proto, m.saved.DeviceID
+	return t, nil
+}
+
+// BuildLink is Build for the protocols that come as a link: everything IPv4
+// goes into the tunnel (they carry no IPv6, so IPv6 is blocked, never leaked).
+func BuildLink(proto, text string, ep netip.AddrPort, set state.Settings) (*Tunnel, error) {
+	cfg := &conf.Config{Peer: conf.Peer{AllowedIPs: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}}}
+	t, err := Build(cfg, ep, set)
+	if err != nil {
+		return nil, err
+	}
+	t.Config, t.Text, t.BlockIPv6 = nil, text, true
+	switch proto {
+	case cores.KankiMix:
+		t.MTU = 1280 // the KANKI MIX core's own packet size
+	case cores.Microtun:
+		if l, err := mtun.ParseLink(text); err == nil && set.MTU == 0 {
+			t.MTU = l.MTU
+		}
+	default:
+		if set.MTU == 0 {
+			t.MTU = 1500 // tun2socks: the adapter stays inside this computer
+		}
+	}
+	return t, nil
+}
+
+// Ping measures the servers' real round trips (each protocol's own hello),
+// several at a time; -1 = no answer.
+func (m *Manager) Ping(ids []string) map[string]int64 {
+	m.mu.Lock()
+	a := m.saved.Account
+	m.mu.Unlock()
+	out := map[string]int64{}
+	if a == nil {
+		return out
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	gate := make(chan struct{}, 8)
+	for _, srv := range a.Servers {
+		if len(ids) > 0 && !want[srv.ID] {
+			continue
+		}
+		wg.Add(1)
+		go func(srv sub.Server) {
+			defer wg.Done()
+			gate <- struct{}{}
+			defer func() { <-gate }()
+			ms, err := m.ping(a, srv)
+			if err != nil {
+				ms = -1
+			}
+			mu.Lock()
+			out[srv.ID] = ms
+			mu.Unlock()
+		}(srv)
+	}
+	wg.Wait()
+	return out
+}
+
+func (m *Manager) ping(a *sub.Account, srv sub.Server) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	text, err := m.configText(ctx, a, srv)
+	if err != nil {
+		return 0, err
+	}
+	host, port, err := endpointOf(srv.Proto, text)
+	if err != nil {
+		return 0, err
+	}
+	ep, err := m.resolveCached(ctx, host, port)
+	if err != nil {
+		return 0, err
+	}
+	switch srv.Proto {
+	case cores.WireGuard, cores.AmneziaWG:
+		w, err := cores.NewWgHello(text)
+		if err != nil {
+			return 0, err
+		}
+		return w.Ping(ep)
+	case cores.KankiMix:
+		k, _ := cores.ParseKmix(text)
+		return cores.KmixPing(k, netip.AddrPortFrom(ep.Addr(), uint16(k.Port)))
+	case cores.Microtun:
+		return mtun.Ping(text)
+	case cores.VLESS:
+		return cores.TCP(ctx, ep)
+	case cores.Hysteria2:
+		if p, ok := m.eng.(ProgramPinger); ok {
+			return p.PingProgram(ctx, srv.Proto, text, ep)
+		}
+	}
+	return 0, errors.New("no ping for this protocol")
+}
+
+// ProgramPinger is an engine that can ping through a protocol's own program
+// (Hysteria2 has no hello of its own; its program connects and measures).
+type ProgramPinger interface {
+	PingProgram(ctx context.Context, proto, text string, ep netip.AddrPort) (int64, error)
 }
 
 // Build turns a config and the settings into a tunnel.

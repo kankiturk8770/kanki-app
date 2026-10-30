@@ -28,14 +28,19 @@ const (
 
 // Server is one config the Windows client can run.
 type Server struct {
-	ID      string `json:"id"`    // stable key: node + protocol
-	Node    string `json:"node"`  // panel node id ("local", "n3", "n3@tunnel"...)
-	Name    string `json:"name"`  // heading on the page, like GERMANY-GAMING
-	Proto   string `json:"proto"` // wireguard | amneziawg
-	Country string `json:"cc,omitempty"`
-	City    string `json:"city,omitempty"`
-	Tunnel  bool   `json:"tunnel"`        // goes through a server inside Iran
-	URL     string `json:"url,omitempty"` // config link: carries the user's key, cleared before it goes to the UI
+	ID      string  `json:"id"`    // stable key: node + protocol
+	Node    string  `json:"node"`  // panel node id ("local", "n3", "n3@tunnel"...)
+	Name    string  `json:"name"`  // heading on the page, like GERMANY-GAMING
+	Proto   string  `json:"proto"` // wireguard | amneziawg
+	Country string  `json:"cc,omitempty"`
+	City    string  `json:"city,omitempty"`
+	Tunnel  bool    `json:"tunnel"` // goes through a server inside Iran
+	Lat     float64 `json:"lat,omitempty"`
+	Lon     float64 `json:"lon,omitempty"`
+	// URL (config download) or Link (mtun:// and vless:// come inside the page):
+	// both carry the user's key and are cleared before they go to the UI
+	URL  string `json:"url,omitempty"`
+	Link string `json:"link,omitempty"`
 }
 
 // Account is what the page says about the user.
@@ -48,6 +53,8 @@ type Account struct {
 	LimitGB  float64  `json:"limit_gb"`
 	UsedGB   float64  `json:"used_gb"`
 	Notice   string   `json:"notice,omitempty"`
+	Support  string   `json:"support,omitempty"`
+	MaxConn  int      `json:"max_conn,omitempty"`
 	Servers  []Server `json:"servers"`
 	SubBase  string   `json:"sub_base,omitempty"`
 	Fetched  int64    `json:"fetched"`
@@ -72,7 +79,9 @@ func Normalize(input string) (string, string, error) {
 
 // Client fetches pages; it races every Kanki host and remembers the winner.
 type Client struct {
-	HTTP      *http.Client
+	HTTP *http.Client
+	// DeviceID goes with every request (the panel can count and limit devices)
+	DeviceID  string
 	mu        sync.Mutex
 	preferred string
 	subBase   string
@@ -142,6 +151,11 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "KankiVPN-Windows")
+	if c.DeviceID != "" {
+		req.Header.Set("X-Kanki-Device", c.DeviceID)
+	}
+	// a panel that knows sealed configs answers with one (see seal.go)
+	req.Header.Set("X-Kanki-Seal", sealVersion)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", err
@@ -151,7 +165,13 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	return string(b), err
+	if err != nil {
+		return "", err
+	}
+	if code := codeOf(url); code != "" && isSealed(b) {
+		return open(b, code, c.DeviceID)
+	}
+	return string(b), nil
 }
 
 // race asks all urls; the first good answer wins. The first url starts 300ms
@@ -258,11 +278,42 @@ type pageData struct {
 	AppMsg  *struct {
 		Text string `json:"text"`
 	} `json:"app_msg"`
-	Nodes []struct {
-		ID      string `json:"id"`
-		ExitCC  string `json:"exit_cc"`
-		ExitCty string `json:"exit_city"`
+	Support string `json:"support"`
+	MaxConn int    `json:"max_conn"`
+	Nodes   []struct {
+		ID      string   `json:"id"`
+		Name    string   `json:"name"`
+		ExitCC  string   `json:"exit_cc"`
+		ExitCty string   `json:"exit_city"`
+		Lat     *float64 `json:"exit_lat"`
+		Lon     *float64 `json:"exit_lon"`
+		Mtun    *string  `json:"mtun"`
 	} `json:"nodes"`
+	Xray []struct {
+		Name    string   `json:"name"`
+		Link    string   `json:"link"`
+		ExitCC  string   `json:"exit_cc"`
+		ExitCty string   `json:"exit_city"`
+		Lat     *float64 `json:"exit_lat"`
+		Lon     *float64 `json:"exit_lon"`
+	} `json:"xray"`
+}
+
+type exit struct {
+	cc, city string
+	lat, lon float64
+}
+
+func exitOf(cc, city string, lat, lon *float64) (exit, bool) {
+	cc = strings.ToUpper(strings.TrimSpace(cc))
+	if len(cc) != 2 {
+		return exit{}, false
+	}
+	e := exit{cc: cc, city: city}
+	if lat != nil && lon != nil {
+		e.lat, e.lon = *lat, *lon
+	}
+	return e, true
 }
 
 // Parse reads a subscription page. base is the host it came from: config
@@ -299,10 +350,11 @@ func Parse(page, base string) (*Account, error) {
 	if data.AppMsg != nil {
 		a.Notice = strings.TrimSpace(data.AppMsg.Text)
 	}
-	exits := map[string][2]string{}
+	a.Support, a.MaxConn = strings.TrimSpace(data.Support), data.MaxConn
+	exits := map[string]exit{}
 	for _, n := range data.Nodes {
-		if cc := strings.ToUpper(strings.TrimSpace(n.ExitCC)); len(cc) == 2 {
-			exits[n.ID] = [2]string{cc, n.ExitCty}
+		if e, ok := exitOf(n.ExitCC, n.ExitCty, n.Lat, n.Lon); ok {
+			exits[n.ID] = e
 		}
 	}
 
@@ -321,11 +373,19 @@ func Parse(page, base string) (*Account, error) {
 	}
 	seen := map[string]bool{}
 	for _, m := range linkRe.FindAllStringSubmatchIndex(clean, -1) {
-		proto := clean[m[4]:m[5]]
-		if proto != "wireguard" && proto != "amneziawg" {
-			continue // only these two run on Windows (qr / uri / other cores skipped)
-		}
+		proto, extra, _ := strings.Cut(clean[m[4]:m[5]], "/")
 		raw := html.UnescapeString(clean[m[0]:m[1]])
+		switch proto {
+		case "wireguard", "amneziawg":
+			if extra != "" {
+				continue // the QR and URI buttons of the same config
+			}
+		case "kankimix", "hysteria2":
+			// the page only has their QR button; the same address without /qr gives the link text
+			raw = strings.Replace(raw, "/"+proto+"/"+extra+"?", "/"+proto+"?", 1)
+		default:
+			continue // OpenVPN is not part of the Windows client
+		}
 		url := raw
 		if !strings.HasPrefix(raw, "http") {
 			url = base + raw
@@ -348,13 +408,52 @@ func Parse(page, base string) (*Account, error) {
 			ID: node + "/" + proto, Node: node, Name: name, Proto: proto, URL: url,
 			Tunnel: strings.HasSuffix(node, tunnelSuffix),
 		}
-		if e, ok := exits[strings.TrimSuffix(node, tunnelSuffix)]; ok {
-			s.Country, s.City = e[0], e[1]
+		s.setExit(exits[strings.TrimSuffix(node, tunnelSuffix)])
+		a.Servers = append(a.Servers, s)
+	}
+	// microtun: its link is inside the page data, one per server (null = not for this user)
+	for _, n := range data.Nodes {
+		if n.Mtun == nil || !strings.HasPrefix(strings.TrimSpace(*n.Mtun), "mtun://") {
+			continue
 		}
+		s := Server{ID: n.ID + "/microtun", Node: n.ID, Name: n.Name, Proto: "microtun", Link: strings.TrimSpace(*n.Mtun),
+			Tunnel: strings.HasSuffix(n.ID, tunnelSuffix)}
+		if s.Name == "" {
+			s.Name = n.ID
+		}
+		s.setExit(exits[strings.TrimSuffix(n.ID, tunnelSuffix)])
+		a.Servers = append(a.Servers, s)
+	}
+	// Xray: only VLESS runs on Windows
+	for i, x := range data.Xray {
+		l := strings.TrimSpace(x.Link)
+		if !strings.HasPrefix(strings.ToLower(l), "vless://") {
+			continue
+		}
+		s := Server{ID: fmt.Sprintf("xray/%d/%s", i, x.Name), Node: "xray", Name: x.Name, Proto: "vless", Link: l}
+		e, _ := exitOf(x.ExitCC, x.ExitCty, x.Lat, x.Lon)
+		s.setExit(e)
 		a.Servers = append(a.Servers, s)
 	}
 	if a.Username == "" && len(a.Servers) == 0 {
 		return nil, errors.New("this is not a Kanki subscription page")
 	}
 	return a, nil
+}
+
+func (s *Server) setExit(e exit) {
+	if e.cc != "" {
+		s.Country, s.City, s.Lat, s.Lon = e.cc, e.city, e.lat, e.lon
+	}
+}
+
+// codeOf finds the subscription code in a panel address (/sub/CODE or ?sub=CODE).
+func codeOf(u string) string {
+	if i := strings.Index(u, "/sub/"); i >= 0 {
+		return strings.SplitN(u[i+5:], "?", 2)[0]
+	}
+	if m := regexp.MustCompile(`[?&]sub=([^&]+)`).FindStringSubmatch(u); m != nil {
+		return m[1]
+	}
+	return ""
 }

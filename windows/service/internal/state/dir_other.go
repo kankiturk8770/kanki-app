@@ -16,3 +16,7 @@ func Dir() string {
 }
 
 func makeDir(dir string) error { return os.MkdirAll(dir, 0o700) }
+
+// Off Windows (development and tests) the file is plain; the folder is 0700.
+func protect(b []byte) ([]byte, error)   { return b, nil }
+func unprotect(b []byte) ([]byte, error) { return b, nil }

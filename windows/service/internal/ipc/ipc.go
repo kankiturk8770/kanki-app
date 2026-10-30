@@ -85,6 +85,7 @@ func Do(req Request, m *core.Manager, log *logx.Log, version string) Response {
 		Server   string          `json:"server"`
 		Input    string          `json:"input"`
 		Settings *state.Settings `json:"settings"`
+		Servers  []string        `json:"servers"`
 	}
 	if len(req.Args) > 0 {
 		if err := json.Unmarshal(req.Args, &args); err != nil {
@@ -131,6 +132,8 @@ func Do(req Request, m *core.Manager, log *logx.Log, version string) Response {
 			return fail(err)
 		}
 		return ok(m.Settings())
+	case "ping":
+		return ok(m.Ping(args.Servers))
 	case "logs":
 		return ok(log.Lines())
 	}

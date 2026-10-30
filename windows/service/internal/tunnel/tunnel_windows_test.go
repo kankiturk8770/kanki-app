@@ -62,6 +62,7 @@ func TestTunnelUpAndDown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tun.Proto = "amneziawg"
 	e := New(logx.New(""))
 	if err := e.Up(*tun); err != nil {
 		t.Fatal(err)
@@ -69,10 +70,10 @@ func TestTunnelUpAndDown(t *testing.T) {
 	luid := winipcfg.LUID(0)
 	{
 		e.mu.Lock()
-		dev := e.dev
+		r := e.run
 		e.mu.Unlock()
-		if dev == nil {
-			t.Fatal("no device")
+		if r == nil {
+			t.Fatal("no tunnel")
 		}
 	}
 	ifs, err := winipcfg.GetIPInterfaceTable(windows.AF_INET)
