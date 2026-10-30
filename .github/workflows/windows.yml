@@ -8,8 +8,9 @@ on:
       - ".github/workflows/windows.yml"
   workflow_dispatch:
 
+# نوشتن مخزن فقط برای گذاشتن فایل نصبی ویندوز در Releases (پیش‌انتشار)
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   # منطق سرویس (کانفیگ، مسیرها، اشتراک، مدیریت اتصال، پایپ) روی لینوکس با race detector
@@ -126,6 +127,19 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           & $iscc /DAppVersion=$env:VERSION /DSrc=..\..\dist windows\installer\kanki.iss
           if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+      # the setup file in Releases (not counted in the Actions storage); a pre-release, so the Android
+      # app's latest release stays the latest
+      - name: گذاشتن فایل نصبی در Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "windows-v$env:VERSION"
+          gh release delete $tag --yes --cleanup-tag 2>$null
+          gh release create $tag --prerelease --target $env:GITHUB_SHA --title "Kanki VPN Windows $env:VERSION" `
+            --notes "نسخه‌ی ویندوز. فایل نصبی: KankiVPN-Setup-$env:VERSION.exe (نصب با دسترسی ادمین). هنوز امضای دیجیتال ندارد: در هشدار ویندوز More info و بعد Run anyway." `
+            "dist\KankiVPN-Setup-$env:VERSION.exe"
 
       # when the account's artifact storage is full the build itself still counts
       - uses: actions/upload-artifact@v4
