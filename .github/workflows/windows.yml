@@ -36,7 +36,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      VERSION: "1.2.4"
+      VERSION: "1.2.5"
       # the same core versions as the Android app (build.yml)
       XRAY_VERSION: v26.3.27
       HY_VERSION: v2.12.3

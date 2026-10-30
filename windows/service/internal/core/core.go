@@ -212,6 +212,7 @@ func (m *Manager) SetSubscription(input string) (*sub.Account, error) {
 	defer cancel()
 	a, err := m.sub.Load(ctx, base, code)
 	if err != nil {
+		m.log.Printf("subscription: %v", err)
 		return nil, fmt.Errorf("could not load the subscription: %w", err)
 	}
 	m.mu.Lock()

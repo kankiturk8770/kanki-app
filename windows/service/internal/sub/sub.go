@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,8 +95,77 @@ var Resolver = &net.Resolver{PreferGo: true}
 
 func NewClient() *Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DialContext = (&net.Dialer{Timeout: 15 * time.Second, Resolver: Resolver}).DialContext
+	tr.DialContext = dial
 	return &Client{HTTP: &http.Client{Timeout: 25 * time.Second, Transport: tr}}
+}
+
+// filtered is the address Iran's DNS gives for a blocked name (10.10.34.34-36
+// and its IPv6 twin); dialing it only wastes time.
+func filtered(a netip.Addr) bool {
+	a = a.Unmap()
+	if a.Is4() {
+		return netip.MustParsePrefix("10.10.34.0/24").Contains(a)
+	}
+	return netip.MustParsePrefix("2001:4188:2:600::/64").Contains(a)
+}
+
+// lookup asks Windows' own DNS first (what the browser and the Android app
+// use), then this process's resolver (works while the kill switch is on).
+// IPv4 first: IPv6 is often broken on Iranian networks.
+func lookup(ctx context.Context, host string) ([]netip.Addr, error) {
+	var lastErr error
+	for _, r := range []*net.Resolver{net.DefaultResolver, Resolver} {
+		lctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		as, err := r.LookupNetIP(lctx, "ip", host)
+		cancel()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		var v4, v6 []netip.Addr
+		for _, a := range as {
+			switch {
+			case filtered(a):
+			case a.Unmap().Is4():
+				v4 = append(v4, a.Unmap())
+			default:
+				v6 = append(v6, a)
+			}
+		}
+		if len(v4)+len(v6) > 0 {
+			return append(v4, v6...), nil
+		}
+		lastErr = fmt.Errorf("%s is blocked (DNS gives the filter address)", host)
+	}
+	return nil, lastErr
+}
+
+// dial tries every address of the host in turn, like Android's HttpURLConnection.
+func dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	d := &net.Dialer{Timeout: 8 * time.Second}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return d.DialContext(ctx, network, addr)
+	}
+	ips, err := lookup(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, ip := range ips {
+		c, err := d.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return c, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, lastErr
 }
 
 func (c *Client) kankiHosts() []string {
@@ -198,7 +268,7 @@ func (c *Client) race(ctx context.Context, urls []string) (string, string, error
 			ch <- res{u, b, err}
 		}(i, u)
 	}
-	var last error
+	var errs []string
 	for range urls {
 		r := <-ch
 		if r.err == nil {
@@ -211,9 +281,31 @@ func (c *Client) race(ctx context.Context, urls []string) (string, string, error
 			}
 			return r.url, r.body, nil
 		}
-		last = r.err
+		errs = append(errs, hostOf(r.url)+": "+short(r.err))
 	}
-	return "", "", last
+	// every host's reason, not only the last one (that is all the user can send us)
+	return "", "", errors.New(strings.Join(errs, " | "))
+}
+
+func hostOf(u string) string {
+	if i := strings.Index(u, "://"); i >= 0 {
+		u = u[i+3:]
+	}
+	if i := strings.IndexByte(u, '/'); i >= 0 {
+		u = u[:i]
+	}
+	return u
+}
+
+// short drops the URL (with the user's code) that Go puts in front of the reason.
+func short(err error) string {
+	var ue interface{ Unwrap() error }
+	if errors.As(err, &ue) && strings.HasPrefix(err.Error(), "Get ") {
+		if in := ue.Unwrap(); in != nil {
+			return in.Error()
+		}
+	}
+	return err.Error()
 }
 
 // Load fetches and reads the subscription page.
