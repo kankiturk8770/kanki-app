@@ -32,6 +32,15 @@
 - `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`
 - هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
 
+## نسخه‌ی ویندوز (`windows/`)
+- سرویس Go (`windows/service`، اجرا به‌عنوان SYSTEM: Wintun + amneziawg-go، مسیرها، WFP) و برنامه‌ی WPF
+  (`windows/ui/KankiVPN`، کاربر عادی) که با JSON خط‌به‌خط روی `\\.\pipe\KankiVPN` حرف می‌زنند. نقشه‌ی کامل در `windows/README.md`.
+- اشتراک را `windows/service/internal/sub` می‌خواند (مثل `SubscriptionApi.kt`): هر تغییر شکل صفحه‌ی اشتراک پنل هر دو را
+  عوض می‌کند. فقط WireGuard و AmneziaWG.
+- تست: `cd windows/service && go test -race ./...` و `GOOS=windows go vet ./...`. ساخت C# و تست‌های ادمین (کارت شبکه، WFP)
+  فقط در CI (`.github/workflows/windows.yml`). متن UI در `Strings.cs` (انگلیسی ← فارسی). نسخه: `VERSION` در همان workflow،
+  `Version` در `KankiVPN.csproj` و `windows/CHANGES.md`.
+
 ## ساخت و تست
 - CI (`build.yml`) روی هر push فایل APK می‌سازد؛ `shots.yml` عکس صفحه‌ها (`app/src/test/.../Shots.kt`).
 - ساخت محلی به Android SDK نیاز دارد که در محیط ابری نیست؛ پس بعد از push نتیجه‌ی CI را چک کن.

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>KankiVPN</AssemblyName>
+    <RootNamespace>KankiVPN</RootNamespace>
+    <ApplicationIcon>Assets\kanki.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Company>Kanki</Company>
+    <Product>Kanki VPN</Product>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\vazir_regular.ttf" />
+    <Resource Include="Assets\vazir_bold.ttf" />
+    <Resource Include="Assets\kanki.ico" />
+  </ItemGroup>
+
+</Project>
