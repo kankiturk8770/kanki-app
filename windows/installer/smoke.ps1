@@ -36,7 +36,7 @@ Add-LocalGroupMember -Group 'Users' -Member $name -ErrorAction SilentlyContinue
 $out = "$env:PUBLIC\kanki-check.txt"
 Remove-Item $out -ErrorAction SilentlyContinue
 $cred = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\$name", $sec)
-$p = Start-Process -FilePath "$dir\KankiVPN.exe" -ArgumentList '--check-service', $out -Credential $cred -LoadUserProfile -WorkingDirectory $env:PUBLIC -PassThru -Wait
+$p = Start-Process -FilePath "$dir\KankiVPN.exe" -ArgumentList '--check-service', $out -Credential $cred -LoadUserProfile -UseNewEnvironment -WorkingDirectory $env:PUBLIC -PassThru -Wait
 $res = if (Test-Path $out) { Get-Content $out -Raw } else { "no result (exit $($p.ExitCode))" }
 Remove-LocalUser -Name $name
 Write-Host "app as normal user -> $res"
