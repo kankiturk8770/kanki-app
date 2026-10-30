@@ -104,8 +104,15 @@ func TestTunnelUpAndDown(t *testing.T) {
 		t.Log("no handshake bytes sent yet (allowed; the peer does not exist)")
 	}
 	e.Down(false, false)
-	if _, err := luid.Interface(); err == nil {
-		t.Fatal("adapter still there after Down")
+	// Windows removes the interface a moment after the adapter is deleted
+	for i := 0; ; i++ {
+		if _, err := luid.Interface(); err != nil {
+			break
+		}
+		if i == 50 {
+			t.Fatal("adapter still there 5 seconds after Down")
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
