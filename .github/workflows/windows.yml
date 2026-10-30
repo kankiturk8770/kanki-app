@@ -140,6 +140,8 @@ jobs:
           gh release create $tag --prerelease --target $env:GITHUB_SHA --title "Kanki VPN Windows $env:VERSION" `
             --notes "نسخه‌ی ویندوز. فایل نصبی: KankiVPN-Setup-$env:VERSION.exe (نصب با دسترسی ادمین). هنوز امضای دیجیتال ندارد: در هشدار ویندوز More info و بعد Run anyway." `
             "dist\KankiVPN-Setup-$env:VERSION.exe"
+          Compress-Archive -Path shots\*.png -DestinationPath KankiVPN-screenshots.zip
+          gh release upload $tag KankiVPN-screenshots.zip --clobber
 
       # when the account's artifact storage is full the build itself still counts
       - uses: actions/upload-artifact@v4
