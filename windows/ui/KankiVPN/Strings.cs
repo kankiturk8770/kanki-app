@@ -44,6 +44,7 @@ namespace KankiVPN
             ["Download"] = "دانلود",
             ["Upload"] = "آپلود",
             ["Jitter"] = "جیتر",
+            ["Measuring ping…"] = "در حال سنجش پینگ…",
             ["GB"] = "گیگ",
             ["days"] = "روز",
             ["hours"] = "ساعت",

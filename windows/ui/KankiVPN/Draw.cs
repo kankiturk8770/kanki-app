@@ -115,7 +115,7 @@ namespace KankiVPN
     /// </summary>
     public class Glass : Border
     {
-        public enum Kinds { Card, Mode, Nav, Plain }
+        public enum Kinds { Card, Mode, Nav, Plain, Gold, Hero, Line }
 
         public static readonly DependencyProperty KindProperty = DependencyProperty.Register(nameof(Kind), typeof(Kinds), typeof(Glass),
             new FrameworkPropertyMetadata(Kinds.Card, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -215,6 +215,30 @@ namespace KankiVPN
                     var bw = 1 + .5 * l;
                     dc.DrawGeometry(null, Pen(Diagonal(box, A(Lerp(c, White, .3 * l), .30 + .70 * l), A(c, .22 + .68 * l), A(c, .30 + .70 * l)), bw),
                         Round(new Rect(bw / 2, bw / 2, w - bw, h - bw), rad - bw / 2));
+                    return;
+                case Kinds.Gold:
+                    // the big button glows; the small one (radius 12) does not
+                    if (rad > 13)
+                        foreach (var (sw, a) in new[] { (9.0, .08), (5.0, .16) }) dc.DrawGeometry(null, Pen(A(p.Gold, a), sw), shape);
+                    dc.PushClip(shape);
+                    dc.DrawRectangle(Vertical(0, h, p.Shine, p.Gold, p.GoldDeep), null, box);
+                    dc.Pop();
+                    if (rad > 13) dc.DrawGeometry(null, Pen(A(p.GoldLight, .7), 1), Round(new Rect(.5, .5, w - 1, h - 1), rad - .5));
+                    return;
+                case Kinds.Line:
+                    // big (LineButton): dark with a 1.5 edge; small (SmallLine, radius 12): tinted with a thin edge
+                    var big = rad > 13;
+                    dc.PushClip(shape);
+                    dc.DrawRectangle(Solid(big ? A(p.Panel, .8) : A(c, .08)), null, box);
+                    dc.Pop();
+                    var lw = big ? 1.5 : 1;
+                    dc.DrawGeometry(null, Pen(A(c, big ? .8 : .6), lw), Round(new Rect(lw / 2, lw / 2, w - lw, h - lw), rad - lw / 2));
+                    return;
+                case Kinds.Hero:
+                    dc.PushClip(shape);
+                    dc.DrawRectangle(Diagonal(box, A(p.Gold, .20), A(p.Gold, .04), A(p.Accent, .08)), null, box);
+                    dc.Pop();
+                    dc.DrawGeometry(null, Pen(Diagonal(box, A(p.Gold, .7), A(p.Gold, .12), A(p.Accent, .45)), 1), Round(new Rect(.5, .5, w - 1, h - 1), rad - .5));
                     return;
                 case Kinds.Plain:
                     dc.PushClip(shape);
@@ -570,10 +594,264 @@ namespace KankiVPN
                     dc.Pop();
                     break;
                 }
+                case "ping":
+                    for (var i = 0; i < 3; i++)
+                    {
+                        var hh = w * (.30 + i * .28);
+                        dc.DrawRoundedRectangle(b, null, RectOf(w * (.10 + i * .30), w * .92 - hh, w * .2, hh), w * .06, w * .06);
+                    }
+                    break;
+                case "clock":
+                {
+                    var sw = w * .11;
+                    dc.DrawEllipse(null, Pen(c, sw), cen, w * .38, w * .38);
+                    dc.DrawLine(Pen(c, sw, true), cen, Pt(w * .5, w * .28));
+                    dc.DrawLine(Pen(c, sw, true), cen, Pt(w * .68, w * .58));
+                    break;
+                }
+                case "check": // HomeUi.kt CheckMark (on): a filled circle with a dark tick
+                {
+                    Circle(dc, b, cen, w / 2);
+                    var k = w * .55;
+                    var o = (w - k) / 2;
+                    var pen = Pen(Theme.P.Ink, k * .16, true);
+                    dc.DrawLine(pen, Pt(o + k * .12, o + k * .52), Pt(o + k * .40, o + k * .80));
+                    dc.DrawLine(pen, Pt(o + k * .40, o + k * .80), Pt(o + k * .90, o + k * .22));
+                    break;
+                }
+                case "account": // Ui.kt accountIcon
+                {
+                    Circle(dc, b, Pt(w / 2, w * .32), w * .20);
+                    var g = new StreamGeometry();
+                    using (var x = g.Open())
+                    {
+                        x.BeginFigure(Pt(w / 2, w * .96), true, true);
+                        x.LineTo(Pt(w * .14, w * .96), true, true);
+                        x.ArcTo(Pt(w * .86, w * .96), new Size(w * .36, w * .36), 0, false, SweepDirection.Clockwise, true, true);
+                    }
+                    dc.DrawGeometry(b, null, g);
+                    break;
+                }
+                case "dot":
+                    Circle(dc, b, cen, w / 2);
+                    break;
                 default:
                     Circle(dc, A(c, .25), cen, w * .45);
                     Circle(dc, A(c, .5), cen, w * .32);
                     Circle(dc, c, cen, w * .20);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Ui.kt SpeedGauge: a 250° dial with Speedtest's log scale (0..1000 Mbps), a glowing arc and needle.</summary>
+    public sealed class SpeedGauge : Drawn
+    {
+        static readonly double[] ticks = { 0, 5, 10, 25, 50, 100, 250, 500, 1000 };
+
+        public static double Fraction(double v)
+        {
+            var x = Math.Clamp(v, 0, 1000);
+            for (var i = 0; i < ticks.Length - 1; i++)
+                if (x <= ticks[i + 1]) return (i + (x - ticks[i]) / (ticks[i + 1] - ticks[i])) / (ticks.Length - 1);
+            return 1;
+        }
+
+        readonly Tween anim = new(0);
+        string tint = "Primary";
+
+        public SpeedGauge() => FlowDirection = FlowDirection.LeftToRight;
+
+        /// <summary>value in Mbps; tint: theme colour name of the arc and needle.</summary>
+        public void Set(double value, string colour)
+        {
+            tint = colour;
+            anim.To(Fraction(value), .3);
+            Live = anim.Moving;
+            InvalidateVisual();
+        }
+
+        protected override void Frame(double dt)
+        {
+            anim.Step(dt);
+            if (!anim.Moving) Live = false;
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var w = RenderSize.Width;
+            var h = RenderSize.Height;
+            var col = Glass.TintOf(tint);
+            var c = new Point(w / 2, h * .55);
+            var r = Math.Min(w / 2, h * .55) * .9;
+            const double start = 145, sweep = 250, sw = 14;
+            var f = anim.Value;
+            Arc(dc, Pen(Color.FromArgb(0x22, 255, 255, 255), sw, true), c, r, start, sweep);
+            if (f > .001)
+                foreach (var (m, a) in new[] { (2.2, .15), (1.4, .35), (1.0, 1.0) })
+                    Arc(dc, Pen(A(col, a), sw * m, true), c, r, start, sweep * f);
+            var face = new Typeface((FontFamily)Application.Current.Resources["Poppins"], FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            for (var i = 0; i < ticks.Length; i++)
+            {
+                var ang = (start + sweep * i / (ticks.Length - 1)) * Math.PI / 180;
+                Point At(double rr) => new(c.X + rr * Math.Cos(ang), c.Y + rr * Math.Sin(ang));
+                Line(dc, A(P.Gold, .8), At(r - sw * 1.3), At(r - sw * 2.1), 2);
+                var ft = new System.Windows.Media.FormattedText(((int)ticks[i]).ToString(), System.Globalization.CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, face, 11, Solid(P.Sub), dpi);
+                var lp = At(r - sw * 3.4);
+                dc.DrawText(ft, new Point(lp.X - ft.Width / 2, lp.Y - ft.Height / 2));
+            }
+            var na = (start + sweep * f) * Math.PI / 180;
+            var tip = new Point(c.X + (r - sw * 1.2) * Math.Cos(na), c.Y + (r - sw * 1.2) * Math.Sin(na));
+            foreach (var (m, a) in new[] { (3.0, .15), (1.8, .35), (1.0, 1.0) }) Line(dc, A(col, a), c, tip, 4 * m);
+            Circle(dc, P.Panel, c, 12);
+            Ring(dc, col, c, 12, 3);
+        }
+    }
+
+    /// <summary>Ui.kt SettingIcon: a line icon (drawn on a 24 grid) in a rounded box tinted with its colour.</summary>
+    public sealed class SettingIcon : Drawn
+    {
+        public static readonly DependencyProperty KindProperty = DependencyProperty.Register(nameof(Kind), typeof(string), typeof(SettingIcon),
+            new FrameworkPropertyMetadata("", FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty TintProperty = DependencyProperty.Register(nameof(Tint), typeof(string), typeof(SettingIcon),
+            new FrameworkPropertyMetadata("Primary", FrameworkPropertyMetadataOptions.AffectsRender));
+
+        public string Kind { get => (string)GetValue(KindProperty); set => SetValue(KindProperty, value); }
+        public string Tint { get => (string)GetValue(TintProperty); set => SetValue(TintProperty, value); }
+
+        public SettingIcon()
+        {
+            Width = Height = 36;
+            FlowDirection = FlowDirection.LeftToRight;
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var s = RenderSize.Width;
+            var t = Glass.TintOf(Tint);
+            var box = new Rect(0, 0, s, s);
+            dc.DrawRoundedRectangle(Vertical(0, s, A(t, .22), A(t, .07)), Pen(A(t, .45), 1), new Rect(.5, .5, s - 1, s - 1), 12, 12);
+            var w = s * .58;
+            dc.PushTransform(new TranslateTransform((s - w) / 2, (s - w) / 2));
+            Paint(dc, Kind, t, w);
+            dc.Pop();
+        }
+
+        /// <summary>Ui.kt settingIcon.</summary>
+        public static void Paint(DrawingContext dc, string kind, Color c, double size)
+        {
+            var u = size / 24;
+            var st = Pen(c, 1.9 * u, true, true);
+            Point P(double x, double y) => new(x * u, y * u);
+            Geometry Pl(bool closed, params double[] v)
+            {
+                var pts = new Point[v.Length / 2];
+                for (var i = 0; i < pts.Length; i++) pts[i] = P(v[i * 2], v[i * 2 + 1]);
+                return Poly(closed, pts);
+            }
+            var b = Solid(c);
+            switch (kind)
+            {
+                case "dns":
+                    foreach (var y in new[] { 3.5, 13.5 })
+                    {
+                        dc.DrawRoundedRectangle(null, st, new Rect(P(3, y), new Size(18 * u, 7 * u)), 2.6 * u, 2.6 * u);
+                        Circle(dc, b, P(7.2, y + 3.5), 1.2 * u);
+                        dc.DrawLine(st, P(11, y + 3.5), P(16.5, y + 3.5));
+                    }
+                    break;
+                case "auto":
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(2.8, 2.8), new Size(18.4 * u, 18.4 * u)), 140, 270));
+                    dc.DrawGeometry(b, null, Pl(true, 13.4, 5.6, 8.2, 12.8, 11.7, 12.8, 10.7, 18.4, 15.9, 11.2, 12.4, 11.2));
+                    break;
+                case "sound":
+                    dc.DrawGeometry(null, st, Pl(true, 3.5, 9.5, 7.5, 9.5, 12, 5.5, 12, 18.5, 7.5, 14.5, 3.5, 14.5));
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(7.5, 7.5), new Size(9 * u, 9 * u)), -45, 90));
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(4.5, 4.5), new Size(15 * u, 15 * u)), -50, 100));
+                    break;
+                case "palette":
+                {
+                    Point Rim(double deg) { var r = deg * Math.PI / 180; return P(12 + 9.4 * Math.Cos(r), 12 + 9.4 * Math.Sin(r)); }
+                    var g = new StreamGeometry();
+                    using (var x = g.Open())
+                    {
+                        x.BeginFigure(Rim(62), false, false);
+                        for (var k = 1; k <= 65; k++) x.LineTo(Rim(62 + 5 * k), true, true);
+                        x.LineTo(Rim(388), true, true);
+                        x.QuadraticBezierTo(P(14.6, 14.4), Rim(62), true, true);
+                    }
+                    dc.DrawGeometry(null, st, g);
+                    foreach (var (x, y) in new[] { (7.8, 10.2), (10.4, 6.9), (14.6, 6.9), (17.0, 10.2) }) Circle(dc, b, P(x, y), 1.25 * u);
+                    break;
+                }
+                case "split":
+                    dc.DrawLine(st, P(12, 21), P(12, 12.5));
+                    dc.DrawGeometry(null, st, Pl(false, 12, 12.5, 6.5, 7));
+                    dc.DrawGeometry(null, st, Pl(false, 12, 12.5, 17.5, 7));
+                    dc.DrawGeometry(null, st, Pl(false, 6.5, 11, 6.5, 7, 10.5, 7));
+                    dc.DrawGeometry(null, st, Pl(false, 17.5, 11, 17.5, 7, 13.5, 7));
+                    break;
+                case "kill":
+                {
+                    var g = new StreamGeometry();
+                    using (var x = g.Open())
+                    {
+                        x.BeginFigure(P(12, 2.5), false, true); x.LineTo(P(20, 5.5), true, true); x.LineTo(P(20, 11.5), true, true);
+                        x.QuadraticBezierTo(P(20, 18), P(12, 21.5), true, true);
+                        x.QuadraticBezierTo(P(4, 18), P(4, 11.5), true, true); x.LineTo(P(4, 5.5), true, true);
+                    }
+                    dc.DrawGeometry(null, st, g);
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(8.6, 9), new Size(6.8 * u, 6.8 * u)), -50, 280));
+                    dc.DrawLine(st, P(12, 8.2), P(12, 12));
+                    break;
+                }
+                case "cart":
+                    dc.DrawGeometry(null, st, Pl(false, 2.5, 3.5, 5.2, 3.5, 7.4, 15, 18.6, 15, 20.6, 7, 5.9, 7));
+                    Circle(dc, b, P(9.2, 19.5), 1.7 * u);
+                    Circle(dc, b, P(16.8, 19.5), 1.7 * u);
+                    break;
+                case "support":
+                {
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(4, 3.5), new Size(16 * u, 16 * u)), 180, 180));
+                    dc.DrawRoundedRectangle(b, null, new Rect(P(2.8, 11), new Size(4.4 * u, 6.6 * u)), 2 * u, 2 * u);
+                    dc.DrawRoundedRectangle(b, null, new Rect(P(16.8, 11), new Size(4.4 * u, 6.6 * u)), 2 * u, 2 * u);
+                    var g = new StreamGeometry();
+                    using (var x = g.Open())
+                    {
+                        x.BeginFigure(P(19, 17.6), false, false);
+                        x.QuadraticBezierTo(P(19, 20.8), P(14.5, 20.8), true, true);
+                    }
+                    dc.DrawGeometry(null, st, g);
+                    Circle(dc, b, P(13.2, 20.8), 1.3 * u);
+                    break;
+                }
+                case "share":
+                    foreach (var (x, y) in new[] { (18.0, 5.5), (6.0, 12.0), (18.0, 18.5) }) dc.DrawEllipse(null, st, P(x, y), 2.6 * u, 2.6 * u);
+                    dc.DrawLine(st, P(8.3, 10.8), P(15.7, 6.7));
+                    dc.DrawLine(st, P(8.3, 13.2), P(15.7, 17.3));
+                    break;
+                case "logout":
+                    dc.DrawGeometry(null, st, Pl(false, 10, 3.5, 4.5, 3.5, 4.5, 20.5, 10, 20.5));
+                    dc.DrawLine(st, P(9.5, 12), P(20, 12));
+                    dc.DrawGeometry(null, st, Pl(false, 16, 8, 20, 12, 16, 16));
+                    break;
+                case "lang":
+                    dc.DrawEllipse(null, st, P(12, 12), 9 * u, 9 * u);
+                    dc.DrawEllipse(null, st, P(12, 12), 4 * u, 9 * u);
+                    dc.DrawLine(st, P(3.5, 9), P(20.5, 9));
+                    dc.DrawLine(st, P(3.5, 15), P(20.5, 15));
+                    break;
+                case "user": // a person (the account)
+                    dc.DrawEllipse(null, st, P(12, 8), 3.8 * u, 3.8 * u);
+                    dc.DrawGeometry(null, st, Arc(new Rect(P(4.5, 14), new Size(15 * u, 13 * u)), 180, 180));
+                    break;
+                case "log": // lines of a log
+                    foreach (var (y, l) in new[] { (6.0, 17.0), (10.0, 13.0), (14.0, 16.0), (18.0, 10.0) }) dc.DrawLine(st, P(4, y), P(4 + l, y));
+                    break;
+                default:
+                    dc.DrawEllipse(null, st, P(12, 12), 8 * u, 8 * u);
                     break;
             }
         }
@@ -654,7 +932,7 @@ namespace KankiVPN
         {
             var w = RenderSize.Width;
             var h = RenderSize.Height;
-            col = ping is { } q ? Orb.PingColor(q) : P.Gold;
+            col = ping is { } pv ? Orb.PingColor(pv) : P.Gold;
             var y0 = h * .74;
             var amp = h * .62;
             if (to.Count < 2)

@@ -134,7 +134,15 @@ namespace KankiVPN
             Put("Danger", p.Danger); Put("Warn", p.Warn); Put("User", p.UserCountry); Put("ToggleOn", p.ToggleOn);
             Put("NavTop", p.NavTop); Put("NavBottom", p.NavBottom); Put("OnNav", p.OnNav);
             Put("AccentSoft", Gfx.A(p.Accent, .12)); Put("PrimarySoft", Gfx.A(p.Gold, .12)); Put("PrimaryFaint", Gfx.A(p.Gold, .18));
-            Put("WhiteFaint", Gfx.A(Colors.White, .08)); Put("ConnectedSoft", Gfx.A(p.Connected, .10)); Put("ConnectedEdge", Gfx.A(p.Connected, .5));
+            Put("WhiteFaint", Gfx.A(Colors.White, .08)); Put("WhiteTrack", Color.FromArgb(0x1F, 255, 255, 255));
+            Put("PrimaryEdge", Gfx.A(p.Gold, .6)); Put("SwitchOff", Color.FromArgb(0x33, 255, 255, 255)); Put("SubRing", Gfx.A(p.Sub, .4));
+            Put("Divider", Gfx.A(p.Gold, .10)); Put("Gold55", Gfx.A(p.Gold, .55));
+            var avatar = new LinearGradientBrush(Gfx.A(p.Gold, .30), Gfx.A(p.Gold, .10), 90);
+            avatar.Freeze();
+            r["AvatarFill"] = avatar; Put("PrimaryLine", Gfx.A(p.Gold, .3));
+            var bar = new LinearGradientBrush(Gfx.A(p.Gold, .65), p.Gold, 0);
+            bar.Freeze();
+            r["GoldBar"] = bar; Put("PanelSoft", Gfx.A(p.Panel, .75)); Put("PrimaryHair", Gfx.A(p.Gold, .12)); Put("ConnectedSoft", Gfx.A(p.Connected, .10)); Put("ConnectedEdge", Gfx.A(p.Connected, .5));
             var div = new LinearGradientBrush(new GradientStopCollection
             {
                 new(Colors.Transparent, 0), new(Gfx.A(p.Gold, .45), .5), new(Colors.Transparent, 1),
@@ -149,6 +157,9 @@ namespace KankiVPN
             r["Glow"] = glow;
             Changed?.Invoke();
         }
+
+        /// <summary>A theme's own colours (for its card in Settings).</summary>
+        public static Palette Of(string name) => Themes.FirstOrDefault(x => x.Id == name) ?? Themes[0];
 
         public static Color Col(string key) => (Color)Application.Current.Resources["C" + key];
 

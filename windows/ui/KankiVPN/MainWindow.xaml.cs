@@ -55,7 +55,9 @@ namespace KankiVPN
                 default: ModeSmart.IsChecked = true; break;
             }
             BuildThemeCards();
-            DrawGauge(0, "");
+            SetGauge(0, "");
+            SpeedPhase("", false);
+            SpeedTiles(null);
             ConnectBtn.MouseLeftButtonUp += (_, e) => { if (ConnectBtn.IsEnabled) Connect_Click(ConnectBtn, e); };
             ConnectBtn.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space && ConnectBtn.IsEnabled) Connect_Click(ConnectBtn, e); };
             Theme.Changed += () => { ModeColors(); if (IsLoaded) ShowStatus(); };
@@ -306,6 +308,8 @@ namespace KankiVPN
         {
             if (pipe == null || account == null || account.Servers.Count == 0) return;
             PingAllBtn.IsEnabled = false;
+            PingAllBtn.Visibility = Visibility.Hidden;
+            PingAllSpin.Visibility = Visibility.Visible;
             PingAllBar.Width = 0;
             var bar = new DoubleAnimation(0, Math.Max(0, PingAllBar.Parent is FrameworkElement f ? f.ActualWidth * 0.9 : 300), TimeSpan.FromSeconds(6));
             PingAllBar.BeginAnimation(WidthProperty, bar);
@@ -323,6 +327,8 @@ namespace KankiVPN
             PingAllBar.BeginAnimation(WidthProperty, null);
             PingAllBar.Width = PingAllBar.Parent is FrameworkElement p ? p.ActualWidth : 0;
             PingAllBtn.IsEnabled = true;
+            PingAllBtn.Visibility = Visibility.Visible;
+            PingAllSpin.Visibility = Visibility.Collapsed;
             FillServers();
             ShowStatus();
         }
@@ -369,31 +375,24 @@ namespace KankiVPN
                 var key = g.Key;
                 var open = openCountry == key || (openCountry == null && g.Any(s => s.Id == cur));
                 var first = g.First();
-                var card = new Border { Style = (Style)FindResource("CardBox"), Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(12, 10, 12, 10) };
-                if (g.Any(s => s.Id == cur)) card.SetResourceReference(Border.BorderBrushProperty, "EdgeStrong");
+                var lit = open || g.Any(s => s.Id == cur);
+                // ServersUi.kt CountryCard: glass, lit while open or in use
+                var card = new Glass { CornerRadius = new CornerRadius(20), Selected = lit, Margin = new Thickness(0, 8, 0, 0) };
                 var stack = new StackPanel();
-                var head = new Button { Style = (Style)FindResource("Plain") };
-                var row = new DockPanel();
-                row.Children.Add(Docked(Flag(first.Country, 36), Dock.Left, new Thickness(0, 0, 10, 0)));
+                var head = new Button { Style = (Style)FindResource("Plain"), Height = 52, Padding = new Thickness(0) };
+                var row = new DockPanel { Margin = new Thickness(12, 0, 12, 0) };
+                var badge = Flag(first.Country, 32);
+                if (badge is Border fb) fb.BorderBrush = Gfx.Solid(lit ? Theme.P.Gold : Gfx.A(Theme.P.Accent, .7));
+                row.Children.Add(Docked(badge, Dock.Left, new Thickness(0, 0, 12, 0)));
                 var best = BestPing(g);
-                var pingTxt = new TextBlock
-                {
-                    Text = (open ? "▾ " : "▴ ") + (best == long.MaxValue ? "—" : best + " ms"),
-                    FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight,
-                };
-                pingTxt.SetResourceReference(TextBlock.ForegroundProperty, PingBrush(best));
-                row.Children.Add(Docked(pingTxt, Dock.Right, new Thickness(0)));
-                var names = new StackPanel();
+                row.Children.Add(Docked(CardPing(best == long.MaxValue ? null : best, open), Dock.Right, new Thickness(0)));
+                var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
                 var nm = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
-                nm.Children.Add(new TextBlock { Text = Countries.Name(first.Country, first.Name), FontSize = 16, FontWeight = FontWeights.Bold });
-                if (g.Any(s => s.Id == cur && status.State == "connected"))
-                {
-                    var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-                    dot.SetResourceReference(Shape.FillProperty, "Connected");
-                    nm.Children.Add(dot);
-                }
+                nm.Children.Add(new TextBlock { Text = Countries.Name(first.Country, first.Name), FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Gfx.Solid(Theme.P.Text) });
+                if (g.Any(s => s.Id == cur))
+                    nm.Children.Add(new Ellipse { Width = 6, Height = 6, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Fill = Gfx.Solid(Theme.P.Connected) });
                 names.Children.Add(nm);
-                names.Children.Add(new TextBlock { Text = Countries.City(first.Country, first.City), Style = (Style)FindResource("Small"), HorizontalAlignment = HorizontalAlignment.Left });
+                names.Children.Add(new TextBlock { Text = Countries.City(first.Country, first.City), FontSize = 11, Foreground = Gfx.Solid(Theme.P.Sub), HorizontalAlignment = HorizontalAlignment.Left });
                 row.Children.Add(names);
                 head.Content = row;
                 head.Click += (_, _) =>
@@ -408,106 +407,145 @@ namespace KankiVPN
             }
         }
 
+        /// <summary>ServersUi.kt CardPing: the best ping with a small open / closed triangle.</summary>
+        static UIElement CardPing(long? ms, bool open)
+        {
+            var col = ms is { } m ? Orb.PingColor(m) : Theme.P.Sub;
+            var p = new StackPanel { Orientation = Orientation.Horizontal, FlowDirection = FlowDirection.LeftToRight, VerticalAlignment = VerticalAlignment.Center };
+            var tri = open
+                ? Gfx.Poly(true, new Point(0, 9 * .25), new Point(9, 9 * .25), new Point(4.5, 9 * .85))
+                : Gfx.Poly(true, new Point(0, 9 * .8), new Point(9, 9 * .8), new Point(4.5, 9 * .2));
+            p.Children.Add(new Path { Data = tri, Fill = Gfx.Solid(open ? Theme.P.Gold : col), Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center });
+            p.Children.Add(new TextBlock
+            {
+                Text = ms == null ? "-" : ms < 0 ? "✕" : ms + " ms", FontSize = 12, FontWeight = FontWeights.SemiBold,
+                FontFamily = (FontFamily)FindResourceStatic("Poppins"), Foreground = Gfx.Solid(col), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            });
+            return p;
+        }
+
+        static object FindResourceStatic(string key) => Application.Current.Resources[key];
+
         long BestPing(IEnumerable<Server> g) =>
             g.Select(s => pings.TryGetValue(s.Id, out var v) && v > 0 ? v : long.MaxValue).DefaultIfEmpty(long.MaxValue).Min();
 
         static string PingBrush(long ms) => ms == long.MaxValue || ms <= 0 ? "Muted" : ms < 120 ? "Connected" : ms < 250 ? "Warn" : "Danger";
 
-        // the two columns: through Iran (tunnel) and direct
+        // the two columns: through Iran (tunnel) and direct, in one box (ServersUi.kt CountryCard)
         UIElement Cells(List<Server> list, string? cur)
         {
-            var box = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(8), Margin = new Thickness(0, 10, 0, 0) };
-            box.SetResourceReference(Border.BorderBrushProperty, "Edge");
-            box.SetResourceReference(Border.BackgroundProperty, "Surface");
+            var box = new Border
+            {
+                CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(8), Margin = new Thickness(12, 0, 12, 12),
+                Background = Gfx.Solid(Color.FromArgb(0x08, 255, 255, 255)), BorderBrush = Gfx.Solid(Gfx.A(Theme.P.Gold, .18)),
+            };
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
-            var cols = new[] { list.Where(s => s.Tunnel).ToList(), list.Where(s => !s.Tunnel).ToList() };
-            var titles = new[] { "Tunnel", "Direct" };
-            var rows = Math.Max(cols[0].Count, cols[1].Count);
+            string Fam(string p) => p == "amneziawg" ? "amnezia" : p;
+            var fams = new[] { "kankimix", "microtun", "hysteria2", "amnezia", "wireguard", "vless" };
+            var lines = list.GroupBy(s => Fam(s.Proto)).OrderBy(x => Array.IndexOf(fams, x.Key) < 0 ? 99 : Array.IndexOf(fams, x.Key))
+                .SelectMany(x =>
+                {
+                    var t = x.Where(s => s.Tunnel).ToList();
+                    var d = x.Where(s => !s.Tunnel).ToList();
+                    return Enumerable.Range(0, Math.Max(t.Count, d.Count)).Select(i => (t.ElementAtOrDefault(i), d.ElementAtOrDefault(i)));
+                }).ToList();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            for (var r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            foreach (var _ in lines) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             for (var c = 0; c < 2; c++)
             {
-                var t = new TextBlock { Text = Strings.T(titles[c]), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) };
-                t.SetResourceReference(TextBlock.ForegroundProperty, c == 0 ? "Primary" : "Muted");
-                Grid.SetColumn(t, c);
-                grid.Children.Add(t);
-                for (var r = 0; r < rows; r++)
+                var t = new TextBlock
                 {
-                    var cell = r < cols[c].Count ? Cell(cols[c][r], cols[c][r].Id == cur) : EmptyCell();
-                    Grid.SetColumn(cell, c);
+                    Text = Strings.T(c == 0 ? "Tunnel" : "Direct"), FontSize = 11, FontWeight = FontWeights.Black, HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 0, 0, 4), Foreground = Gfx.Solid(c == 0 ? Theme.P.Gold : Theme.P.Sub),
+                };
+                Grid.SetColumn(t, c * 2);
+                grid.Children.Add(t);
+            }
+            for (var r = 0; r < lines.Count; r++)
+                for (var c = 0; c < 2; c++)
+                {
+                    var srv = c == 0 ? lines[r].Item1 : lines[r].Item2;
+                    var cell = Cell(srv, srv != null && srv.Id == cur);
+                    Grid.SetColumn(cell, c * 2);
                     Grid.SetRow(cell, r + 1);
                     grid.Children.Add(cell);
                 }
-            }
             box.Child = grid;
             return box;
         }
 
-        FrameworkElement EmptyCell()
+        /// <summary>ModesUi.kt protoColor: the protocol's colour bar.</summary>
+        static Color ProtoColor(string p) => p switch
         {
-            var b = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Margin = new Thickness(3), MinHeight = 40 };
-            b.SetResourceReference(Border.BorderBrushProperty, "Edge");
-            b.Child = new TextBlock { Text = "—", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Style = (Style)FindResource("Small") };
-            return b;
-        }
+            "kankimix" => Theme.P.Mix,
+            "microtun" => Theme.P.Connected,
+            "amneziawg" => Theme.P.ModeAnti,
+            "wireguard" => Theme.P.ModeDns,
+            "hysteria2" => Theme.P.Connected,
+            _ => Theme.P.Gold,
+        };
 
-        FrameworkElement Cell(Server s, bool selected)
+        /// <summary>ServersUi.kt CfgCell: colour bar, name, signal bars and ping; the chosen one gold. Empty: "—".</summary>
+        FrameworkElement Cell(Server? s, bool selected)
         {
+            var p = Theme.P;
+            var b = new Border
+            {
+                Height = 44, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 0, 4), Padding = new Thickness(8, 0, 8, 0),
+                BorderThickness = new Thickness(selected ? 1.4 : 1),
+                BorderBrush = Gfx.Solid(selected ? p.Gold : Gfx.A(p.Gold, s != null ? .14 : .05)),
+                Background = selected
+                    ? new LinearGradientBrush(Gfx.A(p.Gold, .26), Gfx.A(p.Gold, .07), 0)
+                    : new LinearGradientBrush(Color.FromArgb(0x12, 255, 255, 255), Color.FromArgb(0x05, 255, 255, 255), 0),
+            };
+            if (s == null)
+            {
+                b.Child = new TextBlock { Text = "—", FontSize = 12, Foreground = Gfx.Solid(Gfx.A(p.Sub, .5)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                return b;
+            }
             var ms = pings.TryGetValue(s.Id, out var v) ? v : 0;
-            var btn = new Button { Style = (Style)FindResource("Plain"), Margin = new Thickness(3) };
-            var b = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(selected ? 1.6 : 1), Padding = new Thickness(0, 8, 0, 8) };
-            b.SetResourceReference(Border.BorderBrushProperty, selected ? "Primary" : "Edge");
-            b.SetResourceReference(Border.BackgroundProperty, selected ? "Sheet" : "Card");
-            var d = new DockPanel();
-            // the coloured edge: the protocol's family (Android protoColor)
-            var edge = new Border { Width = 3, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 8, 0) };
-            edge.SetResourceReference(Border.BackgroundProperty, s.Proto switch
+            long? ping = ms == 0 ? null : ms;
+            var col = ping is { } q ? Orb.PingColor(q) : p.Sub;
+            var d = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
+            d.Children.Add(Docked(new Border { Width = 3, Height = 20, CornerRadius = new CornerRadius(1.5), Background = Gfx.Solid(ProtoColor(s.Proto)) }, Dock.Left, new Thickness(0, 0, 8, 0)));
+            var right = new StackPanel { Orientation = Orientation.Horizontal, FlowDirection = FlowDirection.LeftToRight, VerticalAlignment = VerticalAlignment.Center };
+            right.Children.Add(Bars(ping, col));
+            right.Children.Add(new TextBlock
             {
-                "kankimix" or "microtun" => "ModeGame",
-                "vless" or "hysteria2" => "ModeAnti",
-                "amneziawg" => "Primary",
-                _ => "PrimaryLight",
+                Text = ping == null ? "-" : ping < 0 ? "✕" : ping.ToString(), FontSize = 12, FontWeight = FontWeights.Bold,
+                FontFamily = (FontFamily)FindResource("Poppins"), Foreground = Gfx.Solid(col), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             });
-            d.Children.Add(Docked(edge, Dock.Left, new Thickness(0, 0, 8, 0)));
-            var left = new StackPanel { Orientation = Orientation.Horizontal, FlowDirection = FlowDirection.LeftToRight };
-            if (ms < 0)
+            d.Children.Add(Docked(right, Dock.Right, new Thickness(4, 0, 0, 0)));
+            d.Children.Add(new TextBlock
             {
-                var x = new TextBlock { Text = "✕", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
-                x.SetResourceReference(TextBlock.ForegroundProperty, "Danger");
-                left.Children.Add(x);
-            }
-            else
-            {
-                var t = new TextBlock { Text = ms > 0 ? ms.ToString() : "…", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
-                t.SetResourceReference(TextBlock.ForegroundProperty, PingBrush(ms > 0 ? ms : long.MaxValue));
-                left.Children.Add(t);
-            }
-            left.Children.Add(Bars(ms));
-            d.Children.Add(Docked(left, Dock.Right, new Thickness(0, 0, 10, 0)));
-            var name = new TextBlock { Text = ProtoName(s.Proto), FontWeight = FontWeights.Bold, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            if (selected) name.SetResourceReference(TextBlock.ForegroundProperty, "Primary");
-            d.Children.Add(name);
+                Text = ProtoName(s.Proto), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Gfx.Solid(selected ? p.GoldLight : p.Text),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
+            });
             b.Child = d;
-            btn.Content = b;
-            btn.ToolTip = s.Name;
+            var btn = new Button { Style = (Style)FindResource("Plain"), Content = b, ToolTip = s.Name };
             btn.Click += async (_, _) => await Pick(s);
             return btn;
         }
 
-        /// <summary>The signal bars next to a ping (SignalBars in ServersUi.kt).</summary>
-        static UIElement Bars(long ms)
+        /// <summary>ServersUi.kt SignalBars: three bars from the ping (under 80 three, under 160 two, else one).</summary>
+        static UIElement Bars(long? ping, Color c)
         {
-            var lit = ms <= 0 ? 0 : ms < 90 ? 3 : ms < 180 ? 2 : 1;
-            var p = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var n = ping == null || ping < 0 ? 0 : ping < 80 ? 3 : ping < 160 ? 2 : 1;
+            var g = new Grid { Width = 12, Height = 11, VerticalAlignment = VerticalAlignment.Center };
+            var bw = 12 / 4.2;
             for (var i = 0; i < 3; i++)
             {
-                var r = new Rectangle { Width = 3, Height = 5 + i * 4, Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Bottom, RadiusX = 1, RadiusY = 1 };
-                r.SetResourceReference(Shape.FillProperty, i < lit ? PingBrush(ms) : "Edge");
-                p.Children.Add(r);
+                var hh = 11 * (.4 + .3 * i);
+                g.Children.Add(new Rectangle
+                {
+                    Width = bw, Height = hh, RadiusX = bw / 2, RadiusY = bw / 2, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(i * bw * 1.6, 0, 0, 0), Fill = Gfx.Solid(i < n ? c : Gfx.A(c, .22)),
+                });
             }
-            return p;
+            return g;
         }
 
         static T Docked<T>(T e, Dock d, Thickness m) where T : FrameworkElement
@@ -716,11 +754,18 @@ namespace KankiVPN
             AccTime.Text = Jalali.Remaining(account.Expires);
             AccExpiry.Text = account.Expires > 0 ? Jalali.Date(account.Expires) : "—";
             AccConn.Text = account.MaxConn > 0 ? Jalali.Fa(account.MaxConn.ToString()) : "—";
+            // SettingsUi.kt AccountSheet: the bar is the data left, red under 10%, amber under 25%
+            var frac = left < 0 ? 1 : Math.Clamp(left / Math.Max(0.01, account.LimitGb), 0, 1);
+            var barCol = frac < .1 ? Theme.P.Danger : frac < .25 ? Theme.P.Warn : Theme.P.Connected;
+            AccBar.Background = new LinearGradientBrush(Gfx.A(barCol, .65), barCol, 0);
             AccBar.Dispatcher.InvokeAsync(() =>
             {
-                if (AccBar.Parent is FrameworkElement f)
-                    AccBar.Width = left < 0 ? f.ActualWidth : f.ActualWidth * Math.Clamp(left / Math.Max(0.01, account?.LimitGb ?? 1), 0, 1);
+                if (AccBar.Parent is FrameworkElement f) AccBar.Width = f.ActualWidth * Math.Max(.02, frac);
             }, DispatcherPriority.Loaded);
+            var pill = active ? Theme.P.Connected : Theme.P.Danger;
+            AccStatusPill.Background = Gfx.Solid(Gfx.A(pill, .10));
+            AccStatusPill.BorderBrush = Gfx.Solid(Gfx.A(pill, .7));
+            AccStatus.Foreground = Gfx.Solid(pill);
 
             if (!string.IsNullOrEmpty(account.Notice)) ModeHint.Text = account.Notice;
             FillServers();
@@ -731,10 +776,29 @@ namespace KankiVPN
         {
             if (account == null) return;
             AccMsg.Text = "";
-            AccountSheet.Visibility = Visibility.Visible;
+            ShowSheet();
         }
 
         void CloseSheet_Click(object sender, RoutedEventArgs e) => AccountSheet.Visibility = Visibility.Collapsed;
+
+        /// <summary>The account sheet comes in like Android's: the dark backdrop fades in, the card grows from 0.92.</summary>
+        void ShowSheet()
+        {
+            AccountSheet.Visibility = Visibility.Visible;
+            if (Clock.Frozen || !SystemParameters.ClientAreaAnimation) return;
+            var ease = new Eased(Gfx.FastOutSlowIn);
+            AccountSheet.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = ease });
+            var sc = new ScaleTransform(.92, .92);
+            AccountCard.RenderTransform = sc;
+            var grow = new DoubleAnimation(.92, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease };
+            sc.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            sc.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        }
+
+        /// <summary>A tap on the dark backdrop closes the sheet; a tap on the card does not.</summary>
+        void Sheet_Backdrop(object sender, MouseButtonEventArgs e) => AccountSheet.Visibility = Visibility.Collapsed;
+
+        void Sheet_Card(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
         async void Refresh_Click(object sender, RoutedEventArgs e)
         {
@@ -773,7 +837,7 @@ namespace KankiVPN
             if (string.IsNullOrEmpty(url) || !(url.StartsWith("https://") || url.StartsWith("tg://")))
             {
                 AccMsg.Text = Strings.T("The panel has no support link yet.");
-                AccountSheet.Visibility = Visibility.Visible;
+                ShowSheet();
                 return;
             }
             try
@@ -844,37 +908,33 @@ namespace KankiVPN
             var ct = speedCts.Token;
             SpeedBtn.Content = Strings.T("Stop");
             var sp = new Speed();
-            void Chip(Border b, TextBlock t, string label, int state)
-            {
-                t.Text = (state == 2 ? "✓ " : state == 1 ? "… " : "") + Strings.T(label);
-                b.SetResourceReference(Border.BorderBrushProperty, state == 0 ? "Edge" : "Primary");
-            }
             try
             {
-                SpDown.Text = SpUp.Text = SpPing.Text = SpJitter.Text = "--";
-                Chip(ChipPing, ChipPingText, "Ping", 1);
-                Chip(ChipDown, ChipDownText, "Download", 0);
-                Chip(ChipUp, ChipUpText, "Upload", 0);
+                SpDown.Text = SpUp.Text = SpPing.Text = SpJitter.Text = "–";
+                SpeedTiles(null);
+                SpeedPhase("ping", true);
+                SetGauge(0, "ping");
                 var (ping, jitter, lost) = await sp.Latency(10, ct);
-                SpPing.Text = ping < 0 ? "—" : ping + " ms";
-                SpJitter.Text = jitter < 0 ? "—" : jitter + " ms";
-                SpLoss.Text = Strings.T("Lost:") + " " + Jalali.Fa(lost * 10 + "%");
-                Chip(ChipPing, ChipPingText, "Ping", 2);
-                Chip(ChipDown, ChipDownText, "Download", 1);
-                var down = await sp.Download(8, 6, v => Dispatcher.Invoke(() => DrawGauge(v, "Download")), ct);
-                SpDown.Text = Mbps(down) + " Mbps";
-                Chip(ChipDown, ChipDownText, "Download", 2);
-                Chip(ChipUp, ChipUpText, "Upload", 1);
-                var up = await sp.Upload(6, 4, v => Dispatcher.Invoke(() => DrawGauge(v, "Upload")), ct);
-                SpUp.Text = Mbps(up) + " Mbps";
-                Chip(ChipUp, ChipUpText, "Upload", 2);
-                DrawGauge(down, "Download");
+                SpPing.Text = ping < 0 ? "–" : ping.ToString();
+                SpJitter.Text = jitter < 0 ? "–" : jitter.ToString();
+                SpeedTiles(ping < 0 ? null : ping);
+                SpeedLoss(lost * 10);
+                SpeedPhase("down", true);
+                var down = await sp.Download(8, 6, v => Dispatcher.Invoke(() => SetGauge(v, "down")), ct);
+                SpDown.Text = Mbps(down);
+                SpeedPhase("up", true);
+                var up = await sp.Upload(6, 4, v => Dispatcher.Invoke(() => SetGauge(v, "up")), ct);
+                SpUp.Text = Mbps(up);
+                SpeedPhase("done", false);
+                SetGauge(down, "done");
             }
             catch (OperationCanceledException)
             {
+                SpeedPhase("", false);
             }
             catch (Exception ex)
             {
+                SpeedPhase("", false);
                 SpLoss.Text = ex.Message;
             }
             SpUsed.Text = Strings.T("Data used by this test:") + " " + (sp.UsedBytes / 1048576.0).ToString("0.00", CultureInfo.InvariantCulture) + " MB";
@@ -882,62 +942,73 @@ namespace KankiVPN
             speedCts = null;
         }
 
-        // the speed gauge: a 270° dial with a log scale 0..1000 Mbps and a needle (SpeedUi.kt)
-        static readonly double[] Ticks = { 0, 5, 10, 25, 50, 100, 250, 500, 1000 };
-
-        static double Frac(double v) => v <= 0 ? 0 : Math.Min(1, Math.Log10(1 + v) / Math.Log10(1001));
-
-        void DrawGauge(double value, string label)
+        /// <summary>The three step chips (SpeedUi.kt PhaseChip): spinning while it runs, a tick when done.</summary>
+        void SpeedPhase(string phase, bool running)
         {
-            Gauge.Children.Clear();
-            const double cx = 130, cy = 120, r = 100;
-            Point At(double f, double rad)
+            var order = new[] { "ping", "down", "up", "done" };
+            var cur = Array.IndexOf(order, phase);
+            foreach (var (key, box, mark, spin, text) in new[]
             {
-                var a = (135 + 270 * f) * Math.PI / 180;
-                return new Point(cx + rad * Math.Cos(a), cy + rad * Math.Sin(a));
-            }
-            Path Arc(double f0, double f1, string brush, double w)
+                ("ping", ChipPing, ChipPingMark, ChipPingSpin, ChipPingText),
+                ("down", ChipDown, ChipDownMark, ChipDownSpin, ChipDownText),
+                ("up", ChipUp, ChipUpMark, ChipUpSpin, ChipUpText),
+            })
             {
-                var fig = new PathFigure { StartPoint = At(f0, r) };
-                fig.Segments.Add(new ArcSegment(At(f1, r), new Size(r, r), 0, (f1 - f0) * 270 > 180, SweepDirection.Clockwise, true));
-                var p = new Path { Data = new PathGeometry(new[] { fig }), StrokeThickness = w, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
-                p.SetResourceReference(Shape.StrokeProperty, brush);
-                return p;
+                var me = Array.IndexOf(order, key);
+                var done = cur > me || phase == "done";
+                var active = running && cur == me;
+                var c = active ? Theme.P.Gold : done ? Theme.P.Connected : Gfx.A(Theme.P.Sub, .6);
+                box.Background = Gfx.Solid(Gfx.A(c, .10));
+                box.BorderBrush = Gfx.Solid(Gfx.A(c, .45));
+                text.Foreground = Gfx.Solid(c);
+                spin.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+                mark.Visibility = active ? Visibility.Collapsed : Visibility.Visible;
+                mark.Kind = done ? "check" : "dot";
+                mark.Width = mark.Height = done ? 14 : 6;
+                mark.Fill = Gfx.Solid(done ? Theme.P.Connected : c);
             }
-            Gauge.Children.Add(Arc(0, 1, "Surface", 16));
-            var f = Frac(value);
-            if (f > 0.002) Gauge.Children.Add(Arc(0, f, "Connected", 16));
-            foreach (var t in Ticks)
+        }
+
+        /// <summary>The gauge, the big number and the line under it (SpeedUi.kt).</summary>
+        void SetGauge(double value, string phase)
+        {
+            var tint = phase == "up" ? "Accent" : phase == "done" ? "Connected" : "Primary";
+            var c = Glass.TintOf(tint);
+            Gauge.Set(value, tint);
+            GaugeValue.Text = value.ToString("0.0", CultureInfo.InvariantCulture);
+            GaugeGlow.Color = c;
+            GaugeLabel.Foreground = Gfx.Solid(c);
+            GaugeLabel.Text = phase switch
             {
-                var tf = Frac(t);
-                var a = At(tf, r - 22);
-                var tick = new Line { X1 = At(tf, r - 12).X, Y1 = At(tf, r - 12).Y, X2 = At(tf, r - 17).X, Y2 = At(tf, r - 17).Y, StrokeThickness = 2 };
-                tick.SetResourceReference(Shape.StrokeProperty, "Primary");
-                Gauge.Children.Add(tick);
-                var tx = new TextBlock { Text = t.ToString(CultureInfo.InvariantCulture), FontSize = 10 };
-                tx.SetResourceReference(TextBlock.ForegroundProperty, "Text");
-                tx.Measure(new Size(100, 100));
-                Canvas.SetLeft(tx, a.X - tx.DesiredSize.Width / 2);
-                Canvas.SetTop(tx, a.Y - tx.DesiredSize.Height / 2);
-                Gauge.Children.Add(tx);
+                "ping" => Strings.T("Measuring ping…"),
+                "up" => Strings.T("Upload") + " · Mbps",
+                "down" or "done" => Strings.T("Download") + " · Mbps",
+                _ => "Mbps",
+            };
+        }
+
+        /// <summary>The four result tiles' icons and units (SpeedUi.kt ResultTile).</summary>
+        void SpeedTiles(long? ping)
+        {
+            foreach (var (icon, box, c) in new[]
+            {
+                (SpDownIcon, SpDownIconBox, Theme.P.Gold),
+                (SpUpIcon, SpUpIconBox, Theme.P.Accent),
+                (SpPingIcon, SpPingIconBox, ping is { } q ? Orb.PingColor(q) : Theme.P.Sub),
+                (SpJitterIcon, SpJitterIconBox, Theme.P.Sub),
+            })
+            {
+                icon.Fill = Gfx.Solid(c);
+                box.Background = Gfx.Solid(Gfx.A(c, .14));
             }
-            var tip = At(f, r - 34);
-            var needle = new Line { X1 = cx, Y1 = cy, X2 = tip.X, Y2 = tip.Y, StrokeThickness = 4, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
-            needle.SetResourceReference(Shape.StrokeProperty, "Connected");
-            Gauge.Children.Add(needle);
-            var hub = new Ellipse { Width = 16, Height = 16, StrokeThickness = 3 };
-            hub.SetResourceReference(Shape.StrokeProperty, "Connected");
-            hub.SetResourceReference(Shape.FillProperty, "Bg");
-            Canvas.SetLeft(hub, cx - 8);
-            Canvas.SetTop(hub, cy - 8);
-            Gauge.Children.Add(hub);
-            var big = new TextBlock { Text = value > 0 ? Mbps(value) : "0", FontSize = 40, FontWeight = FontWeights.Bold };
-            big.SetResourceReference(TextBlock.ForegroundProperty, "Text");
-            big.Measure(new Size(300, 100));
-            Canvas.SetLeft(big, cx - big.DesiredSize.Width / 2);
-            Canvas.SetTop(big, cy + 30);
-            Gauge.Children.Add(big);
-            GaugeLabel.Text = "Mbps" + (label != "" ? " · " + Strings.T(label) : "");
+            SpDownUnit.Text = SpUpUnit.Text = "Mbps";
+            SpPingUnit.Text = SpJitterUnit.Text = "ms";
+        }
+
+        void SpeedLoss(int percent)
+        {
+            SpLoss.Text = Strings.T("Lost:") + " " + Jalali.Fa(percent + "%");
+            SpLossDot.Fill = Gfx.Solid(percent == 0 ? Theme.P.Connected : percent < 5 ? Theme.P.Warn : Theme.P.Danger);
         }
 
         // ================================================================ settings
@@ -1083,16 +1154,20 @@ namespace KankiVPN
             foreach (var (name, label) in new[] { ("yellow", "Kanki yellow"), ("crimson", "Crimson") })
             {
                 var btn = new Button { Style = (Style)FindResource("Plain"), Margin = new Thickness(4) };
-                var b = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(Theme.Current == name ? 2 : 1), Padding = new Thickness(8, 10, 8, 10) };
-                b.SetResourceReference(Border.BorderBrushProperty, Theme.Current == name ? "Primary" : "Edge");
-                b.SetResourceReference(Border.BackgroundProperty, "Surface");
+                // SettingsUi.kt ThemePicker: the theme's own black, its three colours, its gold edge
+                var tp = Theme.Of(name);
+                var sel = Theme.Current == name;
+                var b = new Border
+                {
+                    CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(sel ? 2 : 1), Padding = new Thickness(8, 12, 8, 12),
+                    BorderBrush = Gfx.Solid(sel ? tp.Gold : Gfx.A(tp.Gold, .3)), Background = new LinearGradientBrush(tp.BgMid, tp.BgBottom, 90),
+                };
                 var st = new StackPanel();
                 var dots = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-                foreach (var c in Theme.Dots(name))
-                    dots.Children.Add(new Ellipse { Width = 14, Height = 14, Margin = new Thickness(2), Fill = new SolidColorBrush(c) });
+                foreach (var c in new[] { tp.Gold, tp.Accent, tp.Connected })
+                    dots.Children.Add(new Ellipse { Width = 14, Height = 14, Margin = new Thickness(2, 0, 2, 0), Fill = Gfx.Solid(c) });
                 st.Children.Add(dots);
-                var t = new TextBlock { Text = Strings.T(label), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), FontWeight = FontWeights.SemiBold };
-                t.SetResourceReference(TextBlock.ForegroundProperty, "Text");
+                var t = new TextBlock { Text = Strings.T(label), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Gfx.Solid(sel ? tp.Gold : tp.Sub) };
                 st.Children.Add(t);
                 b.Child = st;
                 btn.Content = b;
@@ -1104,7 +1179,6 @@ namespace KankiVPN
                     BuildThemeCards();
                     ShowStatus();
                     FillServers();
-                    DrawGauge(0, "");
                 };
                 ThemeCards.Children.Add(btn);
             }
@@ -1222,21 +1296,20 @@ namespace KankiVPN
             }
             if (page == "speed")
             {
-                SpDown.Text = "48.6 Mbps";
-                SpUp.Text = "12.3 Mbps";
-                SpPing.Text = "74 ms";
-                SpJitter.Text = "6 ms";
-                SpLoss.Text = Strings.T("Lost:") + " " + Jalali.Fa("0%");
-                ChipPingText.Text = "✓ " + Strings.T("Ping");
-                ChipDownText.Text = "✓ " + Strings.T("Download");
-                ChipUpText.Text = "✓ " + Strings.T("Upload");
+                SpDown.Text = "48.6";
+                SpUp.Text = "12.3";
+                SpPing.Text = "74";
+                SpJitter.Text = "6";
+                SpeedTiles(74);
+                SpeedLoss(0);
+                SpeedPhase("done", false);
                 SpUsed.Text = Strings.T("Data used by this test:") + " 91.55 MB";
                 SpeedBtn.Content = Strings.T("Test again");
-                DrawGauge(48.6, "Download");
+                SetGauge(48.6, "done");
             }
             if (page == "login") account = null;
             Open(page switch { "home-on" or "home-off" or "account" => "home", _ => page });
-            if (page == "account") AccountSheet.Visibility = Visibility.Visible;
+            if (page == "account") ShowSheet();
             if (page == "settings") SplitPanel.Visibility = Visibility.Visible;
             ShowStatus();
         }
