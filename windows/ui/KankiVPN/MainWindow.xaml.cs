@@ -45,6 +45,8 @@ namespace KankiVPN
             this.pipe = pipe;
             this.prefs = prefs;
             InitializeComponent();
+            // in code, not XAML: the obfuscated build could not bind it on the drawn card
+            AccountCard.MouseLeftButtonUp += Sheet_Card;
             FlowDirection = Strings.Persian ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
             LangFa.IsChecked = Strings.Persian;
             LangEn.IsChecked = !Strings.Persian;
