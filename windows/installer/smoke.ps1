@@ -38,9 +38,19 @@ Remove-Item $out -ErrorAction SilentlyContinue
 $cred = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\$name", $sec)
 $p = Start-Process -FilePath "$dir\KankiVPN.exe" -ArgumentList '--check-service', $out -Credential $cred -LoadUserProfile -UseNewEnvironment -WorkingDirectory $env:PUBLIC -PassThru -Wait
 $res = if (Test-Path $out) { Get-Content $out -Raw } else { "no result (exit $($p.ExitCode))" }
-Remove-LocalUser -Name $name
 Write-Host "app as normal user -> $res"
-if ($res -ne 'ok') { throw "the app does not trust the service as a normal user: $res" }
+if ($res -ne 'ok') { Remove-LocalUser -Name $name; throw "the app does not trust the service as a normal user: $res" }
+
+# the whole app, as that user: it must still be running after 20 seconds and write no crash log
+$app = Start-Process -FilePath "$dir\KankiVPN.exe" -Credential $cred -LoadUserProfile -UseNewEnvironment -WorkingDirectory $env:PUBLIC -PassThru
+Start-Sleep -Seconds 20
+$crash = Get-ChildItem "C:\Users\$name*\AppData\Roaming\KankiVPN\crash.log" -ErrorAction SilentlyContinue | Get-Content -Raw
+$alive = -not $app.HasExited
+if ($alive) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+Remove-LocalUser -Name $name
+if ($crash) { Write-Host $crash; throw "the app wrote a crash log" }
+if (-not $alive) { throw "the app closed by itself (exit $($app.ExitCode))" }
+Write-Host "app ran 20 seconds as a normal user without a crash"
 
 $s = Ask '{"id":2,"cmd":"status"}'
 if ($s.data.state -ne 'disconnected') { throw "unexpected state" }
