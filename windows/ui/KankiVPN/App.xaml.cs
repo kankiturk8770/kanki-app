@@ -151,6 +151,8 @@ namespace KankiVPN
         async Task Shots(string dir)
         {
             Directory.CreateDirectory(dir);
+            // every animation at one fixed moment, so the pictures do not change from run to run
+            Clock.Freeze(4.2);
             foreach (var theme in new[] { "yellow", "crimson" })
             foreach (var lang in new[] { "fa", "en" })
             {

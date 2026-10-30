@@ -30,9 +30,11 @@ namespace KankiVPN
         readonly Dictionary<string, long> pings = new();
         readonly List<long> pingHistory = new();
         ulong lastRx, lastTx;
+        long rxRate, txRate;
         DateTime lastAt;
-        bool polling, busy, turning, loadingSettings, ready;
+        bool polling, busy, loadingSettings, ready;
         string? openCountry;
+        FrameworkElement? lastPage;
         int tick;
         CancellationTokenSource? speedCts;
 
@@ -54,6 +56,9 @@ namespace KankiVPN
             }
             BuildThemeCards();
             DrawGauge(0, "");
+            ConnectBtn.MouseLeftButtonUp += (_, e) => { if (ConnectBtn.IsEnabled) Connect_Click(ConnectBtn, e); };
+            ConnectBtn.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space && ConnectBtn.IsEnabled) Connect_Click(ConnectBtn, e); };
+            Theme.Changed += () => { ModeColors(); if (IsLoaded) ShowStatus(); };
             ready = true;
             timer.Tick += async (_, _) => await Poll();
             Loaded += async (_, _) => await Start();
@@ -121,12 +126,15 @@ namespace KankiVPN
             if (status.State == "connected" && lastAt != default && status.Rx >= lastRx && status.Tx >= lastTx)
             {
                 var secs = Math.Max(0.2, (now - lastAt).TotalSeconds);
-                DownText.Text = Mbps((status.Rx - lastRx) * 8 / secs / 1e6);
-                UpText.Text = Mbps((status.Tx - lastTx) * 8 / secs / 1e6);
+                rxRate = (long)((status.Rx - lastRx) / secs);
+                txRate = (long)((status.Tx - lastTx) / secs);
+                DownText.Text = Mbps(rxRate * 8 / 1e6);
+                UpText.Text = Mbps(txRate * 8 / 1e6);
             }
             else if (status.State != "connected")
             {
                 DownText.Text = UpText.Text = "--";
+                rxRate = txRate = 0;
             }
             lastRx = status.Rx;
             lastTx = status.Tx;
@@ -170,6 +178,21 @@ namespace KankiVPN
             SpeedPage.Visibility = !login && TabSpeed.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = !login && TabSettings.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             if (login) AccountSheet.Visibility = Visibility.Collapsed;
+            var shown = new FrameworkElement[] { LoginPage, HomePage, ServersPage, SpeedPage, SettingsPage }.FirstOrDefault(x => x.Visibility == Visibility.Visible);
+            if (shown != null && shown != lastPage) Enter(shown);
+            lastPage = shown;
+            Backdrop.Calm = login;
+        }
+
+        /// <summary>A page coming in: fades in and slides up 14 in 260 ms, as on Android.</summary>
+        static void Enter(FrameworkElement page)
+        {
+            if (Clock.Frozen || !SystemParameters.ClientAreaAnimation) return;
+            var ease = new Eased(Gfx.FastOutSlowIn);
+            var t = new TranslateTransform();
+            page.RenderTransform = t;
+            page.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
+            t.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(14, 0, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
         }
 
         public void Open(string page)
@@ -249,7 +272,34 @@ namespace KankiVPN
                 "anti" => "Anti-filter: the hidden protocols for hard networks",
                 _ => "Smart: pings every server and connects to the best",
             });
+            ModeColors();
             if (IsLoaded) ShowStatus();
+        }
+
+        /// <summary>The tiles' icons and labels: the chosen one a little lighter and bold, the others softer.</summary>
+        void ModeColors()
+        {
+            foreach (var (tile, icon, text, col) in new[]
+            {
+                (ModeSmart, ModeSmartIcon, ModeSmartText, Theme.P.ModeSmart),
+                (ModeGame, ModeGameIcon, ModeGameText, Theme.P.ModeGame),
+                (ModeAnti, ModeAntiIcon, ModeAntiText, Theme.P.ModeAnti),
+            })
+            {
+                var sel = tile.IsChecked == true;
+                icon.Fill = Gfx.Solid(sel ? Gfx.Lerp(col, Colors.White, .18) : Gfx.A(col, .8));
+                text.Foreground = Gfx.Solid(sel ? Theme.P.Text : Gfx.A(Theme.P.Text, .78));
+                text.FontWeight = sel ? FontWeights.Black : FontWeights.Bold;
+            }
+            ModeHintIcon.Fill = Gfx.Solid(prefs.Mode == "gaming" ? Theme.P.ModeGame : prefs.Mode == "anti" ? Theme.P.ModeAnti : Theme.P.ModeSmart);
+            ConnectBtn.Game = prefs.Mode == "gaming";
+        }
+
+        /// <summary>The map and the connect button share what is left over the cards (HomeUi.kt HomeContent).</summary>
+        void HomeBoxes_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Map.Height = Math.Clamp(MapBox.ActualHeight, 76, 250);
+            ConnectBtn.Diameter = Math.Clamp((OrbBox.ActualHeight - 8) / Orb.Footprint, 96, 142);
         }
 
         async Task PingAll()
@@ -468,14 +518,26 @@ namespace KankiVPN
         }
 
         /// <summary>A round badge with the country code (Windows has no flag emoji).</summary>
+        /// <summary>Kit.kt FlagBadge: the flag in a dark round badge with a gold ring.</summary>
         FrameworkElement Flag(string? cc, double size)
         {
-            var b = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), BorderThickness = new Thickness(1.2) };
-            b.SetResourceReference(Border.BackgroundProperty, "Surface");
-            b.SetResourceReference(Border.BorderBrushProperty, "PrimaryDark");
-            var t = new TextBlock { Text = string.IsNullOrEmpty(cc) ? "··" : cc, FontSize = size * 0.34, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight };
-            t.SetResourceReference(TextBlock.ForegroundProperty, "Text");
-            b.Child = t;
+            var b = new Border
+            {
+                Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), BorderThickness = new Thickness(1.5),
+                Background = new RadialGradientBrush(Theme.P.Surface, Theme.P.Panel), BorderBrush = Gfx.Solid(Gfx.A(Theme.P.Gold, .55)),
+            };
+            if (WorldMap.Flag(cc) is { } img)
+            {
+                var i = new Image { Source = img, Width = size * .56, Height = size * .56, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                RenderOptions.SetBitmapScalingMode(i, BitmapScalingMode.HighQuality);
+                b.Child = i;
+            }
+            else
+            {
+                var t = new TextBlock { Text = string.IsNullOrEmpty(cc) ? "··" : cc, FontSize = size * 0.34, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight };
+                t.SetResourceReference(TextBlock.ForegroundProperty, "Text");
+                b.Child = t;
+            }
             return b;
         }
 
@@ -507,7 +569,9 @@ namespace KankiVPN
             var st = status.State;
             var on = st == "connected";
             var srv = Chosen();
-            StateText.Text = Strings.T(st switch
+            var orb = st is "connecting" or "reconnecting" ? "connecting" : on ? "on" : "off";
+            ConnectBtn.State = orb;
+            var head = Strings.T(st switch
             {
                 "connecting" => "Connecting…",
                 "connected" => "Connected",
@@ -515,45 +579,48 @@ namespace KankiVPN
                 "error" => "Could not connect",
                 _ => "Connect",
             });
-            StateText.SetResourceReference(TextBlock.ForegroundProperty, st switch
-            {
-                "connected" => "Connected",
-                "error" => "Danger",
-                _ => "Primary",
-            });
-            SubText.Text = on && status.Since > 0
+            var line = on && status.Since > 0
                 ? Duration(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - status.Since)
-                : st == "disconnected" ? Strings.T(prefs.Manual ? "Manual" : prefs.Mode == "gaming" ? "Gaming" : prefs.Mode == "anti" ? "Anti-filter" : "Smart")
-                : st == "error" ? Strings.T("Tap to cancel") : "";
-            SubText.SetResourceReference(TextBlock.ForegroundProperty, on ? "Text" : "Muted");
-            Ring.SetResourceReference(Shape.StrokeProperty, on ? "Connected" : st == "error" ? "Danger" : "Primary");
-            RingGlow.Opacity = on ? 1 : st == "disconnected" ? 0.7 : 0.9;
-            Turn(st == "connecting" || st == "reconnecting");
+                : orb == "connecting" ? Strings.T("Tap to cancel")
+                : Strings.T(prefs.Manual ? "Manual" : prefs.Mode == "gaming" ? "Gaming" : prefs.Mode == "anti" ? "Anti-filter" : "Smart");
+            ConnectBtn.Text(head, line, on && status.Since > 0);
+            var ms0 = srv != null && pings.TryGetValue(srv.Id, out var p0) && p0 > 0 ? p0 : 0;
+            ConnectBtn.Live(on && ms0 > 0 ? ms0 : null, on ? pingHistory : new List<long>(), rxRate + txRate);
+            // the background glows in the mode's colour while connected
+            var modeKey = prefs.Mode == "gaming" ? "ModeGame" : prefs.Mode == "anti" ? "ModeAnti" : "ModeSmart";
+            Backdrop.Accent = on ? modeKey : "Primary";
 
-            ServerCard.Visibility = srv != null ? Visibility.Visible : Visibility.Collapsed;
+            ServerCard.Visibility = on && srv != null ? Visibility.Visible : Visibility.Collapsed;
             if (srv != null)
             {
                 CardName.Text = Countries.Name(srv.Country, srv.Name);
                 var city = Countries.City(srv.Country, srv.City);
                 CardSub.Text = (city != "" ? city + " · " : "") + ProtoName(srv.Proto) + (srv.Tunnel ? " · " + Strings.T("Tunnel") : "");
-                CardCcText.Text = string.IsNullOrEmpty(srv.Country) ? "··" : srv.Country;
+                CardFlag.Source = WorldMap.Flag(srv.Country);
             }
-            StablePill.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            var green = Theme.P.Connected;
+            StablePill.Background = Gfx.Solid(Gfx.A(green, .1));
+            StablePill.BorderBrush = Gfx.Solid(Gfx.A(green, .5));
+            StableDot.Fill = StableText.Foreground = Gfx.Solid(green);
 
             var exit = on ? srv : null;
             LocText.Text = exit != null
                 ? Strings.T("Your IP:") + " " + Countries.Name(exit.Country, exit.Name)
-                : Strings.T("Your location:") + " " + Strings.T("Tehran");
-            LocDot.SetResourceReference(Shape.FillProperty, on ? "Connected" : "Primary");
+                : Strings.T("Your location:") + " " + Countries.Name("IR", "Iran");
+            var chip = on ? Theme.P.Connected : Theme.P.Gold;
+            LocChip.Tint = on ? "Connected" : "Primary";
+            LocDot.Fill = Gfx.Solid(chip);
+            LocDot2.Fill = Gfx.Solid(Gfx.A(chip, .5));
 
             var ms = srv != null && pings.TryGetValue(srv.Id, out var p) && p > 0 ? p : 0;
             PingText.Text = on && ms > 0 ? ms.ToString() : "--";
-            PingText.SetResourceReference(TextBlock.ForegroundProperty, on && ms > 0 ? PingBrush(ms) : "Text");
-            DrawSpark();
+            PingText.Foreground = Gfx.Solid(on && ms > 0 ? Orb.PingColor(ms) : Theme.P.Sub);
+            PingLine.Set(on ? pingHistory : new List<long>(), on && ms > 0 ? ms : null);
             DrawMap(srv, on);
 
             if (!string.IsNullOrEmpty(status.Error) && st == "error") ShowError(status.Error!);
             ConnectBtn.IsEnabled = !busy && srv != null;
+            ConnectBtn.Opacity = ConnectBtn.IsEnabled ? 1 : .55;
         }
 
         void ShowError(string msg)
@@ -561,96 +628,25 @@ namespace KankiVPN
             ModeHint.Text = (status.Blocked ? Strings.T("Internet is blocked until the VPN is back (kill switch).") + " " : "") + msg;
         }
 
-        void DrawSpark()
-        {
-            var pts = new PointCollection();
-            if (pingHistory.Count > 1)
-            {
-                var max = pingHistory.Max();
-                var min = pingHistory.Min();
-                for (var i = 0; i < pingHistory.Count; i++)
-                {
-                    var y = max == min ? 9 : 16 - (pingHistory[i] - min) * 14.0 / (max - min);
-                    pts.Add(new Point(i * 44.0 / (pingHistory.Count - 1), y));
-                }
-            }
-            else
-            {
-                pts.Add(new Point(0, 12));
-                pts.Add(new Point(12, 12));
-                pts.Add(new Point(16, 4));
-                pts.Add(new Point(20, 16));
-                pts.Add(new Point(24, 12));
-                pts.Add(new Point(44, 12));
-            }
-            PingLine.Points = pts;
-        }
-
-        void Turn(bool on)
-        {
-            // one moving thing in the whole app: the ring's ticks while connecting
-            if (on == turning || !SystemParameters.ClientAreaAnimation) return;
-            turning = on;
-            TicksTurn.BeginAnimation(RotateTransform.AngleProperty,
-                on ? new DoubleAnimation(0, 360, TimeSpan.FromSeconds(3)) { RepeatBehavior = RepeatBehavior.Forever } : null);
-        }
-
-        // map: same projection as Assets/map.png (lon -12..66, lat 24..64 over 1560 x 1000)
-        static Point Proj(double lat, double lon) => new((lon + 12) / 78 * 1560, (64 - lat) / 40 * 1000);
-
+        /// <summary>The map: every server's country (one pin each), you in Iran, the chosen server lit.</summary>
         void DrawMap(Server? srv, bool on)
         {
-            MapMarks.Children.Clear();
-            if (account == null) return;
-            var tehran = Proj(35.7, 51.4);
-            var seen = new HashSet<string>();
-            foreach (var s in account.Servers)
+            var pinsList = new List<MapPin>();
+            if (account != null)
             {
-                var cc = s.Country ?? "";
-                if (cc == "" || !seen.Add(cc)) continue;
-                var (lat, lon) = s.Lat != 0 || s.Lon != 0 ? (s.Lat, s.Lon) : Countries.Of(cc) is { } i ? (i.Lat, i.Lon) : (0d, 0d);
-                if (lat == 0 && lon == 0) continue;
-                var p = Proj(lat, lon);
-                if (on && srv?.Country == cc)
+                var seen = new HashSet<string>();
+                foreach (var s in account.Servers)
                 {
-                    // the route: an arc from you to the server, like the Android map
-                    var mid = new Point((tehran.X + p.X) / 2, Math.Min(tehran.Y, p.Y) - 160);
-                    var fig = new PathFigure { StartPoint = tehran };
-                    fig.Segments.Add(new QuadraticBezierSegment(mid, p, true));
-                    var arc = new Path { Data = new PathGeometry(new[] { fig }), StrokeThickness = 6 };
-                    arc.SetResourceReference(Shape.StrokeProperty, "Connected");
-                    arc.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Theme.Col("Connected"), BlurRadius = 18, ShadowDepth = 0 };
-                    MapMarks.Children.Add(arc);
+                    var cc = s.Country ?? "";
+                    if (cc == "" || !seen.Add(cc)) continue;
+                    var (lat, lon) = s.Lat != 0 || s.Lon != 0 ? (s.Lat, s.Lon) : Countries.Of(cc) is { } i ? (i.Lat, i.Lon) : (0d, 0d);
+                    if (lat == 0 && lon == 0) continue;
+                    pinsList.Add(new MapPin(lat, lon, cc, srv?.Country == cc));
                 }
-                Mark(p, cc, srv?.Country == cc && on ? "Connected" : "Primary");
             }
-            Mark(tehran, null, "User");
-        }
-
-        void Mark(Point p, string? cc, string brush)
-        {
-            const double r = 34;
-            var dot = new Ellipse { Width = 22, Height = 22 };
-            dot.SetResourceReference(Shape.FillProperty, brush);
-            dot.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Theme.Col(brush), BlurRadius = 26, ShadowDepth = 0 };
-            Canvas.SetLeft(dot, p.X - 11);
-            Canvas.SetTop(dot, p.Y - 11);
-            MapMarks.Children.Add(dot);
-            FrameworkElement badge;
-            if (cc != null)
-            {
-                badge = Flag(cc, r * 2);
-            }
-            else
-            {
-                var t = new TextBlock { Text = Strings.T("You"), FontSize = 30, FontWeight = FontWeights.Bold };
-                t.SetResourceReference(TextBlock.ForegroundProperty, "Text");
-                badge = t;
-            }
-            badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Canvas.SetLeft(badge, cc != null ? p.X - r : p.X + 18);
-            Canvas.SetTop(badge, cc != null ? p.Y - r * 2 - 18 : p.Y - 46);
-            MapMarks.Children.Add(badge);
+            var accent = !on && status.State == "disconnected" ? "Primary"
+                : prefs.Mode == "gaming" ? "ModeGame" : prefs.Mode == "anti" ? "ModeAnti" : "ModeSmart";
+            Map.Set(pinsList, (35.7, 51.4), "IR", on, accent);
         }
 
         async void Connect_Click(object sender, RoutedEventArgs e)
@@ -693,18 +689,23 @@ namespace KankiVPN
             ShowPage();
             if (account == null) return;
             var left = account.LimitGb > 0 ? Math.Max(0, account.LimitGb - account.UsedGb) : -1;
-            DataText.Text = left < 0 ? Strings.T("Unlimited") : Jalali.Fa(left.ToString("0.#", CultureInfo.InvariantCulture)) + " " + Strings.T("GB");
+            DataText.Text = left < 0 ? "∞" : Jalali.Fa(left.ToString("0", CultureInfo.InvariantCulture));
             var days = account.Expires > 0 ? (account.Expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds()) / 86400.0 : -1;
-            DaysText.Text = account.Expires <= 0 ? Strings.T("Unlimited") : days <= 0 ? Strings.T("Expired") : Jalali.Fa(Math.Ceiling(days).ToString(CultureInfo.InvariantCulture)) + " " + Strings.T("days");
+            DaysText.Text = account.Expires <= 0 ? "∞" : Jalali.Fa(Math.Max(0, Math.Ceiling(days)).ToString(CultureInfo.InvariantCulture));
             var active = account.Status == "Active" || account.Status == "";
             StatusText.Text = Strings.T(active ? "Active" : account.Status);
-            StatusText.SetResourceReference(TextBlock.ForegroundProperty, active ? "Connected" : "Warn");
-            StatusDot.SetResourceReference(Shape.FillProperty, active ? "Connected" : "Warn");
+            StatusText.SetResourceReference(TextBlock.ForegroundProperty, active ? "Connected" : "Danger");
+            StatusDot.SetResourceReference(Shape.FillProperty, active ? "Connected" : "Danger");
+            // the bar is the data used (none when the data is unlimited)
+            var used = account.LimitGb > 0 ? Math.Clamp(account.UsedGb / account.LimitGb, 0, 1) : -1;
+            DataBarBox.Visibility = used < 0 ? Visibility.Collapsed : Visibility.Visible;
+            DataBar.Background = used > .85
+                ? new LinearGradientBrush(Theme.P.Warn, Theme.P.Danger, 0)
+                : new LinearGradientBrush(new GradientStopCollection { new(Theme.P.GoldDeep, 0), new(Theme.P.Gold, .5), new(Theme.P.GoldLight, 1) }, 0);
             DataBar.Width = 0;
             DataBar.Dispatcher.InvokeAsync(() =>
             {
-                if (DataBar.Parent is FrameworkElement f)
-                    DataBar.Width = left < 0 ? f.ActualWidth : f.ActualWidth * Math.Clamp(left / Math.Max(0.01, account?.LimitGb ?? 1), 0, 1);
+                if (DataBar.Parent is FrameworkElement f && used >= 0) DataBar.Width = f.ActualWidth * used;
             }, DispatcherPriority.Loaded);
             AccountSub.Text = account.Username;
 
@@ -1099,7 +1100,7 @@ namespace KankiVPN
                 {
                     prefs.Theme = name;
                     prefs.Save();
-                    Theme.Apply(name);
+                    Theme.Apply(name, animate: true);
                     BuildThemeCards();
                     ShowStatus();
                     FillServers();

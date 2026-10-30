@@ -21,11 +21,11 @@
 
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
-    <Resource Include="Assets\map.png" />
-    <Resource Include="Assets\vazir_regular.ttf" />
-    <Resource Include="Assets\vazir_bold.ttf" />
-    <Resource Include="Assets\orbitron.ttf" />
+    <Resource Include="Assets\*.ttf" />
     <Resource Include="Assets\kanki.ico" />
+    <!-- the map (Natural Earth countries, windows/tools/packmap.py) and Noto's waving flags, as on Android -->
+    <Resource Include="Assets\countries.bin" />
+    <Resource Include="Assets\flags\*.png" />
   </ItemGroup>
 
   <!--

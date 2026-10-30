@@ -9,6 +9,8 @@
         FontFamily="{StaticResource Vazir}" FontSize="14" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display">
     <Grid x:Name="Root">
+        <!-- Ui.kt KankiBackground: black, a faint glow behind the connect button, twinkling stars -->
+        <k:Backdrop x:Name="Backdrop"/>
         <Grid MaxWidth="560">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -16,21 +18,21 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- top bar: the wordmark and shield; the account button (Android: the link icon) -->
-            <DockPanel Grid.Row="0" Margin="16,14,16,6">
-                <Image DockPanel.Dock="Left" Source="pack://application:,,,/Assets/logo.png" Width="34" Height="34"
-                       RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,8,0"/>
-                <Button x:Name="AccountBtn" DockPanel.Dock="Right" Style="{StaticResource Plain}" Width="40" Height="40"
+            <!-- top bar (HomeUi.kt AppHeader): the K shield and KANKI VPN on one side, the account button (the link
+                 icon) on the other -->
+            <DockPanel Grid.Row="0" Margin="16,8,16,4">
+                <k:Logo3D DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,8,0"/>
+                <Button x:Name="AccountBtn" DockPanel.Dock="Right" Style="{StaticResource Plain}" Width="36" Height="36"
                         Click="Account_Click" ToolTip="{k:T 'Account'}">
-                    <Border CornerRadius="12" BorderThickness="1.2" BorderBrush="{DynamicResource Edge}" Background="{DynamicResource Card}">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE71B;" Foreground="{DynamicResource Primary}"/>
-                    </Border>
+                    <k:Glass CornerRadius="12">
+                        <k:KIcon Kind="link" Width="20" Height="20" Fill="{DynamicResource Primary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </k:Glass>
                 </Button>
-                <TextBlock Text="KANKI VPN" FontFamily="{StaticResource Brand}" FontWeight="Bold" FontSize="21"
+                <TextBlock Text="KANKI VPN" FontFamily="{StaticResource Brand}" FontSize="15"
                            Foreground="{DynamicResource Primary}" FlowDirection="LeftToRight" VerticalAlignment="Center"
                            HorizontalAlignment="Left">
                     <TextBlock.Effect>
-                        <DropShadowEffect Color="{DynamicResource CPrimary}" BlurRadius="14" ShadowDepth="0" Opacity="0.55"/>
+                        <DropShadowEffect Color="{DynamicResource CPrimary}" BlurRadius="9" ShadowDepth="0" Opacity="0.75"/>
                     </TextBlock.Effect>
                 </TextBlock>
             </DockPanel>
@@ -58,202 +60,167 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- ============================== Home -->
-                <Grid x:Name="HomePage" Margin="16,0">
+                <!-- ============================== Home (HomeUi.kt HomeContent): the map and the connect button share
+                     what is left over the fixed cards (44 / 56) -->
+                <Grid x:Name="HomePage">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="44*"/>
+                        <RowDefinition Height="56*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- the map fills the top; the location pill sits on it -->
-                    <Grid Grid.Row="0" Grid.RowSpan="2" Margin="-16,0" ClipToBounds="True">
-                        <Viewbox Stretch="UniformToFill" VerticalAlignment="Top">
-                            <Canvas x:Name="Map" Width="1560" Height="1000" FlowDirection="LeftToRight">
-                                <Rectangle Width="1560" Height="1000" Fill="{DynamicResource PrimaryDark}" Opacity="0.75">
-                                    <Rectangle.OpacityMask>
-                                        <ImageBrush ImageSource="pack://application:,,,/Assets/map.png"/>
-                                    </Rectangle.OpacityMask>
-                                </Rectangle>
-                                <Canvas x:Name="MapMarks"/>
-                            </Canvas>
-                        </Viewbox>
-                        <Border VerticalAlignment="Bottom" Height="120" IsHitTestVisible="False">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="Transparent" Offset="0"/>
-                                    <GradientStop Color="{DynamicResource CBg}" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
-                    </Grid>
-                    <Border Grid.Row="0" HorizontalAlignment="Left" CornerRadius="14" Padding="12,4" Margin="0,4,0,0"
-                            Background="{DynamicResource Sheet}" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
+                    <!-- "your location : Iran"; connected: "your IP : Germany" -->
+                    <k:Glass x:Name="LocChip" Grid.Row="0" Margin="16,0" HorizontalAlignment="Left" CornerRadius="99" Padding="12,4">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="LocDot" Width="7" Height="7" Fill="{DynamicResource Primary}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="LocText" FontSize="12" FontWeight="SemiBold"/>
+                            <Ellipse x:Name="LocDot" Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock x:Name="LocText" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Text}" TextWrapping="NoWrap"/>
+                            <Ellipse x:Name="LocDot2" Width="4" Height="4" VerticalAlignment="Center" Margin="7,0,0,0"/>
                         </StackPanel>
-                    </Border>
+                    </k:Glass>
 
-                    <!-- the connect button: ticked ring, glow, the shield and the state -->
-                    <Button x:Name="ConnectBtn" Grid.Row="1" Width="236" Height="236" VerticalAlignment="Bottom" Margin="0,0,0,8"
-                            Cursor="Hand" Click="Connect_Click" AutomationProperties.Name="{k:T 'Connect'}">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Grid Background="Transparent">
-                                    <ContentPresenter/>
-                                    <Ellipse x:Name="focus" Stroke="{DynamicResource Text}" StrokeThickness="1" StrokeDashArray="2 3" Visibility="Collapsed"/>
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="focus" Property="Visibility" Value="Visible"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <Grid>
-                            <Ellipse Fill="{DynamicResource Glow}" Margin="-24"/>
-                            <Ellipse x:Name="RingTicks" Margin="6" StrokeThickness="10" StrokeDashArray="0.18 1.4"
-                                     Stroke="{DynamicResource PrimaryDark}" RenderTransformOrigin="0.5,0.5">
-                                <Ellipse.RenderTransform>
-                                    <RotateTransform x:Name="TicksTurn"/>
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
-                            <Ellipse x:Name="Ring" Margin="22" StrokeThickness="5" Stroke="{DynamicResource Primary}">
-                                <Ellipse.Effect>
-                                    <DropShadowEffect x:Name="RingGlow" Color="{DynamicResource CPrimary}" BlurRadius="24" ShadowDepth="0" Opacity="0.9"/>
-                                </Ellipse.Effect>
-                            </Ellipse>
-                            <Ellipse Margin="34" StrokeThickness="1.2" Stroke="{DynamicResource PrimaryDark}">
-                                <Ellipse.Fill>
-                                    <RadialGradientBrush>
-                                        <GradientStop Color="#FF1A1A1A" Offset="0"/>
-                                        <GradientStop Color="#FF050505" Offset="1"/>
-                                    </RadialGradientBrush>
-                                </Ellipse.Fill>
-                            </Ellipse>
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <Image Source="pack://application:,,,/Assets/logo.png" Width="38" Height="38" RenderOptions.BitmapScalingMode="HighQuality"/>
-                                <TextBlock x:Name="StateText" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="SubText" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
-                            </StackPanel>
-                        </Grid>
-                    </Button>
+                    <Grid x:Name="MapBox" Grid.Row="1" SizeChanged="HomeBoxes_SizeChanged">
+                        <k:WorldMap x:Name="Map" VerticalAlignment="Center"/>
+                    </Grid>
 
-                    <!-- the server in use; opens the list -->
-                    <Button x:Name="ServerCard" Grid.Row="2" Style="{StaticResource Plain}" Click="ServerCard_Click" Margin="0,4,0,8">
-                        <Border Style="{StaticResource CardBox}" BorderBrush="{DynamicResource EdgeStrong}" Padding="12,8">
+                    <Grid x:Name="OrbBox" Grid.Row="2" SizeChanged="HomeBoxes_SizeChanged">
+                        <k:Orb x:Name="ConnectBtn" HorizontalAlignment="Center" VerticalAlignment="Center" Focusable="True"
+                               AutomationProperties.Name="{k:T 'Connect'}"/>
+                    </Grid>
+
+                    <StackPanel Grid.Row="3" Margin="16,8,16,8">
+                        <!-- the server in use, only while connected (HomeUi.kt ConnectedCard) -->
+                        <k:Glass x:Name="ServerCard" Selected="True" Height="44" Padding="12,0" Margin="0,0,0,8" Visibility="Collapsed">
                             <DockPanel>
-                                <Border x:Name="CardCc" DockPanel.Dock="Left" Width="34" Height="34" CornerRadius="17" Margin="0,0,10,0"
-                                        Background="{DynamicResource Surface}" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
-                                    <TextBlock x:Name="CardCcText" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" FlowDirection="LeftToRight"/>
-                                </Border>
-                                <Border x:Name="StablePill" DockPanel.Dock="Right" CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
-                                        BorderThickness="1" BorderBrush="{DynamicResource Connected}">
+                                <Image x:Name="CardFlag" DockPanel.Dock="Left" Width="22" Height="22" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <Border x:Name="StablePill" DockPanel.Dock="Right" CornerRadius="99" Padding="8,3" VerticalAlignment="Center" BorderThickness="1">
                                     <StackPanel Orientation="Horizontal">
-                                        <Ellipse Width="6" Height="6" Fill="{DynamicResource Connected}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{k:T 'Stable connection'}" FontSize="11" Foreground="{DynamicResource Connected}"/>
+                                        <Ellipse x:Name="StableDot" Width="6" Height="6" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="StableText" Text="{k:T 'Stable connection'}" FontSize="10" FontWeight="Bold" TextWrapping="NoWrap"/>
                                     </StackPanel>
                                 </Border>
-                                <StackPanel>
-                                    <TextBlock x:Name="CardName" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                                    <TextBlock x:Name="CardSub" Style="{StaticResource Small}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="CardName" FontSize="13" FontWeight="Black" Foreground="{DynamicResource Text}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                    <TextBlock x:Name="CardSub" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                                 </StackPanel>
                             </DockPanel>
-                        </Border>
-                    </Button>
+                        </k:Glass>
 
-                    <!-- the three modes -->
-                    <UniformGrid Grid.Row="3" Columns="3" Margin="-4,0">
-                        <RadioButton x:Name="ModeSmart" Style="{StaticResource ModeTile}" Tag="{DynamicResource ModeSmart}" Checked="Mode_Checked">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xE735;" Foreground="{DynamicResource ModeSmart}" FontSize="18"/>
-                                <TextBlock Text="{k:T 'Smart'}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton x:Name="ModeGame" Style="{StaticResource ModeTile}" Tag="{DynamicResource ModeGame}" Checked="Mode_Checked">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xE7FC;" Foreground="{DynamicResource ModeGame}" FontSize="18"/>
-                                <TextBlock Text="{k:T 'Gaming'}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton x:Name="ModeAnti" Style="{StaticResource ModeTile}" Tag="{DynamicResource ModeAnti}" Checked="Mode_Checked">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xEA18;" Foreground="{DynamicResource ModeAnti}" FontSize="18"/>
-                                <TextBlock Text="{k:T 'Anti-filter'}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </RadioButton>
-                    </UniformGrid>
-                    <Border Grid.Row="4" Style="{StaticResource CardBox}" Padding="12,8" Margin="0,8,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE735;" FontSize="12" Foreground="{DynamicResource Primary}" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="ModeHint" FontSize="12" Foreground="{DynamicResource Muted}"/>
-                        </StackPanel>
-                    </Border>
+                        <!-- the three modes (ModesUi.kt ModeRow) -->
+                        <UniformGrid Columns="3" Margin="-4,0">
+                            <RadioButton x:Name="ModeSmart" Style="{StaticResource ModeTile}" Tag="ModeSmart" Checked="Mode_Checked">
+                                <StackPanel>
+                                    <k:KIcon x:Name="ModeSmartIcon" Kind="smart" Width="20" Height="20"/>
+                                    <TextBlock x:Name="ModeSmartText" Text="{k:T 'Smart'}" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="ModeGame" Style="{StaticResource ModeTile}" Tag="ModeGame" Checked="Mode_Checked">
+                                <StackPanel>
+                                    <k:KIcon x:Name="ModeGameIcon" Kind="game" Width="20" Height="20"/>
+                                    <TextBlock x:Name="ModeGameText" Text="{k:T 'Gaming'}" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="ModeAnti" Style="{StaticResource ModeTile}" Tag="ModeAnti" Checked="Mode_Checked">
+                                <StackPanel>
+                                    <k:KIcon x:Name="ModeAntiIcon" Kind="anti" Width="20" Height="20"/>
+                                    <TextBlock x:Name="ModeAntiText" Text="{k:T 'Anti-filter'}" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
+                                </StackPanel>
+                            </RadioButton>
+                        </UniformGrid>
+                        <!-- what the chosen mode does (ModesUi.kt ModeHint) -->
+                        <k:Glass CornerRadius="12" Padding="12,8" Margin="0,8,0,0">
+                            <DockPanel>
+                                <k:KIcon x:Name="ModeHintIcon" Kind="spark" Width="12" Height="12" DockPanel.Dock="Left" Margin="0,0,8,0"/>
+                                <TextBlock x:Name="ModeHint" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                            </DockPanel>
+                        </k:Glass>
 
-                    <!-- ping, download, upload -->
-                    <Border Grid.Row="5" Style="{StaticResource CardBox}" Margin="0,8,0,0" Padding="12,8">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition/>
-                                <ColumnDefinition/>
-                                <ColumnDefinition/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="{k:T 'Ping'}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
-                                    <TextBlock x:Name="PingText" Text="--" FontSize="17" FontWeight="Bold"/>
-                                    <TextBlock Text=" ms" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
-                                    <Polyline x:Name="PingLine" Stroke="{DynamicResource Connected}" StrokeThickness="1.5" Width="44" Height="18"
-                                              Margin="6,0,0,0" Stretch="None"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"><Run Text="&#xE896;" FontFamily="{StaticResource Icons}" Foreground="{DynamicResource Primary}"/><Run Text=" "/><Run Text="{k:T 'Download'}"/></TextBlock>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
-                                    <TextBlock x:Name="DownText" Text="--" FontSize="17" FontWeight="Bold"/>
-                                    <TextBlock Text=" Mbps" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"><Run Text="&#xE898;" FontFamily="{StaticResource Icons}" Foreground="{DynamicResource Primary}"/><Run Text=" "/><Run Text="{k:T 'Upload'}"/></TextBlock>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
-                                    <TextBlock x:Name="UpText" Text="--" FontSize="17" FontWeight="Bold"/>
-                                    <TextBlock Text=" Mbps" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <!-- data left, days left, status; the bar is the data left -->
-                    <Button Grid.Row="6" Style="{StaticResource Plain}" Click="Account_Click" Margin="0,8,0,12">
-                        <Border Style="{StaticResource CardBox}" Padding="14,8">
-                            <StackPanel>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition/>
-                                        <ColumnDefinition/>
-                                        <ColumnDefinition/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="DataText" FontWeight="Bold" HorizontalAlignment="Left"/>
-                                    <TextBlock x:Name="DaysText" Grid.Column="1" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{DynamicResource Connected}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="StatusText" FontWeight="Bold" Foreground="{DynamicResource Connected}"/>
+                        <!-- ping (live heartbeat), download, upload (HomeUi.kt StatsRow) -->
+                        <k:Glass Height="48" Padding="4,0" Margin="0,8,0,0">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.25*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{k:T 'Ping'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Text}" HorizontalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
+                                        <TextBlock x:Name="PingText" Text="--" FontSize="14" FontWeight="Bold" FontFamily="{StaticResource Poppins}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="ms" FontSize="10" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
+                                                   Margin="3,0,0,0" VerticalAlignment="Center"/>
+                                        <k:PingPulse x:Name="PingLine" Width="44" Height="18" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                     </StackPanel>
-                                </Grid>
-                                <Grid Margin="0,8,0,0" Height="5" FlowDirection="LeftToRight">
-                                    <Border CornerRadius="3" Background="{DynamicResource Surface}"/>
-                                    <Border x:Name="DataBar" CornerRadius="3" Background="{DynamicResource NavSelected}" HorizontalAlignment="Right" Width="0"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </Button>
+                                </StackPanel>
+                                <Rectangle Grid.Column="1" Width="1" Height="28" Fill="{DynamicResource StatDivider}"/>
+                                <StackPanel Grid.Column="2">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Border Width="16" Height="16" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Accent}" Background="{DynamicResource AccentSoft}">
+                                            <k:KIcon Kind="down" Width="9" Height="9" Fill="{DynamicResource Accent}"/>
+                                        </Border>
+                                        <TextBlock Text="{k:T 'Download'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Text}" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
+                                        <TextBlock x:Name="DownText" Text="--" FontSize="14" FontWeight="Bold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Text}"/>
+                                        <TextBlock Text="Mbps" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
+                                                   Margin="3,0,0,2" VerticalAlignment="Bottom"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Rectangle Grid.Column="3" Width="1" Height="28" Fill="{DynamicResource StatDivider}"/>
+                                <StackPanel Grid.Column="4">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Border Width="16" Height="16" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Primary}" Background="{DynamicResource PrimarySoft}">
+                                            <k:KIcon Kind="up" Width="9" Height="9" Fill="{DynamicResource Primary}"/>
+                                        </Border>
+                                        <TextBlock Text="{k:T 'Upload'}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Text}" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
+                                        <TextBlock x:Name="UpText" Text="--" FontSize="14" FontWeight="Bold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Text}"/>
+                                        <TextBlock Text="Mbps" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
+                                                   Margin="3,0,0,2" VerticalAlignment="Bottom"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </k:Glass>
+
+                        <!-- data left, days left, status; under it the data used (HomeUi.kt UsageStrip) -->
+                        <Button Style="{StaticResource Plain}" Click="Account_Click" Margin="0,8,0,0">
+                            <k:Glass>
+                                <StackPanel>
+                                    <Grid Height="34" Margin="12,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock x:Name="DataText" FontSize="14" FontWeight="Black" Foreground="{DynamicResource Text}"/>
+                                            <TextBlock Text="{k:T 'GB'}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Rectangle Grid.Column="1" Width="1" Height="18" Fill="{DynamicResource PrimaryFaint}"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock x:Name="DaysText" FontSize="14" FontWeight="Black" Foreground="{DynamicResource Text}"/>
+                                            <TextBlock Text="{k:T 'days'}" FontSize="11" Foreground="{DynamicResource Muted}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Rectangle Grid.Column="3" Width="1" Height="18" Fill="{DynamicResource PrimaryFaint}"/>
+                                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Ellipse x:Name="StatusDot" Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="StatusText" FontSize="12" FontWeight="Bold"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid x:Name="DataBarBox" Height="4" Margin="12,0,12,8">
+                                        <Border CornerRadius="2" Background="{DynamicResource WhiteFaint}"/>
+                                        <Border x:Name="DataBar" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </k:Glass>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
                 <!-- ============================== Servers -->
@@ -600,36 +567,35 @@
                 </Grid>
             </Grid>
 
-            <!-- bottom bar -->
-            <Border x:Name="NavBar" Grid.Row="2" Margin="12,6,12,12" CornerRadius="18" Padding="4"
-                    Background="{DynamicResource Sheet}" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
+            <!-- bottom bar (HomeUi.kt BottomBar): glass bar, the chosen tab filled with the theme's gradient -->
+            <k:Glass x:Name="NavBar" Grid.Row="2" Margin="12,8,12,8" CornerRadius="20" Padding="4">
                 <UniformGrid Columns="4">
                     <RadioButton x:Name="TabHome" Style="{StaticResource NavTab}" IsChecked="True" Checked="Tab_Checked">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE80F;" FontSize="18"/>
-                            <TextBlock Text="{k:T 'Home'}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            <k:KIcon Kind="home" Width="20" Height="20" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="{k:T 'Home'}" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="TabServers" Style="{StaticResource NavTab}" Checked="Tab_Checked">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE774;" FontSize="18"/>
-                            <TextBlock Text="{k:T 'Servers'}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            <k:KIcon Kind="globe" Width="20" Height="20" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="{k:T 'Servers'}" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="TabSpeed" Style="{StaticResource NavTab}" Checked="Tab_Checked">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xEC4A;" FontSize="18"/>
-                            <TextBlock Text="{k:T 'Speed test'}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            <k:KIcon Kind="gauge" Width="20" Height="20" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="{k:T 'Speed test'}" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="TabSettings" Style="{StaticResource NavTab}" Checked="Tab_Checked">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE9E9;" FontSize="18"/>
-                            <TextBlock Text="{k:T 'Settings'}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            <k:KIcon Kind="sliders" Width="20" Height="20" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="{k:T 'Settings'}" HorizontalAlignment="Center" Margin="0,4,0,0" TextWrapping="NoWrap"/>
                         </StackPanel>
                     </RadioButton>
                 </UniformGrid>
-            </Border>
+            </k:Glass>
         </Grid>
     </Grid>
 </Window>
