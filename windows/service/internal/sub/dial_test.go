@@ -37,3 +37,18 @@ func TestDialByNameAndEveryHostInTheError(t *testing.T) {
 	}
 	t.Log(err)
 }
+
+func TestOnlyTheTwoSubHosts(t *testing.T) {
+	c := NewClient()
+	for _, base := range []string{FallbackHost, IranHost, oldHost} {
+		got := c.alternates(base, "/sub/kanki-1-abcd")
+		if len(got) != 2 {
+			t.Fatalf("%s: %v", base, got)
+		}
+		for _, u := range got {
+			if !strings.HasPrefix(u, FallbackHost) && !strings.HasPrefix(u, IranHost) {
+				t.Fatalf("%s: unexpected host in %v", base, got)
+			}
+		}
+	}
+}

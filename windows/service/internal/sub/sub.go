@@ -20,11 +20,13 @@ import (
 	"time"
 )
 
-// Kanki panel hosts; each one serves the same page and config links.
+// Kanki panel hosts; each one serves the same page and config links. Only
+// these two serve the subscription (plus the panel's own sub_base, if the
+// admin sets one); the old sub.kanki.pro is filtered in Iran and not used.
 const (
-	DefaultHost  = "https://sub.kanki.pro:2053"
 	FallbackHost = "https://fi.kankipro.cafe:2053"
 	IranHost     = "https://s1s.polimax.shop:2053"
+	oldHost      = "https://sub.kanki.pro:2053"
 )
 
 // Server is one config the Windows client can run.
@@ -73,7 +75,7 @@ func Normalize(input string) (string, string, error) {
 		return m[1], m[2], nil
 	}
 	if c := codeRe.FindString(s); c != "" {
-		return DefaultHost, c, nil
+		return FallbackHost, c, nil
 	}
 	return "", "", errors.New("not a subscription link or code")
 }
@@ -175,7 +177,6 @@ func (c *Client) kankiHosts() []string {
 	if c.subBase != "" {
 		hs = append(hs, c.subBase)
 	}
-	hs = append(hs, DefaultHost)
 	if c.preferred != "" {
 		hs = append([]string{c.preferred}, hs...)
 	}
@@ -205,6 +206,9 @@ func (c *Client) isKanki(base string) bool {
 
 // alternates gives the same path on every Kanki host (only for Kanki hosts).
 func (c *Client) alternates(base, path string) []string {
+	if base == oldHost {
+		base = FallbackHost // a link or a saved account from before
+	}
 	if !c.isKanki(base) {
 		return []string{base + path}
 	}
