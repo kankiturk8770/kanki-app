@@ -121,25 +121,91 @@ namespace KankiVPN
         static bool Trusted(SafePipeHandle h)
         {
             if (!GetNamedPipeServerProcessId(h, out var pid)) return false;
+            // kanki-svc.exe کنار همین برنامه در پوشه‌ی نصب است. از ProcessPath گرفته می‌شود نه
+            // AppContext.BaseDirectory: برنامه تک‌فایل است و BaseDirectory به پوشه‌ی موقتِ بازشدن
+            // کتابخانه‌های بومی اشاره می‌کند، نه پوشه‌ی نصب.
+            var appDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+            var expected = Path.GetFullPath(Path.Combine(appDir, "kanki-svc.exe"));
+            var image = Win32Image(pid);
+            if (image != null)
+                return string.Equals(Path.GetFullPath(image), expected, StringComparison.OrdinalIgnoreCase);
+            // کاربر عادی (حتی ادمینِ بدون «Run as administrator») اجازه‌ی باز کردن پروسه‌ی SYSTEM را ندارد؛
+            // پس OpenProcess رد می‌شد و «سرویس تأیید نشد» می‌آمد. مسیر را بدون باز کردن پروسه از
+            // ویندوز می‌گیریم (همان راهی که Task Manager می‌رود) و با مسیر دستگاهیِ پوشه‌ی نصب مقایسه می‌کنیم.
+            var nt = NtImage(pid);
+            var want = NtPath(expected);
+            return nt != null && want != null && string.Equals(nt, want, StringComparison.OrdinalIgnoreCase);
+        }
+
+        static string? Win32Image(uint pid)
+        {
             var proc = OpenProcess(ProcessQueryLimitedInformation, false, pid);
-            if (proc == IntPtr.Zero) return false;
+            if (proc == IntPtr.Zero) return null;
             try
             {
                 var sb = new StringBuilder(1024);
                 var size = sb.Capacity;
-                if (!QueryFullProcessImageName(proc, 0, sb, ref size)) return false;
-                // kanki-svc.exe کنار همین برنامه در پوشه‌ی نصب است. از ProcessPath گرفته می‌شود نه
-                // AppContext.BaseDirectory: برنامه تک‌فایل است و BaseDirectory به پوشه‌ی موقتِ بازشدن
-                // کتابخانه‌های بومی اشاره می‌کند، نه پوشه‌ی نصب (وگرنه «سرویس تأیید نشد» اشتباه می‌داد).
-                var appDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
-                var expected = Path.Combine(appDir, "kanki-svc.exe");
-                return string.Equals(Path.GetFullPath(sb.ToString()), Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase);
+                return QueryFullProcessImageName(proc, 0, sb, ref size) ? sb.ToString() : null;
             }
             finally
             {
                 CloseHandle(proc);
             }
         }
+
+        // \Device\HarddiskVolume3\Program Files\Kanki VPN\kanki-svc.exe
+        static string? NtImage(uint pid)
+        {
+            const int SystemProcessIdInformation = 88;
+            const ushort max = 4096;
+            var buf = Marshal.AllocHGlobal(max);
+            try
+            {
+                var info = new SystemProcessIdInfo
+                {
+                    ProcessId = (IntPtr)pid,
+                    ImageName = new UnicodeString { Length = 0, MaximumLength = max, Buffer = buf },
+                };
+                if (NtQuerySystemInformation(SystemProcessIdInformation, ref info, Marshal.SizeOf<SystemProcessIdInfo>(), out _) != 0)
+                    return null;
+                return Marshal.PtrToStringUni(info.ImageName.Buffer, info.ImageName.Length / 2);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buf);
+            }
+        }
+
+        // C:\x\y → \Device\HarddiskVolume3\x\y
+        static string? NtPath(string win32)
+        {
+            var root = Path.GetPathRoot(win32);
+            if (root is not { Length: >= 2 } || root[1] != ':') return null;
+            var sb = new StringBuilder(1024);
+            if (QueryDosDevice(root.Substring(0, 2), sb, sb.Capacity) == 0) return null;
+            return sb.ToString() + win32.Substring(2);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct UnicodeString
+        {
+            public ushort Length;
+            public ushort MaximumLength;
+            public IntPtr Buffer;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct SystemProcessIdInfo
+        {
+            public IntPtr ProcessId;
+            public UnicodeString ImageName;
+        }
+
+        [DllImport("ntdll.dll")]
+        static extern int NtQuerySystemInformation(int infoClass, ref SystemProcessIdInfo info, int length, out int returned);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "QueryDosDeviceW")]
+        static extern uint QueryDosDevice(string device, StringBuilder target, int max);
 
         const uint ProcessQueryLimitedInformation = 0x1000;
 

@@ -44,6 +44,25 @@ namespace KankiVPN
             AppDomain.CurrentDomain.UnhandledException += (_, x) => Crash(x.ExceptionObject);
             DispatcherUnhandledException += (_, x) => Crash(x.Exception);
             var args = e.Args;
+            // تست CI: همان کاری که برنامه موقع باز شدن با سرویس می‌کند (تأیید پایپ + hello)، از یک کاربر عادی
+            var check = Array.IndexOf(args, "--check-service");
+            if (check >= 0 && check + 1 < args.Length)
+            {
+                string result;
+                try
+                {
+                    using var p = new PipeClient();
+                    await p.Call("hello", null, 5000);
+                    result = "ok";
+                }
+                catch (Exception ex)
+                {
+                    result = ex.GetType().Name + ": " + ex.Message;
+                }
+                File.WriteAllText(args[check + 1], result);
+                Shutdown(result == "ok" ? 0 : 1);
+                return;
+            }
             var shot = Array.IndexOf(args, "--shot");
             if (shot >= 0 && shot + 1 < args.Length)
             {
