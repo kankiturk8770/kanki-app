@@ -11,17 +11,47 @@
     <RootNamespace>KankiVPN</RootNamespace>
     <ApplicationIcon>Assets\kanki.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Company>Kanki</Company>
     <Product>Kanki VPN</Product>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- no debug symbols in a release: less to read for anyone taking the program apart -->
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\map.png" />
     <Resource Include="Assets\vazir_regular.ttf" />
     <Resource Include="Assets\vazir_bold.ttf" />
+    <Resource Include="Assets\orbitron.ttf" />
     <Resource Include="Assets\kanki.ico" />
   </ItemGroup>
+
+  <!--
+    Obfuscation (CI: -p:Obfuscate=true, with the Obfuscar tool installed). Private and internal
+    names are renamed and strings hidden in the compiled app before it is bundled into the single
+    exe; public types stay as they are (XAML and JSON find them by name). Nothing is packed or
+    encrypted at run time, so antivirus programs see an ordinary .NET program.
+  -->
+  <Target Name="KankiObfuscate" AfterTargets="CoreCompile"
+          Condition="'$(Obfuscate)' == 'true' and '$(Configuration)' == 'Release' and !$(MSBuildProjectName.Contains('_wpftmp'))">
+    <PropertyGroup>
+      <ObfIn>$(ProjectDir)$(IntermediateOutputPath)</ObfIn>
+      <ObfOut>$(ProjectDir)$(IntermediateOutputPath)obf\</ObfOut>
+    </PropertyGroup>
+    <ItemGroup>
+      <ObfRefDir Include="@(ReferencePath->'%(RootDir)%(Directory)')" />
+      <ObfLine Include="&lt;?xml version='1.0'?&gt;&lt;Obfuscator&gt;" />
+      <ObfLine Include="&lt;Var name='InPath' value='$(ObfIn)' /&gt;&lt;Var name='OutPath' value='$(ObfOut)' /&gt;" />
+      <ObfLine Include="&lt;Var name='KeepPublicApi' value='true' /&gt;&lt;Var name='HidePrivateApi' value='true' /&gt;" />
+      <ObfLine Include="&lt;Var name='HideStrings' value='true' /&gt;&lt;Var name='RenameProperties' value='false' /&gt;&lt;Var name='RenameEvents' value='false' /&gt;" />
+      <ObfLine Include="@(ObfRefDir->Distinct()->'&lt;AssemblySearchPath path=&quot;%(Identity)&quot; /&gt;')" />
+      <ObfLine Include="&lt;Module file='$(ObfIn)$(TargetFileName)' /&gt;&lt;/Obfuscator&gt;" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(ObfIn)obfuscar.xml" Lines="@(ObfLine)" Overwrite="true" />
+    <Exec Command="obfuscar.console &quot;$(ObfIn)obfuscar.xml&quot;" />
+    <Copy SourceFiles="$(ObfOut)$(TargetFileName)" DestinationFolder="$(ObfIn)" />
+  </Target>
 
 </Project>

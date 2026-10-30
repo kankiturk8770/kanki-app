@@ -243,6 +243,21 @@ func (m *Manager) Refresh() (*sub.Account, error) {
 	return public(n), nil
 }
 
+// SubLink is the user's own subscription link (the account sheet copies it).
+func (m *Manager) SubLink() (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	a := m.saved.Account
+	if a == nil || a.Code == "" {
+		return "", errors.New("no subscription yet")
+	}
+	base := a.Base
+	if a.SubBase != "" {
+		base = a.SubBase
+	}
+	return base + "/sub/" + a.Code, nil
+}
+
 // Logout forgets the subscription and disconnects.
 func (m *Manager) Logout() {
 	m.Disconnect()

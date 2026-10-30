@@ -132,6 +132,12 @@ func Do(req Request, m *core.Manager, log *logx.Log, version string) Response {
 			return fail(err)
 		}
 		return ok(m.Settings())
+	case "sublink":
+		l, err := m.SubLink()
+		if err != nil {
+			return fail(err)
+		}
+		return ok(l)
 	case "ping":
 		return ok(m.Ping(args.Servers))
 	case "logs":

@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - "windows/**"
+      - "kmix-core/**"
+      - "mtun-core/**"
       - ".github/workflows/windows.yml"
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ jobs:
           cache-dependency-path: windows/service/go.sum
       - run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - run: go vet ./...
-      - run: GOOS=windows go vet ./...
+      - run: GOOS=windows go vet -tags tcp ./...
       - run: go test -race ./...
 
   build:
@@ -33,7 +35,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      VERSION: "1.0.0"
+      VERSION: "1.1.0"
+      # the same core versions as the Android app (build.yml)
+      XRAY_VERSION: v26.3.27
+      HY_VERSION: v2.12.3
+      GARBLE_VERSION: v0.17.0
       # https://www.wintun.net/builds/wintun-0.14.1.zip
       WINTUN_SHA256: 07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
     steps:
@@ -59,21 +65,46 @@ jobs:
           Copy-Item wintun\wintun\bin\amd64\wintun.dll "$env:windir\System32\"
           Get-Content windows\LICENSES.txt, wintun\wintun\LICENSE.txt | Set-Content dist\LICENSES.txt
 
-      - name: ساخت سرویس (Go)
+      - name: دریافت هسته‌های Xray و Hysteria2 (با چک SHA256)
+        shell: pwsh
+        run: |
+          $xb = "https://github.com/XTLS/Xray-core/releases/download/$env:XRAY_VERSION"
+          Invoke-WebRequest "$xb/Xray-windows-64.zip" -OutFile xray.zip
+          Invoke-WebRequest "$xb/Xray-windows-64.zip.dgst" -OutFile xray.dgst
+          $want = ((Get-Content xray.dgst | Where-Object { $_ -like 'SHA2-256*' } | Select-Object -First 1) -split '\s+')[1]
+          $got = (Get-FileHash xray.zip -Algorithm SHA256).Hash.ToLower()
+          if (-not $want -or $want -ne $got) { throw "Xray SHA256 mismatch: want=$want got=$got" }
+          Expand-Archive xray.zip -DestinationPath xr
+          Copy-Item xr\xray.exe dist\
+          $hb = "https://github.com/apernet/hysteria/releases/download/app%2F$env:HY_VERSION"
+          Invoke-WebRequest "$hb/hysteria-windows-amd64.exe" -OutFile dist\hysteria.exe
+          Invoke-WebRequest "$hb/hashes.txt" -OutFile hy-hashes.txt
+          $want = (Get-Content hy-hashes.txt | Where-Object { $_ -match 'hysteria-windows-amd64\.exe$' } | Select-Object -First 1) -split '\s+' | Select-Object -First 1
+          $got = (Get-FileHash dist\hysteria.exe -Algorithm SHA256).Hash.ToLower()
+          if (-not $want -or $want -ne $got) { throw "Hysteria SHA256 mismatch: want=$want got=$got" }
+          Add-Content dist\LICENSES.txt "`n- Xray-core $env:XRAY_VERSION (xray.exe), MPL-2.0, https://github.com/XTLS/Xray-core`n- Hysteria $env:HY_VERSION (hysteria.exe), MIT, https://github.com/apernet/hysteria`n- tun2socks, MIT, https://github.com/xjasonlyu/tun2socks`n"
+
+      # garble: names and strings of our code hidden in the exe; no packer (nothing for antivirus to flag)
+      - name: ساخت سرویس (Go، با garble)
         working-directory: windows/service
         env:
           CGO_ENABLED: "0"
-        run: go build -trimpath -ldflags "-s -w -X main.Version=${{ env.VERSION }}" -o ..\..\dist\kanki-svc.exe .\cmd\kanki-svc
+        run: |
+          go install mvdan.cc/garble@${{ env.GARBLE_VERSION }}
+          garble -literals -tiny build -tags tcp -trimpath -ldflags "-X main.Version=${{ env.VERSION }}" -o ..\..\dist\kanki-svc.exe .\cmd\kanki-svc
+          ..\..\dist\kanki-svc.exe version
 
       # روی خود ویندوز: ساختارهای WFP، و با دسترسی ادمین کارت شبکه، مسیرها، DNS و قوانین فایروال واقعی
       - name: تست سرویس روی ویندوز
         working-directory: windows/service
         env:
           KANKI_ADMIN_TESTS: "1"
-        run: go test -count=1 -v ./internal/firewall/ ./internal/tunnel/ ./internal/core/ ./internal/ipc/
+        run: go test -count=1 -tags tcp -v ./internal/firewall/ ./internal/tunnel/ ./internal/core/ ./internal/ipc/ ./internal/state/ ./internal/cores/
 
-      - name: ساخت برنامه (WPF)
-        run: dotnet publish windows\ui\KankiVPN\KankiVPN.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:Version=${{ env.VERSION }} -o publish
+      - name: ساخت برنامه (WPF، با Obfuscar)
+        run: |
+          dotnet tool install --global Obfuscar.GlobalTool
+          dotnet publish windows\ui\KankiVPN\KankiVPN.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:Version=${{ env.VERSION }} -p:Obfuscate=true -o publish
 
       - name: عکس صفحه‌ها
         shell: pwsh
@@ -82,7 +113,7 @@ jobs:
           $p = Start-Process -FilePath dist\KankiVPN.exe -ArgumentList '--shot', "$PWD\shots" -PassThru -Wait
           if (Test-Path shots\crash.log) { Get-Content shots\crash.log }
           $n = (Get-ChildItem shots -Filter *.png).Count
-          if ($n -ne 21) { throw "expected 21 screenshots, got $n (exit $($p.ExitCode))" }
+          if ($n -ne 28) { throw "expected 28 screenshots, got $n (exit $($p.ExitCode))" }
 
       - name: تست نصب سرویس و پایپ
         shell: pwsh
@@ -106,6 +137,8 @@ jobs:
             dist/KankiVPN.exe
             dist/kanki-svc.exe
             dist/wintun.dll
+            dist/xray.exe
+            dist/hysteria.exe
             dist/LICENSES.txt
       - uses: actions/upload-artifact@v4
         continue-on-error: true
@@ -118,13 +151,13 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
-          $names = 'fa-400-home', 'fa-400-servers', 'fa-400-settings', 'fa-400-login'
-          $sheet = New-Object System.Drawing.Bitmap 800, 360
+          $names = 'yellow-fa-home-on', 'yellow-fa-servers', 'yellow-fa-speed', 'crimson-fa-home-off'
+          $sheet = New-Object System.Drawing.Bitmap 800, 383
           $g = [System.Drawing.Graphics]::FromImage($sheet)
           $g.InterpolationMode = 'HighQualityBicubic'
           for ($i = 0; $i -lt 4; $i++) {
             $img = [System.Drawing.Image]::FromFile("$PWD\shots\$($names[$i]).png")
-            $g.DrawImage($img, $i * 200, 0, 200, 360)
+            $g.DrawImage($img, $i * 200, 0, 200, 383)
             $img.Dispose()
           }
           $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object MimeType -eq 'image/jpeg'

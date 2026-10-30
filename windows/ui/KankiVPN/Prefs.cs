@@ -12,6 +12,10 @@ namespace KankiVPN
         public string Lang { get; set; } = "fa";
         public string LastServer { get; set; } = "";
         public bool TrayHintShown { get; set; }
+        public string Theme { get; set; } = "yellow";
+        /// <summary>smart, gaming or anti (the three tiles on Home); a server picked by hand wins.</summary>
+        public string Mode { get; set; } = "smart";
+        public bool Manual { get; set; }
 
         static string PathOf() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KankiVPN", "ui.json");
 

@@ -14,6 +14,8 @@ namespace KankiVPN
         [JsonPropertyName("cc")] public string? Country { get; set; }
         [JsonPropertyName("city")] public string? City { get; set; }
         [JsonPropertyName("tunnel")] public bool Tunnel { get; set; }
+        [JsonPropertyName("lat")] public double Lat { get; set; }
+        [JsonPropertyName("lon")] public double Lon { get; set; }
     }
 
     public sealed class Account
@@ -24,6 +26,8 @@ namespace KankiVPN
         [JsonPropertyName("limit_gb")] public double LimitGb { get; set; }
         [JsonPropertyName("used_gb")] public double UsedGb { get; set; }
         [JsonPropertyName("notice")] public string? Notice { get; set; }
+        [JsonPropertyName("support")] public string? Support { get; set; }
+        [JsonPropertyName("max_conn")] public int MaxConn { get; set; }
         [JsonPropertyName("servers")] public List<Server> Servers { get; set; } = new();
     }
 
