@@ -160,25 +160,20 @@ jobs:
           name: windows-shots
           path: shots/
 
-      # four pages side by side as one small JPEG, as text in the log (readable even without artifacts)
+      # the main screens as JPEGs in the log (readable even without artifacts)
       - name: عکس‌ها در لاگ
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
-          $names = 'yellow-fa-home-off', 'yellow-fa-settings', 'yellow-fa-account', 'yellow-en-servers'
-          $sheet = New-Object System.Drawing.Bitmap 800, 383
-          $g = [System.Drawing.Graphics]::FromImage($sheet)
-          $g.InterpolationMode = 'HighQualityBicubic'
-          for ($i = 0; $i -lt 4; $i++) {
-            $img = [System.Drawing.Image]::FromFile("$PWD\shots\$($names[$i]).png")
-            $g.DrawImage($img, $i * 200, 0, 200, 383)
-            $img.Dispose()
-          }
           $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object MimeType -eq 'image/jpeg'
           $q = New-Object System.Drawing.Imaging.EncoderParameters 1
-          $q.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 70L
-          $sheet.Save("$PWD\sheet.jpg", $codec, $q)
-          $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\sheet.jpg"))
-          Write-Host "SHOT-BEGIN $($b.Length)"
-          for ($i = 0; $i -lt $b.Length; $i += 4000) { Write-Host ("SHOT " + $b.Substring($i, [Math]::Min(4000, $b.Length - $i))) }
-          Write-Host "SHOT-END"
+          $q.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 82L
+          foreach ($n in 'yellow-fa-home-off','yellow-fa-home-on','yellow-fa-servers','yellow-fa-speed','yellow-fa-settings','yellow-fa-account','yellow-fa-login','crimson-fa-home-on','yellow-en-home-on') {
+            $img = [System.Drawing.Image]::FromFile("$PWD\shots\$n.png")
+            $img.Save("$PWD\$n.jpg", $codec, $q)
+            $img.Dispose()
+            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\$n.jpg"))
+            Write-Host "SHOT-BEGIN $n"
+            for ($i = 0; $i -lt $b.Length; $i += 4000) { Write-Host ("SHOT " + $b.Substring($i, [Math]::Min(4000, $b.Length - $i))) }
+            Write-Host "SHOT-END $n"
+          }
