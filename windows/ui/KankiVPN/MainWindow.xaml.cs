@@ -133,7 +133,7 @@ namespace KankiVPN
             lastAt = now;
         }
 
-        static string Mbps(double v) => v.ToString(v < 10 ? "0.0" : "0", CultureInfo.InvariantCulture);
+        static string Mbps(double v) => v.ToString(v < 100 ? "0.0" : "0", CultureInfo.InvariantCulture);
 
         void ServiceOk()
         {
@@ -324,7 +324,7 @@ namespace KankiVPN
                 var stack = new StackPanel();
                 var head = new Button { Style = (Style)FindResource("Plain") };
                 var row = new DockPanel();
-                row.Children.Add(Docked(Flag(first.Country, 36), Dock.Right, new Thickness(10, 0, 0, 0)));
+                row.Children.Add(Docked(Flag(first.Country, 36), Dock.Left, new Thickness(0, 0, 10, 0)));
                 var best = BestPing(g);
                 var pingTxt = new TextBlock
                 {
@@ -332,9 +332,9 @@ namespace KankiVPN
                     FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight,
                 };
                 pingTxt.SetResourceReference(TextBlock.ForegroundProperty, PingBrush(best));
-                row.Children.Add(Docked(pingTxt, Dock.Left, new Thickness(0)));
+                row.Children.Add(Docked(pingTxt, Dock.Right, new Thickness(0)));
                 var names = new StackPanel();
-                var nm = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+                var nm = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
                 nm.Children.Add(new TextBlock { Text = Countries.Name(first.Country, first.Name), FontSize = 16, FontWeight = FontWeights.Bold });
                 if (g.Any(s => s.Id == cur && status.State == "connected"))
                 {
@@ -343,7 +343,7 @@ namespace KankiVPN
                     nm.Children.Add(dot);
                 }
                 names.Children.Add(nm);
-                names.Children.Add(new TextBlock { Text = Countries.City(first.Country, first.City), Style = (Style)FindResource("Small"), HorizontalAlignment = HorizontalAlignment.Right });
+                names.Children.Add(new TextBlock { Text = Countries.City(first.Country, first.City), Style = (Style)FindResource("Small"), HorizontalAlignment = HorizontalAlignment.Left });
                 row.Children.Add(names);
                 head.Content = row;
                 head.Click += (_, _) =>
@@ -407,12 +407,12 @@ namespace KankiVPN
         {
             var ms = pings.TryGetValue(s.Id, out var v) ? v : 0;
             var btn = new Button { Style = (Style)FindResource("Plain"), Margin = new Thickness(3) };
-            var b = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(selected ? 1.6 : 1), Padding = new Thickness(10, 8, 0, 8) };
+            var b = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(selected ? 1.6 : 1), Padding = new Thickness(0, 8, 0, 8) };
             b.SetResourceReference(Border.BorderBrushProperty, selected ? "Primary" : "Edge");
             b.SetResourceReference(Border.BackgroundProperty, selected ? "Sheet" : "Card");
             var d = new DockPanel();
             // the coloured edge: the protocol's family (Android protoColor)
-            var edge = new Border { Width = 3, CornerRadius = new CornerRadius(2), Margin = new Thickness(8, 0, 4, 0) };
+            var edge = new Border { Width = 3, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 8, 0) };
             edge.SetResourceReference(Border.BackgroundProperty, s.Proto switch
             {
                 "kankimix" or "microtun" => "ModeGame",
@@ -420,7 +420,7 @@ namespace KankiVPN
                 "amneziawg" => "Primary",
                 _ => "PrimaryLight",
             });
-            d.Children.Add(Docked(edge, Dock.Right, new Thickness(0)));
+            d.Children.Add(Docked(edge, Dock.Left, new Thickness(0, 0, 8, 0)));
             var left = new StackPanel { Orientation = Orientation.Horizontal, FlowDirection = FlowDirection.LeftToRight };
             if (ms < 0)
             {
@@ -435,8 +435,8 @@ namespace KankiVPN
                 left.Children.Add(t);
             }
             left.Children.Add(Bars(ms));
-            d.Children.Add(Docked(left, Dock.Left, new Thickness(0)));
-            var name = new TextBlock { Text = ProtoName(s.Proto), FontWeight = FontWeights.Bold, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FlowDirection = FlowDirection.LeftToRight, TextTrimming = TextTrimming.CharacterEllipsis };
+            d.Children.Add(Docked(left, Dock.Right, new Thickness(0, 0, 10, 0)));
+            var name = new TextBlock { Text = ProtoName(s.Proto), FontWeight = FontWeights.Bold, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             if (selected) name.SetResourceReference(TextBlock.ForegroundProperty, "Primary");
             d.Children.Add(name);
             b.Child = d;

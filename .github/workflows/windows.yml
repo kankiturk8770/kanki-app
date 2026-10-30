@@ -151,7 +151,7 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
-          $names = 'yellow-fa-home-on', 'yellow-fa-servers', 'yellow-fa-speed', 'crimson-fa-home-off'
+          $names = 'yellow-fa-home-off', 'yellow-fa-settings', 'yellow-fa-account', 'yellow-en-servers'
           $sheet = New-Object System.Drawing.Bitmap 800, 383
           $g = [System.Drawing.Graphics]::FromImage($sheet)
           $g.InterpolationMode = 'HighQualityBicubic'
