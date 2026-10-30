@@ -234,8 +234,26 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="press" Property="ScaleX" Value="0.965"/>
-                                <Setter TargetName="press" Property="ScaleY" Value="0.965"/>
+                                <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.09"/>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.09"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
