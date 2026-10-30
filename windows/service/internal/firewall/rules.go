@@ -151,19 +151,25 @@ func permitWireGuardService(session uintptr, baseObjects *baseObjects, weight ui
 	// Second condition is the SECURITY_DESCRIPTOR of the current process.
 	// This prevents other processes hosted in the same exe from matching this filter.
 	//
+	// Kanki: outside the service (kanki-svc debug, admin tests) the token has
+	// no service SID; then the program path alone is the condition.
+	numConditions := uint32(len(conditions))
+	var sdBlob wtFwpByteBlob
 	sd, err := getCurrentProcessSecurityDescriptor()
-	if err != nil {
+	if errors.Is(err, windows.ERROR_NO_SUCH_GROUP) {
+		numConditions = 1
+	} else if err != nil {
 		return wrapErr(err)
-	}
-
-	sdBlob := wtFwpByteBlob{sd.Length(), (*byte)(unsafe.Pointer(sd))}
-	conditions[1] = wtFwpmFilterCondition0{
-		fieldKey:  cFWPM_CONDITION_ALE_USER_ID,
-		matchType: cFWP_MATCH_EQUAL,
-		conditionValue: wtFwpConditionValue0{
-			_type: cFWP_SECURITY_DESCRIPTOR_TYPE,
-			value: uintptr(unsafe.Pointer(&sdBlob)),
-		},
+	} else {
+		sdBlob = wtFwpByteBlob{sd.Length(), (*byte)(unsafe.Pointer(sd))}
+		conditions[1] = wtFwpmFilterCondition0{
+			fieldKey:  cFWPM_CONDITION_ALE_USER_ID,
+			matchType: cFWP_MATCH_EQUAL,
+			conditionValue: wtFwpConditionValue0{
+				_type: cFWP_SECURITY_DESCRIPTOR_TYPE,
+				value: uintptr(unsafe.Pointer(&sdBlob)),
+			},
+		}
 	}
 
 	//
@@ -174,7 +180,7 @@ func permitWireGuardService(session uintptr, baseObjects *baseObjects, weight ui
 		subLayerKey:         baseObjects.filters,
 		weight:              filterWeight(weight),
 		flags:               cFWPM_FILTER_FLAG_CLEAR_ACTION_RIGHT,
-		numFilterConditions: uint32(len(conditions)),
+		numFilterConditions: numConditions,
 		filterCondition:     (*wtFwpmFilterCondition0)(unsafe.Pointer(&conditions)),
 		action: wtFwpmAction0{
 			_type: cFWP_ACTION_PERMIT,
