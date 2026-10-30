@@ -22,14 +22,40 @@ namespace KankiVPN
         Prefs prefs = new();
         MainWindow? window;
 
+        /// <summary>Where a crash is written: %AppData%\KankiVPN\crash.log (in screenshot mode, that folder).</summary>
+        static string crashLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KankiVPN", "crash.log");
+
+        static void Crash(object? error)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(crashLog)!);
+                File.AppendAllText(crashLog, DateTime.Now.ToString("u") + " " + error + Environment.NewLine);
+            }
+            catch
+            {
+                // nothing more to do
+            }
+        }
+
         protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            AppDomain.CurrentDomain.UnhandledException += (_, x) => Crash(x.ExceptionObject);
+            DispatcherUnhandledException += (_, x) => Crash(x.Exception);
             var args = e.Args;
             var shot = Array.IndexOf(args, "--shot");
             if (shot >= 0 && shot + 1 < args.Length)
             {
-                await Shots(args[shot + 1]);
+                crashLog = Path.Combine(args[shot + 1], "crash.log");
+                try
+                {
+                    await Shots(args[shot + 1]);
+                }
+                catch (Exception ex)
+                {
+                    Crash(ex);
+                }
                 Shutdown();
                 return;
             }

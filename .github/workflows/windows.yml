@@ -80,6 +80,7 @@ jobs:
         run: |
           Copy-Item publish\KankiVPN.exe dist\
           $p = Start-Process -FilePath dist\KankiVPN.exe -ArgumentList '--shot', "$PWD\shots" -PassThru -Wait
+          if (Test-Path shots\crash.log) { Get-Content shots\crash.log }
           $n = (Get-ChildItem shots -Filter *.png).Count
           if ($n -ne 20) { throw "expected 20 screenshots, got $n (exit $($p.ExitCode))" }
 
