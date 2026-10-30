@@ -214,8 +214,16 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
           if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then echo "Secrets TG_BOT_TOKEN / TG_CHAT_ID not set: skipped"; exit 0; fi
+          # فقط وقتی خود اپ اندروید عوض شده باشد APK فرستاده می‌شود (تغییر فقط-ویندوز APK تکراری نفرستد)
+          before="${{ github.event.before }}"
+          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$before^{commit}" 2>/dev/null; then
+            if ! git diff --name-only "$before" "$GITHUB_SHA" | grep -qE '^(app/|CHANGES\.md|README\.md|kmix-core/|mtun-core/)'; then
+              echo "no Android changes in this push: skip Telegram"; exit 0
+            fi
+          fi
           ver=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-          msg=$(git log -1 --pretty=%s | head -c 900)
+          # متن از CHANGES.md خودِ اندروید (بخش بالای فایل)، نه آخرین کامیت (که ممکن است ویندوز باشد)
+          msg=$(awk '/^# /{c++; next} c==1' CHANGES.md | sed 's/\*\*//g' | sed '/^[[:space:]]*$/d' | head -n 14)
           for f in out/*.apk; do
             case "$f" in *arm64*) kind="arm64 · بیشتر گوشی‌ها";; *armv7*) kind="armv7 · گوشی‌های قدیمی";; *) kind="";; esac
             curl -sS --retry 3 --max-time 300 -F chat_id="$TG_CHAT_ID" -F document=@"$f" \
