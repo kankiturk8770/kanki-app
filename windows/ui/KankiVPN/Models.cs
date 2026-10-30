@@ -28,7 +28,9 @@ namespace KankiVPN
         [JsonPropertyName("notice")] public string? Notice { get; set; }
         [JsonPropertyName("support")] public string? Support { get; set; }
         [JsonPropertyName("max_conn")] public int MaxConn { get; set; }
-        [JsonPropertyName("servers")] public List<Server> Servers { get; set; } = new();
+        // Go sends an empty list as null
+        [JsonPropertyName("servers")] public List<Server> Servers { get => servers; set => servers = value ?? new(); }
+        List<Server> servers = new();
     }
 
     public sealed class Status
@@ -51,8 +53,11 @@ namespace KankiVPN
         [JsonPropertyName("block_ipv6")] public bool BlockIPv6 { get; set; } = true;
         [JsonPropertyName("allow_lan")] public bool AllowLan { get; set; } = true;
         [JsonPropertyName("split_mode")] public string SplitMode { get; set; } = "all";
-        [JsonPropertyName("split_list")] public List<string> SplitList { get; set; } = new();
-        [JsonPropertyName("dns")] public List<string> Dns { get; set; } = new();
+        // Go sends an empty list as null
+        [JsonPropertyName("split_list")] public List<string> SplitList { get => splitList; set => splitList = value ?? new(); }
+        List<string> splitList = new();
+        [JsonPropertyName("dns")] public List<string> Dns { get => dns; set => dns = value ?? new(); }
+        List<string> dns = new();
         [JsonPropertyName("auto_connect")] public bool AutoConnect { get; set; }
         [JsonPropertyName("mtu")] public int Mtu { get; set; }
     }

@@ -42,7 +42,17 @@ namespace KankiVPN
         {
             base.OnStartup(e);
             AppDomain.CurrentDomain.UnhandledException += (_, x) => Crash(x.ExceptionObject);
-            DispatcherUnhandledException += (_, x) => Crash(x.Exception);
+            // one broken screen update must not close the whole app: write it down and keep going
+            DispatcherUnhandledException += (_, x) =>
+            {
+                Crash(x.Exception);
+                x.Handled = true;
+            };
+            TaskScheduler.UnobservedTaskException += (_, x) =>
+            {
+                Crash(x.Exception);
+                x.SetObserved();
+            };
             var args = e.Args;
             // تست CI: همان کاری که برنامه موقع باز شدن با سرویس می‌کند (تأیید پایپ + hello)، از یک کاربر عادی
             var check = Array.IndexOf(args, "--check-service");
