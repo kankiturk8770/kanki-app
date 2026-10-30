@@ -118,7 +118,7 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
-          $names = 'fa-400-home', 'fa-400-servers', 'fonts', 'en-400-home'
+          $names = 'fa-400-home', 'fa-400-servers', 'fa-400-settings', 'fa-400-login'
           $sheet = New-Object System.Drawing.Bitmap 800, 360
           $g = [System.Drawing.Graphics]::FromImage($sheet)
           $g.InterpolationMode = 'HighQualityBicubic'

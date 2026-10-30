@@ -205,8 +205,12 @@ namespace KankiVPN
                             dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, root.ActualWidth, root.ActualHeight));
                         bmp.Render(bg);
                         bmp.Render(root);
+                        // RenderTargetBitmap draws a right-to-left root mirrored; flip it back
+                        BitmapSource img = bmp;
+                        if (root.FlowDirection == FlowDirection.RightToLeft)
+                            img = new TransformedBitmap(bmp, new ScaleTransform(-1, 1));
                         var enc = new PngBitmapEncoder();
-                        enc.Frames.Add(BitmapFrame.Create(bmp));
+                        enc.Frames.Add(BitmapFrame.Create(img));
                         using (var f = File.Create(Path.Combine(dir, $"{lang}-{size.Item1}-{page}.png")))
                             enc.Save(f);
                         w.Quitting = true;
