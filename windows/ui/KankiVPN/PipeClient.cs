@@ -128,7 +128,11 @@ namespace KankiVPN
                 var sb = new StringBuilder(1024);
                 var size = sb.Capacity;
                 if (!QueryFullProcessImageName(proc, 0, sb, ref size)) return false;
-                var expected = Path.Combine(AppContext.BaseDirectory, "kanki-svc.exe");
+                // kanki-svc.exe کنار همین برنامه در پوشه‌ی نصب است. از ProcessPath گرفته می‌شود نه
+                // AppContext.BaseDirectory: برنامه تک‌فایل است و BaseDirectory به پوشه‌ی موقتِ بازشدن
+                // کتابخانه‌های بومی اشاره می‌کند، نه پوشه‌ی نصب (وگرنه «سرویس تأیید نشد» اشتباه می‌داد).
+                var appDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+                var expected = Path.Combine(appDir, "kanki-svc.exe");
                 return string.Equals(Path.GetFullPath(sb.ToString()), Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase);
             }
             finally
