@@ -175,10 +175,19 @@ object SubscriptionApi {
         c.connectTimeout = 15000
         c.readTimeout = 20000
         c.setRequestProperty("User-Agent", "KankiVPN-Android")
+        // شناسه‌ی گوشی (لیست دستگاه‌های پنل) و کانفیگ رمزشده (Seal.kt)
+        val dev = Seal.device
+        if (dev != null) {
+            c.setRequestProperty("X-Kanki-Device", dev)
+            c.setRequestProperty("X-Kanki-Seal", Seal.VERSION)
+        }
         try {
             val code = c.responseCode
             if (code != 200) throw IOException("HTTP $code")
-            return c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val body = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val sub = Seal.codeOf(url)
+            if (dev != null && sub != null && Seal.isSealed(body)) return Seal.open(body, sub, dev)
+            return body
         } finally {
             c.disconnect()
         }

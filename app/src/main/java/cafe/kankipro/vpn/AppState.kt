@@ -1150,6 +1150,9 @@ class AppState private constructor(context: Context) {
 
     private fun locateNodes() {
         val a = account ?: return
+        // سرورهایی که هنوز کشورشان معلوم نشد (مثلاً یک اینباند Xray که پنل خروجی‌اش را نداده)؛ در پاس دوم
+        // از روی IP خروجی به سرور هم‌خانه‌شان وصل می‌شوند تا جدا و بی‌کشور نمانند («قاطی پاتی» سرورهای Xray)
+        val unresolved = mutableListOf<String>()
         for ((nodeId, links) in a.configs.groupBy { it.node }) {
             val ex = a.exits[nodeId]
             // خروجی ایران (از نسخه‌های قبل) معتبر نیست: یعنی فقط تا سرور ایران رسیده بوده
@@ -1158,12 +1161,21 @@ class AppState private constructor(context: Context) {
                 runCatching { Geo(p[0].toDouble(), p[1].toDouble()) }.getOrNull()
             }
             val iso = ex?.iso ?: savedIso ?: isoOfFlag(flagOf(links.first().nodeName))
-            if (iso == null) { nodeIso.remove(nodeId); nodeGeo.remove(nodeId); continue }
+            if (iso == null) { nodeIso.remove(nodeId); nodeGeo.remove(nodeId); unresolved.add(nodeId); continue }
             nodeIso[nodeId] = iso
             val geo = ex?.geo ?: savedGeo?.takeIf { savedIso == iso } ?: geoOfIso(iso)
             if (geo != null) nodeGeo[nodeId] = geo else nodeGeo.remove(nodeId)
             val city = ex?.city?.takeIf { it.isNotBlank() } ?: prefs.getString("ncity_$nodeId", null)?.takeIf { savedIso == iso && it.isNotBlank() }
             if (city != null) nodeCity[nodeId] = city else nodeCity.remove(nodeId)
+        }
+        // پاس دوم: سرور بی‌کشور که IP خروجی‌اش با یک سرور شناخته‌شده یکی است، همان کشور/شهر/مکان را می‌گیرد
+        // (اینباند Xray روی همان سروری که WireGuard دارد ← زیر همان کشور، نه یک کارت جدا)
+        for (nodeId in unresolved) {
+            val ip = a.exits[nodeId]?.ip?.takeIf { it.isNotBlank() } ?: continue
+            val sibling = a.exits.entries.firstOrNull { it.key != nodeId && it.value.ip == ip && nodeIso.containsKey(it.key) }?.key ?: continue
+            nodeIso[sibling]?.let { nodeIso[nodeId] = it }
+            nodeGeo[sibling]?.let { nodeGeo[nodeId] = it } ?: nodeGeo.remove(nodeId)
+            nodeCity[sibling]?.let { nodeCity[nodeId] = it } ?: nodeCity.remove(nodeId)
         }
     }
 

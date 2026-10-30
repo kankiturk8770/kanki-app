@@ -14,3 +14,8 @@
 
 # نشانه‌هایی که بازتاب و کاتلین لازم دارند
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod, SourceFile, LineNumberTable
+
+# مبهم‌سازی قوی‌تر: کلاس‌هایی که نگه داشته نشده‌اند (کتابخانه‌ها) به ریشه منتقل و دسترسی‌هاشان بازتر می‌شود
+# تا R8 بیشتر ادغام و تغییرِ نام بدهد. کد cafe.kankipro.vpn و موتورها بالا نگه داشته شده‌اند، پس دست نمی‌خورند.
+-allowaccessmodification
+-repackageclasses ''

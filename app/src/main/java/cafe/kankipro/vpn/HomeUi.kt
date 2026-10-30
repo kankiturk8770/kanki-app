@@ -482,7 +482,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                     val a = .35f + .65f * tw
                     drawCircle(col.copy(alpha = .16f * a), sz * 4f, o)
                     drawCircle(col.copy(alpha = a), sz * .8f, o)
-                    if (s.size > 1.1f) {
+                    if (s.size > 1.1f && !Motion.lowEnd) {
                         val l = sz * 6f
                         drawLine(col.copy(alpha = .7f * a), Offset(o.x - l, o.y), Offset(o.x + l, o.y), .7.dp.toPx(), StrokeCap.Round)
                         drawLine(col.copy(alpha = .7f * a), Offset(o.x, o.y - l), Offset(o.x, o.y + l), .7.dp.toPx(), StrokeCap.Round)
@@ -494,21 +494,23 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 val goldA = 1f - gameA
                 if (goldA > .01f) neonRing(gold, c, r2, 1.2.dp.toPx(), strength = (.45f + .25f * lit) * goldA)
                 if (gameA > .01f) rgbRing(c, r2, 1.2.dp.toPx(), gameA, -deg * .6f)
-                if (goldA > .01f) {
+                // دنباله‌دارها فقط روی گوشی قوی (کم کردن کار نقاشی هر فریم روی گوشی ضعیف، بدون تغییر شکل دکمه)
+                if (goldA > .01f && !Motion.lowEnd) {
                     neonComet(K.GoldLight, deg, 80f, c, r2, 1.6.dp.toPx(), goldA)
                     neonComet(K.GoldLight, deg + 180f, 80f, c, r2, 1.6.dp.toPx(), goldA)
                 }
-                // ---- حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد
+                // ---- حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد (روی گوشی ضعیف نصف درجه‌ها، نرم‌تر)
                 rotate(-Math.toDegrees(tick.toDouble()).toFloat() * .35f, c) {
                     val r1 = r * 1.2f
-                    for (i in 0 until 72) {
-                        val a = Math.toRadians(i * 5.0)
-                        val major = i % 6 == 0
+                    val ticks = if (Motion.lowEnd) 36 else 72
+                    for (i in 0 until ticks) {
+                        val a = Math.toRadians(i * (360.0 / ticks))
+                        val major = i % (ticks / 12) == 0
                         val h = (if (major) 5f else 3f).dp.toPx()
                         val ca = cos(a).toFloat(); val sa = sin(a).toFloat()
                         // گیمینگ: هر درجه رنگ همان جای حلقه‌ی نئونی
                         val base = if (major) K.GoldLight else gold
-                        val tc = if (gameA > .01f) lerp(base, rgbAt(i / 72f), .85f * gameA) else base
+                        val tc = if (gameA > .01f) lerp(base, rgbAt(i.toFloat() / ticks), .85f * gameA) else base
                         drawLine(
                             tc.copy(alpha = if (major) .85f else .4f),
                             Offset(c.x + (r1 - h) * ca, c.y + (r1 - h) * sa), Offset(c.x + (r1 + h) * ca, c.y + (r1 + h) * sa),
