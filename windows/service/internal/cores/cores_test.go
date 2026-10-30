@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/netip"
 	"strings"
 	"testing"
@@ -87,14 +88,20 @@ func TestWgPingAgainstRealServer(t *testing.T) {
 		psk := [32]byte{7}
 		dev := device.NewDevice(tuntest.NewChannelTUN().TUN(), conn.NewDefaultBind(), device.NewLogger(device.LogLevelSilent, ""))
 		hx := func(b []byte) string { return fmt.Sprintf("%x", b) }
-		if err := dev.IpcSet("private_key=" + hx(srvPriv[:]) + "\nlisten_port=" + fmt.Sprint(51900+len(awg)) + "\n" + awg +
+		// a free port (a fixed one can sit in a range Windows reserved on the CI machine)
+		pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := fmt.Sprint(pc.LocalAddr().(*net.UDPAddr).Port)
+		pc.Close()
+		if err := dev.IpcSet("private_key=" + hx(srvPriv[:]) + "\nlisten_port=" + port + "\n" + awg +
 			"public_key=" + hx(cliPub) + "\npreshared_key=" + hx(psk[:]) + "\nallowed_ip=10.9.0.2/32\n"); err != nil {
 			t.Fatal(err)
 		}
 		if err := dev.Up(); err != nil {
 			t.Fatal(err)
 		}
-		port := fmt.Sprint(51900 + len(awg))
 		b64 := base64.StdEncoding.EncodeToString
 		cfg := "[Interface]\nPrivateKey = " + b64(cliPriv[:]) + "\n"
 		for _, l := range strings.Split(strings.TrimSpace(awg), "\n") {
