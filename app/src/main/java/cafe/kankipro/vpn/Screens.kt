@@ -13,6 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -88,7 +91,18 @@ fun LoginScreen(state: AppState) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
-                    placeholder = { T("- - - - - - - - - -", size = 16.sp, color = K.Sub.copy(alpha = .45f), font = Poppins, weight = FontWeight.SemiBold, ltr = true) },
+                    // خط‌چین کل عرض فیلد (نه چند خط تیره‌ی کوتاه وسط)
+                    placeholder = {
+                        Canvas(Modifier.fillMaxWidth().height(2.dp)) {
+                            val y = size.height / 2
+                            drawLine(
+                                color = K.Sub.copy(alpha = .45f),
+                                start = Offset(0f, y), end = Offset(size.width, y),
+                                strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 7.dp.toPx())),
+                            )
+                        }
+                    },
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     colors = OutlinedTextFieldDefaults.colors(
