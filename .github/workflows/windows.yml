@@ -116,6 +116,20 @@ jobs:
           $n = (Get-ChildItem shots -Filter *.png).Count
           if ($n -ne 28) { throw "expected 28 screenshots, got $n (exit $($p.ExitCode))" }
 
+      # همه‌ی عکس‌ها در شاخه‌ی shots-windows (مثل shots اندروید)، برای مقایسه‌ی کنار هم با اندروید
+      - name: عکس‌ها در شاخه‌ی shots-windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd shots
+          git init -q -b shots-windows
+          git config user.name "kanki-shots"
+          git config user.email "shots@users.noreply.github.com"
+          git add -A
+          git commit -qm "windows screenshots of ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" shots-windows
+
       - name: تست نصب سرویس و پایپ
         shell: pwsh
         run: .\windows\installer\smoke.ps1 dist
