@@ -1,0 +1,506 @@
+<Application x:Class="KankiVPN.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:k="clr-namespace:KankiVPN"
+             ShutdownMode="OnExplicitShutdown">
+    <!-- Colours are set by Theme.Apply (the Android app's yellow and crimson themes); every
+         themed brush below is a DynamicResource so a theme change repaints at once. -->
+    <Application.Resources>
+        <FontFamily x:Key="Vazir">pack://application:,,,/Assets/#Vazirmatn</FontFamily>
+        <!-- the Android app's fonts: Vazirmatn in six weights, Poppins for numbers, Orbitron Black for the name -->
+        <FontFamily x:Key="Brand">pack://application:,,,/Assets/#Orbitron Black</FontFamily>
+        <FontFamily x:Key="Poppins">pack://application:,,,/Assets/#Poppins</FontFamily>
+        <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Small" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Icon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Icons}"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="FlowDirection" Value="LeftToRight"/>
+        </Style>
+
+        <!-- the glass card of the Android app: dark fill, thin themed edge, rounded -->
+        <Style x:Key="CardBox" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Card}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Edge}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="14,12"/>
+        </Style>
+
+        <!-- a plain clickable area (cards, cells, rows) with a visible keyboard focus -->
+        <Style x:Key="Plain" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="Transparent" BorderThickness="1" BorderBrush="Transparent" CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- the buttons of the Android app (Ui.kt GoldButton, Kit.kt SmallGold, Ui.kt LineButton): a gold gradient
+             with a soft glow, or a dark one with a coloured edge; both give a little when pressed (pressable) -->
+        <Style x:Key="BigButton" TargetType="Button">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnPrimary}"/>
+            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform><ScaleTransform x:Name="press"/></Grid.RenderTransform>
+                            <k:Glass x:Name="b" Kind="Gold" CornerRadius="20" Tint="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Border x:Name="focus" CornerRadius="20" BorderThickness="2" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.09"/>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.09"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SmallGold" TargetType="Button">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnPrimary}"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform><ScaleTransform x:Name="press"/></Grid.RenderTransform>
+                            <k:Glass x:Name="b" Kind="Gold" CornerRadius="12" Tint="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Border x:Name="focus" CornerRadius="12" BorderThickness="2" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.09"/>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.09"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Outline" TargetType="Button">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+            <Setter Property="MinHeight" Value="48"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Tag" Value="Primary"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform><ScaleTransform x:Name="press"/></Grid.RenderTransform>
+                            <k:Glass x:Name="b" Kind="Line" CornerRadius="20" Tint="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Border x:Name="focus" CornerRadius="20" BorderThickness="2" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.09"/>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.09"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Kit.kt SmallLine: a small button with a thin coloured edge -->
+        <Style x:Key="SmallLine" TargetType="Button" BasedOn="{StaticResource Outline}">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform><ScaleTransform x:Name="press"/></Grid.RenderTransform>
+                            <k:Glass x:Name="b" Kind="Line" CornerRadius="12" Tint="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Border x:Name="focus" CornerRadius="12" BorderThickness="2" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="0.965" Duration="0:0:0.09"/>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="0.965" Duration="0:0:0.09"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="press" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.4">
+                                            <DoubleAnimation.EasingFunction><ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- no scroll bars, as on Android (the wheel and the touchpad still scroll) -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Hidden"/>
+        </Style>
+
+        <!-- bottom bar tab (HomeUi.kt BottomBar): icon over label; the chosen one filled with the theme's gradient -->
+        <Style x:Key="NavTab" TargetType="RadioButton">
+            <Setter Property="GroupName" Value="nav"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Margin="2" Background="Transparent">
+                            <k:Glass x:Name="sel" Kind="Nav" CornerRadius="16" Visibility="Collapsed"/>
+                            <Border x:Name="focus" CornerRadius="16" BorderThickness="1.5" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="0,8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="sel" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OnNav}"/>
+                                <Setter Property="FontWeight" Value="Black"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Home mode tile (ModesUi.kt modeGlass): glass of its own mode colour (Tag), lit when chosen -->
+        <Style x:Key="ModeTile" TargetType="RadioButton">
+            <Setter Property="GroupName" Value="mode"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Margin="4,0">
+                            <k:Glass x:Name="b" Kind="Mode" CornerRadius="12" Height="52"
+                                     Tint="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                     Selected="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </k:Glass>
+                            <Border x:Name="focus" CornerRadius="12" BorderThickness="1.5" BorderBrush="Transparent"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- a switch: label (content) and the pill knob at the end -->
+        <!-- a setting with a switch (SettingsUi.kt SwitchRow, Material 3 switch in the theme's colours) -->
+        <Style x:Key="Switch" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MinHeight" Value="52"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Border x:Name="track" Grid.Column="1" Width="52" Height="32" CornerRadius="16" VerticalAlignment="Center"
+                                    Background="{DynamicResource SwitchOff}" BorderThickness="2" BorderBrush="{DynamicResource SwitchOff}">
+                                <Ellipse x:Name="knob" Width="16" Height="16" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="6,0"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="track" Property="Background" Value="{DynamicResource ToggleOn}"/>
+                                <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource ToggleOn}"/>
+                                <Setter TargetName="knob" Property="Fill" Value="{DynamicResource OnPrimary}"/>
+                                <Setter TargetName="knob" Property="Width" Value="24"/>
+                                <Setter TargetName="knob" Property="Height" Value="24"/>
+                                <Setter TargetName="knob" Property="Margin" Value="2,0"/>
+                                <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- one choice of a list (SettingsUi.kt DnsRow with HomeUi.kt CheckMark) -->
+        <Style x:Key="Choice" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <StackPanel Orientation="Horizontal" Background="Transparent" Margin="4,0">
+                            <Grid Width="20" Height="20" VerticalAlignment="Center">
+                                <Ellipse x:Name="ring" Stroke="{DynamicResource SubRing}" StrokeThickness="1.5"/>
+                                <k:KIcon x:Name="tick" Kind="check" Fill="{DynamicResource Connected}" Visibility="Collapsed"/>
+                            </Grid>
+                            <ContentPresenter VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="ring" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ring" Property="Stroke" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Kit.kt Segmented: the chosen one gold -->
+        <Style x:Key="Segment" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent">
+                            <k:Glass x:Name="b" Kind="Gold" CornerRadius="12" Visibility="Collapsed"/>
+                            <Border x:Name="focus" CornerRadius="12" BorderThickness="1.5" BorderBrush="Transparent"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="b" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OnPrimary}"/>
+                                <Setter Property="FontWeight" Value="Black"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focus" Property="BorderBrush" Value="{DynamicResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- a section title (SettingsUi.kt Group) -->
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="Margin" Value="4,16,4,8"/>
+        </Style>
+
+        <!-- the subscription code field (Screens.kt LoginScreen: OutlinedTextField) -->
+        <Style x:Key="CodeBox" TargetType="TextBox">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontFamily" Value="{StaticResource Poppins}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Primary}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryDark}"/>
+            <Setter Property="MinHeight" Value="56"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Grid>
+                            <Border x:Name="b" Background="#66000000" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource PrimaryField}"/>
+                            <TextBlock x:Name="hint" Text="- - - - - - - - - -" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                       FontFamily="{StaticResource Poppins}" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource SubFaint}"
+                                       IsHitTestVisible="False" Visibility="Collapsed"/>
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="hint" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Primary}"/>
+                                <Setter TargetName="b" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Primary}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryDark}"/>
+            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="b" Background="#66000000" CornerRadius="16"
+                                BorderThickness="1" BorderBrush="{DynamicResource PrimaryField}">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Primary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ToolTip">
+            <Setter Property="FontFamily" Value="{StaticResource Vazir}"/>
+        </Style>
+    </Application.Resources>
+</Application>

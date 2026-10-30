@@ -1,0 +1,20 @@
+Kanki VPN for Windows uses these open source parts:
+
+- amneziawg-go (WireGuard / AmneziaWG engine), MIT License,
+  https://github.com/amnezia-vpn/amneziawg-go
+- WireGuard for Windows: winipcfg and the firewall (WFP) rules, MIT License,
+  Copyright (C) 2019-2026 WireGuard LLC, https://git.zx2c4.com/wireguard-windows
+- Wintun (wintun.dll), distributed unmodified under the Wintun Prebuilt
+  Binaries License (included below), https://www.wintun.net
+- go-winio (named pipes), MIT License, https://github.com/microsoft/go-winio
+- Vazirmatn font, SIL Open Font License 1.1, https://github.com/rastikerdar/vazirmatn
+  (family name of the Medium, SemiBold, ExtraBold and Black files set to "Vazirmatn")
+- Poppins font, SIL Open Font License 1.1, https://github.com/google/fonts/tree/main/ofl/poppins
+  (family name of the SemiBold file set to "Poppins")
+- Orbitron font, SIL Open Font License 1.1, https://github.com/google/fonts/tree/main/ofl/orbitron
+  (the weight 900 instance of the variable font)
+- The map: Natural Earth admin 0 countries (1:50m), public domain, https://www.naturalearthdata.com
+  (points thinned and packed by windows/tools/packmap.py)
+- Flags: the waving flags of Noto Emoji (third_party/region-flags), public domain,
+  https://github.com/googlefonts/noto-emoji
+

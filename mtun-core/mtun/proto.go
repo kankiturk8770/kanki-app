@@ -1,4 +1,4 @@
-package main
+package mtun
 
 import (
 	"crypto/aes"

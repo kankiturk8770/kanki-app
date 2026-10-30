@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -45,7 +44,7 @@ func HasTCP() bool { return true }
 // tunWriter بسته‌های خروجی پشته (SYN-ACK، داده، ...) را در TUN می‌نویسد.
 type tunWriter struct {
 	ep *channel.Endpoint
-	tf *os.File
+	tf io.Writer
 }
 
 func (w *tunWriter) WriteNotify() {
@@ -64,7 +63,7 @@ func (w *tunWriter) WriteNotify() {
 	}
 }
 
-func startTCP(tf *os.File, mtu int) error {
+func startTCP(tf io.Writer, mtu int) error {
 	s := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol},
