@@ -53,7 +53,7 @@
                                    FontSize="14" TextAlignment="Center" Margin="0,16,0,16"/>
                         <TextBox x:Name="SubInput" FlowDirection="LeftToRight" KeyDown="SubInput_KeyDown"
                                  AutomationProperties.Name="{k:T 'Subscription link or code'}"/>
-                        <Button x:Name="AddSubBtn" Style="{StaticResource Primary}" Content="{k:T 'Sign in'}" Margin="0,12,0,0" Click="AddSub_Click"/>
+                        <Button x:Name="AddSubBtn" Style="{StaticResource BigButton}" Content="{k:T 'Sign in'}" Margin="0,12,0,0" Click="AddSub_Click"/>
                         <TextBlock x:Name="LoginError" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,12,0,0" TextAlignment="Center"/>
                     </StackPanel>
                 </Grid>
@@ -147,7 +147,7 @@
 
                     <!-- the server in use; opens the list -->
                     <Button x:Name="ServerCard" Grid.Row="2" Style="{StaticResource Plain}" Click="ServerCard_Click" Margin="0,4,0,8">
-                        <Border Style="{StaticResource Card}" BorderBrush="{DynamicResource EdgeStrong}" Padding="12,8">
+                        <Border Style="{StaticResource CardBox}" BorderBrush="{DynamicResource EdgeStrong}" Padding="12,8">
                             <DockPanel>
                                 <Border x:Name="CardCc" DockPanel.Dock="Right" Width="34" Height="34" CornerRadius="17" Margin="10,0,0,0"
                                         Background="{DynamicResource Surface}" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
@@ -189,7 +189,7 @@
                             </StackPanel>
                         </RadioButton>
                     </UniformGrid>
-                    <Border Grid.Row="4" Style="{StaticResource Card}" Padding="12,8" Margin="0,8,0,0">
+                    <Border Grid.Row="4" Style="{StaticResource CardBox}" Padding="12,8" Margin="0,8,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE735;" FontSize="12" Foreground="{DynamicResource Primary}" Margin="0,0,8,0"/>
                             <TextBlock x:Name="ModeHint" FontSize="12" Foreground="{DynamicResource Muted}"/>
@@ -197,7 +197,7 @@
                     </Border>
 
                     <!-- ping, download, upload -->
-                    <Border Grid.Row="5" Style="{StaticResource Card}" Margin="0,8,0,0" Padding="12,8">
+                    <Border Grid.Row="5" Style="{StaticResource CardBox}" Margin="0,8,0,0" Padding="12,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition/>
@@ -232,7 +232,7 @@
 
                     <!-- data left, days left, status; the bar is the data left -->
                     <Button Grid.Row="6" Style="{StaticResource Plain}" Click="Account_Click" Margin="0,8,0,12">
-                        <Border Style="{StaticResource Card}" Padding="14,8">
+                        <Border Style="{StaticResource CardBox}" Padding="14,8">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -259,7 +259,7 @@
                 <!-- ============================== Servers -->
                 <ScrollViewer x:Name="ServersPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="16,4,16,16">
-                        <Border Style="{StaticResource Card}" BorderBrush="{DynamicResource EdgeStrong}" Padding="14">
+                        <Border Style="{StaticResource CardBox}" BorderBrush="{DynamicResource EdgeStrong}" Padding="14">
                             <DockPanel>
                                 <Image DockPanel.Dock="Right" Source="pack://application:,,,/Assets/logo.png" Width="56" Height="56"
                                        RenderOptions.BitmapScalingMode="HighQuality" Margin="12,0,0,0"/>
@@ -277,10 +277,10 @@
                                 </StackPanel>
                             </DockPanel>
                         </Border>
-                        <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                        <Border Style="{StaticResource CardBox}" Margin="0,10,0,0">
                             <StackPanel>
                                 <DockPanel>
-                                    <Button x:Name="PingAllBtn" DockPanel.Dock="Left" Style="{StaticResource Primary}" MinHeight="38" Padding="22,4"
+                                    <Button x:Name="PingAllBtn" DockPanel.Dock="Left" Style="{StaticResource BigButton}" MinHeight="38" Padding="22,4"
                                             Content="{k:T 'Again'}" Click="PingAll_Click"/>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{k:T 'Ping all'}" FontSize="16" FontWeight="Bold"/>
@@ -304,7 +304,7 @@
                     <StackPanel Margin="16,4,16,16">
                         <TextBlock Text="{k:T 'Speed test'}" FontSize="20" FontWeight="Bold"/>
                         <TextBlock x:Name="SpeedWhere" Style="{StaticResource Small}"/>
-                        <Border Style="{StaticResource Card}" Margin="0,12,0,0" Padding="14">
+                        <Border Style="{StaticResource CardBox}" Margin="0,12,0,0" Padding="14">
                             <StackPanel>
                                 <UniformGrid Columns="3">
                                     <Border x:Name="ChipPing" CornerRadius="14" Padding="6,4" Margin="3" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
@@ -320,7 +320,7 @@
                                 <Canvas x:Name="Gauge" Width="260" Height="230" Margin="0,8,0,0" FlowDirection="LeftToRight"/>
                                 <TextBlock x:Name="GaugeLabel" HorizontalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Connected}" Margin="0,-10,0,8"/>
                                 <UniformGrid Columns="2">
-                                    <Border Style="{StaticResource Card}" Margin="3" Padding="12,8">
+                                    <Border Style="{StaticResource CardBox}" Margin="3" Padding="12,8">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE896;" Foreground="{DynamicResource Primary}"/>
                                             <StackPanel HorizontalAlignment="Right">
@@ -329,7 +329,7 @@
                                             </StackPanel>
                                         </DockPanel>
                                     </Border>
-                                    <Border Style="{StaticResource Card}" Margin="3" Padding="12,8">
+                                    <Border Style="{StaticResource CardBox}" Margin="3" Padding="12,8">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE898;" Foreground="{DynamicResource Primary}"/>
                                             <StackPanel HorizontalAlignment="Right">
@@ -338,7 +338,7 @@
                                             </StackPanel>
                                         </DockPanel>
                                     </Border>
-                                    <Border Style="{StaticResource Card}" Margin="3" Padding="12,8">
+                                    <Border Style="{StaticResource CardBox}" Margin="3" Padding="12,8">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE9D2;" Foreground="{DynamicResource Primary}"/>
                                             <StackPanel HorizontalAlignment="Right">
@@ -347,7 +347,7 @@
                                             </StackPanel>
                                         </DockPanel>
                                     </Border>
-                                    <Border Style="{StaticResource Card}" Margin="3" Padding="12,8">
+                                    <Border Style="{StaticResource CardBox}" Margin="3" Padding="12,8">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE916;" Foreground="{DynamicResource Primary}"/>
                                             <StackPanel HorizontalAlignment="Right">
@@ -359,7 +359,7 @@
                                 </UniformGrid>
                                 <TextBlock x:Name="SpLoss" Style="{StaticResource Small}" Margin="4,10,4,0"/>
                                 <TextBlock Style="{StaticResource Small}" Margin="4,2,4,0"><Run Text="{k:T 'Test server:'}"/><Run Text=" Cloudflare" FontWeight="Bold"/></TextBlock>
-                                <Button x:Name="SpeedBtn" Style="{StaticResource Primary}" Content="{k:T 'Start test'}" Margin="0,14,0,0" Click="Speed_Click"/>
+                                <Button x:Name="SpeedBtn" Style="{StaticResource BigButton}" Content="{k:T 'Start test'}" Margin="0,14,0,0" Click="Speed_Click"/>
                                 <TextBlock x:Name="SpUsed" Style="{StaticResource Small}" Margin="4,8,4,0"/>
                             </StackPanel>
                         </Border>
@@ -372,7 +372,7 @@
                         <TextBlock Text="{k:T 'Settings'}" FontSize="20" FontWeight="Bold"/>
 
                         <TextBlock Style="{StaticResource Section}" Text="{k:T 'Connection'}"/>
-                        <Border Style="{StaticResource Card}">
+                        <Border Style="{StaticResource CardBox}">
                             <StackPanel>
                                 <Button Style="{StaticResource Plain}" Click="Dns_Click">
                                     <DockPanel Margin="0,4">
@@ -451,7 +451,7 @@
                         </Border>
 
                         <TextBlock Style="{StaticResource Section}" Text="{k:T 'Look and language'}"/>
-                        <Border Style="{StaticResource Card}">
+                        <Border Style="{StaticResource CardBox}">
                             <StackPanel>
                                 <DockPanel Margin="0,4">
                                     <Border DockPanel.Dock="Right" Width="36" Height="36" CornerRadius="10" Margin="10,0,0,0" Background="{DynamicResource Surface}" BorderThickness="1" BorderBrush="{DynamicResource Edge}">
@@ -484,7 +484,7 @@
                         </Border>
 
                         <TextBlock Style="{StaticResource Section}" Text="{k:T 'Account and support'}"/>
-                        <Border Style="{StaticResource Card}">
+                        <Border Style="{StaticResource CardBox}">
                             <StackPanel>
                                 <Button Style="{StaticResource Plain}" Click="Account_Click">
                                     <DockPanel Margin="0,4">
@@ -537,7 +537,7 @@
 
                 <!-- ============================== account sheet (over Home, like Android) -->
                 <Grid x:Name="AccountSheet" Visibility="Collapsed" Panel.ZIndex="10" Background="#B3000000">
-                    <Border Style="{StaticResource Card}" Background="{DynamicResource Sheet}" BorderBrush="{DynamicResource EdgeStrong}"
+                    <Border Style="{StaticResource CardBox}" Background="{DynamicResource Sheet}" BorderBrush="{DynamicResource EdgeStrong}"
                             VerticalAlignment="Center" Margin="16,0" Padding="18">
                         <StackPanel>
                             <DockPanel>
@@ -580,7 +580,7 @@
                                 <TextBlock Grid.Row="5" Text="{k:T 'Connections at once'}" Style="{StaticResource Small}" FontSize="13" Margin="0,4"/>
                                 <TextBlock x:Name="AccConn" Grid.Row="5" Grid.Column="1" FontWeight="Bold" Margin="0,4"/>
                             </Grid>
-                            <Button Style="{StaticResource Primary}" Content="{k:T 'Renew service'}" Margin="0,16,0,0" Click="Renew_Click"/>
+                            <Button Style="{StaticResource BigButton}" Content="{k:T 'Renew service'}" Margin="0,16,0,0" Click="Renew_Click"/>
                             <UniformGrid Columns="3" Margin="-4,8,-4,0">
                                 <Button Style="{StaticResource Outline}" Content="{k:T 'Refresh'}" Margin="4,0" Padding="6,4" Click="Refresh_Click"/>
                                 <Button Style="{StaticResource Outline}" Content="{k:T 'Copy sub link'}" Margin="4,0" Padding="6,4" Click="CopySub_Click"/>

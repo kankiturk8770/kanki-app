@@ -319,7 +319,7 @@ namespace KankiVPN
                 var key = g.Key;
                 var open = openCountry == key || (openCountry == null && g.Any(s => s.Id == cur));
                 var first = g.First();
-                var card = new Border { Style = (Style)FindResource("Card"), Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(12, 10, 12, 10) };
+                var card = new Border { Style = (Style)FindResource("CardBox"), Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(12, 10, 12, 10) };
                 if (g.Any(s => s.Id == cur)) card.SetResourceReference(Border.BorderBrushProperty, "EdgeStrong");
                 var stack = new StackPanel();
                 var head = new Button { Style = (Style)FindResource("Plain") };

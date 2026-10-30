@@ -32,7 +32,7 @@
         </Style>
 
         <!-- the glass card of the Android app: dark fill, thin themed edge, rounded -->
-        <Style x:Key="Card" TargetType="Border">
+        <Style x:Key="CardBox" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource Card}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource Edge}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -65,7 +65,7 @@
         </Style>
 
         <!-- the big themed button (Android: "تست دوباره", "تمدید سرویس") -->
-        <Style x:Key="Primary" TargetType="Button">
+        <Style x:Key="BigButton" TargetType="Button">
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{DynamicResource OnNav}"/>
@@ -94,7 +94,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="Outline" TargetType="Button" BasedOn="{StaticResource Primary}">
+        <Style x:Key="Outline" TargetType="Button" BasedOn="{StaticResource BigButton}">
             <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="14"/>
