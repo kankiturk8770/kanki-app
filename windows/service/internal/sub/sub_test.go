@@ -104,7 +104,7 @@ func TestNormalize(t *testing.T) {
 		t.Fatal(b, c, err)
 	}
 	b, c, err = Normalize("code: kanki-12-abcd1234")
-	if err != nil || b != DefaultHost || c != "kanki-12-abcd1234" {
+	if err != nil || b != FallbackHost || c != "kanki-12-abcd1234" {
 		t.Fatal(b, c, err)
 	}
 	if _, _, err = Normalize("hello"); err == nil {
