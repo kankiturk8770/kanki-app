@@ -39,6 +39,9 @@
 - اشتراک را `windows/service/internal/sub` می‌خواند (مثل `SubscriptionApi.kt`): هر تغییر شکل صفحه‌ی اشتراک پنل هر دو را
   عوض می‌کند. پروتکل‌ها: WireGuard، AmneziaWG، KANKI MIX، microtun، VLESS، Hysteria2 (OpenVPN نه).
 - ظاهر ویندوز کپی اندروید است (تم زرد و زرشکی، `Theme.cs`)؛ هر تغییر ظاهر اندروید باید در `windows/ui` هم بیاید.
+  کد کشیدن اندروید خط به خط به C# آمده: `Gfx.cs` (رنگ با Oklab، گرادیان، ساعت ۶۰ فریم)، `Draw.cs` (`goldGlass`، آیکن‌ها،
+  `Logo3D`، `SpeedGauge`، `PingPulse`، `KankiBackground`)، `Orb.cs` (`OrbButton` و تعقیب گیمینگ)، `WorldMap.cs`. هر تابع
+  کشیدن اندروید که عوض شد، همان تابع در این فایل‌ها هم عوض شود. عکس‌های ویندوز در شاخه‌ی `shots-windows`.
 - تست: `cd windows/service && go test -race ./...` و `GOOS=windows go vet ./...`. ساخت C# و تست‌های ادمین (کارت شبکه، WFP)
   فقط در CI (`.github/workflows/windows.yml`). متن UI در `Strings.cs` (انگلیسی ← فارسی). نسخه: `VERSION` در همان workflow،
   `Version` در `KankiVPN.csproj` و `windows/CHANGES.md`.

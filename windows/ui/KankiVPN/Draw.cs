@@ -134,8 +134,8 @@ namespace KankiVPN
         public Glass()
         {
             CornerRadius = new CornerRadius(16);
-            Loaded += (_, _) => Theme.Changed += InvalidateVisual;
-            Unloaded += (_, _) => Theme.Changed -= InvalidateVisual;
+            Loaded += (_, _) => { Theme.Changed += InvalidateVisual; };
+            Unloaded += (_, _) => { Theme.Changed -= InvalidateVisual; };
         }
 
         bool stepping;

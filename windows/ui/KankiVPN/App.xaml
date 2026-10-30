@@ -419,6 +419,41 @@
             <Setter Property="Margin" Value="4,16,4,8"/>
         </Style>
 
+        <!-- the subscription code field (Screens.kt LoginScreen: OutlinedTextField) -->
+        <Style x:Key="CodeBox" TargetType="TextBox">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontFamily" Value="{StaticResource Poppins}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Primary}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryDark}"/>
+            <Setter Property="MinHeight" Value="56"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Grid>
+                            <Border x:Name="b" Background="#66000000" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource PrimaryField}"/>
+                            <TextBlock x:Name="hint" Text="- - - - - - - - - -" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                       FontFamily="{StaticResource Poppins}" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource SubFaint}"
+                                       IsHitTestVisible="False" Visibility="Collapsed"/>
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="hint" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Primary}"/>
+                                <Setter TargetName="b" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Foreground" Value="{DynamicResource Text}"/>
@@ -431,8 +466,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="12"
-                                BorderThickness="1" BorderBrush="{DynamicResource Edge}">
+                        <Border x:Name="b" Background="#66000000" CornerRadius="16"
+                                BorderThickness="1" BorderBrush="{DynamicResource PrimaryField}">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                         </Border>

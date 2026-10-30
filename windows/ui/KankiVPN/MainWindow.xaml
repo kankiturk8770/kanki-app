@@ -46,19 +46,34 @@
                 </Border>
 
                 <!-- ============================== first run: the subscription -->
-                <Grid x:Name="LoginPage" Visibility="Collapsed" Margin="24,0">
-                    <StackPanel VerticalAlignment="Center">
-                        <Image Source="pack://application:,,,/Assets/logo.png" Width="120" Height="120" RenderOptions.BitmapScalingMode="HighQuality"/>
-                        <TextBlock Text="KANKI VPN" FontFamily="{StaticResource Brand}" FontWeight="Bold" FontSize="26" Margin="0,12,0,0"
-                                   Foreground="{DynamicResource Primary}" HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
-                        <TextBlock Text="{k:T 'Paste the subscription link or code you got from Kanki.'}" Style="{StaticResource Small}"
-                                   FontSize="14" TextAlignment="Center" Margin="0,16,0,16"/>
-                        <TextBox x:Name="SubInput" FlowDirection="LeftToRight" KeyDown="SubInput_KeyDown"
-                                 AutomationProperties.Name="{k:T 'Subscription link or code'}"/>
-                        <Button x:Name="AddSubBtn" Style="{StaticResource BigButton}" Content="{k:T 'Sign in'}" Margin="0,12,0,0" Click="AddSub_Click"/>
-                        <TextBlock x:Name="LoginError" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,12,0,0" TextAlignment="Center"/>
+                <!-- Screens.kt LoginScreen: the big logo, the name, one card to sign in, a link to the bot -->
+                <ScrollViewer x:Name="LoginPage" Visibility="Collapsed" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel VerticalAlignment="Center" Margin="24,20">
+                        <k:Logo3D Width="132" Height="132" Animate="True" Glow="1" HorizontalAlignment="Center"/>
+                        <TextBlock Text="KANKI VPN" FontFamily="{StaticResource Brand}" FontSize="32" Margin="0,18,0,0"
+                                   Foreground="{DynamicResource Primary}" HorizontalAlignment="Center" FlowDirection="LeftToRight">
+                            <TextBlock.Effect><DropShadowEffect Color="{DynamicResource CPrimary}" BlurRadius="10" ShadowDepth="0" Opacity="0.75"/></TextBlock.Effect>
+                        </TextBlock>
+                        <TextBlock Text="Secure · Fast · Low Ping" FontFamily="{StaticResource Poppins}" FontWeight="SemiBold" FontSize="13" Margin="0,4,0,30"
+                                   Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" FlowDirection="LeftToRight"/>
+                        <k:Glass CornerRadius="20" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="{k:T 'Sign in to your account'}" FontSize="22" FontWeight="Black" Foreground="{DynamicResource Text}"/>
+                                <TextBlock Text="{k:T 'Safe, fast and free internet'}" FontSize="13" Foreground="{DynamicResource Muted}" Margin="0,4,0,16"/>
+                                <TextBox x:Name="SubInput" Style="{StaticResource CodeBox}" FlowDirection="LeftToRight" KeyDown="SubInput_KeyDown"
+                                         AutomationProperties.Name="{k:T 'Subscription link or code'}"/>
+                                <TextBlock x:Name="LoginError" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,10,0,0"/>
+                                <UniformGrid Columns="2" Margin="0,6,0,0">
+                                    <Button x:Name="AddSubBtn" Style="{StaticResource BigButton}" Content="{k:T 'Sign in'}" Margin="0,0,6,0" Click="AddSub_Click"/>
+                                    <Button Style="{StaticResource Outline}" Content="{k:T 'Paste'}" Margin="6,0,0,0" Click="Paste_Click"/>
+                                </UniformGrid>
+                            </StackPanel>
+                        </k:Glass>
+                        <Button Style="{StaticResource Plain}" HorizontalAlignment="Center" Margin="0,22,0,0" Click="Bot_Click">
+                            <TextBlock Text="{k:T 'No subscription? Get one from the bot'}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource Primary}" Margin="10,6"/>
+                        </Button>
                     </StackPanel>
-                </Grid>
+                </ScrollViewer>
 
                 <!-- ============================== Home (HomeUi.kt HomeContent): the map and the connect button share
                      what is left over the fixed cards (44 / 56) -->

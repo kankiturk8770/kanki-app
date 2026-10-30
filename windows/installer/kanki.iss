@@ -2,7 +2,7 @@
 ; Built in CI: iscc /DAppVersion=1.0.0 /DSrc=<folder with the three files> kanki.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.2.0"
 #endif
 #ifndef Src
   #define Src "..\dist"

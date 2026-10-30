@@ -408,7 +408,7 @@ namespace KankiVPN
         }
 
         /// <summary>ServersUi.kt CardPing: the best ping with a small open / closed triangle.</summary>
-        static UIElement CardPing(long? ms, bool open)
+        static FrameworkElement CardPing(long? ms, bool open)
         {
             var col = ms is { } m ? Orb.PingColor(m) : Theme.P.Sub;
             var p = new StackPanel { Orientation = Orientation.Horizontal, FlowDirection = FlowDirection.LeftToRight, VerticalAlignment = VerticalAlignment.Center };
@@ -873,6 +873,32 @@ namespace KankiVPN
             AddSubBtn.IsEnabled = true;
         }
 
+        /// <summary>Screens.kt LoginScreen: paste the copied link or code.</summary>
+        void Paste_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (Clipboard.ContainsText()) SubInput.Text = Clipboard.GetText().Trim();
+            }
+            catch
+            {
+                // the clipboard is busy with another program: nothing to paste
+            }
+        }
+
+        /// <summary>No subscription yet: the Kanki bot (Android BOT_URL).</summary>
+        void Bot_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("https://t.me/kankivpn_bot") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                LoginError.Text = ex.Message;
+            }
+        }
+
         void SubInput_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter) AddSub_Click(sender, e);
@@ -1286,7 +1312,7 @@ namespace KankiVPN
             status = on
                 ? new Status { State = "connected", Server = account.Servers[2], Rx = 0, Tx = 0, KillSwitch = true, Since = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 754 }
                 : new Status();
-            serviceVersion = "1.1.0";
+            serviceVersion = "1.2.0";
             ShowAccount();
             ShowSettings();
             if (on)

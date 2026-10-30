@@ -136,7 +136,7 @@ namespace KankiVPN
             Put("AccentSoft", Gfx.A(p.Accent, .12)); Put("PrimarySoft", Gfx.A(p.Gold, .12)); Put("PrimaryFaint", Gfx.A(p.Gold, .18));
             Put("WhiteFaint", Gfx.A(Colors.White, .08)); Put("WhiteTrack", Color.FromArgb(0x1F, 255, 255, 255));
             Put("PrimaryEdge", Gfx.A(p.Gold, .6)); Put("SwitchOff", Color.FromArgb(0x33, 255, 255, 255)); Put("SubRing", Gfx.A(p.Sub, .4));
-            Put("Divider", Gfx.A(p.Gold, .10)); Put("Gold55", Gfx.A(p.Gold, .55));
+            Put("Divider", Gfx.A(p.Gold, .10)); Put("PrimaryField", Gfx.A(p.Gold, .35)); Put("SubFaint", Gfx.A(p.Sub, .45)); Put("Gold55", Gfx.A(p.Gold, .55));
             var avatar = new LinearGradientBrush(Gfx.A(p.Gold, .30), Gfx.A(p.Gold, .10), 90);
             avatar.Freeze();
             r["AvatarFill"] = avatar; Put("PrimaryLine", Gfx.A(p.Gold, .3));

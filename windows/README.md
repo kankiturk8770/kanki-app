@@ -73,6 +73,8 @@
 | DPAPI | `service/internal/state/dpapi_windows.go` |
 | Wintun، هسته‌ها، آدرس، مسیر، DNS | `service/internal/tunnel/` (`cores_windows.go`: KANKI MIX، microtun، Xray/Hysteria + tun2socks) |
 | برنامه (WPF) | `ui/KankiVPN/` (`MainWindow.xaml`، تم‌ها `Theme.cs`، تست سرعت `Speed.cs`، کشورها `Countries.cs`، ترجمه `Strings.cs`) |
+| ظاهر کشیده‌شده (کپی کد اندروید) | `Gfx.cs` (رنگ، گرادیان، ساعت انیمیشن)، `Draw.cs` (شیشه، آیکن‌ها، لوگو، گیج، ضربان پینگ، پس‌زمینه)، `Orb.cs` (دکمه‌ی اتصال و تعقیب گیمینگ)، `WorldMap.cs` (نقشه) |
+| داده‌ی نقشه و پرچم‌ها | `Assets/countries.bin` (از Natural Earth با `tools/packmap.py`)، `Assets/flags/*.png` (پرچم‌های Noto) |
 | فایل نصبی (Inno Setup) و تست نصب | `installer/` |
 
 ## ساخت و تست
