@@ -2,11 +2,13 @@ package sub
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A page shaped like the panel's sub_page (assets/web/sub.html + proto_row).
@@ -160,5 +162,21 @@ func TestSealedConfig(t *testing.T) {
 	c.DeviceID = "dev-2"
 	if _, err := c.get(context.Background(), srv.URL+"/api/config/12/wireguard?sub=kanki-12-abcd1234"); err == nil {
 		t.Fatal("opened with the wrong device")
+	}
+}
+
+// An expired certificate names its dates (Windows leaves them out), so a wrong
+// computer clock is told apart from a certificate that really ended.
+func TestCertDates(t *testing.T) {
+	c := &x509.Certificate{NotBefore: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), NotAfter: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+	if m := certDates(c, time.Date(2026, 10, 31, 6, 0, 0, 0, time.UTC)); !strings.Contains(m, "ended 2026-10-30") {
+		t.Fatal(m)
+	}
+	if m := certDates(c, time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)); !strings.Contains(m, "clock") {
+		t.Fatal(m)
+	}
+	err := fmt.Errorf("Get x: %w", x509.CertificateInvalidError{Cert: c, Reason: x509.Expired})
+	if m := short(err); !strings.Contains(m, "2026-10-30") {
+		t.Fatal(m)
 	}
 }
