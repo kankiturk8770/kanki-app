@@ -63,7 +63,7 @@
 | شروع سرویس، install/uninstall/debug | `service/cmd/kanki-svc/main_windows.go` |
 | خواندن کانفیگ WG/AWG و ساختن UAPI | `service/internal/conf/` |
 | مسیرها و تقسیم ترافیک | `service/internal/route/` |
-| خواندن اشتراک پنل (مثل `SubscriptionApi.kt`) | `service/internal/sub/` |
+| خواندن اشتراک پنل (مثل `SubscriptionApi.kt`) | `service/internal/sub/` (`sub.go`: دامنه‌ها، `dial`/`lookup`، `race`) |
 | مدیریت اتصال، کیل سوییچ هنگام اتصال دوباره | `service/internal/core/` |
 | پروتکل پایپ | `service/internal/ipc/` |
 | تنظیمات و فایل وضعیت | `service/internal/state/` |
@@ -75,11 +75,32 @@
 | برنامه (WPF) | `ui/KankiVPN/` (`MainWindow.xaml`، تم‌ها `Theme.cs`، تست سرعت `Speed.cs`، کشورها `Countries.cs`، ترجمه `Strings.cs`) |
 | ظاهر کشیده‌شده (کپی کد اندروید) | `Gfx.cs` (رنگ، گرادیان، ساعت انیمیشن)، `Draw.cs` (شیشه، آیکن‌ها، لوگو، گیج، ضربان پینگ، پس‌زمینه)، `Orb.cs` (دکمه‌ی اتصال و تعقیب گیمینگ)، `WorldMap.cs` (نقشه) |
 | داده‌ی نقشه و پرچم‌ها | `Assets/countries.bin` (از Natural Earth با `tools/packmap.py`)، `Assets/flags/*.png` (پرچم‌های Noto) |
-| فایل نصبی (Inno Setup) و تست نصب | `installer/` |
+| فایل نصبی (Inno Setup) و تست نصب | `installer/` (`kanki.iss`، `smoke.ps1`، `upgrade.ps1`) |
+| ارتباط با سرویس از برنامه (تأیید پایپ، روشن کردن سرویس، ساختن درخواست) | `ui/KankiVPN/PipeClient.cs` |
+
+## لینک ساب
+- فقط دو دامنه، هر دو پورت 2053: `https://s1s.polimax.shop:2053` (ایران، `IranHost`) و `https://fi.kankipro.cafe:2053`
+  (خارج، `FallbackHost`)، به‌علاوه‌ی `sub_base` خود پنل اگر ادمین بگذارد. هر دو با هم امتحان می‌شوند (`race`)؛ اولین جواب
+  برنده است و دفعه‌ی بعد اول همان. کد خالی ← `FallbackHost`. `sub.kanki.pro` در ایران فیلتر است و استفاده نمی‌شود
+  (`oldHost`: لینک/حساب قدیمی به همین دو می‌رود).
+- اتصال (`dial`): اول DNS ویندوز، بعد DNS خود سرویس (برای وقتی کیل سوییچ روشن است)؛ آدرس فیلتر ایران (10.10.34.x و
+  `2001:4188:2:600::/64`) کنار گذاشته می‌شود؛ اول IPv4؛ همه‌ی IPها یکی‌یکی.
+- خطای ورود علت هر دامنه را جدا می‌گوید (بدون کد اشتراک) و در `service.log` هم نوشته می‌شود.
+
+## عیب‌یابی روی کامپیوتر کاربر
+- برنامه با کاربر عادی اجرا می‌شود؛ «Run as administrator» لازم نیست.
+- خطای برنامه: `%APPDATA%\KankiVPN\crash.log` (برنامه با خطای یک بخش بسته نمی‌شود، فقط این‌جا می‌نویسد).
+- گزارش سرویس: `C:\ProgramData\KankiVPN\service.log` (فقط ادمین)، یا از تب گزارش برنامه.
+- «سرویس اجرا نیست» فقط وقتی پایپ جواب ندهد؛ برنامه اول خودش سرویس را روشن می‌کند (کاربر عادی اجازه‌ی روشن کردن دارد،
+  نه خاموش/تغییر). هر خطای دیگر با متن واقعی‌اش نشان داده می‌شود.
 
 ## ساخت و تست
-- `cd windows/service && go test -race ./...` (روی لینوکس هم). `GOOS=windows go vet ./...` برای بخش ویندوز.
+- `cd windows/service && go test -race ./...` (روی لینوکس هم). `GOOS=windows go vet -tags tcp ./...` برای بخش ویندوز.
 - CI (`.github/workflows/windows.yml`): تست روی لینوکس، بعد روی ویندوز: ساخت سرویس، تست واقعی کارت شبکه / مسیر / DNS /
-  WFP با دسترسی ادمین، ساخت برنامه، عکس صفحه‌ها (`KankiVPN.exe --shot <پوشه>`)، نصب سرویس و گفت‌وگو از راه پایپ،
-  و ساخت `KankiVPN-Setup-x.y.z.exe`. خروجی‌ها در Artifacts همان اجرا.
+  WFP با دسترسی ادمین، ساخت برنامه (Obfuscar)، عکس صفحه‌ها (`KankiVPN.exe --shot <پوشه>`)، `smoke.ps1`، ساخت
+  `KankiVPN-Setup-x.y.z.exe`، `upgrade.ps1`، و گذاشتن فایل نصبی در Releases (`windows-vX.Y.Z`).
+  - `smoke.ps1`: نصب سرویس، پایپ، برنامه با یک **کاربر عادی** (`--check-service`) و کل برنامه ۲۰ ثانیه بدون `crash.log`.
+  - `upgrade.ps1`: دقیقاً مثل کاربر: نصب ۱.۲.۱ از Releases، نصب تازه روی آن، ورود با کاربر عادی
+    (`--check-service <فایل> <کد>`)، توقف سرویس و روشن شدنش توسط برنامه، ۲۰ ثانیه برنامه‌ی کامل، حذف.
+- هر چیزی که فقط در نسخه‌ی Release هست (Obfuscar، تک‌فایل، کاربر عادی) فقط با همین دو تست دیده می‌شود؛ تست‌های Go کافی نیستند.
 - اجرای دستی روی ویندوز (ادمین): `kanki-svc.exe debug` در یک ترمینال، بعد `KankiVPN.exe`.
