@@ -5,6 +5,7 @@ package sub
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -303,6 +304,12 @@ func hostOf(u string) string {
 
 // short drops the URL (with the user's code) that Go puts in front of the reason.
 func short(err error) string {
+	// Windows checks certificates itself and leaves the dates out: say them, so a
+	// wrong computer clock is told apart from a certificate that really ended
+	var ce x509.CertificateInvalidError
+	if errors.As(err, &ce) && ce.Reason == x509.Expired && ce.Cert != nil {
+		return certDates(ce.Cert, time.Now())
+	}
 	var ue interface{ Unwrap() error }
 	if errors.As(err, &ue) && strings.HasPrefix(err.Error(), "Get ") {
 		if in := ue.Unwrap(); in != nil {
@@ -310,6 +317,18 @@ func short(err error) string {
 		}
 	}
 	return err.Error()
+}
+
+// certDates is the reason of an expired / not yet valid certificate with its dates.
+func certDates(c *x509.Certificate, now time.Time) string {
+	const day = "2006-01-02 15:04 UTC"
+	switch {
+	case now.Before(c.NotBefore):
+		return fmt.Sprintf("certificate not valid yet: it starts %s, this computer's clock says %s (set the date and time of Windows)", c.NotBefore.UTC().Format(day), now.UTC().Format(day))
+	case now.After(c.NotAfter):
+		return fmt.Sprintf("the server's certificate ended %s (now %s)", c.NotAfter.UTC().Format(day), now.UTC().Format(day))
+	}
+	return fmt.Sprintf("certificate %s – %s refused by Windows (now %s)", c.NotBefore.UTC().Format(day), c.NotAfter.UTC().Format(day), now.UTC().Format(day))
 }
 
 // Load fetches and reads the subscription page.
