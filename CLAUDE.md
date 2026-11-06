@@ -29,7 +29,9 @@
 | تست سرعت | `Speed.kt`، `SpeedUi.kt` |
 
 ## هسته‌های Go
-- `kmix-core/` هسته‌ی KANKI MIX (`libkmix.so`)، تست: `cd kmix-core && go test ./...`
+- `kmix-core/` هسته‌ی KANKI MIX (`libkmix.so`)، تست: `cd kmix-core && go test ./...`. سرور آن داخل ریپوی پنل است
+  (`kanki-panel/src/vpn/kmix-server`)؛ پوشه‌ی `internal/` دو طرف باید **یکی** بماند (`MaxWire` = ۱۳۳۲: سقف ۱۳۸۰ پنل).
+  تست سرتاسری با سرور واقعی: `SRVBIN=<kanki-mix-server> HOSTIP=<IP غیر loopback> go test ./...`
 - `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`. خود کلاینت در پکیج `mtun-core/mtun` است
   (`main.go` فقط برنامه‌ی اندروید است)؛ نسخه‌ی ویندوز همان پکیج را استفاده می‌کند. KANKI MIX هم `StartDevice` دارد (ویندوز).
 - هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
@@ -82,6 +84,10 @@
 - [ ] شاید: تقسیم ترافیک بر اساس برنامه در ویندوز (درایور کرنل لازم دارد).
 - [ ] اگر انتشار عمومی شد: امضای دیجیتال فایل نصبی ویندوز (SmartScreen).
 - کار دستی صاحب اپ: Artifact retention سه روز در هر ریپو؛ پاک کردن کلید قدیمی GitHub (`ghp_…`) اگر هنوز هست.
+
+### 2026-11-06 — ۱.۲۴.۱ و ویندوز ۱.۲.۸: KANKI MIX زیر سقف MTU
+پنل 3.32 MTU خودکار گرفت و سورس سرور KANKI MIX به پنل آمد (3.32.1، `MaxWire` ۱۳۳۲). همین عدد در `kmix-core` (کد `internal` عین پنل).
+تست: `go test` هسته (تست تازه‌ی اندازه)، سرتاسری با سرور واقعی هر چهار حالت (اپ قدیم/تازه × سرور قدیم/تازه)، `go test` سرویس ویندوز.
 
 ### 2026-10-31 — ویندوز ۱.۲.۷: خطای گواهی با تاریخ
 صاحب اپ روی لپ‌تاپ: ورود نشد. `s1s.polimax.shop:2053`: «x509: certificate has expired or is not yet valid» (بدون جزئیات)؛
