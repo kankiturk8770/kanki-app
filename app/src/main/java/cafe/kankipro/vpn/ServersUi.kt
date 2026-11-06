@@ -70,6 +70,8 @@ class ServersActions(
     val pick: (String, String) -> Unit = { _, _ -> },
     val pingAll: () -> Unit = {},
     val mtu: (String) -> String = { "" },
+    /** MTU ای که پنل در کانفیگ این سرور گذاشته (null = نامعلوم) */
+    val panelMtu: (String, String) -> String? = { _, _ -> null },
     val setMtu: (String, String) -> Unit = { _, _ -> },
     val closeTip: () -> Unit = {},
 )
@@ -267,7 +269,8 @@ private fun CfgLine(l: CfgLineUi, act: ServersActions) {
             Column(Modifier.padding(start = D.S2, end = D.S2, top = D.S1, bottom = D.S1)) {
                 T(r.title + " · " + protoDesc(r.proto), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
                 r.host?.let { h -> T(trf("سرور: %s", h), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = D.S2)) }
-                if (r.proto != "xray") MtuField(act.mtu(r.proto)) { act.setMtu(r.proto, it) }
+                // فقط WireGuard و AmneziaWG: اندازه‌ی بسته‌ی بقیه را هسته‌شان یا پنل تعیین می‌کند
+                if (r.proto in setOf("wireguard", "amneziawg", "amneziawg-direct")) MtuField(act.mtu(r.proto), act.panelMtu(r.node, r.proto)) { act.setMtu(r.proto, it) }
             }
         }
     }
@@ -339,14 +342,16 @@ private fun SignalBars(ping: Long?, c: Color) {
 }
 
 @Composable
-fun MtuField(initial: String, onChange: (String) -> Unit) {
+fun MtuField(initial: String, panel: String?, onChange: (String) -> Unit) {
     var v by remember { mutableStateOf(initial) }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         OutlinedTextField(
             value = v,
             onValueChange = { t -> v = t.filter { it.isDigit() }.take(4); onChange(v) },
             modifier = Modifier.fillMaxWidth(), singleLine = true,
-            label = { T("MTU دلخواه (خالی = پیش‌فرض)", size = 12.sp, color = K.Sub, weight = FontWeight.Normal) },
+            label = {
+                T(if (panel != null) trf("MTU دلخواه (خالی = پنل: %s؛ فقط کمتر)", panel) else "MTU دلخواه (خالی = پیش‌فرض)", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+            },
             textStyle = TextStyle(fontFamily = Poppins, fontSize = 14.sp, color = K.Text),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = RoundedCornerShape(D.RS),

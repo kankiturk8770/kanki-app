@@ -1236,6 +1236,8 @@ class AppState private constructor(context: Context) {
     }
 
     fun mtuFor(p: String): String = prefs.getString("mtu_$p", "") ?: ""
+    /** MTU که پنل در کانفیگ یک سرور گذاشته (از متن ذخیره‌شده‌ی خود کانفیگ؛ null اگر هنوز خوانده نشده) */
+    fun panelMtu(node: String, p: String): String? = infos["$node/$p"]?.mtu?.takeIf { it.toIntOrNull() != null }
     fun setMtu(p: String, v: String) { prefs.edit().putString("mtu_$p", v.trim()).apply() }
 
     /** کلید کانفیگ فعال (برای OpenVPN نوع اتصال هم لحاظ می‌شود) */

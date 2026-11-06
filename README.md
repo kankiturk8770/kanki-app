@@ -2,6 +2,10 @@
 
 اپ اندروید (Kotlin + Jetpack Compose) با موتور AmneziaWG / WireGuard و اشتراک از پنل `kankipro.cafe`.
 
+## تازه‌های نسخه‌ی ۱.۲۵.۱
+
+- MTU دلخواه فقط کمتر از MTU پنل؛ فقط برای WireGuard و AmneziaWG.
+
 ## تازه‌های نسخه‌ی ۱.۲۵.۰
 
 - کانفیگ‌ها همیشه فوراً از حافظه، پینگ درست وقتی وصلی، هوشمند به ترتیب Xray مستقیم ← Amnezia مستقیم ← Amnezia/WireGuard ← microtun، تم زرد و مشکی AMOLED، سرعت با KB/MB، دکمه‌های بزرگ ربات، عدد پیام پشتیبانی، انیمیشن روان‌تر.

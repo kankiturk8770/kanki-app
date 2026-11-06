@@ -53,4 +53,18 @@ class SubParseTest {
         val km = a.configs.filter { it.protocol == "kankimix" }
         assertTrue(km.isNotEmpty() && km.all { "/kankimix?" in it.url })
     }
+
+    @Test
+    fun a_custom_mtu_only_lowers_the_panels() {
+        val wg = "[Interface]\nPrivateKey = x\nMTU = 1320\n\n[Peer]\nEndpoint = a:1\n"
+        // 1380 typed on the phone would make 1440-byte packets: the panel's 1320 stays
+        assertTrue("MTU = 1320" in applyMtu(wg, "1380"))
+        // lower is taken
+        assertTrue("MTU = 1280" in applyMtu(wg, "1280"))
+        // empty = the panel's
+        assertEquals(wg, applyMtu(wg, ""))
+        // KANKI MIX and microtun are never touched
+        val km = "[Interface]\n[KankiMix]\nEndpoint = a:1\nURI = kanki://k@a:1\n"
+        assertEquals(km, applyMtu(km, "1280"))
+    }
 }

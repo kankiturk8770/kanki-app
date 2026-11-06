@@ -594,8 +594,9 @@ func BuildLink(proto, text string, ep netip.AddrPort, set state.Settings) (*Tunn
 	case cores.KankiMix:
 		t.MTU = 1280 // the KANKI MIX core's own packet size
 	case cores.Microtun:
-		if l, err := mtun.ParseLink(text); err == nil && set.MTU == 0 {
-			t.MTU = l.MTU
+		// the link's MTU (the panel works it out so no packet is cut on the way); a setting may only lower it
+		if l, err := mtun.ParseLink(text); err == nil {
+			t.MTU = lowerOnly(l.MTU, set.MTU)
 		}
 	default:
 		if set.MTU == 0 {
@@ -706,6 +707,14 @@ type ProgramPinger interface {
 	PingProgram(ctx context.Context, proto, text string, ep netip.AddrPort) (int64, error)
 }
 
+// lowerOnly: the config's MTU, or the setting when it is set and smaller (0 = not set)
+func lowerOnly(cfg, setting int) int {
+	if setting > 0 && (cfg == 0 || setting < cfg) {
+		return setting
+	}
+	return cfg
+}
+
 // Build turns a config and the settings into a tunnel.
 func Build(cfg *conf.Config, ep netip.AddrPort, set state.Settings) (*Tunnel, error) {
 	dns := cfg.DNS
@@ -739,10 +748,9 @@ func Build(cfg *conf.Config, ep netip.AddrPort, set state.Settings) (*Tunnel, er
 	if len(plan.Routes) == 0 {
 		return nil, errors.New("nothing would go through the VPN with these split tunnel settings")
 	}
-	mtu := cfg.MTU
-	if set.MTU != 0 {
-		mtu = set.MTU
-	}
+	// the config's MTU (panel 3.32+: worked out so the whole packet never passes the mobile network's
+	// limit); the MTU setting may only lower it, never raise it (1380 over the panel's 1320 made 1440-byte packets)
+	mtu := lowerOnly(cfg.MTU, set.MTU)
 	if mtu == 0 {
 		mtu = 1280
 	}

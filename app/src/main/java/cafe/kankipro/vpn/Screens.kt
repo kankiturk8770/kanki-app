@@ -613,6 +613,7 @@ private fun ServersTab(state: AppState) {
             pick = { id, p -> state.pickFromServers(id, p) },
             pingAll = { state.startPingAll() },
             mtu = { p -> state.mtuFor(p) },
+            panelMtu = { n, p -> state.panelMtu(n, p) },
             setMtu = { p, v -> state.setMtu(p, v) },
             closeTip = { state.markTip("servers") },
         ),
