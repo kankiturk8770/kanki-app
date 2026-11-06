@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b0906">
+<title>ali</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FFE9A6%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23B8862B%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%222.5%22%20y%3D%222.5%22%20width%3D%2259%22%20height%3D%2259%22%20rx%3D%2217%22%20fill%3D%22%230f0b06%22%20stroke%3D%22url%28%23g%29%22%20stroke-width%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M23%2017v30M42%2017.5L25.5%2032.5%2042.5%2047%22%20fill%3D%22none%22%20stroke%3D%22url%28%23g%29%22%20stroke-width%3D%226.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2243%22%20cy%3D%2216.5%22%20r%3D%224.4%22%20fill%3D%22%23FFE9A6%22%2F%3E%3Ccircle%20cx%3D%2243.5%22%20cy%3D%2247.5%22%20r%3D%224.4%22%20fill%3D%22%23FFE9A6%22%2F%3E%3C%2Fsvg%3E">
+<style>
+@font-face{font-family:Vazirmatn;src:url(/assets/vazirmatn.woff) format("woff");font-weight:100 900;font-style:normal;font-display:swap}
+
+:root{--g:#F5C451;--gl:#FFE9A6;--gd:#B8862B;--ok:#3ddc97;--warn:#ffb547;--bad:#ff6b6b;--t:#F7F1E3;--s:#A89C82;--ln:rgba(245,196,81,.22);--c1:rgba(28,23,14,.94);--c2:rgba(12,10,6,.96);--bg1:#0c0a06;--bg2:#17110a;--in:rgba(0,0,0,.28)}
+body.light{--g:#c9952f;--gl:#e9c46e;--gd:#94681a;--t:#2b2216;--s:#75664b;--ln:rgba(140,100,30,.25);--c1:#f7f1e5;--c2:#efe6d3;--bg1:#e9e0cd;--bg2:#ddd1b8;--in:rgba(255,255,255,.45);--ok:#12915b;--warn:#b86e00;--bad:#d23c3c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{min-height:100vh;background:linear-gradient(var(--bg1),var(--bg2) 50%,var(--bg1));background-attachment:fixed;color:var(--t);font-family:Vazirmatn,"Segoe UI",Tahoma,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% -10%,rgba(245,196,81,.18),transparent 55%)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gl);outline-offset:2px}
+.sub-shell{max-width:760px;margin:auto;padding:14px 14px calc(34px + env(safe-area-inset-bottom));position:relative}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{flex:none;width:42px;height:42px;border-radius:14px;background:linear-gradient(145deg,var(--gl),var(--g),var(--gd));color:#1a1206;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px rgba(245,196,81,.35)}
+.logo.has-img{background:none;box-shadow:none;padding:0;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:contain;display:block}
+.brand b{display:block;color:var(--g);letter-spacing:1px;font-size:16px;direction:ltr;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand small{color:var(--s);font-size:11px}
+.tools{display:flex;gap:6px}
+.chip{border:1px solid var(--ln);background:transparent;border-radius:12px;padding:7px 12px;cursor:pointer;min-width:40px}
+.chip:hover{border-color:var(--g)}
+.card{background:linear-gradient(165deg,var(--c1),var(--c2));border:1px solid var(--ln);border-radius:22px;padding:14px;margin-bottom:12px;box-shadow:inset 0 1px 0 rgba(255,233,166,.05),0 10px 30px rgba(0,0,0,.25)}
+.hero{display:flex;align-items:center;gap:12px}
+.av{flex:none;width:54px;height:54px;border-radius:17px;background:linear-gradient(145deg,var(--gl),var(--gd));color:#1a1206;font-weight:900;font-size:24px;display:flex;align-items:center;justify-content:center}
+.hi{flex:1;min-width:0}
+.hi h1{margin:0;font-size:20px;direction:ltr;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hi p{margin:3px 0 0;color:var(--s);font-size:12px}
+.pill{flex:none;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 11px;font-size:12px;border:1px solid var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent)}
+.pill:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.warn{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent)}
+.pill.bad{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+/* rings */
+.rings{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rbox{display:flex;flex-direction:column;align-items:center;text-align:center;border:1px solid var(--ln);border-radius:18px;padding:12px 8px;background:var(--in)}
+.rw{position:relative;width:min(132px,100%);aspect-ratio:1}
+.rw svg{width:100%;height:100%;display:block;direction:ltr}
+.rb{fill:none;stroke:rgba(127,127,127,.2);stroke-width:9}
+.rf{fill:none;stroke:url(#gg);stroke-width:9;stroke-linecap:round;stroke-dasharray:0 327;transition:stroke-dasharray 1s cubic-bezier(.2,.8,.2,1)}
+.rf.warn{stroke:var(--warn)}.rf.bad{stroke:var(--bad)}
+.rc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.rc b{font-size:24px;line-height:1.1;direction:ltr;unicode-bidi:isolate}
+.rc small{color:var(--s);font-size:11px}
+.rl{margin-top:9px;font-weight:700;font-size:13px}
+.rs{color:var(--s);font-size:11px;margin-top:3px;direction:ltr;unicode-bidi:isolate}
+@media(prefers-reduced-motion:reduce){.rf{transition:none}}
+/* stat tiles */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:linear-gradient(rgba(245,196,81,.08),transparent);border:1px solid var(--ln);border-radius:16px;padding:10px 8px;text-align:center;min-width:0}
+.stat small{color:var(--s);display:block;font-size:11px;margin-bottom:4px}
+.stat b{font-size:14px;display:block;direction:ltr;unicode-bidi:isolate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* link card */
+.linkc>b{display:block;margin-bottom:8px}
+.lrow{display:flex;gap:8px;margin-top:8px}
+.lrow input{flex:1;min-width:0;direction:ltr;text-align:left;background:var(--in);border:1px solid var(--ln);border-radius:12px;padding:9px 10px;font-size:12px;color:var(--s)}
+.hint{display:block;color:var(--s);font-size:11px;margin-top:8px}
+.btn,.b2{display:flex;align-items:center;justify-content:center;text-align:center;border-radius:12px;padding:9px 12px;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn{background:linear-gradient(var(--gl),var(--g),var(--gd));color:#1a1206;font-weight:800;border:0;box-shadow:inset 0 0 0 1px rgba(255,233,166,.45),0 0 12px rgba(245,196,81,.5),0 0 28px rgba(245,196,81,.2)}
+.btn:hover{box-shadow:inset 0 0 0 1px rgba(255,233,166,.7),0 0 18px rgba(245,196,81,.7),0 0 40px rgba(245,196,81,.3)}
+.b2:hover,.chip:hover{box-shadow:0 0 10px rgba(245,196,81,.35)}
+body.light .btn{box-shadow:0 3px 12px rgba(201,149,47,.4)}
+.logo.svgl{background:none;box-shadow:none;filter:drop-shadow(0 0 8px rgba(245,196,81,.45))}.logo .klogo{width:100%;height:100%;display:block}
+.b2{background:transparent;border:1px solid var(--ln);color:var(--t)}
+.b2:hover{border-color:var(--g);color:var(--g)}
+/* configs */
+.sec{display:flex;justify-content:center;margin:20px 0 12px}
+.sec span{border:1px solid var(--ln);border-radius:12px;padding:6px 16px;background:var(--c1);font-weight:700}
+.nodes{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:700px){.nodes{grid-template-columns:1fr 1fr}}
+.node{background:linear-gradient(165deg,var(--c1),var(--c2));border:1px solid var(--ln);border-radius:22px;padding:12px;box-shadow:inset 0 1px 0 rgba(255,233,166,.05)}
+.node h3{margin:0 0 6px;color:var(--g);font-size:15px;display:flex;flex-direction:column;border-bottom:1px solid var(--ln);padding-bottom:8px}
+.node h3 small{color:var(--s);font-size:11px;font-weight:400}
+.row{border:1px solid var(--ln);border-radius:16px;padding:10px;margin-top:8px;background:var(--in)}
+.ph{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.ph b{display:block}.ph small{display:block;color:var(--s);font-size:10px}
+.pl{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:900;color:#fff}
+.pl-wireguard{background:#1fa36b}.pl-amneziawg{background:#7c5cf0}.pl-hysteria2{background:#d1497a}.pl-kankimix{background:#ff7a1a}.pl-xray{background:#e0a020}.pl-dns{background:#2a9df4}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.acts .btn,.acts .b2{padding:8px 6px;font-size:12px;white-space:normal}
+.apponly{grid-column:1/-1;margin:0;padding:10px 12px;border-radius:12px;font-size:12.5px;text-align:center;color:var(--pc,var(--t));background:color-mix(in srgb,var(--pc,var(--g)) 10%,transparent);border:1px dashed color-mix(in srgb,var(--pc,var(--g)) 50%,transparent)}
+.uri{grid-column:1/-1;direction:ltr;display:block;word-break:break-all;background:rgba(0,0,0,.25);padding:8px;border-radius:10px;font-size:10px;max-height:64px;overflow:auto}
+body.light .uri{background:rgba(0,0,0,.06)}
+.empty{text-align:center;color:var(--s);padding:22px}
+/* configs by protocol: a row per country, tunnel and direct side by side */
+.pc{background:linear-gradient(165deg,var(--c1),var(--c2));border:1px solid color-mix(in srgb,var(--pc) 45%,transparent);border-radius:22px;padding:12px;margin-bottom:12px;box-shadow:inset 0 1px 0 rgba(255,233,166,.05)}
+.pc[data-p=wireguard]{--pc:#1fa36b}.pc[data-p=amneziawg]{--pc:#7c5cf0}.pc[data-p=hysteria2]{--pc:#d1497a}.pc[data-p=xray]{--pc:#e0a020}.pc[data-p=kankimix]{--pc:#ff7a1a}.pc[data-p=dns]{--pc:#2a9df4}
+.pch{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.pch b{display:block;color:var(--pc);font-size:15px}.pch small{display:block;color:var(--s);font-size:11px;margin-top:1px}
+.pch .pl{background:var(--pc)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0 2px;text-align:center;font-size:11.5px;font-weight:800;color:var(--pc)}
+.crow{border:1px solid color-mix(in srgb,var(--pc) 28%,transparent);border-radius:14px;padding:7px 8px;margin-top:6px;background:var(--in)}
+.cn{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-size:13px;font-weight:800}
+.cn .fl{font-size:17px;line-height:1}.cn small{color:var(--s);font-weight:400;font-size:11px;direction:ltr;unicode-bidi:isolate}
+.cells{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cells.one{grid-template-columns:1fr}
+.cell{display:flex;gap:5px}
+.cell .btn,.cell .b2{flex:1;padding:7px 4px;font-size:11.5px;border-radius:10px;white-space:nowrap}
+.cell .btn{background:var(--pc);color:#fff;box-shadow:0 0 10px color-mix(in srgb,var(--pc) 40%,transparent)}
+.cell .b2{color:var(--pc);border-color:color-mix(in srgb,var(--pc) 50%,transparent);background:color-mix(in srgb,var(--pc) 10%,transparent)}
+.cell.none{align-items:center;justify-content:center;color:var(--s);font-size:12px;border:1px dashed var(--ln);border-radius:10px;min-height:32px}
+.inline{display:flex;align-items:center;gap:8px}.inline .cn{flex:1;margin:0}.inline .cell{flex:none;width:52%}
+.tip{font-size:11.5px;color:var(--s);margin:6px 2px 0;line-height:1.7}
+.kmx{font-size:12.5px;line-height:1.9;margin:4px 0 0}
+.pb{margin-top:auto;padding-top:8px;display:flex;flex-direction:column;gap:6px}.pb .btn,.pb .b2{width:100%;padding:8px 6px;font-size:12px;border-radius:12px}
+.pb .btn{background:var(--pc);color:#fff;box-shadow:0 0 10px color-mix(in srgb,var(--pc) 40%,transparent)}.pb .b2{color:var(--pc);border-color:color-mix(in srgb,var(--pc) 50%,transparent);background:color-mix(in srgb,var(--pc) 10%,transparent)}
+.xn{font-size:11px;margin:6px 2px 0;color:var(--s);text-align:center}
+.pc[data-p=v2]{--pc:#e0a020}.pc[data-p=v2] .pch .pl{background:linear-gradient(135deg,#d1497a,#e0a020)}
+.tgs{display:flex;gap:6px;margin:2px 0 0}.tgs .tg{font-size:11px;font-weight:800;color:var(--pc);border:1px solid color-mix(in srgb,var(--pc) 45%,transparent);border-radius:8px;padding:1px 7px;direction:ltr}
+.pb.two{flex-direction:row}.pb.two>*{flex:1}
+.kfl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.kfl span{font-size:12px;border:1px solid color-mix(in srgb,var(--pc) 40%,transparent);border-radius:99px;padding:2px 9px}
+/* the app's install files */
+.appc{margin-bottom:4px}
+.ah{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.ah b{display:block;font-size:15px}.ah small{display:block;color:var(--s);font-size:11.5px;margin-top:2px}
+.aico{width:40px;height:40px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;color:#1a1206;background:linear-gradient(var(--gl),var(--g),var(--gd));box-shadow:0 0 14px rgba(245,196,81,.45)}
+.aver{font-size:11px;font-weight:700;color:var(--g);border:1px solid var(--ln);border-radius:99px;padding:1px 8px;margin-inline-start:4px;direction:ltr;unicode-bidi:isolate}
+.arow{display:flex;align-items:center;gap:10px;border:1px solid var(--ln);border-radius:16px;padding:10px;margin-top:8px;background:var(--in)}
+.arow.rec{border-color:var(--g);box-shadow:inset 0 0 0 1px rgba(245,196,81,.25),0 0 14px rgba(245,196,81,.12)}
+.arow .ai{flex:1;min-width:0}
+.arow .ai b{display:flex;align-items:center;gap:6px;font-size:13.5px}
+.arow .ai small{display:block;color:var(--s);font-size:11px;margin-top:2px}
+.arow .ai i{font-style:normal;font-size:10.5px;color:var(--s);direction:ltr;unicode-bidi:isolate}
+.arow .tag{font-size:10px;font-weight:800;color:#1a1206;background:var(--g);border-radius:99px;padding:1px 7px}
+.arow .btn{flex:none;padding:9px 14px}
+/* help */
+.help{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.help b{display:block}.help small{color:var(--s)}
+.help .go{display:flex;gap:8px;flex-wrap:wrap}
+footer{display:flex;justify-content:space-between;gap:10px;color:var(--s);font-size:11px;margin-top:18px}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+.modal.on{display:flex}
+.mbox{background:linear-gradient(var(--c1),var(--c2)),var(--bg1);border:1px solid var(--ln);border-radius:22px;padding:14px;width:min(520px,100%);max-height:90vh;overflow:auto}
+@media(max-width:620px){.modal{align-items:flex-end;padding:0}.mbox{width:100%;border-radius:22px 22px 0 0;padding-bottom:calc(14px + env(safe-area-inset-bottom))}}
+.mbox .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.mbox pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.3);padding:10px;border-radius:12px;font-size:11px;max-height:55vh;overflow:auto}
+body.light .mbox pre{background:rgba(0,0,0,.06)}
+.qr{background:#fff;border-radius:14px;padding:10px;display:flex;justify-content:center}
+.qr img{width:min(300px,80vw);height:auto}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--g);color:#1a1206;padding:8px 16px;border-radius:12px;font-weight:700;display:none;z-index:10}
+
+/* ---- v2.4.1: compact page, colour per protocol, no white edges ---- */
+html{background:#0c0a06;color-scheme:dark}
+html:has(body.light){background:#e9e0cd;color-scheme:light}
+body.light{color-scheme:light}
+.sub-shell{max-width:620px;padding-top:10px}
+.top{margin-bottom:8px}
+.logo{width:34px;height:34px;border-radius:11px;font-size:16px}
+.brand b{font-size:14px}.brand small{font-size:10px}
+.chip{padding:5px 10px;min-width:34px;font-size:12px;border-radius:10px}
+.card{padding:11px;border-radius:18px;margin-bottom:9px}
+.hero{gap:10px}
+.av{width:40px;height:40px;border-radius:13px;font-size:18px}
+.hi h1{font-size:16px}.hi p{font-size:11px;margin-top:1px}
+.pill{padding:3px 9px;font-size:11px}
+.rings{gap:8px}
+.rbox{padding:9px 6px;border-radius:15px}
+.rw{width:min(86px,100%)}
+.rc b{font-size:17px}.rc small{font-size:10px}
+.rl{margin-top:6px;font-size:12px}.rs{font-size:10px}
+.stats{gap:6px;margin-bottom:9px}
+.stat{padding:7px 6px;border-radius:13px}
+.stat small{font-size:10px;margin-bottom:2px}.stat b{font-size:13px}
+.linkc>b{margin-bottom:4px;font-size:14px}
+.lrow{margin-top:6px}.lrow input{padding:7px 9px;font-size:11px}
+.lrow .btn,.lrow .b2{padding:7px 11px;font-size:12px}
+.sec{margin:12px 0 9px}.sec span{padding:4px 13px;font-size:13px}
+.node{padding:10px;border-radius:18px}
+.node h3{font-size:14px;padding-bottom:6px}
+.row{padding:8px;border-radius:13px;margin-top:7px}
+.ph{margin-bottom:7px}
+.pl{width:26px;height:26px;border-radius:8px;font-size:12px}
+.proto[data-proto=wireguard]{--pc:#1fa36b}.proto[data-proto=amneziawg]{--pc:#7c5cf0}.proto[data-proto=hysteria2]{--pc:#d1497a}.proto[data-proto=kankimix]{--pc:#ff7a1a}
+.proto{border-color:color-mix(in srgb,var(--pc,var(--g)) 35%,transparent)}
+.proto .ph b{color:var(--pc,var(--t))}
+.proto .acts .btn{background:var(--pc,var(--g));color:#fff;box-shadow:0 0 12px color-mix(in srgb,var(--pc,var(--g)) 40%,transparent)}
+.proto .acts .btn:hover{box-shadow:0 0 18px color-mix(in srgb,var(--pc,var(--g)) 60%,transparent)}
+.proto .acts .b2{color:var(--pc,var(--t));border-color:color-mix(in srgb,var(--pc,var(--g)) 50%,transparent);background:color-mix(in srgb,var(--pc,var(--g)) 10%,transparent)}
+.proto .acts .b2:hover{color:var(--pc,var(--g));background:color-mix(in srgb,var(--pc,var(--g)) 20%,transparent);box-shadow:none}
+footer{margin-top:12px}
+/* Vazirmatn for Persian; English a little bolder and clearer */
+input,select,textarea,button{font-family:inherit}
+html[lang=en] body{font-weight:500;letter-spacing:.012em}
+html[lang=en] small,html[lang=en] .muted,html[lang=en] .sub{font-weight:500}
+.ltr,code,pre,[dir=ltr]{font-weight:500;letter-spacing:.012em}
+b .ltr,.ltr b,b.ltr,strong.ltr{font-weight:700}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9A6"/><stop offset="1" stop-color="#B8862B"/></linearGradient></defs></svg>
+<main class="sub-shell" data-token="kanki-1-1338159476499767303" data-expires="2026-12-06T09:47:12Z" data-traffic-limit="0.000000" data-traffic-used="0.000000" data-status="Active">
+  <div class="top">
+    <div class="brand"><div class="logo" id="lg">K</div><div><b id="pn">Kanki Panel</b><small data-i18n="vpn_sub">VPN Subscription</small></div></div>
+    <div class="tools"><button class="chip" id="th" aria-label="theme">◐</button><button class="chip" id="lang">EN</button></div>
+  </div>
+
+  <section class="card hero">
+    <div class="av" id="av">K</div>
+    <div class="hi"><h1 id="un">ali</h1><p data-i18n="ready">Your VPN subscription is ready</p></div>
+    <span class="pill" id="st">Active</span>
+  </section>
+
+  <section class="card">
+    <div class="rings">
+      <div class="rbox">
+        <div class="rw"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="rb" cx="60" cy="60" r="52"/><circle class="rf" id="f_data" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/></svg>
+          <div class="rc"><b id="b_left">—</b><small id="u_left"></small></div></div>
+        <div class="rl" data-i18n="left_data">Data remaining</div>
+        <div class="rs" id="b_data"></div>
+      </div>
+      <div class="rbox">
+        <div class="rw"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="rb" cx="60" cy="60" r="52"/><circle class="rf" id="f_time" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/></svg>
+          <div class="rc"><b id="b_time">—</b><small id="u_time"></small></div></div>
+        <div class="rl" data-i18n="left_time">Time remaining</div>
+        <div class="rs" id="b_exp"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="stats">
+    <div class="stat"><small data-i18n="used">Used</small><b id="s_used">—</b></div>
+    <div class="stat"><small data-i18n="exp_date">Expiry</small><b id="s_exp">—</b></div>
+    <div class="stat"><small data-i18n="conns">Connections</small><b id="s_conn">—</b></div>
+    <div class="stat"><small data-i18n="last_seen">Last connection</small><b id="s_seen">—</b></div>
+  </div>
+
+  <section class="card linkc">
+    <b data-i18n="sub_link">Subscription link</b>
+    <div class="lrow"><input id="subu" readonly aria-label="subscription link"><button class="btn" id="cpu" data-act="copy" data-i18n="copy">Copy</button></div>
+    <div class="lrow"><input id="rawu" readonly aria-label="raw subscription"><button class="b2" id="cpr" data-act="copy" data-i18n="copy">Copy</button></div>
+    <small class="hint" data-i18n="raw_hint">Second link is for v2rayNG / Hiddify</small>
+  </section>
+
+  <section class="card appc" id="apps" hidden>
+    <div class="ah"><div class="aico">K</div><div><b><span data-i18n="app_title">Kanki VPN app</span> <span id="a_ver" class="aver"></span></b><small data-i18n="app_sub">Pick the version for your phone, then sign in with your subscription code</small></div></div>
+    <div id="a_list"></div>
+  </section>
+
+  <div class="sec"><span data-i18n="your_configs">Your configs</span></div>
+  <div class="nodes" id="nodes"><section class="node" data-node="local"><h3>Main<small data-i18n="main_server"></small></h3><div class="row proto" data-proto="kankimix"><div class="ph"><i class="pl pl-kankimix">K</i><div><b>KANKI MIX</b><small>kankimix</small></div></div><div class="acts"><i hidden data-url="/api/config/1/kankimix?sub=kanki-1-1338159476499767303&amp;node=local"></i><p class="apponly" data-i18n="app_only">Only in the Kanki VPN app</p></div></div></section><section class="node" data-node="de"><h3>🇩🇪 GERMANY<small data-i18n="node"></small></h3><div class="row proto" data-proto="amneziawg"><div class="ph"><i class="pl pl-amneziawg">A</i><div><b>AmneziaWG</b><small>amneziawg</small></div></div><div class="acts"><a class="btn" href="/api/config/1/amneziawg?sub=kanki-1-1338159476499767303&amp;node=de" data-i18n="dl_conf">Download config</a><button class="b2" data-act="info" data-url="/api/config/1/amneziawg?sub=kanki-1-1338159476499767303&amp;node=de" data-i18n="show_info">Show info</button><button class="b2" data-act="qr" data-url="/api/config/1/amneziawg/qr?sub=kanki-1-1338159476499767303&amp;node=de" data-i18n="qr">QR Code</button></div></div><div class="row proto" data-proto="hysteria2"><div class="ph"><i class="pl pl-hysteria2">H</i><div><b>Hysteria2</b><small>hysteria2</small></div></div><div class="acts"><code class="uri">hysteria2://1338159476499767303@de.example.com:8443/?#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY</code><button class="b2" data-act="copy" data-text="hysteria2://1338159476499767303@de.example.com:8443/?#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY" data-i18n="copy_uri">Copy URI</button><button class="b2" data-act="qr" data-url="/api/config/1/hysteria2/qr?sub=kanki-1-1338159476499767303&amp;node=de" data-i18n="qr">QR Code</button></div></div><div class="row proto" data-proto="kankimix"><div class="ph"><i class="pl pl-kankimix">K</i><div><b>KANKI MIX</b><small>kankimix</small></div></div><div class="acts"><i hidden data-url="/api/config/1/kankimix?sub=kanki-1-1338159476499767303&amp;node=de"></i><p class="apponly" data-i18n="app_only">Only in the Kanki VPN app</p></div></div></section><section class="node" data-node="de@tunnel" data-via="tunnel"><h3>🇩🇪 GERMANY (تانل)<small data-i18n="tunnel"></small></h3><div class="row proto" data-proto="wireguard"><div class="ph"><i class="pl pl-wireguard">W</i><div><b>WireGuard</b><small>wireguard</small></div></div><div class="acts"><a class="btn" href="/api/config/1/wireguard?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="dl_conf">Download config</a><button class="b2" data-act="info" data-url="/api/config/1/wireguard?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="show_info">Show info</button><button class="b2" data-act="qr" data-url="/api/config/1/wireguard/qr?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="qr">QR Code</button><button class="b2" data-act="uri" data-url="/api/config/1/wireguard/uri?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="get_uri">Get URI</button></div></div><div class="row proto" data-proto="amneziawg"><div class="ph"><i class="pl pl-amneziawg">A</i><div><b>AmneziaWG</b><small>amneziawg</small></div></div><div class="acts"><a class="btn" href="/api/config/1/amneziawg?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="dl_conf">Download config</a><button class="b2" data-act="info" data-url="/api/config/1/amneziawg?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="show_info">Show info</button><button class="b2" data-act="qr" data-url="/api/config/1/amneziawg/qr?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="qr">QR Code</button></div></div><div class="row proto" data-proto="hysteria2"><div class="ph"><i class="pl pl-hysteria2">H</i><div><b>Hysteria2</b><small>hysteria2</small></div></div><div class="acts"><code class="uri">hysteria2://1338159476499767303@ir.example.com:8443/?sni=de.example.com#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28Tunnel%29</code><button class="b2" data-act="copy" data-text="hysteria2://1338159476499767303@ir.example.com:8443/?sni=de.example.com#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28Tunnel%29" data-i18n="copy_uri">Copy URI</button><button class="b2" data-act="qr" data-url="/api/config/1/hysteria2/qr?sub=kanki-1-1338159476499767303&amp;node=de@tunnel" data-i18n="qr">QR Code</button></div></div><div class="row proto" data-proto="kankimix"><div class="ph"><i class="pl pl-kankimix">K</i><div><b>KANKI MIX</b><small>kankimix</small></div></div><div class="acts"><i hidden data-via="tunnel" data-url="/api/config/1/kankimix?sub=kanki-1-1338159476499767303&amp;node=de@tunnel"></i><p class="apponly" data-i18n="app_only">Only in the Kanki VPN app</p></div></div></section></div>
+  <div id="cfg"></div>
+
+  <section class="card help" id="help" hidden style="margin-top:12px">
+    <div><b data-i18n="help">Help</b><small data-i18n="help_sub">Install the app or contact support</small></div>
+    <div class="go"><a class="btn" id="h_app" hidden target="_blank" rel="noopener noreferrer" data-i18n="get_app">Get the app</a><a class="b2" id="h_sup" hidden target="_blank" rel="noopener noreferrer" data-i18n="support">Support</a></div>
+  </section>
+
+  <footer><span>Secure · Private · Powerful</span><span id="ver"></span></footer>
+</main>
+<div class="modal" id="m"><div class="mbox"><div class="mh"><b id="mt"></b><button class="chip" id="mx" aria-label="close">✕</button></div><div id="mb"></div></div></div>
+<div class="toast" id="toast"></div>
+<script type="application/json" id="data">{"active":true,"app_link":"","app_msg":null,"apps":[],"created_ts":1793958432,"dns":null,"emergency":"","emergency_key":"","expires_ts":1796550432,"id":1,"last_seen_ts":0,"limit_gb":0.0,"logo":"","max_conn":1,"nodes":[{"exit_cc":"","exit_city":"","exit_ip":"","hy2":null,"id":"local","kcore":[],"kmix":"kanki://545b5819af52993374808bf16c7c97f1ce9fb35a59b57f993f7a31346135af97@panel.example.com:4000?fec=10-3&gaming=1#Main","kmix_tunnel":null,"main":true,"mtun":"mtun://17973383d5e23de55d23c990182ec2aa344fa88528a4a3fd020b807663d48da2@panel.example.com:4200?obfs=ebf9a4cc0468269ff17a2b17859bf4509821f6f4737f2f91368395ccac133df4&ip=10.79.0.2/16&mtu=1324&burst=300&delay=2#Main%20%C2%B7%20microtun","name":"Main","protocols":["kankimix"],"via_proto":{"kankimix":"direct"}},{"awg_direct":"","awg_via":"direct","exit_cc":"","exit_city":"","exit_ip":"","hy2":"hysteria2://1338159476499767303@de.example.com:8443/?#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY","id":"de","kcore":[],"kmix":"kanki://545b5819af52993374808bf16c7c97f1ce9fb35a59b57f993f7a31346135af97@de.example.com:4000?fec=10-3&gaming=1#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY","kmix_tunnel":"kanki://545b5819af52993374808bf16c7c97f1ce9fb35a59b57f993f7a31346135af97@ir.example.com:4000?fec=10-3&gaming=1&via=tunnel#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28Tunnel%29","main":false,"mtun":"mtun://17973383d5e23de55d23c990182ec2aa344fa88528a4a3fd020b807663d48da2@de.example.com:4200?obfs=ebf9a4cc0468269ff17a2b17859bf4509821f6f4737f2f91368395ccac133df4&ip=10.79.0.2/16&mtu=1324&burst=300&delay=2#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%C2%B7%20microtun","name":"🇩🇪 GERMANY","protocols":["amneziawg","hysteria2","kankimix"],"via_proto":{"amneziawg":"direct","hysteria2":"direct","kankimix":"direct"}},{"awg_direct":"","awg_via":"tunnel","exit_cc":"","exit_city":"","exit_ip":"","hy2":"hysteria2://1338159476499767303@ir.example.com:8443/?sni=de.example.com#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28Tunnel%29","id":"de@tunnel","kcore":[],"kmix":"kanki://545b5819af52993374808bf16c7c97f1ce9fb35a59b57f993f7a31346135af97@ir.example.com:4000?fec=10-3&gaming=1&via=tunnel#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28Tunnel%29","kmix_tunnel":null,"main":false,"mtun":"mtun://17973383d5e23de55d23c990182ec2aa344fa88528a4a3fd020b807663d48da2@ir.example.com:4200?obfs=ebf9a4cc0468269ff17a2b17859bf4509821f6f4737f2f91368395ccac133df4&ip=10.79.0.2/16&mtu=1324&burst=300&delay=2#%F0%9F%87%A9%F0%9F%87%AA%20GERMANY%20%28%D8%AA%D8%A7%D9%86%D9%84%29%20%C2%B7%20microtun","name":"🇩🇪 GERMANY (تانل)","parent":"de","protocols":["wireguard","amneziawg","hysteria2","kankimix"],"via":"tunnel","via_proto":{"amneziawg":"tunnel","hysteria2":"tunnel","kankimix":"tunnel","wireguard":"tunnel"}}],"online":0,"panel_name":"Kanki Panel","status":"Active","sub":"kanki-1-1338159476499767303","sub_base":"","support":"","used_gb":0.0,"username":"ali","version":"3.32.0","xray":null}</script>
+<script>
+(function(){
+"use strict";
+var D=JSON.parse(document.getElementById('data').textContent);
+var T={fa:{vpn_sub:'اشتراک VPN',ready:'اشتراک VPN شما آماده استفاده است',left_data:'حجم باقی‌مانده',used:'مصرف‌شده',conns:'اتصال همزمان',last_seen:'آخرین اتصال',exp_date:'تاریخ انقضا',left_time:'زمان باقی‌مانده',your_configs:'کانفیگ‌های شما',dl_conf:'دانلود کانفیگ',show_info:'نمایش اطلاعات',qr:'دانلود QR Code',get_uri:'دریافت URI',copy_uri:'کپی URI',main_server:'سرور اصلی',node:'نود',tunnel:'از راه تانل ایران',unlimited:'نامحدود',expired:'منقضی',never:'هنوز وصل نشده',days:'روز',hours:'ساعت',s_ago:'ثانیه پیش',m_ago:'دقیقه پیش',h_ago:'ساعت پیش',Active:'فعال',Disabled:'غیرفعال',Expired:'منقضی',Limited:'اتمام حجم',copied:'کپی شد',copy:'کپی',no_cfg:'هنوز کانفیگی برای شما فعال نشده',loading:'در حال دریافت…',sub_link:'لینک اشتراک',raw_hint:'لینک دوم برای v2rayNG و Hiddify است',help:'راهنما و پشتیبانی',help_sub:'اپ را نصب کن یا با پشتیبانی در تماس باش',get_app:'دانلود اپ',support:'پشتیبانی',of:'از',c_tunnel:'تانل',c_direct:'مستقیم',dl_s:'دانلود',qr_s:'QR',copy_s:'کپی',wg_sub:'همه از راه تانل',awg_sub:'تانل یا مستقیم؛ هرکدوم بهتر جواب داد',hy_sub:'از راه تانل · کشورهای فعال',xr_sub:'برای v2rayNG و V2Box؛ همه یکجا میاد',copy_all:'کپی همه‌ی کانفیگ‌ها',copy_sub:'کپی لینک ساب',cfgs:'کانفیگ',v2_sub:'برای v2rayNG، V2Box و Hiddify',v2_hint:'لینک اشتراک ترکیبی شامل کانفیگ‌های Xray و Hysteria',all_hint:'همه‌ی کانفیگ‌ها یکجا: «لینک دوم» بالای صفحه رو کپی کن و توی V2Box، v2rayNG یا Hiddify به‌عنوان اشتراک اضافه کن.',km_sub:'پروتکل اختصاصی کانکی',km_txt:'مخصوص گیم و پینگ کم، با کمترین لگ. فقط داخل اپ Kanki VPN کار می‌کنه و کانفیگ‌هاش خودکار میاد: اپ رو باز کن و از دکمه‌ی 🔗 بالای صفحه «بروزرسانی» رو بزن.',app_title:'اپ Kanki VPN',app_sub:'نسخه‌ی گوشی‌ات رو بگیر و با کد اشتراکت وارد شو',dl:'دانلود',rec:'پیشنهادی',a_arm64:'گوشی‌های جدید (۶۴ بیتی)',h_arm64:'بیشتر گوشی‌های امروزی؛ اگر مطمئن نیستی همین رو بگیر',a_armv7:'گوشی‌های قدیمی (۳۲ بیتی)',h_armv7:'اگه نسخه‌ی ۶۴ بیتی نصب نشد، این رو بگیر',a_universal:'همه‌ی گوشی‌ها',h_universal:'روی هر گوشی نصب می‌شه، فقط حجمش بیشتره',a_x86_64:'شبیه‌ساز اندروید (x86)',h_x86_64:'برای شبیه‌ساز اندروید روی کامپیوتر',app_only:'فقط داخل اپ Kanki VPN · اپ رو باز کن و «بروزرسانی» رو بزن'},
+en:{vpn_sub:'VPN Subscription',ready:'Your VPN subscription is ready',left_data:'Data remaining',used:'Used',conns:'Connections',last_seen:'Last connection',exp_date:'Expiry',left_time:'Time remaining',your_configs:'Your configs',dl_conf:'Download config',show_info:'Show info',qr:'QR Code',get_uri:'Get URI',copy_uri:'Copy URI',main_server:'Main server',node:'Node',tunnel:'Through the Iran tunnel',unlimited:'Unlimited',expired:'Expired',never:'Never',days:'days',hours:'hours',s_ago:'s ago',m_ago:'min ago',h_ago:'h ago',Active:'Active',Disabled:'Disabled',Expired:'Expired',Limited:'Out of data',copied:'Copied',copy:'Copy',no_cfg:'No configs are active for you yet',loading:'Loading…',sub_link:'Subscription link',raw_hint:'Second link is for v2rayNG / Hiddify',help:'Help',help_sub:'Install the app or contact support',get_app:'Get the app',support:'Support',of:'of',c_tunnel:'Tunnel',c_direct:'Direct',dl_s:'Download',qr_s:'QR',copy_s:'Copy',wg_sub:'All through the tunnel',awg_sub:'Tunnel or direct, whichever works better',hy_sub:'Through the tunnel · these countries',xr_sub:'For v2rayNG and V2Box, all at once',copy_all:'Copy all configs',copy_sub:'Copy sub link',cfgs:'configs',v2_sub:'For v2rayNG, V2Box and Hiddify',v2_hint:'Combined subscription link with the Xray and Hysteria configs',all_hint:'Every config at once: copy the second link at the top and add it as a subscription in V2Box, v2rayNG or Hiddify.',km_sub:'Kanki’s own protocol',km_txt:'Made for games and low ping. It works only in the Kanki VPN app and its configs come by themselves: open the app and tap Refresh (🔗 at the top).',app_title:'Kanki VPN app',app_sub:'Pick the version for your phone, then sign in with your subscription code',dl:'Download',rec:'Recommended',a_arm64:'New phones (64-bit)',h_arm64:'Most phones today; take this one if unsure',a_armv7:'Older phones (32-bit)',h_armv7:'If the 64-bit one does not install, take this one',a_universal:'Every phone',h_universal:'Installs on any phone, only bigger',a_x86_64:'Android emulator (x86)',h_x86_64:'For an Android emulator on a computer',app_only:'Only in the Kanki VPN app · open the app and tap Refresh'}};
+// browser storage can be closed (private mode, blocked site data): the page works without it
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+var L=lsGet('kk_lang')||'fa';
+function $(i){return document.getElementById(i)}
+function t(k){return (T[L]&&T[L][k])||k}
+// ---- digits + Jalali (Shamsi) date
+var PD='۰۱۲۳۴۵۶۷۸۹';
+function N(x){x=String(x);return L=='fa'?x.replace(/\d/g,function(d){return PD.charAt(+d)}):x}
+function p2(n){return (n<10?'0':'')+n}
+function dv(a,b){return Math.floor(a/b)}
+function g2j(gy,gm,gd){var gdm=[0,31,59,90,120,151,181,212,243,273,304,334],gy2=gm>2?gy+1:gy,days=355666+365*gy+dv(gy2+3,4)-dv(gy2+99,100)+dv(gy2+399,400)+gd+gdm[gm-1],jy=-1595+33*dv(days,12053);
+ days%=12053;jy+=4*dv(days,1461);days%=1461;if(days>365){jy+=dv(days-1,365);days=(days-1)%365}
+ return [jy,days<186?1+dv(days,31):7+dv(days-186,30),1+(days<186?days%31:(days-186)%30)]}
+function fmt(ts,time){var d=new Date(ts*1000),s;
+ if(L=='fa'){var j=g2j(d.getFullYear(),d.getMonth()+1,d.getDate());s=j[0]+'/'+p2(j[1])+'/'+p2(j[2])}else s=d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+ if(time)s+=' '+p2(d.getHours())+':'+p2(d.getMinutes());return N(s)}
+function ago(ts){var s=Math.max(0,Math.floor(Date.now()/1000-ts));
+ if(s<60)return N(s)+' '+t('s_ago');if(s<3600)return N(Math.floor(s/60))+' '+t('m_ago');if(s<86400)return N(Math.floor(s/3600))+' '+t('h_ago');return fmt(ts)}
+function gb(x){return N((x>=100?x.toFixed(0):x.toFixed(2))+' GB')}
+// ---- ring: frac = 0..1 of the circle that is filled
+var CIRC=2*Math.PI*52;
+function ring(id,frac){var e=$(id);frac=Math.max(0,Math.min(1,frac));
+ e.style.strokeDasharray=(CIRC*frac).toFixed(1)+' '+CIRC.toFixed(1);e.setAttribute('class','rf'+(frac<.05?' bad':frac<.15?' warn':''))}
+var fr={data:0,time:0},first=true;
+function logoOk(x){return /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+\/=]+$/.test(x||'')}
+function render(){
+ document.documentElement.lang=L;document.documentElement.dir=L=='fa'?'rtl':'ltr';
+ $('lang').textContent=L=='fa'?'EN':'FA';
+ document.querySelectorAll('[data-i18n]').forEach(function(e){e.textContent=t(e.dataset.i18n)});
+ var pn=D.panel_name||'Kanki Panel';$('pn').textContent=pn;
+ var lg=$('lg');if(logoOk(D.logo)){lg.className='logo has-img';lg.innerHTML='<img alt="" src="'+D.logo+'">'}else{lg.className='logo svgl';lg.innerHTML='<svg class="klogo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9A6"/><stop offset="1" stop-color="#B8862B"/></linearGradient><radialGradient id="kb" cx=".3" cy=".22" r=".95"><stop offset="0" stop-color="#2c2213"/><stop offset="1" stop-color="#0b0906"/></radialGradient></defs><rect x="2.5" y="2.5" width="59" height="59" rx="17" fill="url(#kb)" stroke="url(#kg)" stroke-width="2.2"/><path d="M23 17v30M42 17.5L25.5 32.5 42.5 47" fill="none" stroke="url(#kg)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="43" cy="16.5" r="4.4" fill="#FFE9A6"/><circle cx="43.5" cy="47.5" r="4.4" fill="#FFE9A6"/></svg>'}
+ $('av').textContent=(D.username||'K').charAt(0).toUpperCase();
+ // status pill: green = active, orange = out of data / expired, red = disabled
+ var st=$('st');st.textContent=t(D.status);st.className='pill'+(D.active?'':(D.status=='Disabled'?' bad':' warn'));
+ // data ring
+ var unl=!(D.limit_gb>0),left=unl?0:Math.max(0,D.limit_gb-D.used_gb);
+ $('b_left').textContent=unl?'∞':N((left>=100?left.toFixed(0):left.toFixed(1)));
+ $('u_left').textContent=unl?t('unlimited'):'GB';
+ $('b_data').textContent=gb(D.used_gb)+' / '+(unl?'∞':gb(D.limit_gb));
+ fr.data=unl?1:left/D.limit_gb;
+ // time ring
+ var now=Date.now()/1000,exp=D.expires_ts;
+ if(exp>0){var s=exp-now;
+  if(s<=0){$('b_time').textContent=N(0);$('u_time').textContent=t('expired');fr.time=0}
+  else{var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),span=exp-(D.created_ts||now-30*86400);if(span<=0)span=30*86400;
+   $('b_time').textContent=N(d>0?d:h);$('u_time').textContent=d>0?t('days'):t('hours');fr.time=s/span}
+  $('b_exp').textContent=fmt(exp,true)}
+ else{$('b_time').textContent='∞';$('u_time').textContent=t('unlimited');$('b_exp').textContent='';fr.time=1}
+ if(!first){ring('f_data',fr.data);ring('f_time',fr.time)}
+ // tiles
+ $('s_used').textContent=gb(D.used_gb);
+ $('s_exp').textContent=exp>0?fmt(exp):'∞';
+ $('s_conn').textContent=N(D.online)+' / '+(D.max_conn>0?N(D.max_conn):'∞');
+ $('s_seen').textContent=D.last_seen_ts>0?ago(D.last_seen_ts):t('never');
+ // links
+ var base=(D.sub_base||location.origin)+'/sub/'+D.sub;
+ $('subu').value=base;$('cpu').dataset.text=base;$('rawu').value=base+'/raw';$('cpr').dataset.text=base+'/raw';
+ $('ver').textContent=pn+' v'+D.version;
+ var nodes=$('nodes');nodes.querySelectorAll('.node').forEach(function(n){if(!n.querySelector('.row'))n.remove()});
+ if(!nodes.querySelector('.node'))nodes.innerHTML='<div class="card empty">'+t('no_cfg')+'</div>';
+ cfgView();
+ helpLinks();
+ appFiles();
+}
+// ---- configs by protocol. The server's sections (#nodes) stay in the page as they are, the Kanki app
+// reads them; people see the same buttons grouped: one card per protocol, a row per country, the
+// configs through the tunnel and the direct ones side by side. KANKI MIX is one card (app only).
+function cfgView(){var box=$('cfg'),src=$('nodes');box.innerHTML='';
+ var NB={};(D.nodes||[]).forEach(function(n){NB[n.id]=n});
+ var G={},order=[],rows=0;
+ src.querySelectorAll('.node').forEach(function(sec){var id=sec.dataset.node||'';if(id=='xray'||id=='dns')return;
+  var info=NB[id]||{},base=info.parent||id.replace(/@tunnel$/,'');if(order.indexOf(base)<0)order.push(base);
+  sec.querySelectorAll('.row.proto').forEach(function(r){var p=r.dataset.proto,acts=r.querySelector('.acts');if(!acts)return;
+   var via=(info.via_proto&&info.via_proto[p])||(sec.dataset.via=='tunnel'?'tunnel':'direct');
+   G[p]=G[p]||{};G[p][base]=G[p][base]||{};G[p][base][via]=acts;rows++})});
+ if(!rows&&!src.querySelector('[data-node=xray],[data-node=dns]'))return;
+ // a server's flag and country (where its traffic really leaves), else the name the panel gives it
+ var where=function(base){var n=NB[base]||{},cc=String(n.exit_cc||'').toUpperCase(),nm='',ok=/^[A-Z]{2}$/.test(cc);
+  if(ok){nm=(L=='fa'&&{GB:'انگلیس',US:'آمریکا',AE:'امارات'}[cc])||'';if(!nm)try{nm=new Intl.DisplayNames([L],{type:'region'}).of(cc)}catch(e){nm=cc}}
+  return {fl:ok?String.fromCodePoint(127397+cc.charCodeAt(0),127397+cc.charCodeAt(1)):'🌐',nm:nm||n.name||base,city:nm?n.exit_city||'':''}};
+ var place=function(base){var w=where(base);
+  return '<div class="cn"><span class="fl">'+w.fl+'</span><span>'+esc(w.nm)+'</span>'+(w.city?'<small>'+esc(w.city)+'</small>':'')+'</div>'};
+ // the buttons of one config, short: download / QR (WireGuard, AmneziaWG), copy / QR (Hysteria2)
+ var cell=function(acts,p){if(!acts)return '<div class="cell none">—</div>';var h='';
+  var dl=acts.querySelector('a.btn'),cp=acts.querySelector('[data-act=copy]'),qr=acts.querySelector('[data-act=qr]');
+  if(dl)h+='<a class="btn" href="'+esc(dl.getAttribute('href'))+'">⬇ '+t('dl_s')+'</a>';
+  if(cp)h+='<button class="b2" data-act="copy" data-text="'+esc(cp.dataset.text)+'">'+t('copy_s')+'</button>';
+  if(qr)h+='<button class="b2" data-act="qr" data-url="'+esc(qr.dataset.url)+'">'+t('qr_s')+'</button>';
+  return '<div class="cell">'+(h||'—')+'</div>'};
+ var head=function(p,l,title,subt){return '<div class="pch"><i class="pl">'+l+'</i><div><b>'+title+'</b><small>'+subt+'</small></div></div>'};
+ var card=function(p,l,title,subt){var g=G[p];if(!g)return '';var bases=order.filter(function(b){return g[b]});
+  var two=bases.some(function(b){return g[b].tunnel})&&bases.some(function(b){return g[b].direct});
+  var h=head(p,l,title,subt);
+  if(two){h+='<div class="cols"><span>'+t('c_tunnel')+'</span><span>'+t('c_direct')+'</span></div>';
+   bases.forEach(function(b){h+='<div class="crow">'+place(b)+'<div class="cells">'+cell(g[b].tunnel,p)+cell(g[b].direct,p)+'</div></div>'})}
+  else bases.forEach(function(b){var a=g[b].tunnel||g[b].direct;h+='<div class="crow inline">'+place(b)+cell(a,p)+'</div>'});
+  return '<section class="pc" data-p="'+p+'">'+h+'</section>'};
+ var html=card('wireguard','W','WireGuard',t('wg_sub'))+card('amneziawg','A','AmneziaWG',t('awg_sub'));
+ var chips=function(bs){return '<div class="kfl">'+bs.map(function(b){var w=where(b);return '<span>'+w.fl+' '+esc(w.nm)+'</span>'}).join('')+'</div>'};
+ // Hysteria2 + Xray in one card (V2Ray apps read both): Hysteria2 one config per country, the one through
+ // the tunnel (a server without a tunnel: its own), as flags; one button copies every link of both, one
+ // per line (v2rayNG imports them at once); the yellow one copies the combined subscription link
+ var hb=[],hl=[],xl=[],xs=src.querySelector('[data-node=xray]');
+ if(G.hysteria2)order.forEach(function(b){var g=G.hysteria2[b],a=g&&(g.tunnel||g.direct),c=a&&a.querySelector('[data-act=copy]');if(c){hb.push(b);hl.push(c.dataset.text)}});
+ if(xs)xl=[].map.call(xs.querySelectorAll('.row.proto [data-act=copy]'),function(c){return c.dataset.text});
+ if(hl.length||xl.length){var tags=(hl.length?'<span class="tg">Hysteria2 · '+N(hl.length)+'</span>':'')+(xl.length?'<span class="tg">Xray · '+N(xl.length)+'</span>':'');
+  html+='<section class="pc" data-p="v2">'+head('v2','V','Hysteria2 + Xray',t('v2_sub'))+'<div class="tgs">'+tags+'</div>'+(hb.length?chips(hb):'')+
+   '<div class="pb two"><button class="b2" data-act="copy" data-text="'+esc(hl.concat(xl).join('\n'))+'">📋 '+t('copy_all')+'</button>'+
+   '<button class="btn" data-act="copy" data-text="'+esc((D.sub_base||location.origin)+'/sub/'+D.sub+'/v2')+'">🔗 '+t('copy_sub')+'</button></div>'+
+   '<p class="xn">'+t('v2_hint')+'</p></section>'}
+ // KANKI MIX: one card, the countries it runs in
+ if(G.kankimix){var kb=order.filter(function(b){return G.kankimix[b]});
+  html+='<section class="pc" data-p="kankimix">'+head('kankimix','K','KANKI MIX',t('km_sub'))+'<p class="kmx">'+t('km_txt')+'</p>'+
+   '<div class="kfl">'+kb.map(function(b){var w=where(b);return '<span>'+w.fl+' '+esc(w.nm)+'</span>'}).join('')+'</div></section>'}
+ // Kanki DNS: as the server wrote it
+ var ds=src.querySelector('[data-node=dns]');
+ if(ds){var dc=ds.cloneNode(true);dc.className='pc';dc.dataset.p='dns';dc.removeAttribute('data-node');html+=dc.outerHTML}
+ box.innerHTML=html;src.style.display='none'}
+// ---- the app's install files uploaded in the panel (one per phone type, the first fits most phones)
+function appFiles(){var a=D.apps||[];$('apps').hidden=!a.length;if(!a.length)return;
+ var v=a.map(function(x){return x.version}).filter(Boolean)[0];$('a_ver').textContent=v?'v'+v:'';$('a_ver').hidden=!v;
+ $('a_list').innerHTML=a.map(function(x,i){var s=x.short,rec=i==0&&a.length>1;
+  return '<div class="arow'+(rec?' rec':'')+'"><div class="ai"><b>'+esc(t('a_'+s))+(rec?'<span class="tag">'+esc(t('rec'))+'</span>':'')+'</b>'+
+   '<small>'+esc(t('h_'+s))+'</small><i>'+esc(x.name)+' · '+(x.size/1e6).toFixed(1)+' MB</i></div>'+
+   '<a class="btn" href="'+esc(x.url)+'" download="'+esc(x.name)+'">⬇ '+esc(t('dl'))+'</a></div>'}).join('')}
+// ---- app / support buttons (only http(s) links or a Telegram id are accepted)
+function safeUrl(v,tg){v=String(v||'').trim();if(/^https?:\/\//i.test(v))return v;
+ if(tg){var id=v.replace(/^@/,'');if(/^[A-Za-z0-9_]{4,32}$/.test(id))return 'https://t.me/'+id}return ''}
+function helpLinks(){var a=safeUrl(D.app_link,false),s=safeUrl(D.support,true);
+ $('h_app').hidden=!a;if(a)$('h_app').href=a;$('h_sup').hidden=!s;if(s)$('h_sup').href=s;$('help').hidden=!(a||s)}
+// ---- toast + copy
+function toast(m){var e=$('toast');e.textContent=m;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){e.style.display='none'},1500)}
+function copy(s){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(s).then(function(){toast(t('copied'))})}
+ else{var a=document.createElement('textarea');a.value=s;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();toast(t('copied'))}}
+// ---- modal (QR / config info)
+var M=$('m');
+function modal(title,html){$('mt').textContent=title;$('mb').innerHTML=html;M.classList.add('on');document.body.style.overflow='hidden'}
+function closeM(){M.classList.remove('on');document.body.style.overflow=''}
+$('mx').onclick=closeM;M.onclick=function(e){if(e.target===M)closeM()};
+document.addEventListener('keydown',function(e){if(e.key=='Escape')closeM()});
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-act]');if(!b)return;var a=b.dataset.act,u=b.dataset.url;
+ if(a=='copy')return copy(b.dataset.text);
+ if(a=='qr')return modal('QR Code','<div class="qr"><img alt="QR" src="'+u+'"></div>');
+ if(a=='info'||a=='uri'){modal(a=='uri'?'URI':t('show_info'),'<p>'+t('loading')+'</p>');
+  fetch(u).then(function(r){return r.text()}).then(function(x){
+   var extra='';
+   $('mb').innerHTML=extra+'<pre id="cfg">'+esc(x)+'</pre><button class="btn" id="cp" style="width:100%">'+t('copy')+'</button>';
+   $('cp').onclick=function(){copy(x)}})}
+});
+$('lang').onclick=function(){L=L=='fa'?'en':'fa';lsSet('kk_lang',L);render()};
+var th=lsGet('kk_theme')||'dark';if(th=='light')document.body.classList.add('light');
+$('th').onclick=function(){document.body.classList.toggle('light');lsSet('kk_theme',document.body.classList.contains('light')?'light':'dark')};
+// first paint: texts now, rings start empty and fill up once (animation)
+ring('f_data',0);ring('f_time',0);
+render();
+requestAnimationFrame(function(){requestAnimationFrame(function(){first=false;ring('f_data',fr.data);ring('f_time',fr.time)})});
+})();
+</script>
+</body>
+</html>

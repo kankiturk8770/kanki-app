@@ -198,14 +198,15 @@ fun GuideOverlay(onAnswer: (Boolean) -> Unit = {}, onFinish: () -> Unit) {
             }
 
             // حباب ربات: اگر بخش روشن بالای صفحه است، زیرش؛ وگرنه بالایش
-            val placeBelow = hole != null && hole.center.y < box.height * .5f
+            // حباب جایی می‌رود که جای بیشتری دارد (قبلاً همیشه زیر بخش بالایی می‌رفت و دکمه‌ها از پایین صفحه بیرون می‌زدند)
+            val placeBelow = hole != null && (box.height - hole.bottom) >= hole.top
             val bubbleMod = when {
                 hole == null -> Modifier.align(Alignment.Center)
                 placeBelow -> Modifier.align(Alignment.TopCenter).padding(top = with(density) { (hole.bottom + 14.dp.toPx()).coerceAtLeast(0f).toDp() })
                 else -> Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { (box.height - hole.top + 14.dp.toPx()).coerceAtLeast(0f).toDp() })
             }
             GuideBubble(
-                step, idx, last, bubbleMod.padding(horizontal = D.PagePad),
+                step, idx, last, bubbleMod.systemBarsPadding().padding(horizontal = D.PagePad, vertical = D.S2),
                 onNext = { next() }, onBack = { Guide.back() }, onSkip = { Guide.stop(); onFinish() },
             )
         }
@@ -262,18 +263,21 @@ private fun GuideBubble(
             T(trf("%d از %d", idx + 1, guideSteps.size).let { if (en) it else faDigits(it) }, size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         Spacer(Modifier.height(D.S2))
-        GuideBody(if (en) step.textEn else step.text)
-        val points = if (en) step.pointsEn else step.points
-        if (points.isNotEmpty()) {
-            Spacer(Modifier.height(D.S2))
-            points.forEach { (name, what) -> GuidePoint(name, what) }
+        // متن اگر جا نشد خودش اسکرول می‌خورد؛ دکمه‌ها همیشه کامل دیده می‌شوند
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+            GuideBody(if (en) step.textEn else step.text)
+            val points = if (en) step.pointsEn else step.points
+            if (points.isNotEmpty()) {
+                Spacer(Modifier.height(D.S2))
+                points.forEach { (name, what) -> GuidePoint(name, what) }
+            }
         }
         Spacer(Modifier.height(D.S3))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!last) T("رد کردن", size = 12.sp, color = K.Sub, modifier = Modifier.clip(RoundedCornerShape(D.RS)).clickable(onClick = onSkip).padding(horizontal = D.S2, vertical = D.S2))
-            Spacer(Modifier.weight(1f))
-            if (idx > 0) { SmallLine("قبلی", onClick = onBack); Spacer(Modifier.width(D.S2)) }
-            SmallGold(if (last) "تمام" else "بعدی", onClick = onNext)
+        // دکمه‌های قبلی و بعدی تمام‌قد (۴۸dp، اندازه‌ی لمس انگشت) و «رد کردن» جدا بالایشان
+        if (!last) T("رد کردن", size = 13.sp, color = K.Sub, modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(D.RS)).clickable(onClick = onSkip).padding(horizontal = D.S2, vertical = D.S2))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            if (idx > 0) LineButton("قبلی", Modifier.weight(1f), onClick = onBack)
+            GoldButton(if (last) "تمام" else "بعدی", Modifier.weight(if (idx > 0) 1.4f else 1f), onClick = onNext)
         }
     }
 }

@@ -38,6 +38,25 @@ object Motion {
     /** فاصله‌ی دو فریم (نانوثانیه)، با ۲ میلی‌ثانیه جا برای لرزش ساعت فریم */
     val frameNs: Long get() = if (lowEnd) 31_000_000L else 14_500_000L
 
+    /** فریم‌های اخیر: چندتایشان دیر رسیدند (برای سبک شدن خودکار) */
+    private var seen = 0
+    private var late = 0
+
+    /**
+     * فاصله‌ی واقعی دو فریم پشت‌سرهم. اگر گوشی ۶۰ فریم را نگه نمی‌دارد (از ۹۰ فریم، ۲۵ تا بیش از ۲۴ میلی‌ثانیه)،
+     * انیمیشن‌ها خودشان سبک می‌شوند: ۳۰ فریم و تزئین کمتر (همان حالت گوشی ضعیف)، تا آخر این بار باز بودن برنامه.
+     * فقط وقتی برنامه جلوی چشم است و فریم می‌گیرد سنجیده می‌شود (مکث‌های بیش از ۲۵۰ میلی‌ثانیه، مثل برگشتن از پس‌زمینه، حساب نمی‌شوند).
+     */
+    fun frame(deltaNs: Long) {
+        if (lowEnd || deltaNs <= 0 || deltaNs > 250_000_000L) return
+        seen++
+        if (deltaNs > 24_000_000L) late++
+        if (seen >= 90) {
+            if (late >= 25) lowEnd = true
+            seen = 0; late = 0
+        }
+    }
+
     fun init(ctx: android.content.Context) {
         val am = ctx.getSystemService(android.app.ActivityManager::class.java) ?: return
         val mem = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
@@ -53,8 +72,11 @@ fun motionTime(): State<Float> {
     LaunchedEffect(Unit) {
         var start = 0L
         var last = 0L
+        var prev = 0L
         while (true) {
             withFrameNanos { now ->
+                if (prev != 0L) Motion.frame(now - prev)
+                prev = now
                 if (start == 0L) { start = now; last = now }
                 if (now - last >= Motion.frameNs) {
                     // هر ساعت از صفر؛ دقت عدد اعشاری بعد از ساعت‌ها باز بودن برنامه کم نمی‌شود
