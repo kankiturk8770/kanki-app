@@ -181,6 +181,8 @@ fun EmergencyScreen(state: AppState, onClose: () -> Unit) {
                 runCatching { withContext(Dispatchers.IO) { Emergency.markRead(ctx, c, lastAdmin) } }.onSuccess { readSent = lastAdmin }
                 EmergencyStore.setNotified(ctx, lastAdmin)
             }
+            // چت جلوی چشم است: عدد روی دکمه‌ی چت صفر می‌شود
+            if (visible && lastAdmin > 0) EmergencyStore.markSeen(ctx, lastAdmin)
             // عکس‌ها: همه‌ی پیام‌های عکس‌دار، نه فقط تازه‌ها (از حافظه‌ی گوشی، وگرنه از سرور)
             msgs.filter { it.img && it.id !in images && (imgFails[it.id] ?: 0) < 3 }.forEach { m ->
                 runCatching {

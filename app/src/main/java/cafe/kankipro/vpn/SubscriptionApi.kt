@@ -248,19 +248,20 @@ object SubscriptionApi {
             val node = Regex("""[?&]node=([^&]+)""").find(raw)?.groupValues?.get(1) ?: "local"
             val name = headings.lastOrNull { it.first < m.range.first }?.second ?: node
             // Hysteria2 در صفحه‌ی اشتراک فقط دکمه‌ی QR دارد؛ همان آدرس بدون /qr متن لینک hysteria2:// را می‌دهد
-            if (m.groupValues[2].startsWith("hysteria2"))
-                ConfigLink(protocol = "hysteria2", node = node, nodeName = name, url = url.replace(Regex("/hysteria2/[a-z0-9]+\\?"), "/hysteria2?"))
-            // KANKI MIX هم مثل Hysteria2 فقط QR دارد؛ همان آدرس بدون /qr متن لینک kanki:// را می‌دهد
-            else if (m.groupValues[2].startsWith("kankimix"))
-                ConfigLink(protocol = "kankimix", node = node, nodeName = name, url = url.replace(Regex("/kankimix/[a-z0-9]+\\?"), "/kankimix?"))
-            else ConfigLink(protocol = m.groupValues[2], node = node, nodeName = name, url = url)
+            // KANKI MIX هم مثل Hysteria2 فقط QR دارد. دکمه‌های QR و «لینک» بقیه (amneziawg/qr، wireguard/uri) هم همان کانفیگ‌اند:
+            // آدرس بدون پسوند، متن خود کانفیگ است؛ پس هر کانفیگ فقط یک بار شمرده می‌شود
+            val proto = m.groupValues[2].substringBefore("/")
+            ConfigLink(protocol = proto, node = node, nodeName = name, url = url.replace(Regex("/$proto/[a-z0-9]+\\?"), "/$proto?"))
         }.distinctBy { it.url }.toList()
 
         // اطلاعات واقعی که پنل در data-* صفحه گذاشته (مرورگر با جاوااسکریپت از همین‌ها حساب می‌کند)
         fun attr(name: String) = Regex("""$name="([^"]*)"""").find(html)?.groupValues?.get(1)?.trim().orEmpty()
+        // پنل ۳ عددها را در داده‌ی صفحه می‌گذارد (data-traffic-* دیگر نیست)؛ اگر صفت قدیمی بود همان
+        val d0 = dataJson(html)
         val expiresAt = PanelTime.parse(attr("data-expires"))
-        val limitGb = attr("data-traffic-limit").toDoubleOrNull()
-        val usedGb = attr("data-traffic-used").toDoubleOrNull()
+            ?: d0?.optLong("expires_ts", 0L)?.takeIf { it > 946684800L }?.times(1000)
+        val limitGb = attr("data-traffic-limit").toDoubleOrNull() ?: d0?.takeIf { it.has("limit_gb") }?.optDouble("limit_gb")?.takeIf { !it.isNaN() }
+        val usedGb = attr("data-traffic-used").toDoubleOrNull() ?: d0?.takeIf { it.has("used_gb") }?.optDouble("used_gb")?.takeIf { !it.isNaN() }
 
         return Account(
             username = username,

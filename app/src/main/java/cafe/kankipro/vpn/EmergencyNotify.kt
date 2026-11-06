@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.Constraints
@@ -174,6 +176,27 @@ object EmergencyStore {
     fun notified(ctx: Context) = prefs(ctx).getLong("emer_notified", 0L)
     fun setNotified(ctx: Context, id: Long) { if (id > notified(ctx)) prefs(ctx).edit().putLong("emer_notified", id).apply() }
 
+    /** تعداد پیام‌های خوانده‌نشده‌ی پشتیبانی، برای عدد روی دکمه‌ی چت در سربرگ (اعلان آن را صفر نمی‌کند؛ فقط دیدن چت) */
+    var unread by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    /** پیام‌های ادمین تا این شماره روی صفحه‌ی چت دیده شده‌اند */
+    fun markSeen(ctx: Context, id: Long) {
+        if (id > prefs(ctx).getLong("emer_seen", 0L)) prefs(ctx).edit().putLong("emer_seen", id).apply()
+        refreshUnread(ctx)
+    }
+
+    /** دوباره شمردن خوانده‌نشده‌ها از حافظه‌ی گوشی (بدون شبکه) */
+    fun refreshUnread(ctx: Context) {
+        val code = prefs(ctx).getString("code", null) ?: Emergency.savedCode(ctx) ?: run { unread = 0; return }
+        val admin = load(ctx, code).msgs.filter { it.admin }
+        val p = prefs(ctx)
+        // بار اول بعد از نصب این نسخه: تاریخچه‌ی قبلی خوانده‌نشده حساب نمی‌شود
+        if (!p.contains("emer_seen")) p.edit().putLong("emer_seen", admin.maxOfOrNull { it.id } ?: 0L).apply()
+        val seen = p.getLong("emer_seen", 0L)
+        unread = admin.count { it.id > seen }
+    }
+
     // ------------------------------------------------------------ اعلان
     private const val CHANNEL = "kanki_support"
     private const val NOTIF_ID = 4410
@@ -278,6 +301,7 @@ object EmergencyStore {
         val first = notified(ctx) == 0L && load(ctx, code).msgs.isEmpty()
         val page = Emergency.page(ctx, code, lastId(ctx, code))
         save(ctx, code, page.user, page.msgs, page.readUpto)
+        refreshUnread(ctx)
         val admin = page.msgs.filter { it.admin }
         // بار اول بعد از نصب این نسخه: تاریخچه‌ی قبلی «پیام تازه» نیست، فقط نقطه‌ی شروع ثبت می‌شود
         if (first) { admin.maxOfOrNull { it.id }?.let { setNotified(ctx, it) }; return emptyList() }

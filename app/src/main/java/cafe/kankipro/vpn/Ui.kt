@@ -80,26 +80,25 @@ class Palette(
 }
 
 val Themes: List<Palette> = listOf(
-    // زرد کانکی (پیش‌فرض): زرد زنده روی مشکی خالص با سبز نئونی لوگو؛ قرمز فقط برای خطا.
-    // سبز برای «وصل» (نوشته‌ی متصل، لبه‌ی خط‌چین و موج‌های دور دکمه، کشور شما و خط مسیر روی نقشه) و ضد فیلتر،
-    // کهربایی برای گیمینگ و KANKI MIX، مسی برای DNS.
+    // زرد و مشکی (AMOLED، پیش‌فرض): مشکی خالص (پیکسل خاموش روی صفحه‌ی OLED) و فقط خانواده‌ی زرد: زرد زنده، کهربایی، خردلی و
+    // کرم؛ هیچ سبز یا رنگ دیگری کنارش نیست (قبلاً سبز نئونی لوگو کنار زرد بود و با هم نمی‌خواند). قرمز فقط برای خطا.
     Palette(
-        "yellow", Color(0xFFFFD60A), Color(0xFFFFE45C), Color(0xFFB38F00), Color(0xFFFFF4B8),
-        Color(0xFF000000), Color(0xFFFFFBEA), Color(0xFFA39E8A),
+        "yellow", Color(0xFFFFD60A), Color(0xFFFFE566), Color(0xFFC9A100), Color(0xFFFFF3B0),
+        Color(0xFF000000), Color(0xFFFFFDF2), Color(0xFF9C9A8E),
         Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
-        Color(0xE6080704), Color(0xF00F0D07), Color(0xFF090804), Color(0xFF111111),
-        accent = Color(0xFF2EE06F), // سبز نئونی لوگو
-        connected = Color(0xFF3BE67C),
+        Color(0xE6000000), Color(0xF0070600), Color(0xFF000000), Color(0xFF0D0B00),
+        accent = Color(0xFFFFF3B0), // کرم زرد
+        connected = Color(0xFFFFE566), // زرد روشن درخشان
         modeSmart = Color(0xFFFFD60A), // زرد
-        modeGame = Color(0xFFFFB21F), // کهربایی طلایی
-        modeAnti = Color(0xFF2EE06F), // سبز
-        modeDns = Color(0xFFD9935B), // مسی
-        mix = Color(0xFFFFB21F),
-        danger = Color(0xFFFF3B30), warn = Color(0xFFFFAA2B),
-        userCountry = Color(0xFF2EE06F),
+        modeGame = Color(0xFFFF9F0A), // کهربایی
+        modeAnti = Color(0xFFFFF3B0), // کرم
+        modeDns = Color(0xFFE0AE2E), // خردلی
+        mix = Color(0xFFFF9F0A),
+        danger = Color(0xFFFF453A), warn = Color(0xFFFF9F0A),
+        userCountry = Color(0xFFFFF3B0),
         toggleOn = Color(0xFFFFD60A),
-        gameAlt = Color(0xFFFFD60A), tracer = Color(0xFFFFF4B8),
-        navTop = Color(0xFFFFE45C), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF111111),
+        gameAlt = Color(0xFFFFE566), tracer = Color(0xFFFFFFFF),
+        navTop = Color(0xFFFFE566), navBottom = Color(0xFFFFD60A), onNav = Color(0xFF0D0B00),
     ),
     // زرشکی: زرشکی با طلایی شامپاینی و هم‌خانواده‌هایشان (صورتی گلی، آلویی)؛ بدون نارنجی
     Palette(
@@ -121,25 +120,25 @@ val Themes: List<Palette> = listOf(
         // تب انتخاب‌شده: زرشکی عمیق (نه صورتی روشن) با نوشته‌ی سفید
         navTop = Color(0xFFC0152F), navBottom = Color(0xFF6E0918), onNav = Color(0xFFFFFFFF),
     ),
-    // طلایی کانکی: همان طلایی اول (۱.۱۸.۱)؛ فقط طلایی و مشکی و تُن‌های گرم بین‌شان (کهربایی، شامپاینی، کرم، مسی)،
-    // کارت‌های شیشه‌ای طلایی با خط نور پایین و تب شیشه‌ای
+    // طلایی کانکی: طلای مات روی قهوه‌ای سوخته (نه مشکی خالص، تا با «زرد و مشکی» یکی نباشد)؛ فقط طلایی و تُن‌های گرم کنارش
+    // (شامپاینی، مسی، برنزی)، کارت‌های شیشه‌ای طلایی با خط نور پایین و تب شیشه‌ای
     Palette(
-        "gold", Color(0xFFFFC72C), Color(0xFFFFE27A), Color(0xFFC98A0B), Color(0xFFFFF3C4),
-        Color(0xFF000000), Color(0xFFFFFDF6), Color(0xFFA8A092),
-        Color(0xFF000000), Color(0xFF0A0803), Color(0xFF000000),
-        Color(0xD6121009), Color(0xE61C160C), Color(0xF2141109), Color(0xFF241700),
-        accent = Color(0xFFF0D49C), // شامپاینی
-        connected = Color(0xFFFFE58F), // طلایی روشن و درخشان
-        modeSmart = Color(0xFFFFC72C), // طلایی
-        modeGame = Color(0xFFFFA326), // کهربایی
-        modeAnti = Color(0xFFF0D49C), // شامپاینی
-        modeDns = Color(0xFFD98C5F), // مسی
-        mix = Color(0xFFFFB238),
-        danger = Color(0xFFE8553E), warn = Color(0xFFFFA326),
+        "gold", Color(0xFFE8B84A), Color(0xFFF6D88E), Color(0xFFA9761F), Color(0xFFFFF0C8),
+        Color(0xFF120B03), Color(0xFFFFF6E3), Color(0xFFB3A68C),
+        Color(0xFF1A1006), Color(0xFF110A04), Color(0xFF080502),
+        Color(0xD61F150A), Color(0xE6281C0E), Color(0xF21A1208), Color(0xFF241700),
+        accent = Color(0xFFEBD3A1), // شامپاینی
+        connected = Color(0xFFF6D88E), // طلایی روشن
+        modeSmart = Color(0xFFE8B84A), // طلایی
+        modeGame = Color(0xFFD9824A), // مسی
+        modeAnti = Color(0xFFEBD3A1), // شامپاینی
+        modeDns = Color(0xFFB98A55), // برنزی
+        mix = Color(0xFFD9824A),
+        danger = Color(0xFFE5533D), warn = Color(0xFFE59A3A),
         userCountry = Color(0xFFFFF1CC), // کرم
-        toggleOn = Color(0xFFFFC72C),
-        gameAlt = Color(0xFFFFE27A), tracer = Color(0xFFFFF3C4),
-        navTop = Color(0xFFFFE27A), navBottom = Color(0xFFFFC72C), onNav = Color(0xFF241700),
+        toggleOn = Color(0xFFE8B84A),
+        gameAlt = Color(0xFFF6D88E), tracer = Color(0xFFFFF0C8),
+        navTop = Color(0xFFF6D88E), navBottom = Color(0xFFE8B84A), onNav = Color(0xFF241700),
         classic = true,
     ),
     // بنفش سلطنتی: بنفش با سرخابی و هم‌خانواده‌هایشان (صورتی، یاسی، آبی‌بنفش)؛ همه از یک طیف
@@ -395,7 +394,7 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
                 }
             },
         )
-        Twinkles(if (calm) 12 else motes.size, accent)
+        Twinkles(if (calm || Motion.lowEnd) 12 else motes.size, accent)
         content()
     }
 }

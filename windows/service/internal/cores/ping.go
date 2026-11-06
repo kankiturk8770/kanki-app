@@ -28,7 +28,7 @@ const (
 
 // exchange sends hello and waits for an answer ok() accepts; the best round trip in ms.
 func exchange(to netip.AddrPort, hello func() [][]byte, ok func([]byte) bool) (int64, error) {
-	c, err := net.ListenUDP("udp", nil)
+	c, err := probeUDP(to)
 	if err != nil {
 		return 0, err
 	}
@@ -65,7 +65,7 @@ func TCP(ctx context.Context, to netip.AddrPort) (int64, error) {
 	best := int64(-1)
 	for i := 0; i < tries; i++ {
 		t0 := time.Now()
-		d := net.Dialer{Timeout: waitFor * 2}
+		d := net.Dialer{Timeout: waitFor * 2, Control: outsideFor}
 		c, err := d.DialContext(ctx, "tcp", to.String())
 		if err != nil {
 			continue

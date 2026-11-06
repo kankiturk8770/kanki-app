@@ -118,15 +118,29 @@ object RealPing {
     /** یک درخواست کوتاه برای بررسی اتصال تازه: دو آدرس به نوبت، هر کدام با مهلت کوتاه */
     fun quick(attempt: Int): Long? = once(if (attempt % 2 == 0) URL_204 else URL_CF, 3000)
 
+    /**
+     * یک پینگ از داخل تونل. زمان DNS حساب نمی‌شود (قبلاً حساب می‌شد و DNS کند داخل تونل پینگ را ۶۰۰۰ تا ۸۰۰۰ نشان می‌داد):
+     * آدرس جدا گرفته می‌شود، بعد فقط رفت‌وبرگشت. وصل شدن TCP خودش یک رفت‌وبرگشت است (WireGuard، AmneziaWG، microtun)؛
+     * وقتی خود گوشی جوابش را می‌دهد (tun2socks: Hysteria2، Xray، KANKI MIX، زیر ۳ میلی‌ثانیه) زمان جواب HTTP حساب می‌شود.
+     */
     fun once(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {
-        val t0 = System.nanoTime()
-        val c = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = timeoutMs; readTimeout = timeoutMs; useCaches = false
+        val u = URL(url)
+        val ip = java.net.InetAddress.getByName(u.host)
+        java.net.Socket().use { s ->
+            s.soTimeout = timeoutMs
+            val t0 = System.nanoTime()
+            s.connect(java.net.InetSocketAddress(ip, if (u.port > 0) u.port else 80), timeoutMs)
+            val connectMs = (System.nanoTime() - t0) / 1_000_000
+            val t1 = System.nanoTime()
+            s.getOutputStream().apply {
+                write("HEAD ${u.path.ifEmpty { "/" }} HTTP/1.1\r\nHost: ${u.host}\r\nConnection: close\r\n\r\n".toByteArray())
+                flush()
+            }
+            val line = s.getInputStream().bufferedReader().readLine() ?: return@runCatching null
+            val replyMs = (System.nanoTime() - t1) / 1_000_000
+            if (!line.startsWith("HTTP/") || (" 204" !in line && " 200" !in line)) return@runCatching null
+            (if (connectMs >= 3) connectMs else replyMs).coerceAtLeast(1)
         }
-        val code = c.responseCode
-        c.inputStream.use { it.readBytes() }
-        if (code != 204 && code != 200) return@runCatching null
-        (System.nanoTime() - t0) / 1_000_000
     }.getOrNull()
 
     /** پینگ و جیتر برای تست سرعت */

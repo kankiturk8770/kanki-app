@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -178,5 +179,47 @@ func TestCertDates(t *testing.T) {
 	err := fmt.Errorf("Get x: %w", x509.CertificateInvalidError{Cert: c, Reason: x509.Expired})
 	if m := short(err); !strings.Contains(m, "2026-10-30") {
 		t.Fatal(m)
+	}
+}
+
+// The real subscription page of panel 3.32 (a German server with an Iran tunnel and the panel's own
+// server, a user with every protocol): every config is read, the QR and link buttons are not
+// configs of their own, and each config knows whether it goes through Iran.
+func TestParseRealPanelPage(t *testing.T) {
+	page, err := os.ReadFile("testdata/sub-panel-3.32.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const base = "https://panel.example.com"
+	a, err := Parse(string(page), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Server{}
+	for _, s := range a.Servers {
+		if _, dup := got[s.ID]; dup {
+			t.Fatalf("config %s twice", s.ID)
+		}
+		got[s.ID] = s
+		if s.URL != "" && !strings.HasPrefix(s.URL, base+"/") {
+			t.Fatalf("%s points away from the panel: %s", s.ID, s.URL)
+		}
+	}
+	for _, id := range []string{
+		"de/amneziawg", "de@tunnel/amneziawg", "de@tunnel/wireguard", "de/hysteria2", "de@tunnel/hysteria2",
+		"local/kankimix", "de/kankimix", "de@tunnel/kankimix", "local/microtun", "de/microtun", "de@tunnel/microtun",
+	} {
+		if _, ok := got[id]; !ok {
+			t.Errorf("missing %s (have %v)", id, len(got))
+		}
+	}
+	if got["de/amneziawg"].Tunnel || !got["de@tunnel/amneziawg"].Tunnel || !got["de@tunnel/wireguard"].Tunnel {
+		t.Error("direct and tunnel copies mixed up")
+	}
+	if !strings.Contains(got["de/hysteria2"].URL, "/hysteria2?") || !strings.Contains(got["de/kankimix"].URL, "/kankimix?") {
+		t.Error("Hysteria2 / KANKI MIX must use the link text, not the QR")
+	}
+	if a.Status != "Active" || a.LimitGB != 10 || a.UsedGB != 2.5 || a.Expires != 1796550432 {
+		t.Errorf("status %q limit %v used %v expires %v", a.Status, a.LimitGB, a.UsedGB, a.Expires)
 	}
 }

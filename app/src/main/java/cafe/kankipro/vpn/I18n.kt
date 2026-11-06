@@ -171,6 +171,7 @@ private val EN = mapOf(
     "Quad9 · امن" to "Quad9 · secure",
     "تم برنامه" to "App theme",
     "زرد کانکی" to "Kanki Yellow",
+    "زرد و مشکی" to "Yellow & Black",
     "طلایی" to "Gold",
     "زرشکی" to "Crimson",
     "بنفش سلطنتی" to "Royal Purple",

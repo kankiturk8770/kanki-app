@@ -139,12 +139,29 @@ fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Uni
         Spacer(Modifier.width(D.S2))
         BrandTitle(15.sp)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.guideTarget("emergency")) { HeaderIcon(K.Accent, onEmergency) { emergencyChatIcon(it) } }
+        Box(Modifier.guideTarget("emergency")) {
+            HeaderIcon(K.Accent, onEmergency) { emergencyChatIcon(it) }
+            UnreadBadge(EmergencyStore.unread, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
+        }
         Spacer(Modifier.width(D.S2))
         Box(Modifier.guideTarget("robot")) { HeaderIcon(K.Gold, onRobot) { drawRobot(body = false) } }
         Spacer(Modifier.width(D.S2))
         Box(Modifier.guideTarget("account")) { HeaderIcon(K.Gold, onAccount) { linkIcon(it) } }
     }
+}
+
+/** عدد پیام‌های خوانده‌نشده روی گوشه‌ی دکمه (۰ = هیچ؛ بیش از ۹: «+۹») */
+@Composable
+fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { EmergencyStore.refreshUnread(ctx) } } }
+    if (count <= 0) return
+    val txt = if (count > 9) "9+" else count.toString()
+    Box(
+        modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape).background(K.Red)
+            .border(1.5.dp, K.BgTop, CircleShape).padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) { T(if (LangState.en) txt else faDigits(txt), size = 10.sp, color = Color.White, font = Poppins, weight = FontWeight.Bold, ltr = true) }
 }
 
 /** دکمه‌ی کوچک مربعی شیشه‌ای سربرگ با لبه‌ی طلایی */
@@ -933,6 +950,19 @@ private fun StatDivider() {
     Box(Modifier.width(1.dp).height(28.dp).background(Brush.verticalGradient(listOf(Color.Transparent, K.Gold.copy(alpha = .45f), Color.Transparent))))
 }
 
+/**
+ * سرعت لحظه‌ای با واحد مناسب، مثل شمارنده‌ی سرعت گوشی: زیر ۱ مگابایت بر ثانیه به کیلوبایت (۸۵۰ KB/s)، بالاتر به
+ * مگابایت (۲.۴ MB/s)؛ پس دانلود کم «0.0» نشان داده نمی‌شود
+ */
+fun rateParts(bytesPerSec: Long): Pair<String, String> {
+    val b = bytesPerSec.coerceAtLeast(0)
+    return when {
+        b >= 1_000_000 -> String.format(java.util.Locale.US, if (b >= 100_000_000) "%.0f" else "%.1f", b / 1_000_000.0) to "MB/s"
+        b >= 10_000 -> String.format(java.util.Locale.US, "%.0f", b / 1_000.0) to "KB/s"
+        else -> String.format(java.util.Locale.US, "%.1f", b / 1_000.0) to "KB/s"
+    }
+}
+
 @Composable
 private fun SpeedCell(icon: String, label: String, tint: Color, bytesPerSec: Long?, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -944,12 +974,12 @@ private fun SpeedCell(icon: String, label: String, tint: Color, bytesPerSec: Lon
             Spacer(Modifier.width(D.S1))
             T(label, size = 11.sp, color = K.Text, weight = FontWeight.Bold)
         }
-        val v = bytesPerSec?.let { String.format(java.util.Locale.US, "%.1f", it * 8 / 1_000_000.0) } ?: "--"
+        val (v, unit) = bytesPerSec?.let { rateParts(it) } ?: ("--" to "KB/s")
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(verticalAlignment = Alignment.Bottom) {
                 T(v, size = 14.sp, color = K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true)
                 Spacer(Modifier.width(3.dp))
-                T("Mbps", size = 9.5.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.padding(bottom = 2.dp))
+                T(unit, size = 9.5.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, modifier = Modifier.padding(bottom = 2.dp))
             }
         }
     }

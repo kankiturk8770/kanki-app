@@ -24,7 +24,11 @@ import androidx.compose.ui.unit.LayoutDirection
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // همه‌ی تم‌ها تیره‌اند: آیکن‌های نوار بالا (ساعت، آنتن، باتری) و پایین همیشه روشن، حتی وقتی گوشی در حالت روشن است
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         super.onCreate(savedInstanceState)
         // فقط بار اول (نه با چرخیدن صفحه، که اندروید همان intent قدیمی را دوباره می‌دهد)
         if (savedInstanceState == null) openFromNotification(intent)

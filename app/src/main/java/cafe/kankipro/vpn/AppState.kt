@@ -576,13 +576,33 @@ class AppState private constructor(context: Context) {
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
     /** پروتکل‌های فقط گیمینگ: نه در هوشمند، نه در ضد فیلتر خودکار */
     private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO)
+    /**
+     * هوشمند (روزمره) این‌ها را هم امتحان می‌کند. microtun آخرین گزینه است و KANKI MIX هیچ‌وقت: در حالت گیمینگ هر بسته‌اش
+     * دو بار می‌رود و FEC هم بسته‌ی اضافه دارد، پس حجم کاربر دو برابر حساب می‌شد؛ microtun فقط بسته‌های خیلی کوچک
+     * (کمتر از ۳۰۰ بایت) را دو بار می‌فرستد و دانلود یک بار می‌رود.
+     */
+    private val SMART_EXTRA = setOf(MtunCfg.PROTO)
+
+    /**
+     * ردیف هوشمند هر کانفیگ (کمتر = زودتر):
+     * ۰ Xray مستقیم، ۱ AmneziaWG مستقیم، ۲ AmneziaWG و WireGuard (و Hysteria2 و Xray تانل)، ۳ microtun.
+     */
+    private fun smartTier(node: String, p: String): Int {
+        val direct = cfgSide(node, p) != "tunnel"
+        return when {
+            p == "xray" && direct -> 0
+            p == "amneziawg-direct" || (p == "amneziawg" && direct) -> 1
+            p == MtunCfg.PROTO -> 3
+            else -> 2
+        }
+    }
 
     private suspend fun smartMeasure(): List<SmartRow> {
         val a = account ?: return emptyList()
         val cands = a.configs.distinctBy { it.node }.flatMap { n ->
             (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
                 // KANKI MIX و microtun فقط مال گیمینگ‌اند و هوشمند هیچ‌وقت به آن‌ها وصل نمی‌شود
-                if (p in GAME_ONLY) return@mapNotNull null
+                if (p in GAME_ONLY && p !in SMART_EXTRA) return@mapNotNull null
                 infos["${n.node}/$p"]?.takeIf { it.host != "—" }?.let { i -> Triple(n, p, i) }
             }
         }
@@ -643,12 +663,13 @@ class AppState private constructor(context: Context) {
                 error = "هیچ سروری جواب پینگ نداد. اینترنت را بررسی کنید."
                 return
             }
-            // کمترین پینگ اول (جیتر کمتر وقتی پینگ برابر است)؛ اتصال واقعاً آزمایش می‌شود (پاسخ از داخل تونل) و اگر نشد، بعدی.
-            // شبکه‌ی بد (بهترین راه مستقیم پینگ بالای ۲۵۰ یا جیتر بالای ۶۰ دارد یا اصلاً جواب نداد): اول تانل‌ها.
+            // ترتیب: Xray مستقیم، AmneziaWG مستقیم، AmneziaWG / WireGuard، microtun (smartTier). در هر ردیف کمترین پینگ اول؛
+            // فقط کانفیگ «خوب» (پینگ تا ۲۵۰ و جیتر تا ۶۰) به ترتیب ردیف می‌آید، بقیه بعد از همه به ترتیب پینگ. اتصال واقعاً
+            // آزمایش می‌شود (پاسخ از داخل تونل) و اگر نشد، بعدی.
             val scored = rows.sortedWith(compareBy({ it.ping }, { it.jitter })).distinctBy { it.node + "|" + it.proto }
-            val bestDirect = scored.firstOrNull { cfgSide(it.node, it.proto) != "tunnel" }
-            val weak = bestDirect == null || bestDirect.ping > 250 || bestDirect.jitter > 60
-            val order = (if (weak) scored.sortedBy { if (cfgSide(it.node, it.proto) == "tunnel") 0 else 1 } else scored).take(5)
+            val good = { r: SmartRow -> r.ping <= 250 && r.jitter <= 60 }
+            val order = (scored.filter(good).sortedWith(compareBy({ smartTier(it.node, it.proto) }, { it.ping }, { it.jitter })) +
+                scored.filterNot(good)).take(5)
             for ((i, r) in order.withIndex()) {
                 if (!wantTry) return
                 smartCurrent = r.node + "|" + r.proto
@@ -878,27 +899,35 @@ class AppState private constructor(context: Context) {
         val b = base ?: return
         val c = code ?: return
         val fresh = System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs
+        // نسخه‌ی ذخیره‌شده همیشه اول نشان داده می‌شود (حتی اگر قدیمی باشد): صفحه هیچ‌وقت خالی نمی‌ماند تا اینترنت جواب بدهد
         val html = prefs.getString("subhtml_$c", null)
-        val cached = if (fresh && html != null) runCatching { augment(SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)) }.getOrNull() else null
+        val cached = if (html != null) runCatching { augment(SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)) }.getOrNull()
+            ?.takeIf { it.configs.isNotEmpty() } else null
         if (cached == null) {
             refresh()
             if (pingAfterLoad && account != null) { pingAfterLoad = false; startPingAll() }
             return
         }
-        account = cached
+        if (account == null) account = cached
         if (node == null || cached.configs.none { it.node == node }) node = cached.configs.firstOrNull()?.node
         // هیچ خطایی در خواندن از حافظه برنامه را نمی‌بندد (این‌جا هنگام باز شدن برنامه است)
         try {
             loadInfos(cached, force = false)
             fixProto()
-            refreshUsage()   // حجم مصرفی همیشه تازه است، حتی وقتی کانفیگ‌ها از حافظه خوانده شده‌اند
-            locate()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            refresh()
         }
-        if (pingAfterLoad) { pingAfterLoad = false; startPingAll() }
+        locateNodes()
+        bg.launch { runCatching { locate() } }   // مکان خود کاربر از شبکه؛ اتصال خودکار منتظرش نمی‌ماند
+        if (!fresh) {
+            // بیش از ۳ ساعت گذشته: بروزرسانی پشت صحنه (اتصال خودکار منتظرش نمی‌ماند)؛ تا جواب پنل نیامده همین کانفیگ‌ها
+            // نشان داده می‌شوند و اگر پنل جواب نداد یا جواب ناقص داد، همین‌ها می‌مانند
+            bg.launch { runCatching { silentSync() } }
+        } else {
+            runCatching { refreshUsage() }   // حجم مصرفی همیشه تازه است، حتی وقتی کانفیگ‌ها از حافظه خوانده شده‌اند
+        }
+        if (pingAfterLoad && account != null) { pingAfterLoad = false; startPingAll() }
     }
 
     /** تازه وارد شده: بعد از خواندن کانفیگ‌ها پینگ همه گرفته شود */
@@ -1023,7 +1052,8 @@ class AppState private constructor(context: Context) {
                     when (l.protocol) { "hysteria2" -> HyUri.wrap(it); "kankimix" -> KmixUri.wrap(it); else -> it }
                 }
             }
-                .onSuccess { t -> if (t.contains("[Interface]")) prefs.edit().putString(cacheKey, t).apply() }
+                // هر کانفیگ سالمی ذخیره می‌شود (نه فقط WireGuard): KANKI MIX و Hysteria2 هم وقتی پنل در دسترس نیست از حافظه می‌آیند
+                .onSuccess { t -> if (validCfg(l.protocol, t)) prefs.edit().putString(cacheKey, t).apply() }
                 .getOrElse { e -> cached ?: throw e }
         if (host.isBlank()) return txt
         return txt.lines().joinToString("\n") { line ->
@@ -1302,20 +1332,23 @@ class AppState private constructor(context: Context) {
         loading = false
     }
 
+    /** متن کانفیگ برای این پروتکل سالم است (نیمه‌کاره یا صفحه‌ی خطای یک واسطه نیست) */
+    private fun validCfg(protocol: String, txt: String): Boolean = when {
+        protocol.startsWith("openvpn") -> txt.contains("remote ")
+        protocol == "hysteria2" -> txt.contains("hysteria2://")
+        protocol == "kankimix" -> KmixUri.isKmix(txt)
+        protocol == "xray" -> XrayCfg.isXray(txt)
+        MtunCfg.isProto(protocol) -> MtunCfg.isMtun(txt)
+        else -> txt.contains("[Interface]") && txt.contains("[Peer]")
+    }
+
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
         for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray", MtunCfg.PROTO) }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
-            val ok = txt != null && when {
-                l.protocol.startsWith("openvpn") -> txt.contains("remote ")
-                l.protocol == "hysteria2" -> txt.contains("hysteria2://")
-                l.protocol == "kankimix" -> KmixUri.isKmix(txt)
-                l.protocol == "xray" -> XrayCfg.isXray(txt)
-                MtunCfg.isProto(l.protocol) -> MtunCfg.isMtun(txt)
-                else -> txt.contains("[Interface]") && txt.contains("[Peer]")
-            }
+            val ok = txt != null && validCfg(l.protocol, txt)
             // متن خراب (مثلاً نیمه‌کاره رسیده) برنامه را نمی‌بندد؛ آن کانفیگ فقط «خراب» علامت می‌خورد
             val info = if (ok) runCatching { ConfigInfo.parse(txt!!) }.getOrNull() else null
             if (info != null) { infos[key] = info; badCfg.remove(key) }
@@ -1507,7 +1540,9 @@ class AppState private constructor(context: Context) {
         val r = withContext(Dispatchers.IO) {
             val ports = if (info.transport == "TCP" && info.port > 0) listOf(info.port) else listOf(443, 80, 22, 8443, 2053)
             var r: Long? = null
-            for (pt in ports) { r = Pinger.tcp(info.host, pt, 2); if (r != null) break }
+            // بیرون از تونل (وقتی وصلی، از داخل تونل عدد غلط می‌داد)
+            val net = Probe.underlying(ctx)
+            for (pt in ports) { r = Probe.tcp(net, info.host, pt); if (r != null) break }
             r
         }
         tcpPings["$nodeId/$p"] = r ?: -1L
@@ -1590,6 +1625,7 @@ class AppState private constructor(context: Context) {
         val live = activeKey
         val mine = live != null && vstate != VState.OFF && peerOf(nodeId, p) == peerOf(live.substringBefore("|"), live.substringAfter("|"))
         if (mine && vstate == VState.CONNECTING) return pings[k]?.takeIf { it > 0 }
+        var skipped = false
         val r = if (mine) {
             ping ?: withContext(Dispatchers.IO) { RealPing.measure() }
         } else withContext(Dispatchers.IO) {
@@ -1597,6 +1633,11 @@ class AppState private constructor(context: Context) {
                 val l = account?.configs?.firstOrNull { it.node == nodeId && it.protocol == p } ?: return@runCatching null
                 val text = fetchConfig(l)
                 val net = Probe.underlying(ctx)
+                // وقتی VPN بالاست، پینگ‌هایی که نمی‌شود بیرون از تونل فرستاد (برنامه‌ی جدای microtun، پینگ ICMP) از داخل
+                // تونل می‌رفتند و عدد غلط می‌دادند: آخرین پینگ درست همان کانفیگ (پیش از اتصال) نشان داده می‌شود
+                val viaTunnelOnly = net != null && (p == MtunCfg.PROTO || (p != "hysteria2" && p !in setOf("amneziawg", "amneziawg-direct", "wireguard", "kankimix") &&
+                    infos[k]?.let { it.transport != "TCP" || it.port <= 0 } != false))
+                if (viaTunnelOnly) { skipped = true; return@runCatching pings[k]?.takeIf { it > 0 } }
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
@@ -1609,7 +1650,8 @@ class AppState private constructor(context: Context) {
                 }
             }.getOrNull()
         }
-        if (store) pings[k] = r ?: -1L
+        // پینگی که این بار گرفته نشد (فقط از داخل تونل ممکن بود) «خراب» علامت نمی‌خورد
+        if (store && !(skipped && r == null)) pings[k] = r ?: -1L
         return r
     }
 

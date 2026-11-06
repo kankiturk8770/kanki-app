@@ -180,7 +180,7 @@
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
                                         <TextBlock x:Name="DownText" Text="--" FontSize="14" FontWeight="Bold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Text}"/>
-                                        <TextBlock Text="Mbps" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
+                                        <TextBlock x:Name="DownUnit" Text="KB/s" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
                                                    Margin="3,0,0,2" VerticalAlignment="Bottom"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -194,7 +194,7 @@
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" FlowDirection="LeftToRight">
                                         <TextBlock x:Name="UpText" Text="--" FontSize="14" FontWeight="Bold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Text}"/>
-                                        <TextBlock Text="Mbps" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
+                                        <TextBlock x:Name="UpUnit" Text="KB/s" FontSize="9.5" FontWeight="SemiBold" FontFamily="{StaticResource Poppins}" Foreground="{DynamicResource Muted}"
                                                    Margin="3,0,0,2" VerticalAlignment="Bottom"/>
                                     </StackPanel>
                                 </StackPanel>

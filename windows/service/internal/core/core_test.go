@@ -244,3 +244,40 @@ func TestResolvePrefersIPv4(t *testing.T) {
 		t.Fatal(ep, err)
 	}
 }
+
+// A refresh that gets a page without configs (a middlebox's error page, a page cut short) keeps the
+// saved configs; an account that is over may come back empty.
+func TestRefreshKeepsConfigsOnAnEmptyPage(t *testing.T) {
+	empty := false
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/sub/") {
+			if empty {
+				fmt.Fprint(w, `<html><h1>ali</h1><p>Active</p></html>`)
+				return
+			}
+			fmt.Fprint(w, page)
+			return
+		}
+		fmt.Fprint(w, cfgText)
+	}))
+	t.Cleanup(srv.Close)
+	st, err := state.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := sub.NewClient()
+	sc.HTTP = srv.Client()
+	m := New(&fakeEngine{}, st, logx.New(""), sc)
+	t.Cleanup(m.Stop)
+	if _, err := m.SetSubscription(srv.URL + "/sub/kanki-1-abcd1234"); err != nil {
+		t.Fatal(err)
+	}
+	empty = true
+	a, err := m.Refresh()
+	if err == nil || a == nil || len(a.Servers) != 1 {
+		t.Fatalf("an empty page replaced the saved configs: %v %+v", err, a)
+	}
+	if n := len(m.saved.Account.Servers); n != 1 {
+		t.Fatalf("saved configs lost: %d", n)
+	}
+}
