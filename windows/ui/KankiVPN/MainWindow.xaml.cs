@@ -132,8 +132,8 @@ namespace KankiVPN
                 var secs = Math.Max(0.2, (now - lastAt).TotalSeconds);
                 rxRate = (long)((status.Rx - lastRx) / secs);
                 txRate = (long)((status.Tx - lastTx) / secs);
-                DownText.Text = Mbps(rxRate * 8 / 1e6);
-                UpText.Text = Mbps(txRate * 8 / 1e6);
+                (DownText.Text, DownUnit.Text) = Rate(rxRate);
+                (UpText.Text, UpUnit.Text) = Rate(txRate);
             }
             else if (status.State != "connected")
             {
@@ -146,6 +146,17 @@ namespace KankiVPN
         }
 
         static string Mbps(double v) => v.ToString(v < 100 ? "0.0" : "0", CultureInfo.InvariantCulture);
+
+        /// <summary>HomeUi.kt rateParts: the live rate like a phone's speed meter: under 1 MB/s in KB/s (850 KB/s),
+        /// above in MB/s (2.4 MB/s), so a small download never reads "0.0".</summary>
+        static (string, string) Rate(long bytesPerSec)
+        {
+            var b = Math.Max(0, bytesPerSec);
+            var inv = CultureInfo.InvariantCulture;
+            if (b >= 1_000_000) return ((b / 1e6).ToString(b >= 100_000_000 ? "0" : "0.0", inv), "MB/s");
+            if (b >= 10_000) return ((b / 1e3).ToString("0", inv), "KB/s");
+            return ((b / 1e3).ToString("0.0", inv), "KB/s");
+        }
 
         void ServiceOk()
         {
@@ -1322,8 +1333,8 @@ namespace KankiVPN
             ShowSettings();
             if (on)
             {
-                DownText.Text = "10.8";
-                UpText.Text = "1.0";
+                (DownText.Text, DownUnit.Text) = Rate(1_350_000);
+                (UpText.Text, UpUnit.Text) = Rate(125_000);
             }
             if (page == "speed")
             {

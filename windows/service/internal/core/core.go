@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,6 +118,9 @@ type Manager struct {
 	// DNS cannot be reached while reconnecting
 	lastConf map[string]string
 	lastIP   map[string]netip.Addr
+	// last real round trip of each server (ms), shown while connected for the
+	// protocols whose ping cannot be kept outside the tunnel
+	lastPing map[string]int64
 
 	// engMu orders the engine calls: a request that was replaced (older gen)
 	// never touches the engine after the newer one did.
@@ -124,7 +128,7 @@ type Manager struct {
 }
 
 func New(eng Engine, store *state.Store, log *logx.Log, sc *sub.Client) *Manager {
-	m := &Manager{eng: eng, store: store, log: log, sub: sc, lastConf: map[string]string{}, lastIP: map[string]netip.Addr{}}
+	m := &Manager{eng: eng, store: store, log: log, sub: sc, lastConf: map[string]string{}, lastIP: map[string]netip.Addr{}, lastPing: map[string]int64{}}
 	m.saved = store.Load()
 	m.st = Status{State: Disconnected}
 	sc.DeviceID = m.saved.DeviceID
@@ -223,6 +227,15 @@ func (m *Manager) SetSubscription(input string) (*sub.Account, error) {
 	return public(a), nil
 }
 
+// accountOver: the panel says the account cannot be used (then no configs is the real answer)
+func accountOver(status string) bool {
+	switch strings.ToLower(status) {
+	case "expired", "disabled", "limited", "frozen", "inactive", "suspended":
+		return true
+	}
+	return false
+}
+
 // Refresh loads the saved subscription again.
 func (m *Manager) Refresh() (*sub.Account, error) {
 	m.mu.Lock()
@@ -236,6 +249,12 @@ func (m *Manager) Refresh() (*sub.Account, error) {
 	n, err := m.sub.Load(ctx, a.Base, a.Code)
 	if err != nil {
 		return public(a), fmt.Errorf("could not refresh: %w", err)
+	}
+	// an incomplete answer (a middlebox's error page, a page cut short) never replaces a good saved
+	// subscription: no configs while the account is not over is kept as the old one
+	if len(n.Servers) == 0 && len(a.Servers) > 0 && !accountOver(n.Status) {
+		m.log.Printf("refresh: the page came back without configs; the saved ones stay")
+		return public(a), errors.New("could not refresh: the subscription came back without configs")
 	}
 	m.mu.Lock()
 	m.saved.Account = n
@@ -619,6 +638,11 @@ func (m *Manager) Ping(ids []string) map[string]int64 {
 			mu.Lock()
 			out[srv.ID] = ms
 			mu.Unlock()
+			if ms > 0 {
+				m.mu.Lock()
+				m.lastPing[srv.ID] = ms
+				m.mu.Unlock()
+			}
 		}(srv)
 	}
 	wg.Wait()
@@ -626,6 +650,20 @@ func (m *Manager) Ping(ids []string) map[string]int64 {
 }
 
 func (m *Manager) ping(a *sub.Account, srv sub.Server) (int64, error) {
+	// microtun and Hysteria2 ping through their own code / program, which cannot be tied to the real
+	// network card: while the VPN is on they would measure through the tunnel, so the last real
+	// value (taken while disconnected) is shown instead
+	if srv.Proto == cores.Microtun || srv.Proto == cores.Hysteria2 {
+		m.mu.Lock()
+		on, last := m.st.State == Connected, m.lastPing[srv.ID]
+		m.mu.Unlock()
+		if on {
+			if last > 0 {
+				return last, nil
+			}
+			return 0, errors.New("measured only while disconnected")
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	text, err := m.configText(ctx, a, srv)

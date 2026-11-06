@@ -49,15 +49,16 @@ namespace KankiVPN
         {
             new()
             {
-                Id = "yellow", Gold = H(0xFFFFD60A), GoldLight = H(0xFFFFE45C), GoldDeep = H(0xFFB38F00), Shine = H(0xFFFFF4B8),
-                Ink = H(0xFF000000), Text = H(0xFFFFFBEA), Sub = H(0xFFA39E8A),
+                // Ui.kt "yellow": AMOLED yellow and black, only the yellow family (no green beside it)
+                Id = "yellow", Gold = H(0xFFFFD60A), GoldLight = H(0xFFFFE566), GoldDeep = H(0xFFC9A100), Shine = H(0xFFFFF3B0),
+                Ink = H(0xFF000000), Text = H(0xFFFFFDF2), Sub = H(0xFF9C9A8E),
                 BgTop = H(0xFF000000), BgMid = H(0xFF000000), BgBottom = H(0xFF000000),
-                Surface = H(0xE6080704), Surface2 = H(0xF00F0D07), Panel = H(0xFF090804), OnGold = H(0xFF111111),
-                Accent = H(0xFF2EE06F), Connected = H(0xFF3BE67C),
-                ModeSmart = H(0xFFFFD60A), ModeGame = H(0xFFFFB21F), ModeAnti = H(0xFF2EE06F), ModeDns = H(0xFFD9935B),
-                Mix = H(0xFFFFB21F), Danger = H(0xFFFF3B30), Warn = H(0xFFFFAA2B), UserCountry = H(0xFF2EE06F), ToggleOn = H(0xFFFFD60A),
-                GameAlt = H(0xFFFFD60A), Tracer = H(0xFFFFF4B8),
-                NavTop = H(0xFFFFE45C), NavBottom = H(0xFFFFD60A), OnNav = H(0xFF111111),
+                Surface = H(0xE6000000), Surface2 = H(0xF0070600), Panel = H(0xFF000000), OnGold = H(0xFF0D0B00),
+                Accent = H(0xFFFFF3B0), Connected = H(0xFFFFE566),
+                ModeSmart = H(0xFFFFD60A), ModeGame = H(0xFFFF9F0A), ModeAnti = H(0xFFFFF3B0), ModeDns = H(0xFFE0AE2E),
+                Mix = H(0xFFFF9F0A), Danger = H(0xFFFF453A), Warn = H(0xFFFF9F0A), UserCountry = H(0xFFFFF3B0), ToggleOn = H(0xFFFFD60A),
+                GameAlt = H(0xFFFFE566), Tracer = H(0xFFFFFFFF),
+                NavTop = H(0xFFFFE566), NavBottom = H(0xFFFFD60A), OnNav = H(0xFF0D0B00),
             },
             new()
             {
@@ -166,6 +167,6 @@ namespace KankiVPN
         /// <summary>The three dots on a theme card in Settings, as on Android.</summary>
         public static Color[] Dots(string name) => name == "crimson"
             ? new[] { H(0xFFF2C879), H(0xFFFF5C74), H(0xFFE8203F) }
-            : new[] { H(0xFF2EE06F), H(0xFF3BE67C), H(0xFFFFD60A) };
+            : new[] { H(0xFFFFF3B0), H(0xFFFF9F0A), H(0xFFFFD60A) };
     }
 }

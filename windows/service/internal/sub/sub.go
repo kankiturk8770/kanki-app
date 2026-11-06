@@ -395,6 +395,10 @@ type pageData struct {
 	} `json:"app_msg"`
 	Support string `json:"support"`
 	MaxConn int    `json:"max_conn"`
+	// the account numbers (the page no longer has data-traffic-* attributes)
+	LimitGB *float64 `json:"limit_gb"`
+	UsedGB  *float64 `json:"used_gb"`
+	Expires *int64   `json:"expires_ts"`
 	Nodes   []struct {
 		ID      string   `json:"id"`
 		Name    string   `json:"name"`
@@ -403,6 +407,9 @@ type pageData struct {
 		Lat     *float64 `json:"exit_lat"`
 		Lon     *float64 `json:"exit_lon"`
 		Mtun    *string  `json:"mtun"`
+		// where each main config goes: "tunnel" (an Iran address) or "direct" (panel 3.9.5+)
+		Via    map[string]string `json:"via_proto"`
+		AwgVia string            `json:"awg_via"`
 	} `json:"nodes"`
 	Xray []struct {
 		Name    string   `json:"name"`
@@ -466,8 +473,20 @@ func Parse(page, base string) (*Account, error) {
 		a.Notice = strings.TrimSpace(data.AppMsg.Text)
 	}
 	a.Support, a.MaxConn = strings.TrimSpace(data.Support), data.MaxConn
+	// panel 3.x puts the numbers in the page data; the old data-traffic-* attributes win when they are there
+	if attr(page, "data-traffic-limit") == "" && data.LimitGB != nil {
+		a.LimitGB = *data.LimitGB
+	}
+	if attr(page, "data-traffic-used") == "" && data.UsedGB != nil {
+		a.UsedGB = *data.UsedGB
+	}
+	if a.Expires == 0 && data.Expires != nil && *data.Expires > 0 {
+		a.Expires = *data.Expires
+	}
 	exits := map[string]exit{}
+	via := map[string]map[string]string{}
 	for _, n := range data.Nodes {
+		via[n.ID] = n.Via
 		if e, ok := exitOf(n.ExitCC, n.ExitCty, n.Lat, n.Lon); ok {
 			exits[n.ID] = e
 		}
@@ -521,7 +540,8 @@ func Parse(page, base string) (*Account, error) {
 		}
 		s := Server{
 			ID: node + "/" + proto, Node: node, Name: name, Proto: proto, URL: url,
-			Tunnel: strings.HasSuffix(node, tunnelSuffix),
+			// the second copy of a server (@tunnel) goes through Iran, and so does a main config the panel says goes there
+			Tunnel: strings.HasSuffix(node, tunnelSuffix) || via[node][proto] == "tunnel",
 		}
 		s.setExit(exits[strings.TrimSuffix(node, tunnelSuffix)])
 		a.Servers = append(a.Servers, s)

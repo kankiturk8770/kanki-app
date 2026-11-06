@@ -36,6 +36,10 @@ class SubParseTest {
         // لینک کانفیگ‌ها فقط از همان پنلی که وارد شده
         assertTrue(a.configs.all { it.url.startsWith("$base/") })
         assertEquals("Active", a.status)
+        // حجم و انقضا از داده‌ی صفحه (پنل ۳ دیگر data-traffic-* ندارد)
+        assertEquals(10.0, a.limitGb!!, 0.0001)
+        assertEquals(2.5, a.usedGb!!, 0.0001)
+        assertEquals(1796550432000L, a.expiresAt)
         // دکمه‌های QR و «لینک» هر کانفیگ جدا شمرده نمی‌شوند: فقط پروتکل‌های واقعی، هر کدام یک بار
         assertTrue(a.configs.all { "/" !in it.protocol })
         assertEquals(a.configs.size, a.configs.map { it.node to it.protocol }.toSet().size)

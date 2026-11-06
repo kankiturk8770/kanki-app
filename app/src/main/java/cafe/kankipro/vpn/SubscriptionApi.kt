@@ -256,9 +256,12 @@ object SubscriptionApi {
 
         // اطلاعات واقعی که پنل در data-* صفحه گذاشته (مرورگر با جاوااسکریپت از همین‌ها حساب می‌کند)
         fun attr(name: String) = Regex("""$name="([^"]*)"""").find(html)?.groupValues?.get(1)?.trim().orEmpty()
+        // پنل ۳ عددها را در داده‌ی صفحه می‌گذارد (data-traffic-* دیگر نیست)؛ اگر صفت قدیمی بود همان
+        val d0 = dataJson(html)
         val expiresAt = PanelTime.parse(attr("data-expires"))
-        val limitGb = attr("data-traffic-limit").toDoubleOrNull()
-        val usedGb = attr("data-traffic-used").toDoubleOrNull()
+            ?: d0?.optLong("expires_ts", 0L)?.takeIf { it > 946684800L }?.times(1000)
+        val limitGb = attr("data-traffic-limit").toDoubleOrNull() ?: d0?.takeIf { it.has("limit_gb") }?.optDouble("limit_gb")?.takeIf { !it.isNaN() }
+        val usedGb = attr("data-traffic-used").toDoubleOrNull() ?: d0?.takeIf { it.has("used_gb") }?.optDouble("used_gb")?.takeIf { !it.isNaN() }
 
         return Account(
             username = username,
