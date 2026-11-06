@@ -431,11 +431,18 @@ data class ConfigInfo(
     }
 }
 
-/** اعمال MTU دلخواه روی کانفیگ وایرگارد/امنزیا */
+/**
+ * اعمال MTU دلخواه روی کانفیگ وایرگارد/امنزیا. فقط کمتر از MTU خود کانفیگ (که پنل ۳.۳۲ به بعد از روی هسته و تانل‌های سر راه
+ * حساب می‌کند تا بسته روی اینترنت موبایل تکه نشود)؛ عدد بزرگ‌تر نادیده گرفته می‌شود (قبلاً MTU دلخواه ۱۳۸۰ جای ۱۳۲۰ پنل
+ * می‌نشست و بسته‌ی ۱۴۴۰ بایتی تکه می‌شد). کانفیگ‌های دیگر (KANKI MIX، microtun) اصلاً عوض نمی‌شوند: اندازه‌شان را هسته می‌گیرد.
+ */
 fun applyMtu(cfg: String, mtu: String): String {
-    val v = mtu.trim().toIntOrNull() ?: return cfg
+    val v = mtu.trim().toIntOrNull()?.takeIf { it in 576..9000 } ?: return cfg
+    if (KmixUri.isKmix(cfg) || MtunCfg.isMtun(cfg)) return cfg
     val lines = cfg.lines().toMutableList()
     val i = lines.indexOfFirst { it.trim().startsWith("MTU", ignoreCase = true) && it.contains("=") }
+    val panel = if (i >= 0) lines[i].substringAfter("=").trim().toIntOrNull() else null
+    if (panel != null && v >= panel) return cfg
     if (i >= 0) lines[i] = "MTU = $v" else {
         val j = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
         if (j >= 0) lines.add(j + 1, "MTU = $v")

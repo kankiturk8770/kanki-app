@@ -79,6 +79,7 @@ private val EN = mapOf(
     "DNS دلخواه" to "Custom DNS",
     "Kanki VPN را انتخاب و «همیشه روشن» را فعال کنید" to "Select Kanki VPN and enable \"Always-on\"",
     "MTU دلخواه (خالی = پیش‌فرض)" to "Custom MTU (empty = default)",
+    "MTU دلخواه (خالی = پنل: %s؛ فقط کمتر)" to "Custom MTU (empty = panel: %s; lower only)",
     "آدرس را خودتان وارد کنید" to "Enter the address yourself",
     "آماده‌ی اتصال" to "Ready to connect",
     "آپلود" to "Upload",

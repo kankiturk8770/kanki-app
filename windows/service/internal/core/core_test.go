@@ -223,7 +223,8 @@ func TestBuild(t *testing.T) {
 	set.DNS = []string{"9.9.9.9"}
 	set.MTU = 1400
 	tun, _ = Build(cfg, ep, set)
-	if tun.DNS[0].String() != "9.9.9.9" || tun.MTU != 1400 {
+	// the setting never raises the config's MTU (1280 here): bigger packets would be cut on the way
+	if tun.DNS[0].String() != "9.9.9.9" || tun.MTU != 1280 {
 		t.Fatalf("%+v", tun)
 	}
 	cfg.DNS = nil
@@ -279,5 +280,14 @@ func TestRefreshKeepsConfigsOnAnEmptyPage(t *testing.T) {
 	}
 	if n := len(m.saved.Account.Servers); n != 1 {
 		t.Fatalf("saved configs lost: %d", n)
+	}
+}
+
+// The MTU setting only lowers the config's (panel) MTU, never raises it.
+func TestMTUSettingOnlyLowers(t *testing.T) {
+	for _, c := range []struct{ cfg, set, want int }{{1320, 0, 1320}, {1320, 1380, 1320}, {1320, 1280, 1280}, {0, 1400, 1400}, {0, 0, 0}} {
+		if got := lowerOnly(c.cfg, c.set); got != c.want {
+			t.Errorf("lowerOnly(%d, %d) = %d, want %d", c.cfg, c.set, got, c.want)
+		}
 	}
 }
