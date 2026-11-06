@@ -65,7 +65,7 @@ func TCP(ctx context.Context, to netip.AddrPort) (int64, error) {
 	best := int64(-1)
 	for i := 0; i < tries; i++ {
 		t0 := time.Now()
-		d := net.Dialer{Timeout: waitFor * 2, Control: Outside}
+		d := net.Dialer{Timeout: waitFor * 2, Control: outsideFor}
 		c, err := d.DialContext(ctx, "tcp", to.String())
 		if err != nil {
 			continue
