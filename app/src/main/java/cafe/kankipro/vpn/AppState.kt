@@ -406,7 +406,10 @@ class AppState private constructor(context: Context) {
         else -> account?.viaProto?.get(n)?.get(p)?.takeIf { it == "tunnel" } ?: "direct"
     }
 
-    /** امتیاز گیمینگ هر کانفیگ (Modes.gameScore)؛ پروتکلی که سری ندارد (microtun، Hysteria2) فقط با پینگ */
+    /**
+     * امتیاز گیمینگ هر کانفیگ (Modes.gameScore) برای همه‌ی پروتکل‌های گیمینگ: AmneziaWG/WireGuard (۸ دست‌دادن)،
+     * KANKI MIX (۱۲ پینگ هسته)، Hysteria2 و microtun (۴ پینگ هسته). کانفیگی که سنجیده نشد با همان پینگ.
+     */
     private suspend fun gameScores(list: List<Pair<String, String>>): Map<Pair<String, String>, Double?> = withContext(Dispatchers.IO) {
         val net = Probe.underlying(ctx)
         kotlinx.coroutines.coroutineScope {
@@ -420,6 +423,10 @@ class AppState private constructor(context: Context) {
                         val series = if (mine) null else when (c.second) {
                             "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 8, 60)
                             "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 12, 50)
+                            // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
+                            // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
+                            "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
+                            MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
                             else -> null
                         }
                         series?.let { Modes.gameScore(it) } ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()

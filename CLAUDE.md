@@ -88,7 +88,8 @@
 
 ### 2026-11-07 — ۱.۲۶.۰: گیمینگ با امتیاز و انتخاب مسیر
 سناریوی «کاهش پینگ و ثبات بازی» صاحب اپ (همراه پنل 3.36.0: صف کوتاه سرورها و لاین UDP/TCP داخل تانل). اپ: `Modes.gameScore`
-(پینگ + لرزش×۳ + افت×۲۰)، `Probe.wgSeries`، `AppState.gameScores`/`gameVia`/`gameRoute`، سه گزینهٔ مسیر در `GameSheet` (`RouteChip`).
+(پینگ + لرزش×۳ + افت×۲۰) برای همهٔ پروتکل‌های گیمینگ، `Probe.wgSeries`، `AppState.gameScores`/`gameVia`/`gameRoute`، سه گزینهٔ مسیر در `GameSheet` (`RouteChip`)،
+ترتیب ثابت ردیف‌ها و جای ثابت پینگ (`PingSlot`، `SheetPair.id`).
 جدا کردن UDP و TCP بازی را KANKI MIX از قبل دارد. تست: `GameScoreTest`، CI. روی گوشی دیده نشده. **مانده:** همین در ویندوز.
 
 ### 2026-11-06 — ۱.۲۵.۰ و ویندوز ۱.۲.۹: بازبینی کامل
