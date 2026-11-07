@@ -16,6 +16,9 @@ namespace KankiVPN
         /// <summary>smart, gaming or anti (the three tiles on Home); a server picked by hand wins.</summary>
         public string Mode { get; set; } = "smart";
         public bool Manual { get; set; }
+        /// <summary>Gaming: where the best server is looked for: auto (both ways, best score),
+        /// direct (straight to the server abroad) or tunnel (through an Iran server).</summary>
+        public string GameRoute { get; set; } = "auto";
 
         static string PathOf() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KankiVPN", "ui.json");
 
