@@ -30,22 +30,6 @@ fun applyGameOnly(cfg: String, games: Set<String>): String {
     return lines.joinToString("\n")
 }
 
-/**
- * «فقط بازی» برای WireGuard و AmneziaWG: موتور این دو (GoBackend) بسته‌ها را خودش می‌خواند و برنامه نمی‌تواند وسطش بسته‌ی
- * برنامه‌های دیگر را ببندد؛ پس فقط بازی‌ها (و پیش‌نیازهای ورود) از VPN رد می‌شوند و بقیه‌ی برنامه‌ها با اینترنت عادی، بیرون از
- * تانل، می‌روند. تانل و سرور فقط بازی را می‌برند. «به‌جز این برنامه‌ها» با این هم‌زمان نمی‌شود (اندروید هر دو را با هم نمی‌پذیرد).
- */
-fun applyGameIncluded(cfg: String, games: Set<String>): String {
-    if (games.isEmpty()) return cfg
-    val lines = cfg.lines().filterNot {
-        val t = it.trim()
-        t.startsWith("IncludedApplications", ignoreCase = true) || t.startsWith("ExcludedApplications", ignoreCase = true)
-    }.toMutableList()
-    val i = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
-    if (i >= 0) lines.add(i + 1, "IncludedApplications = " + (games + GAME_NEEDS).sorted().joinToString(", "))
-    return lines.joinToString("\n")
-}
-
 /** بدون این‌ها ورود به بازی (حساب گوگل / پلی) و خرید داخل بازی کار نمی‌کند */
 val GAME_NEEDS = setOf("com.google.android.gms", "com.google.android.gsf", "com.android.vending")
 

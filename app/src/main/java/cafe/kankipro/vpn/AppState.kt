@@ -82,8 +82,7 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * گیمینگ «فقط بازی اینترنت داشته باشد»، همه‌ی پروتکل‌های گیمینگ: KANKI MIX، microtun و Hysteria2 با دروازه (AppGate، اندروید ۱۰ به بالا)،
-     * WireGuard و AmneziaWG فقط بازی را از تانل می‌برند (applyGameIncluded).
+     * گیمینگ «فقط بازی اینترنت داشته باشد»: فقط با KANKI MIX و microtun و اندروید ۱۰ به بالا (AppGate).
      * بازی‌های انتخابی، سرویس‌های گوگل و DNS اینترنت دارند و بقیه‌ی برنامه‌ها تا قطع VPN نه.
      */
     var gameOnly by mutableStateOf(prefs.getBoolean("gameFirewall", false))
@@ -631,9 +630,6 @@ class AppState private constructor(context: Context) {
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
     /** پروتکل‌های فقط گیمینگ: نه در هوشمند، نه در ضد فیلتر خودکار */
     private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO)
-    /** «فقط بازی» با دروازه (بقیه‌ی برنامه‌ها بسته) / فقط بازی از تانل (بقیه بیرون از VPN) */
-    private val GAME_GATE = setOf("kankimix", MtunCfg.PROTO, "hysteria2")
-    private val GAME_SPLIT = setOf("wireguard", "amneziawg", "amneziawg-direct")
     /**
      * هوشمند (روزمره) این‌ها را هم امتحان می‌کند. microtun آخرین گزینه است و KANKI MIX هیچ‌وقت: در حالت گیمینگ هر بسته‌اش
      * دو بار می‌رود و FEC هم بسته‌ی اضافه دارد، پس حجم کاربر دو برابر حساب می‌شد؛ microtun فقط بسته‌های خیلی کوچک
@@ -1449,14 +1445,8 @@ class AppState private constructor(context: Context) {
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
-                // «فقط بازی» برای همه‌ی پروتکل‌های گیمینگ: KANKI MIX، microtun و Hysteria2 بقیه‌ی برنامه‌ها را می‌بندند
-                // (دروازه، اندروید ۱۰ به بالا)؛ WireGuard و AmneziaWG فقط بازی را از تانل می‌برند و بقیه بیرون از VPN می‌روند
-                if (mode == KMode.GAME && gameOnly) {
-                    val games = gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() }
-                    when {
-                        link.protocol in GAME_GATE && AppGate.supported -> cfg = applyGameOnly(cfg, games)
-                        link.protocol in GAME_SPLIT -> cfg = applyGameIncluded(cfg, games)
-                    }
+                if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
+                    cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
                 }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)

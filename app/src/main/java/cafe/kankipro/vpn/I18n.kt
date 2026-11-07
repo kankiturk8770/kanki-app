@@ -332,8 +332,6 @@ private val EN = mapOf(
     "سنجش پینگ همه‌ی سرورها…" to "Pinging all servers…",
     "سنجش پینگ…" to "Measuring ping…",
     "سنجش لرزش و افت…" to "Measuring jitter and loss…",
-    "فقط بازی از VPN رد شود" to "Only games go through the VPN",
-    "%d بازی از تانل می‌روند؛ بقیه‌ی برنامه‌ها با اینترنت عادی، بیرون از VPN" to "%d games go through the tunnel; other apps use the normal internet, outside the VPN",
     "بهترین امتیاز" to "Best score",
     "بی‌واسطه" to "No relay",
     "از ایران" to "Via Iran",
