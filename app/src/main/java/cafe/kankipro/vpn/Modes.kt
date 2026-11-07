@@ -61,6 +61,36 @@ object Modes {
      * لرزش میانگین فرق رفت‌وبرگشت بسته‌های پشت‌سرهم است. یک مسیر ۵۰ میلی‌ثانیه‌ی پرنوسان از یک مسیر
      * ۶۰ میلی‌ثانیه‌ی صاف عقب می‌افتد. null وقتی هیچ جوابی نیامد.
      */
+    /** کیفیت یک کانفیگ برای بازی: درصد افت، لرزش (ms)، امتیاز و تعداد بسته‌های سنجش */
+    data class GameQ(val loss: Int, val jitter: Long, val score: Double, val n: Int)
+
+    /** با کمتر از این تعداد بسته درصد افت گول‌زننده است (یک بسته‌ی گم‌شده از ۴ تا یعنی «۲۵٪») و نشان داده نمی‌شود */
+    const val LOSS_MIN_SAMPLES = 10
+
+    fun gameQ(series: List<Long?>): GameQ? {
+        val score = gameScore(series) ?: return null
+        val ok = series.filterNotNull()
+        val jitter = if (ok.size < 2) 0L else ok.zipWithNext { a, b -> kotlin.math.abs(a - b) }.average().toLong()
+        val loss = (series.count { it == null } * 100 + series.size / 2) / series.size
+        return GameQ(loss, jitter, score, series.size)
+    }
+
+    /**
+     * برچسب پایداری برای بازی: ۰ پایدار، ۱ متوسط، ۲ ضعیف (لرزش ۳۰ms مثل هشدار مسیر پنل).
+     * سنجش کوتاه (Hysteria2 و microtun، هر بار یک دست‌دادن کامل): یک بی‌جواب «متوسط»، نصف یا بیشتر «ضعیف».
+     */
+    fun stability(q: GameQ): Int = when {
+        q.n < LOSS_MIN_SAMPLES -> when {
+            q.loss >= 50 || q.jitter >= 30 -> 2
+            q.loss == 0 && q.jitter <= 12 -> 0
+            else -> 1
+        }
+        // یک بسته‌ی گم‌شده در ۲۰ تا (۵٪) می‌تواند شانسی باشد: «متوسط»؛ از ۱۰٪ «ضعیف»
+        q.loss >= 10 || q.jitter >= 30 -> 2
+        q.loss == 0 && q.jitter <= 12 -> 0
+        else -> 1
+    }
+
     fun gameScore(series: List<Long?>): Double? {
         val ok = series.filterNotNull()
         if (ok.isEmpty()) return null

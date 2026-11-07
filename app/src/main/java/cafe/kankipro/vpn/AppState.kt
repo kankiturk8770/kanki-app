@@ -370,8 +370,8 @@ class AppState private constructor(context: Context) {
                 error = trf("%s در اشتراک شما نیست. از «گیمینگ» پروتکل دیگری انتخاب کنید.", familyTitle(fam ?: "kankimix"))
                 return
             }
-            // مسیر انتخابی (مستقیم / از ایران)؛ اگر آن راه در اشتراک نبود، همه
-            val routed = if (gameRoute == "auto") all else all.filter { gameVia(it.first, it.second) == gameRoute }.ifEmpty { all }
+            // «بهترین سرور برای بازی»: هر دو راه (تانل و مستقیم) با هم سنجیده می‌شوند؛ کاربر راه خاص را از فهرست خودش برمی‌دارد
+            val routed = all
             tryStep = "سنجش پینگ…"
             val m = pingMany(routed)
             // پینگ واقعی است: کانفیگی که جواب نداد واقعاً وصل نمی‌شود و امتحانش فقط معطلی است
@@ -421,18 +421,41 @@ class AppState private constructor(context: Context) {
                         val live = activeKey
                         val mine = live != null && vstate != VState.OFF && peerOf(c.first, c.second) == peerOf(live.substringBefore("|"), live.substringAfter("|"))
                         val series = if (mine) null else when (c.second) {
-                            "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 8, 60)
-                            "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 12, 50)
+                            // ۲۰ بسته: یک بسته‌ی گم‌شده ۵٪ است، نه ۱۳٪ (با ۸ بسته یک بسته‌ی شانسی «ضعیف» نشان می‌داد)
+                            "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 20, 60)
+                            "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 20, 40)
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
                             MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
                             else -> null
                         }
-                        series?.let { Modes.gameScore(it) } ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
+                        val q = series?.let { Modes.gameQ(it) }
+                        if (q != null) gameQ["${c.first}/${c.second}"] = q
+                        q?.score ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
                     }.getOrNull()
                 }
             }.awaitAll().toMap()
+        }
+    }
+
+    /** پایداری هر کانفیگ گیمینگ («node/proto»): افت و لرزش آخرین سنجش، برای برچسب زیر هر خانه‌ی پنل گیمینگ */
+    val gameQ = mutableStateMapOf<String, Modes.GameQ>()
+    private val familyMeasured = HashMap<String, Long>()
+
+    /**
+     * با باز شدن یک پروتکل در پنل گیمینگ، همه‌ی کانفیگ‌هایش (تانل و مستقیم) با یک سری بسته‌ی واقعی سنجیده می‌شوند تا زیر هر
+     * خانه «پایدار / متوسط / ضعیف» و درصد افت دیده شود. بعد از «تست پینگ همه» تا با هم دست ندهند؛ هر پروتکل حداکثر دقیقه‌ای یک بار.
+     */
+    fun measureFamily(f: String) {
+        val now = System.currentTimeMillis()
+        if (now - (familyMeasured[f] ?: 0L) < 60_000) return
+        familyMeasured[f] = now
+        bg.launch {
+            kotlinx.coroutines.delay(600)
+            while (pingAllUi.running) kotlinx.coroutines.delay(200)
+            val list = gameConfigs(f)
+            if (list.isNotEmpty()) gameScores(list)
         }
     }
 
