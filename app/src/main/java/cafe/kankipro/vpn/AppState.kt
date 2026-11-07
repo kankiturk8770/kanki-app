@@ -421,8 +421,9 @@ class AppState private constructor(context: Context) {
                         val live = activeKey
                         val mine = live != null && vstate != VState.OFF && peerOf(c.first, c.second) == peerOf(live.substringBefore("|"), live.substringAfter("|"))
                         val series = if (mine) null else when (c.second) {
-                            "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 8, 60)
-                            "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 12, 50)
+                            // ۲۰ بسته: یک بسته‌ی گم‌شده ۵٪ است، نه ۱۳٪ (با ۸ بسته یک بسته‌ی شانسی «ضعیف» نشان می‌داد)
+                            "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 20, 60)
+                            "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 20, 40)
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }

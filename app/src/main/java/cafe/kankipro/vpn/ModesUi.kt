@@ -595,7 +595,8 @@ private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
             val lv = Modes.stability(q)
             val name = when (lv) { 0 -> tr("پایدار"); 1 -> tr("متوسط"); else -> tr("ضعیف") }
             val c = when (lv) { 0 -> K.Ok; 1 -> K.Warn; else -> K.Red }
-            (name + " · " + trf("افت %d٪", q.loss)) to c
+            // درصد افت فقط وقتی سنجش به‌اندازه‌ی کافی بسته داشت
+            (if (q.n >= Modes.LOSS_MIN_SAMPLES) name + " · " + trf("افت %d٪", q.loss) else name) to c
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = D.S1, top = 2.dp)) {
