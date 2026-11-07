@@ -690,12 +690,18 @@ fun GameSheet(
         if (fam == "kankimix" && f?.servers?.isNotEmpty() == true) {
             SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
         }
-        // فایروال «فقط بازی»: فقط پروتکل‌های مخصوص بازی (KANKI MIX و microtun)، اندروید ۱۰ به بالا
-        if ((fam == "kankimix" || fam == "mtun") && f?.servers?.isNotEmpty() == true) {
-            val ok = AppGate.supported
+        // «فقط بازی» برای همه‌ی پروتکل‌های گیمینگ: KANKI MIX، microtun و Hysteria2 بقیه‌ی برنامه‌ها را می‌بندند (اندروید ۱۰ به بالا)؛
+        // WireGuard و Amnezia فقط بازی را از تانل می‌برند و بقیه‌ی برنامه‌ها با اینترنت عادی بیرون از VPN می‌روند
+        if (f?.servers?.isNotEmpty() == true) {
+            val split = fam == "amnezia" || fam == "wireguard"
+            val ok = split || AppGate.supported
             Box(Modifier.guideTarget("game_only")) { SwitchRow(
-                "فقط بازی اینترنت داشته باشد",
-                if (!ok) "روی اندروید ۱۰ به بالا" else trf("%d بازی · سرویس‌های گوگل و DNS هم باز می‌مانند؛ بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند", gameCount),
+                if (split) "فقط بازی از VPN رد شود" else "فقط بازی اینترنت داشته باشد",
+                when {
+                    !ok -> "روی اندروید ۱۰ به بالا"
+                    split -> trf("%d بازی از تانل می‌روند؛ بقیه‌ی برنامه‌ها با اینترنت عادی، بیرون از VPN", gameCount)
+                    else -> trf("%d بازی · سرویس‌های گوگل و DNS هم باز می‌مانند؛ بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند", gameCount)
+                },
                 gameOnly && ok, c, enabled = ok, onChange = onGameOnly,
             ) }
             if (gameOnly && ok) SmallLine("انتخاب بازی‌ها", onClick = onPickGames)

@@ -21,7 +21,7 @@
 | پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG/microtun `RealPing.l3`) | `AppState.livePing` |
 | چت اضطراری | `Emergency.kt`، `EmergencyUi.kt`، `EmergencyNotify.kt` |
 | DNS کانکی (رفع تحریم) | `DnsMode.kt` |
-| دروازه‌ی برنامه‌ها: «فقط بازی» گیمینگ (KMIX/microtun)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt` |
+| دروازه‌ی برنامه‌ها: «فقط بازی» گیمینگ (KMIX/microtun/Hysteria2 با دروازه `GAME_GATE`؛ WG/AWG فقط بازی از تانل `GAME_SPLIT`)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly`/`applyGameIncluded` در `Tunnel.kt`، `GameApps` در `Extras.kt` |
 | سقف فریم انیمیشن‌ها (گوشی ضعیف ۳۰، بقیه ۶۰) | `Motion` و `motionTime()` در `Kit.kt` |
 | ترجمه (فارسی → انگلیسی) | `I18n.kt` |
 | اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
@@ -86,6 +86,10 @@
 - [ ] شاید: تقسیم ترافیک بر اساس برنامه در ویندوز (درایور کرنل لازم دارد).
 - [ ] اگر انتشار عمومی شد: امضای دیجیتال فایل نصبی ویندوز (SmartScreen).
 - کار دستی صاحب اپ: Artifact retention سه روز در هر ریپو؛ پاک کردن کلید قدیمی GitHub (`ghp_…`) اگر هنوز هست.
+
+### 2026-11-07 — ۱.۲۷.۰: «فقط بازی» برای همه‌ی پروتکل‌های گیمینگ
+صاحب اپ: کلید «فقط بازی» برای همه‌ی پروتکل‌های گیمینگ. Hysteria2 با همان دروازه (`AppGate`، `reject`)؛ WireGuard/AmneziaWG با GoBackend کار می‌کنند و
+دروازه نمی‌شود، پس فقط بازی از تانل (`IncludedApplications`) و بقیه بیرون از VPN، با متن جدا در `GameSheet`. همراه ۱.۲۶.۱ در PR #41.
 
 ### 2026-11-07 — ۱.۲۶.۱: پینگ درست وقتی وصلی
 صاحب اپ با ۱۰ عکس از ترکیه: وقتی وصل است پینگ صفحه‌ی اول گاهی ۳ و گاهی ۴۰۰ (KANKI MIX تانل و مستقیم، Xray)، ولی تب سرورها درست (تانل ۱۴۰-۱۸۰، مستقیم ۴۰-۹۰).

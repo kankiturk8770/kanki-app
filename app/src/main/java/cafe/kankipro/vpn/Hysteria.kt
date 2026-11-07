@@ -298,14 +298,16 @@ class KankiHyService : VpnService() {
             Thread.sleep(250)
         }
         if (!ready) error("hysteria2: server did not answer. " + lastLog())
-        tunUp("Kanki · Hysteria2", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+        // «فقط بازی» گیمینگ: بازی‌ها و پیش‌نیازهایشان اینترنت دارند، بقیه با جواب فوری «اینترنت نیست» بسته
+        val games = gameOnly(lines)
+        tunUp("Kanki · Hysteria2", ip, socksPort, mtu, dns, excluded, games ?: included(lines), games != null || blockOthers(lines), my, reject = games != null)
     }
 
     /** «بقیه‌ی برنامه‌ها اینترنت نداشته باشند» (فقط با IncludedApplications معنا دارد) */
     private fun blockOthers(lines: List<String>): Boolean =
         lines.any { it.startsWith("BlockOthers", ignoreCase = true) && it.substringAfter("=", "").trim() == "1" }
 
-    /** «فقط بازی» گیمینگ (KANKI MIX و microtun): برنامه‌هایی که اینترنت دارند؛ null یعنی این حالت خاموش است یا اندروید ۹ و قدیمی‌تر */
+    /** «فقط بازی» گیمینگ (KANKI MIX، microtun و Hysteria2): برنامه‌هایی که اینترنت دارند؛ null یعنی این حالت خاموش است یا اندروید ۹ و قدیمی‌تر */
     private fun gameOnly(lines: List<String>): List<String>? =
         (lines.firstOrNull { it.startsWith("GameOnly", ignoreCase = true) && it.contains("=") }?.substringAfter("=") ?: "")
             .split(",").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() && AppGate.supported }
@@ -323,7 +325,7 @@ class KankiHyService : VpnService() {
      * کارت شبکه‌ی VPN و tun2socks به پراکسی SOCKS محلی هسته (مشترک بین Hysteria2 و Xray).
      * block: فقط برنامه‌های included اینترنت دارند و بقیه هیچ (با AppGate، اندروید ۱۰ به بالا).
      */
-    private fun tunUp(session: String, ip: InetAddress, socksPort: Int, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, block: Boolean, my: Int) {
+    private fun tunUp(session: String, ip: InetAddress, socksPort: Int, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, block: Boolean, my: Int, reject: Boolean = false) {
         val gateMode = block && included.isNotEmpty() && AppGate.supported
         val b = Builder()
             .setSession(session)
@@ -352,7 +354,7 @@ class KankiHyService : VpnService() {
             tun = fd
             if (gateMode) {
                 // خود برنامه (پینگ و بررسی سلامت تونل) هم مجاز است
-                val g = AppGate(this, fd, AppGate.uidsOf(this, included) + android.os.Process.myUid())
+                val g = AppGate(this, fd, AppGate.uidsOf(this, included) + android.os.Process.myUid(), reject = reject)
                 gate = g
                 if (!TProxyService.TProxyStartService(hevFile.path, g.innerFd)) error("tun2socks did not start")
                 g.start()
