@@ -61,6 +61,24 @@ object Modes {
      * لرزش میانگین فرق رفت‌وبرگشت بسته‌های پشت‌سرهم است. یک مسیر ۵۰ میلی‌ثانیه‌ی پرنوسان از یک مسیر
      * ۶۰ میلی‌ثانیه‌ی صاف عقب می‌افتد. null وقتی هیچ جوابی نیامد.
      */
+    /** کیفیت یک کانفیگ برای بازی: درصد افت، لرزش (ms) و امتیاز */
+    data class GameQ(val loss: Int, val jitter: Long, val score: Double)
+
+    fun gameQ(series: List<Long?>): GameQ? {
+        val score = gameScore(series) ?: return null
+        val ok = series.filterNotNull()
+        val jitter = if (ok.size < 2) 0L else ok.zipWithNext { a, b -> kotlin.math.abs(a - b) }.average().toLong()
+        val loss = (series.count { it == null } * 100 + series.size / 2) / series.size
+        return GameQ(loss, jitter, score)
+    }
+
+    /** برچسب پایداری برای بازی: ۰ پایدار، ۱ متوسط، ۲ ضعیف (مثل مرزهای هشدار مسیر پنل: افت ۳٪، لرزش ۳۰ms) */
+    fun stability(q: GameQ): Int = when {
+        q.loss >= 5 || q.jitter >= 30 -> 2
+        q.loss == 0 && q.jitter <= 12 -> 0
+        else -> 1
+    }
+
     fun gameScore(series: List<Long?>): Double? {
         val ok = series.filterNotNull()
         if (ok.isEmpty()) return null

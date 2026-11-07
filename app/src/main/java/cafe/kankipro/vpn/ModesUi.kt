@@ -464,7 +464,7 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
 }
 
 /** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …)، پینگ و راهش (tunnel / direct) */
-data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct")
+data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct", val q: Modes.GameQ? = null)
 
 /** یک سرور با دو راهش کنار هم: کانفیگ تانل (راست) و کانفیگ مستقیم (چپ)؛ هر کدام ممکن است نباشد */
 data class SheetPair(val flag: String, val name: String, val tunnel: SheetServer?, val direct: SheetServer?) {
@@ -555,27 +555,53 @@ private fun PairRow(p: SheetPair, current: String?, auto: Boolean, color: Color,
     }
 }
 
-/** یک خانه: دکمه‌ی انتخاب، اسم راه (تانل، مستقیم یا اسمی که ادمین گذاشته) و پینگ؛ خالی وقتی این سرور آن راه را ندارد */
+/**
+ * یک خانه: دکمه‌ی انتخاب، اسم راه (تانل، مستقیم یا اسمی که ادمین گذاشته) و پینگ؛ زیرش پایداری برای بازی (پایدار / متوسط / ضعیف
+ * و درصد افت، از سنجش واقعی). جای خط دوم همیشه هست تا با رسیدن سنجش چیزی جابه‌جا نشود. خالی وقتی این سرور آن راه را ندارد.
+ */
 @Composable
 private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: Color, enabled: Boolean, modifier: Modifier, onClick: (SheetServer) -> Unit) {
     val shape = RoundedCornerShape(D.RT)
-    Row(
-        modifier.height(D.RowS).clip(shape)
+    Column(
+        modifier.height(D.RowH + D.S3).clip(shape)
             .background(if (selected) color.copy(alpha = .16f) else if (sv != null) Color(0x0AFFFFFF) else Color.Transparent)
             .border(if (selected) 1.3.dp else 1.dp, if (selected) color else if (sv != null) K.Gold.copy(alpha = .16f) else K.Gold.copy(alpha = .06f), shape)
             .alpha(if (sv == null) .45f else if (enabled) 1f else .55f)
             .clickable(enabled = enabled && sv != null) { sv?.let(onClick) }
             .padding(horizontal = D.S2),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.Center,
     ) {
         if (sv == null) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("—", size = 12.sp, color = K.Sub, ltr = true) }
-            return@Row
+            return@Column
         }
-        Radio(selected, color)
-        Spacer(Modifier.width(D.S2))
-        AutoText(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 11.5.sp, color = K.Text, modifier = Modifier.weight(1f))
-        PingSlot(sv.ping, 10.5.sp, 46.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Radio(selected, color)
+            Spacer(Modifier.width(D.S2))
+            AutoText(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 11.5.sp, color = K.Text, modifier = Modifier.weight(1f))
+            PingSlot(sv.ping, 10.5.sp, 46.dp)
+        }
+        StabilityLine(sv.q, sv.ping)
+    }
+}
+
+/** خط دوم هر خانه: نقطه‌ی رنگی و «پایدار / متوسط / ضعیف · افت ٪»؛ تا سنجش برسد «در حال سنجش…» */
+@Composable
+private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
+    val (txt, col) = when {
+        ping != null && ping < 0 -> tr("بدون جواب") to K.Sub
+        q == null -> tr("در حال سنجش…") to K.Sub
+        else -> {
+            val lv = Modes.stability(q)
+            val name = when (lv) { 0 -> tr("پایدار"); 1 -> tr("متوسط"); else -> tr("ضعیف") }
+            val c = when (lv) { 0 -> K.Ok; 1 -> K.Warn; else -> K.Red }
+            (name + " · " + trf("افت %d٪", q.loss)) to c
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = D.S1, top = 2.dp)) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(col))
+        Spacer(Modifier.width(D.S1))
+        T(txt, size = 10.sp, color = if (q == null) K.Sub else col, weight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -629,8 +655,8 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
         T("⚡", size = 16.sp, weight = FontWeight.Normal)
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
-            T("سریع‌ترین سرور", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
-            T("پینگ، لرزش و افت را می‌سنجد و بهترین را وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            T("بهترین سرور برای بازی", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T("پایدارترین را با پینگ، لرزش و افت پیدا و وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         // جای عدد همیشه هست (خالی تا اولین پینگ): متن کنارش با رسیدن عدد جابه‌جا نمی‌شود
         Box(Modifier.width(50.dp), contentAlignment = Alignment.CenterEnd) {
@@ -665,8 +691,6 @@ fun GameSheet(
     onConnect: (node: String, proto: String) -> Unit,
     onFastest: (family: String) -> Unit,
     onClose: () -> Unit,
-    route: String = "auto",
-    onRoute: (String) -> Unit = {},
 ) {
     var fam by remember(visible) {
         mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
@@ -704,12 +728,6 @@ fun GameSheet(
         if (f == null || f.servers.isEmpty()) {
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
         } else {
-            // مسیر «سریع‌ترین سرور»: خودکار (بهترین امتیاز)، مستقیم، یا از ایران (تانل ضد افت)
-            Row(Modifier.fillMaxWidth().padding(bottom = D.S2), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                RouteChip("خودکار", "بهترین امتیاز", route == "auto", c, Modifier.weight(1f)) { onRoute("auto") }
-                RouteChip("مستقیم", "بی‌واسطه", route == "direct", c, Modifier.weight(1f)) { onRoute("direct") }
-                RouteChip("از ایران", "ضد افت", route == "tunnel", c, Modifier.weight(1f)) { onRoute("tunnel") }
-            }
             Column(Modifier.fillMaxWidth().guideTarget("game_list")) {
                 FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
                 PairHeader(c)
@@ -772,24 +790,6 @@ fun FilterSheet(
             pairsOf(amnezia).forEach { p -> PairRow(p, current, auto, protoColor("amneziawg"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         Spacer(Modifier.height(8.dp))
-    }
-}
-
-/** یک گزینه‌ی مسیر گیمینگ (سه‌تایی هم‌عرض؛ متن کوتاه تا روی ۳۶۰ هم کامل دیده شود) */
-@Composable
-private fun RouteChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(D.RS)
-    Column(
-        modifier.height(D.RowH).clip(shape)
-            .background(if (on) c.copy(alpha = .16f) else Color(0x08FFFFFF))
-            .border(if (on) 1.5.dp else 1.dp, if (on) c else K.Gold.copy(alpha = .18f), shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = D.S1),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        T(title, size = 13.sp, color = if (on) K.Text else K.Sub, weight = FontWeight.Black, maxLines = 1)
-        T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
     }
 }
 

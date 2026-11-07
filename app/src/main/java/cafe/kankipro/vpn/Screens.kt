@@ -450,7 +450,7 @@ private fun ModeSheets(state: AppState) {
         (flagEmoji(state.isoOfNode(id)) ?: "🌐") to state.placeName(id)
     fun server(id: String, p: String, tag: String?): SheetServer {
         val (flag, name) = place(id)
-        return SheetServer(id, p, flag, name, tag, state.protoPing(id, p), state.cfgSide(id, p))
+        return SheetServer(id, p, flag, name, tag, state.protoPing(id, p), state.cfgSide(id, p), state.gameQ["$id/$p"])
     }
 
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
@@ -479,8 +479,6 @@ private fun ModeSheets(state: AppState) {
         initFamily = Modes.familyOf(state.gameProto) ?: "kankimix",
         current = state.gameNode?.let { it + "|" + state.gameProto } ?: ("|" + state.gameProto),
         currentAuto = state.gameAuto,
-        route = state.gameRoute,
-        onRoute = { state.changeGameRoute(it) },
         busy = busy,
         kmixDup = state.kmixDup,
         onKmixDup = { state.changeKmixDup(it) },
@@ -489,7 +487,7 @@ private fun ModeSheets(state: AppState) {
         onGameOnly = { state.changeGameOnly(it) },
         onPickGames = { state.gameAppsOpen = true },
         // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
-        onFamilyShown = { },
+        onFamilyShown = { state.measureFamily(it) },
         onConnect = { n, p ->
             state.setGame(false, p, n)
             state.gameSheet = false

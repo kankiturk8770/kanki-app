@@ -370,8 +370,8 @@ class AppState private constructor(context: Context) {
                 error = trf("%s در اشتراک شما نیست. از «گیمینگ» پروتکل دیگری انتخاب کنید.", familyTitle(fam ?: "kankimix"))
                 return
             }
-            // مسیر انتخابی (مستقیم / از ایران)؛ اگر آن راه در اشتراک نبود، همه
-            val routed = if (gameRoute == "auto") all else all.filter { gameVia(it.first, it.second) == gameRoute }.ifEmpty { all }
+            // «بهترین سرور برای بازی»: هر دو راه (تانل و مستقیم) با هم سنجیده می‌شوند؛ کاربر راه خاص را از فهرست خودش برمی‌دارد
+            val routed = all
             tryStep = "سنجش پینگ…"
             val m = pingMany(routed)
             // پینگ واقعی است: کانفیگی که جواب نداد واقعاً وصل نمی‌شود و امتحانش فقط معطلی است
@@ -429,10 +429,32 @@ class AppState private constructor(context: Context) {
                             MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
                             else -> null
                         }
-                        series?.let { Modes.gameScore(it) } ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
+                        val q = series?.let { Modes.gameQ(it) }
+                        if (q != null) gameQ["${c.first}/${c.second}"] = q
+                        q?.score ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
                     }.getOrNull()
                 }
             }.awaitAll().toMap()
+        }
+    }
+
+    /** پایداری هر کانفیگ گیمینگ («node/proto»): افت و لرزش آخرین سنجش، برای برچسب زیر هر خانه‌ی پنل گیمینگ */
+    val gameQ = mutableStateMapOf<String, Modes.GameQ>()
+    private val familyMeasured = HashMap<String, Long>()
+
+    /**
+     * با باز شدن یک پروتکل در پنل گیمینگ، همه‌ی کانفیگ‌هایش (تانل و مستقیم) با یک سری بسته‌ی واقعی سنجیده می‌شوند تا زیر هر
+     * خانه «پایدار / متوسط / ضعیف» و درصد افت دیده شود. بعد از «تست پینگ همه» تا با هم دست ندهند؛ هر پروتکل حداکثر دقیقه‌ای یک بار.
+     */
+    fun measureFamily(f: String) {
+        val now = System.currentTimeMillis()
+        if (now - (familyMeasured[f] ?: 0L) < 60_000) return
+        familyMeasured[f] = now
+        bg.launch {
+            kotlinx.coroutines.delay(600)
+            while (pingAllUi.running) kotlinx.coroutines.delay(200)
+            val list = gameConfigs(f)
+            if (list.isNotEmpty()) gameScores(list)
         }
     }
 
