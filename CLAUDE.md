@@ -18,6 +18,7 @@
 | موتور WireGuard/AmneziaWG | `VpnEngine.kt`، `Tunnel.kt` |
 | Hysteria2 / Xray / KANKI MIX / microtun | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` / `Mtun.kt` |
 | پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
+| پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG/microtun `RealPing.l3`) | `AppState.livePing` |
 | چت اضطراری | `Emergency.kt`، `EmergencyUi.kt`، `EmergencyNotify.kt` |
 | DNS کانکی (رفع تحریم) | `DnsMode.kt` |
 | دروازه‌ی برنامه‌ها: «فقط بازی» گیمینگ (KMIX/microtun)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt` |
@@ -85,6 +86,11 @@
 - [ ] شاید: تقسیم ترافیک بر اساس برنامه در ویندوز (درایور کرنل لازم دارد).
 - [ ] اگر انتشار عمومی شد: امضای دیجیتال فایل نصبی ویندوز (SmartScreen).
 - کار دستی صاحب اپ: Artifact retention سه روز در هر ریپو؛ پاک کردن کلید قدیمی GitHub (`ghp_…`) اگر هنوز هست.
+
+### 2026-11-07 — ۱.۲۶.۱: پینگ درست وقتی وصلی
+صاحب اپ با ۱۰ عکس از ترکیه: وقتی وصل است پینگ صفحه‌ی اول گاهی ۳ و گاهی ۴۰۰ (KANKI MIX تانل و مستقیم، Xray)، ولی تب سرورها درست (تانل ۱۴۰-۱۸۰، مستقیم ۴۰-۹۰).
+علت: `RealPing.once` برای همه زمان وصل شدن TCP را می‌شمرد و اگر زیر ۳ms بود زمان اولین جواب HTTP را؛ در KMIX/Xray/Hy2 خود گوشی (tun2socks) وصل
+می‌شود، پس یا ۳ تا ۸ms محلی یا چند رفت‌وبرگشت. رفع: `livePing` هر پروتکل جدا. بازی خودش (ریجستر خوب، یکی دو پرش ۶۰۰) به این عدد ربطی نداشت.
 
 ### 2026-11-07 — ۱.۲۶.۰: گیمینگ با امتیاز و انتخاب مسیر
 سناریوی «کاهش پینگ و ثبات بازی» صاحب اپ (همراه پنل 3.36.0: صف کوتاه سرورها و لاین UDP/TCP داخل تانل). اپ: `Modes.gameScore`

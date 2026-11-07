@@ -1655,12 +1655,34 @@ class AppState private constructor(context: Context) {
 
     /** یک نمونه‌ی سبک پینگ (یک درخواست HTTP کوچک از داخل تونل) برای نمودار زنده */
     suspend fun samplePing() {
-        val v = withContext(Dispatchers.IO) { RealPing.once() } ?: return
+        val v = withContext(Dispatchers.IO) { livePing() } ?: return
         if (vstate != VState.ON) return
         pingHist.add(v)
         while (pingHist.size > 24) pingHist.removeAt(0)
         // عدد نمایش داده‌شده: کمترین از چند نمونه‌ی آخر (مثل پینگ واقعی، بدون نوسان یک‌باره)
         ping = pingHist.takeLast(3).minOrNull()
+    }
+
+    /**
+     * پینگ واقعی اتصال فعلی، با روش درست همان پروتکل (قبلاً یک روش برای همه بود و KANKI MIX، Xray و Hysteria2
+     * گاهی ۳ و گاهی ۴۰۰ نشان می‌دادند، چون خود گوشی اتصال TCP را جواب می‌دهد):
+     *   KANKI MIX           پینگ خود هسته تا سرور، از همان مسیر UDP بسته‌های بازی (تانل یا مستقیم)
+     *   Xray، Hysteria2     دومین درخواست روی یک اتصال زنده (یک رفت‌وبرگشت)
+     *   WireGuard، AWG، microtun  زمان وصل شدن TCP (بسته واقعاً تا سرور می‌رود)
+     */
+    private fun livePing(): Long? {
+        val p = activeKey?.substringAfter("|") ?: proto
+        return when {
+            p == "kankimix" -> KmixCore.ping().takeIf { it > 0 } ?: RealPing.proxied()
+            p == "xray" || p == "hysteria2" -> RealPing.proxied()
+            else -> RealPing.l3()
+        }
+    }
+
+    /** پینگ واقعی اتصال فعلی، چند بار و کمترین (برای ستون پینگ همان کانفیگ در تب سرورها) */
+    private fun livePingBest(tries: Int = 3): Long? {
+        livePing()
+        return (1..tries).mapNotNull { livePing() }.minOrNull()
     }
 
     /** کانفیگی که الان به آن وصل است یا در حال وصل شدن است («node|proto»)؛ null وقتی هیچ */
@@ -1683,7 +1705,7 @@ class AppState private constructor(context: Context) {
         if (mine && vstate == VState.CONNECTING) return pings[k]?.takeIf { it > 0 }
         var skipped = false
         val r = if (mine) {
-            ping ?: withContext(Dispatchers.IO) { RealPing.measure() }
+            ping ?: withContext(Dispatchers.IO) { livePingBest() }
         } else withContext(Dispatchers.IO) {
             runCatching {
                 val l = account?.configs?.firstOrNull { it.node == nodeId && it.protocol == p } ?: return@runCatching null
@@ -1735,7 +1757,7 @@ class AppState private constructor(context: Context) {
 
     /** پینگ واقعی از داخل تونل (HTTP روی اتصال زنده؛ نه HTTPS که چند رفت‌وبرگشت اضافه دارد) */
     suspend fun measurePing() {
-        ping = withContext(Dispatchers.IO) { RealPing.measure() }
+        ping = withContext(Dispatchers.IO) { livePingBest() }
     }
 
     /** خروج کامل: اشتراک و همه‌ی چیزهایی که از آن ذخیره شده (کانفیگ‌ها و کلیدها) از گوشی پاک می‌شود */

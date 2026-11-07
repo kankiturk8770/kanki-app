@@ -143,15 +143,58 @@ object RealPing {
         }
     }.getOrNull()
 
-    /** پینگ و جیتر برای تست سرعت */
-    fun latency(samples: Int = 6): Pair<Long, Long>? {
-        once()
-        val r = (1..samples).mapNotNull { once() }
-        if (r.size < 2) return r.firstOrNull()?.let { it to 0L }
-        return r.min() to r.zipWithNext { a, b -> abs(a - b) }.average().toLong()
-    }
+    /**
+     * پینگ لایه‌ی ۳ (WireGuard، AmneziaWG، microtun): بسته‌ی وصل شدن TCP واقعاً تا سرور می‌رود و برمی‌گردد،
+     * پس زمان وصل شدن خودش یک رفت‌وبرگشت است. DNS جدا و بیرون از زمان.
+     */
+    fun l3(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {
+        val u = URL(url)
+        val ip = java.net.InetAddress.getByName(u.host)
+        java.net.Socket().use { s ->
+            val t0 = System.nanoTime()
+            s.connect(java.net.InetSocketAddress(ip, if (u.port > 0) u.port else 80), timeoutMs)
+            ((System.nanoTime() - t0) / 1_000_000).coerceAtLeast(1)
+        }
+    }.getOrNull()
 
-    /** یک بار گرم‌کردن، سپس کمترین زمان از چند تلاش */
+    /**
+     * پینگ وقتی خود گوشی اتصال TCP را جواب می‌دهد (Xray و Hysteria2 با tun2socks): زمان وصل شدن چند میلی‌ثانیه‌ی
+     * محلی است (همان «۳ms» غلط) و اولین جواب HTTP چند رفت‌وبرگشت دارد (باز کردن راه تا سرور + وصل شدن سرور به
+     * مقصد؛ همان «۴۰۰ms» غلط). پس روی یک اتصال زنده دو درخواست پشت‌سرهم: دومی فقط یک رفت‌وبرگشت است.
+     */
+    fun proxied(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {
+        val u = URL(url)
+        val ip = java.net.InetAddress.getByName(u.host)
+        java.net.Socket().use { s ->
+            s.soTimeout = timeoutMs
+            s.tcpNoDelay = true
+            s.connect(java.net.InetSocketAddress(ip, if (u.port > 0) u.port else 80), timeoutMs)
+            val out = s.getOutputStream()
+            val inp = s.getInputStream()
+            val req = "HEAD ${u.path.ifEmpty { "/" }} HTTP/1.1\r\nHost: ${u.host}\r\nConnection: keep-alive\r\n\r\n".toByteArray()
+            /** سرآیندهای یک جواب را تا خط خالی می‌خواند؛ false اگر جواب سالم نبود */
+            fun answer(): Boolean {
+                val sb = StringBuilder()
+                while (true) {
+                    val c = inp.read()
+                    if (c < 0) return false
+                    sb.append(c.toChar())
+                    if (sb.endsWith("\r\n\r\n")) break
+                    if (sb.length > 8192) return false
+                }
+                val first = sb.lineSequence().firstOrNull().orEmpty()
+                return first.startsWith("HTTP/") && (" 204" in first || " 200" in first)
+            }
+            out.write(req); out.flush()
+            if (!answer()) return@runCatching null
+            val t0 = System.nanoTime()
+            out.write(req); out.flush()
+            if (!answer()) return@runCatching null
+            ((System.nanoTime() - t0) / 1_000_000).coerceAtLeast(1)
+        }
+    }.getOrNull()
+
+    /** پینگ و جیتر برای تست سرعت */    /** یک بار گرم‌کردن، سپس کمترین زمان از چند تلاش */
     fun measure(tries: Int = 4): Long? {
         once()
         val r = (1..tries).mapNotNull { once() }
