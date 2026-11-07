@@ -468,6 +468,8 @@ data class SheetServer(val node: String, val proto: String, val flag: String, va
 
 /** یک سرور با دو راهش کنار هم: کانفیگ تانل (راست) و کانفیگ مستقیم (چپ)؛ هر کدام ممکن است نباشد */
 data class SheetPair(val flag: String, val name: String, val tunnel: SheetServer?, val direct: SheetServer?) {
+    /** شناسه‌ی ثابت ردیف (اسم دو سرور می‌تواند یکی باشد) */
+    val id: String get() = (tunnel?.let { it.node + "|" + it.proto } ?: "-") + "/" + (direct?.let { it.node + "|" + it.proto } ?: "-")
     val best: Long? get() = listOfNotNull(tunnel?.ping, direct?.ping).filter { it > 0 }.minOrNull()
 }
 
@@ -573,8 +575,18 @@ private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: 
         Radio(selected, color)
         Spacer(Modifier.width(D.S2))
         AutoText(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 11.5.sp, color = K.Text, modifier = Modifier.weight(1f))
-        sv.ping?.let { p -> T(if (p < 0) "✕" else "$p ms", size = 10.5.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1) }
-            ?: T("…", size = 10.5.sp, color = K.Sub, font = Poppins, ltr = true)
+        PingSlot(sv.ping, 10.5.sp, 46.dp)
+    }
+}
+
+/**
+ * جای ثابت عدد پینگ: «…» تا جواب بیاید، بعد عدد یا ✕. عرضش ثابت است تا با رسیدن پینگ اسم کنارش جابه‌جا نشود.
+ */
+@Composable
+private fun PingSlot(p: Long?, size: androidx.compose.ui.unit.TextUnit, width: androidx.compose.ui.unit.Dp = 50.dp) {
+    Box(Modifier.width(width), contentAlignment = Alignment.CenterEnd) {
+        if (p == null) T("…", size = size, color = K.Sub, font = Poppins, ltr = true, maxLines = 1)
+        else T(if (p < 0) "✕" else "$p ms", size = size, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1)
     }
 }
 
@@ -597,8 +609,7 @@ private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled:
         Spacer(Modifier.width(D.S2))
         AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f))
         sv.tag?.let { Tag(it, color); Spacer(Modifier.width(D.S2)) }
-        sv.ping?.let { p -> T(if (p < 0) "✕" else "$p ms", size = 11.sp, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true) }
-            ?: T("…", size = 11.sp, color = K.Sub, font = Poppins, ltr = true)
+        PingSlot(sv.ping, 11.sp)
     }
 }
 
@@ -619,9 +630,13 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
             T("سریع‌ترین سرور", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
-            T("خودش کم‌پینگ‌ترین را انتخاب و وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            T("پینگ، لرزش و افت را می‌سنجد و بهترین را وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true); Spacer(Modifier.width(D.S2)) }
+        // جای عدد همیشه هست (خالی تا اولین پینگ): متن کنارش با رسیدن عدد جابه‌جا نمی‌شود
+        Box(Modifier.width(50.dp), contentAlignment = Alignment.CenterEnd) {
+            best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1) }
+        }
+        Spacer(Modifier.width(D.S2))
         Chevron(color)
     }
 }
@@ -650,6 +665,8 @@ fun GameSheet(
     onConnect: (node: String, proto: String) -> Unit,
     onFastest: (family: String) -> Unit,
     onClose: () -> Unit,
+    route: String = "auto",
+    onRoute: (String) -> Unit = {},
 ) {
     var fam by remember(visible) {
         mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
@@ -687,11 +704,23 @@ fun GameSheet(
         if (f == null || f.servers.isEmpty()) {
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
         } else {
+            // مسیر «سریع‌ترین سرور»: خودکار (بهترین امتیاز)، مستقیم، یا از ایران (تانل ضد افت)
+            Row(Modifier.fillMaxWidth().padding(bottom = D.S2), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                RouteChip("خودکار", "بهترین امتیاز", route == "auto", c, Modifier.weight(1f)) { onRoute("auto") }
+                RouteChip("مستقیم", "بی‌واسطه", route == "direct", c, Modifier.weight(1f)) { onRoute("direct") }
+                RouteChip("از ایران", "ضد افت", route == "tunnel", c, Modifier.weight(1f)) { onRoute("tunnel") }
+            }
             Column(Modifier.fillMaxWidth().guideTarget("game_list")) {
                 FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
                 PairHeader(c)
-                pairsOf(f.servers).forEach { p ->
-                    PairRow(p, current, currentAuto, c, !busy) { sv -> onConnect(sv.node, sv.proto) }
+                // ترتیب سرورها با باز شدن پنل (یا عوض شدن پروتکل) یک بار ثابت می‌شود: پینگ‌هایی که بعد می‌رسند فقط
+                // عددها را عوض می‌کنند، نه جای ردیف‌ها (وگرنه ردیف زیر انگشت کاربر جابه‌جا می‌شد)
+                val pairs = pairsOf(f.servers)
+                val order = remember(visible, fam) { mutableListOf<String>() }
+                // سرور تازه (مثلاً بعد از بروزرسانی اشتراک) ته فهرست اضافه می‌شود
+                pairs.forEach { if (it.id !in order) order.add(it.id) }
+                pairs.sortedBy { order.indexOf(it.id) }.forEach { p ->
+                    key(p.id) { PairRow(p, current, currentAuto, c, !busy) { sv -> onConnect(sv.node, sv.proto) } }
                 }
             }
         }
@@ -743,6 +772,24 @@ fun FilterSheet(
             pairsOf(amnezia).forEach { p -> PairRow(p, current, auto, protoColor("amneziawg"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** یک گزینه‌ی مسیر گیمینگ (سه‌تایی هم‌عرض؛ متن کوتاه تا روی ۳۶۰ هم کامل دیده شود) */
+@Composable
+private fun RouteChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(D.RS)
+    Column(
+        modifier.height(D.RowH).clip(shape)
+            .background(if (on) c.copy(alpha = .16f) else Color(0x08FFFFFF))
+            .border(if (on) 1.5.dp else 1.dp, if (on) c else K.Gold.copy(alpha = .18f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = D.S1),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        T(title, size = 13.sp, color = if (on) K.Text else K.Sub, weight = FontWeight.Black, maxLines = 1)
+        T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
     }
 }
 

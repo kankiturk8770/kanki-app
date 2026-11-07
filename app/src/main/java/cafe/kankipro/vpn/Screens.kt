@@ -479,6 +479,8 @@ private fun ModeSheets(state: AppState) {
         initFamily = Modes.familyOf(state.gameProto) ?: "kankimix",
         current = state.gameNode?.let { it + "|" + state.gameProto } ?: ("|" + state.gameProto),
         currentAuto = state.gameAuto,
+        route = state.gameRoute,
+        onRoute = { state.changeGameRoute(it) },
         busy = busy,
         kmixDup = state.kmixDup,
         onKmixDup = { state.changeKmixDup(it) },

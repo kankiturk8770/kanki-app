@@ -48,6 +48,28 @@ object Modes {
 
     fun familyProtos(f: String): List<String> = GAME_FAMILIES.firstOrNull { it.first == f }?.second ?: emptyList()
 
+    /**
+     * مسیر گیمینگ (فقط برای «سریع‌ترین سرور»):
+     *   auto    هر دو راه سنجیده می‌شود و بهترین امتیاز برنده است
+     *   direct  مستقیم تا سرور خارج (اینترنتی که مسیر خوبی دارد)
+     *   tunnel  از سرور ایران و تانل ضد افت (Game-FEC) تا سرور خارج
+     */
+    val GAME_ROUTES = listOf("auto", "direct", "tunnel")
+
+    /**
+     * امتیاز یک کانفیگ برای بازی (کمتر = بهتر): میانگین پینگ + لرزش × ۳ + درصد افت × ۲۰.
+     * لرزش میانگین فرق رفت‌وبرگشت بسته‌های پشت‌سرهم است. یک مسیر ۵۰ میلی‌ثانیه‌ی پرنوسان از یک مسیر
+     * ۶۰ میلی‌ثانیه‌ی صاف عقب می‌افتد. null وقتی هیچ جوابی نیامد.
+     */
+    fun gameScore(series: List<Long?>): Double? {
+        val ok = series.filterNotNull()
+        if (ok.isEmpty()) return null
+        val avg = ok.average()
+        val jitter = if (ok.size < 2) 0.0 else ok.zipWithNext { a, b -> kotlin.math.abs(a - b).toDouble() }.average()
+        val loss = series.count { it == null } * 100.0 / series.size
+        return avg + jitter * 3 + loss * 20
+    }
+
 
     /** اسم شبکه‌ی فعلی برای حافظه‌ی اپراتور: «wifi» یا کد اپراتور موبایل (مثل 43235 ایرانسل) */
     fun networkKey(ctx: Context): String = runCatching {

@@ -116,6 +116,14 @@ class AppState private constructor(context: Context) {
     /** کاربر حداقل یک بار پنل گیمینگ را تأیید کرده؟ (وگرنه دکمه‌ی اصلی اول پنل را باز می‌کند) */
     var gameSet by mutableStateOf(prefs.getBoolean("gameSet", false))
         private set
+    /** مسیر «سریع‌ترین سرور» گیمینگ: auto، direct یا tunnel (Modes.GAME_ROUTES) */
+    var gameRoute by mutableStateOf(prefs.getString("gameRoute", "auto")?.takeIf { it in Modes.GAME_ROUTES } ?: "auto")
+        private set
+    fun changeGameRoute(r: String) {
+        if (r !in Modes.GAME_ROUTES) return
+        gameRoute = r
+        prefs.edit().putString("gameRoute", r).apply()
+    }
     fun setGame(auto: Boolean, p: String, n: String?) {
         gameAuto = auto; gameProto = p; gameNode = n; gameSet = true
         prefs.edit().putBoolean("gameAuto", auto).putString("gameProto", p).putString("gameNode", n).putBoolean("gameSet", true).apply()
@@ -362,12 +370,20 @@ class AppState private constructor(context: Context) {
                 error = trf("%s در اشتراک شما نیست. از «گیمینگ» پروتکل دیگری انتخاب کنید.", familyTitle(fam ?: "kankimix"))
                 return
             }
+            // مسیر انتخابی (مستقیم / از ایران)؛ اگر آن راه در اشتراک نبود، همه
+            val routed = if (gameRoute == "auto") all else all.filter { gameVia(it.first, it.second) == gameRoute }.ifEmpty { all }
             tryStep = "سنجش پینگ…"
-            val m = pingMany(all)
+            val m = pingMany(routed)
             // پینگ واقعی است: کانفیگی که جواب نداد واقعاً وصل نمی‌شود و امتحانش فقط معطلی است
             // (هر تلاش ناموفق ۱۲ تا ۲۵ ثانیه). فقط اگر هیچ‌کدام جواب نداد، دو تای اول امتحان می‌شوند.
-            val alive = all.filter { (m[it] ?: -1L) > 0 }.sortedBy { m[it] }
-            if (alive.isEmpty()) all.take(2) else alive.take(3)
+            val alive = routed.filter { (m[it] ?: -1L) > 0 }.sortedBy { m[it] }
+            if (alive.isEmpty()) routed.take(2) else {
+                // چهار کم‌پینگ‌ترین با پینگ، لرزش و افت سنجیده می‌شوند (امتیاز = پینگ + لرزش×۳ + افت×۲۰)
+                tryStep = "سنجش لرزش و افت…"
+                val sc = gameScores(alive.take(4))
+                val ranked = alive.take(4).sortedBy { sc[it] ?: ((m[it] ?: 99_999L) + 10_000.0) } + alive.drop(4)
+                ranked.take(3)
+            }
         } else {
             val n = gameNode
             if (n == null || !hasCfg(n, gameProto)) {
@@ -379,6 +395,44 @@ class AppState private constructor(context: Context) {
         val ok = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
         if (!ok && wantTry && !gameAuto) {
             error = trf("اتصال با %s برقرار نشد. سرور یا پروتکل دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(gameNode ?: ""))
+        }
+    }
+
+    /** راه یک کانفیگ گیم: «tunnel» (از سرور ایران) یا «direct» (مستقیم تا سرور خارج) */
+    fun gameVia(n: String, p: String): String = when {
+        isTunnelTwin(n) -> "tunnel"
+        p == "amneziawg-direct" -> "direct"
+        p == "amneziawg" -> account?.awg?.get(n)?.via ?: "tunnel"
+        else -> account?.viaProto?.get(n)?.get(p)?.takeIf { it == "tunnel" } ?: "direct"
+    }
+
+    /**
+     * امتیاز گیمینگ هر کانفیگ (Modes.gameScore) برای همه‌ی پروتکل‌های گیمینگ: AmneziaWG/WireGuard (۸ دست‌دادن)،
+     * KANKI MIX (۱۲ پینگ هسته)، Hysteria2 و microtun (۴ پینگ هسته). کانفیگی که سنجیده نشد با همان پینگ.
+     */
+    private suspend fun gameScores(list: List<Pair<String, String>>): Map<Pair<String, String>, Double?> = withContext(Dispatchers.IO) {
+        val net = Probe.underlying(ctx)
+        kotlinx.coroutines.coroutineScope {
+            list.map { c ->
+                async {
+                    c to runCatching {
+                        val l = account?.configs?.firstOrNull { it.node == c.first && it.protocol == c.second } ?: return@runCatching null
+                        // کانفیگی که همین الان وصل است دوباره دست نمی‌دهد (سرور اتصال زنده را به سوکت آزمایش می‌برد)
+                        val live = activeKey
+                        val mine = live != null && vstate != VState.OFF && peerOf(c.first, c.second) == peerOf(live.substringBefore("|"), live.substringAfter("|"))
+                        val series = if (mine) null else when (c.second) {
+                            "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wgSeries(net, fetchConfig(l), 8, 60)
+                            "kankimix" -> Probe.kmixSeries(net, fetchConfig(l), 12, 50)
+                            // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
+                            // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
+                            "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
+                            MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
+                            else -> null
+                        }
+                        series?.let { Modes.gameScore(it) } ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
+                    }.getOrNull()
+                }
+            }.awaitAll().toMap()
         }
     }
 

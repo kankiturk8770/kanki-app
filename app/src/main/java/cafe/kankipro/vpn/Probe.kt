@@ -126,6 +126,27 @@ object Probe {
     }
 
     /**
+     * سری دست‌دادن AmneziaWG / WireGuard برای انتخاب سرور گیمینگ: count بسته‌ی دست‌دادن با کلید همین کانفیگ،
+     * هر کدام یک بار، با gapMs فاصله (سرور بیش از ۵۰ دست‌دادن در ثانیه از یک کاربر را نمی‌خواند؛ فاصله بیشتر است).
+     * هر عنصر رفت‌وبرگشت یا null برای بسته‌ی بی‌جواب.
+     */
+    fun wgSeries(net: Network?, cfg: String, count: Int, gapMs: Long): List<Long?>? {
+        val w = WgHello.of(cfg) ?: return null
+        val ip = resolve(net, w.host) ?: return null
+        val to = InetSocketAddress(ip, w.port)
+        return runCatching {
+            udp(net).use { s ->
+                UdpSeries.run(s, to, count, gapMs) {
+                    val h = w.hello()
+                    // بسته‌های زباله‌ی Amnezia جدا و پیش از دست‌دادن می‌روند (سرور جوابشان را نمی‌دهد)
+                    for (j in h.junk) runCatching { s.send(DatagramPacket(j, j.size, to)) }
+                    h.packet to { p: ByteArray -> w.answers(p, h) }
+                }
+            }
+        }.getOrNull()
+    }
+
+    /**
      * microtun: خود هسته یک بار با کلید همین کاربر دست می‌دهد و رفت‌وبرگشت آن را می‌سنجد
      * (`libmtun.so ping`؛ دستگاهی روی سرور ساخته نمی‌شود).
      */
