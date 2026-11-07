@@ -701,6 +701,108 @@ func (m *Manager) ping(a *sub.Account, srv sub.Server) (int64, error) {
 	return 0, errors.New("no ping for this protocol")
 }
 
+// GameScore is the gaming choice of a server (Android Modes.gameScore): the mean round trip plus
+// jitter x 3 plus the loss in percent x 20, lower is better. A round trip <= 0 is a lost packet.
+// ok = false when nothing came back.
+func GameScore(series []int64) (score float64, ok bool) {
+	var sum, n float64
+	var jit, jn float64
+	var prev int64
+	lost := 0
+	for _, v := range series {
+		if v <= 0 {
+			lost++
+			continue
+		}
+		if n > 0 {
+			d := float64(v - prev)
+			if d < 0 {
+				d = -d
+			}
+			jit += d
+			jn++
+		}
+		sum += float64(v)
+		n++
+		prev = v
+	}
+	if n == 0 {
+		return 0, false
+	}
+	j := 0.0
+	if jn > 0 {
+		j = jit / jn
+	}
+	return sum/n + j*3 + float64(lost)*100/float64(len(series))*20, true
+}
+
+// samples: how many real hellos each protocol gets for the gaming score (Hysteria2 and microtun
+// run a whole handshake of their core each time, so fewer)
+func samples(proto string) (int, time.Duration) {
+	switch proto {
+	case cores.WireGuard, cores.AmneziaWG:
+		return 8, 60 * time.Millisecond
+	case cores.KankiMix:
+		return 12, 50 * time.Millisecond
+	default:
+		return 4, 0
+	}
+}
+
+// GameScores measures each server (several at a time) with a short series of real hellos and gives
+// its GameScore. A server that is in use right now is not measured again (a new handshake would
+// take its session away); servers that gave nothing are left out.
+func (m *Manager) GameScores(ids []string) map[string]float64 {
+	m.mu.Lock()
+	a := m.saved.Account
+	cur := ""
+	if m.st.State != Disconnected && m.st.Server != nil {
+		cur = m.st.Server.ID
+	}
+	m.mu.Unlock()
+	out := map[string]float64{}
+	if a == nil {
+		return out
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	gate := make(chan struct{}, 4)
+	for _, srv := range a.Servers {
+		if !want[srv.ID] || srv.ID == cur {
+			continue
+		}
+		wg.Add(1)
+		go func(srv sub.Server) {
+			defer wg.Done()
+			gate <- struct{}{}
+			defer func() { <-gate }()
+			n, gap := samples(srv.Proto)
+			series := make([]int64, 0, n)
+			for i := 0; i < n; i++ {
+				ms, err := m.ping(a, srv)
+				if err != nil {
+					ms = -1
+				}
+				series = append(series, ms)
+				if gap > 0 {
+					time.Sleep(gap)
+				}
+			}
+			if sc, ok := GameScore(series); ok {
+				mu.Lock()
+				out[srv.ID] = sc
+				mu.Unlock()
+			}
+		}(srv)
+	}
+	wg.Wait()
+	return out
+}
+
 // ProgramPinger is an engine that can ping through a protocol's own program
 // (Hysteria2 has no hello of its own; its program connects and measures).
 type ProgramPinger interface {

@@ -150,6 +150,12 @@
                                 <TextBlock x:Name="ModeHint" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                             </DockPanel>
                         </k:Glass>
+                        <!-- gaming: where «fastest» looks (Android GameSheet route chips); only in the gaming mode -->
+                        <UniformGrid x:Name="RouteRow" Rows="1" Columns="3" Margin="0,6,0,0" Visibility="Collapsed">
+                            <RadioButton x:Name="RouteAuto" Style="{StaticResource Choice}" GroupName="groute" FontSize="12" Content="{k:T 'Best score'}"/>
+                            <RadioButton x:Name="RouteDirect" Style="{StaticResource Choice}" GroupName="groute" FontSize="12" Content="{k:T 'Direct'}"/>
+                            <RadioButton x:Name="RouteTunnel" Style="{StaticResource Choice}" GroupName="groute" FontSize="12" Content="{k:T 'Via Iran'}"/>
+                        </UniformGrid>
 
                         <!-- ping (live heartbeat), download, upload (HomeUi.kt StatsRow) -->
                         <k:Glass Height="48" Padding="4,0" Margin="0,8,0,0">

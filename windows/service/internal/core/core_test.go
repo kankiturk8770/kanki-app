@@ -291,3 +291,25 @@ func TestMTUSettingOnlyLowers(t *testing.T) {
 		}
 	}
 }
+
+// GameScore: mean + jitter*3 + loss%*20 (Android Modes.gameScore); a flat 60 beats a jumpy 50
+func TestGameScore(t *testing.T) {
+	flat, ok := GameScore([]int64{60, 60, 60, 60, 60, 60, 60, 60})
+	if !ok || flat != 60 {
+		t.Fatalf("flat: %v %v", flat, ok)
+	}
+	jumpy, _ := GameScore([]int64{20, 80, 20, 80, 20, 80, 20, 80})
+	if jumpy != 50+60*3 || jumpy <= flat {
+		t.Fatalf("jumpy: %v", jumpy)
+	}
+	lossy, _ := GameScore([]int64{40, 40, 40, -1, 40, 40, 40, 40, 40, 40})
+	if lossy != 40+10*20 {
+		t.Fatalf("lossy: %v", lossy)
+	}
+	if _, ok := GameScore([]int64{-1, 0}); ok {
+		t.Fatal("nothing came back must not score")
+	}
+	if _, ok := GameScore(nil); ok {
+		t.Fatal("empty must not score")
+	}
+}

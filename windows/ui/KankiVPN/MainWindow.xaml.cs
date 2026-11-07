@@ -28,6 +28,8 @@ namespace KankiVPN
         Status status = new();
         string serviceVersion = "";
         readonly Dictionary<string, long> pings = new();
+        /// <summary>gaming scores of the last connect (lower is better; GameScores)</summary>
+        readonly Dictionary<string, double> scores = new();
         readonly List<long> pingHistory = new();
         ulong lastRx, lastTx;
         long rxRate, txRate;
@@ -47,6 +49,10 @@ namespace KankiVPN
             InitializeComponent();
             // in code, not XAML: the obfuscated build could not bind it on the drawn card
             AccountCard.MouseLeftButtonUp += Sheet_Card;
+            // gaming route (in code too, like the card above)
+            (prefs.GameRoute == "direct" ? RouteDirect : prefs.GameRoute == "tunnel" ? RouteTunnel : RouteAuto).IsChecked = true;
+            foreach (var (rb, key) in new[] { (RouteAuto, "auto"), (RouteDirect, "direct"), (RouteTunnel, "tunnel") })
+                rb.Click += (_, _) => { prefs.GameRoute = key; prefs.Manual = false; prefs.Save(); };
             FlowDirection = Strings.Persian ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
             LangFa.IsChecked = Strings.Persian;
             LangEn.IsChecked = !Strings.Persian;
@@ -248,14 +254,14 @@ namespace KankiVPN
             return Best(prefs.Mode) ?? ById(prefs.LastServer) ?? account.Servers[0];
         }
 
-        /// <summary>Smart: the lowest ping of all. Gaming: KANKI MIX and microtun first (made for
-        /// games). Anti-filter: the hidden protocols first (VLESS, Hysteria2, AmneziaWG).</summary>
+        /// <summary>Smart: the lowest ping of all. Gaming: the five gaming protocols on the chosen way,
+        /// the best GameScores result, else the lowest ping with KANKI MIX and microtun first. Anti-filter: the hidden protocols first (VLESS, Hysteria2, AmneziaWG).</summary>
         Server? Best(string mode)
         {
             if (account == null) return null;
             string[] order = mode switch
             {
-                "gaming" => new[] { "kankimix", "microtun", "amneziawg", "wireguard" },
+                "gaming" => new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" },
                 "anti" => new[] { "vless", "hysteria2", "amneziawg" },
                 _ => Array.Empty<string>(),
             };
@@ -264,6 +270,18 @@ namespace KankiVPN
             {
                 var fam = pool.Where(s => order.Contains(s.Proto)).ToList();
                 if (fam.Count > 0) pool = fam;
+            }
+            if (mode == "gaming")
+            {
+                // the chosen way (direct / through Iran), when the subscription has it
+                if (prefs.GameRoute is "direct" or "tunnel")
+                {
+                    var way = pool.Where(s => s.Tunnel == (prefs.GameRoute == "tunnel")).ToList();
+                    if (way.Count > 0) pool = way;
+                }
+                // measured with ping, jitter and loss (GameScores): the lowest score wins
+                var scored = pool.Where(s => scores.ContainsKey(s.Id)).ToList();
+                if (scored.Count > 0) return scored.OrderBy(s => scores[s.Id]).First();
             }
             long P(Server s) => pings.TryGetValue(s.Id, out var v) && v > 0 ? v : long.MaxValue;
             int Rank(Server s) => order.Length == 0 ? 0 : Array.IndexOf(order, s.Proto) < 0 ? 99 : Array.IndexOf(order, s.Proto);
@@ -282,9 +300,10 @@ namespace KankiVPN
                 prefs.Manual = false; // a mode means "choose for me"
                 prefs.Save();
             }
+            if (RouteRow != null) RouteRow.Visibility = prefs.Mode == "gaming" ? Visibility.Visible : Visibility.Collapsed;
             ModeHint.Text = Strings.T(prefs.Mode switch
             {
-                "gaming" => "Gaming: the lowest ping with KANKI MIX and microtun",
+                "gaming" => "Gaming: ping, jitter and loss decide the server",
                 "anti" => "Anti-filter: the hidden protocols for hard networks",
                 _ => "Smart: pings every server and connects to the best",
             });
@@ -345,6 +364,36 @@ namespace KankiVPN
             PingAllSpin.Visibility = Visibility.Collapsed;
             FillServers();
             ShowStatus();
+        }
+
+        /// <summary>Gaming scores (service `game_score`) of the four lowest-ping gaming servers
+        /// on the chosen way.</summary>
+        async Task GameScores()
+        {
+            if (pipe == null || account == null) return;
+            var games = new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" };
+            var pool = account.Servers.Where(s => games.Contains(s.Proto)).ToList();
+            if (prefs.GameRoute is "direct" or "tunnel")
+            {
+                var way = pool.Where(s => s.Tunnel == (prefs.GameRoute == "tunnel")).ToList();
+                if (way.Count > 0) pool = way;
+            }
+            var ids = pool.Where(s => pings.TryGetValue(s.Id, out var p) && p > 0)
+                .OrderBy(s => pings[s.Id]).Take(4).Select(s => s.Id).ToArray();
+            if (ids.Length == 0) return;
+            ModeHint.Text = Strings.T("Measuring jitter and loss…");
+            try
+            {
+                var res = await pipe.Call("game_score", new { servers = ids }, 60000) as JsonObject;
+                scores.Clear();
+                if (res != null)
+                    foreach (var (k, v) in res)
+                        if (v != null) scores[k] = v.GetValue<double>();
+            }
+            catch
+            {
+                // an older service has no game_score: the lowest ping decides, as before
+            }
         }
 
         async Task PingCurrent()
@@ -714,6 +763,9 @@ namespace KankiVPN
                 {
                     // Smart and the other modes pick from fresh pings
                     if (!prefs.Manual && pings.Count == 0) await PingAll();
+                    // gaming: the four lowest pings of the gaming protocols get a short series each
+                    // (ping + jitter x 3 + loss x 20, Android Modes.gameScore)
+                    if (!prefs.Manual && prefs.Mode == "gaming") await GameScores();
                     srv = Chosen() ?? srv;
                     prefs.LastServer = srv.Id;
                     prefs.Save();

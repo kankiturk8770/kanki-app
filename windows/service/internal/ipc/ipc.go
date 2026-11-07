@@ -154,6 +154,8 @@ func Do(req Request, m *core.Manager, log *logx.Log, version string) Response {
 		return ok(l)
 	case "ping":
 		return ok(m.Ping(args.Servers))
+	case "game_score":
+		return ok(m.GameScores(args.Servers))
 	case "logs":
 		return ok(log.Lines())
 	}
