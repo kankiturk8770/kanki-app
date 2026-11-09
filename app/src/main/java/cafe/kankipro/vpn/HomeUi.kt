@@ -637,7 +637,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             })
             // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
             Column(Modifier.width(OrbBase * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Logo3D(30.dp, animate = on)
+                PowerGlyph(28.dp, ui.vstate, lerp(if (on) K.Green else K.Gold, GameLight, if (on) 0f else gameA))
                 Spacer(Modifier.height(3.dp))
                 val dnsOn = ui.mode == KMode.DNS
                 val (title, sub) = when (ui.vstate) {
@@ -653,6 +653,36 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                     weight = FontWeight.Bold, ltr = num, maxLines = 1)
             }
         }
+    }
+}
+
+/**
+ * آیکون وسط دکمه‌ی اتصال (۱.۲۹، به‌جای لوگو): علامت جهانی روشن/خاموش. خاموش کم‌رنگ؛ در حال اتصال حلقه‌اش می‌چرخد؛
+ * وصل پررنگ و درخشان به رنگ «وصل» تم.
+ */
+@Composable
+private fun PowerGlyph(size: Dp, state: VState, color: Color) {
+    val spin = if (state == VState.CONNECTING) {
+        val t = rememberInfiniteTransition(label = "pw")
+        t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "r").value
+    } else 0f
+    val lit by animateFloatAsState(if (state == VState.ON) 1f else if (state == VState.CONNECTING) .8f else .6f, tween(500), label = "pl")
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val sw = w * .12f
+        val c = color.copy(alpha = .55f + .45f * lit)
+        val r = w * .36f
+        val tl = Offset(center.x - r, center.y - r + w * .04f)
+        val sz = Size(r * 2, r * 2)
+        // درخشش
+        drawCircle(Brush.radialGradient(listOf(color.copy(alpha = .30f * lit), Color.Transparent), center, w * .7f), w * .7f, center)
+        if (state == VState.CONNECTING) {
+            drawArc(c.copy(alpha = .25f), 0f, 360f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+            drawArc(c, spin, 110f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+        } else {
+            drawArc(c, -60f, 300f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+        }
+        drawLine(c, Offset(center.x, w * .06f), Offset(center.x, w * .46f), sw, StrokeCap.Round)
     }
 }
 

@@ -341,40 +341,26 @@ private class MapCache {
 }
 
 /**
- * سنجاق نقشه (۱.۲۹): قطره‌ی برجسته‌ی فلزی به رنگ c با سایه روی زمین، نور براق بالا و پرچم داخل حلقه‌ی تیره.
- * fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه.
+ * سنجاق نقشه (۱.۲۹، خواسته‌ی صاحب اپ: «پرچم گرد شناور»): پرچم داخل دایره‌ی تیره با حلقه‌ی درخشان رنگ c، کمی بالای نقطه
+ * و یک خط نازک نوری تا خود نقطه؛ بدون شکل قطره. fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه.
  */
 private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, pr: Float, fade: Float = 1f) {
-    val head = Offset(o.x, o.y - pr * 2.25f)
-    val rr = pr * 1.18f
-    // سایه‌ی بیضی روی زمین زیر نوک
-    drawOval(
-        Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f * fade), Color.Transparent), o, pr * 1.1f),
-        Offset(o.x - pr * 1.1f, o.y - pr * .32f), Size(pr * 2.2f, pr * .64f),
+    val rr = pr * 1.1f
+    val head = Offset(o.x, o.y - pr * 2.4f)
+    // خط نوری از نقطه تا پرچم (پایین پررنگ، بالا محو)
+    drawLine(
+        Brush.verticalGradient(listOf(c.copy(alpha = .15f * fade), c.copy(alpha = .9f * fade)), startY = head.y + rr, endY = o.y),
+        Offset(o.x, head.y + rr), o, pr * .14f, StrokeCap.Round,
     )
-    // قطره: دایره‌ی سر و دو مماس تا نوک
-    val len = o.y - head.y
-    val phi = Math.toDegrees(kotlin.math.acos((rr / len).toDouble())).toFloat()
-    val drop = Path().apply {
-        moveTo(o.x, o.y)
-        arcTo(androidx.compose.ui.geometry.Rect(head, rr), 90f + phi, 360f - 2f * phi, false)
-        close()
-    }
-    drawCircle(c.copy(alpha = .22f * fade), rr * 1.45f, head)
-    drawPath(drop, Brush.linearGradient(listOf(lerp(c, Color.White, .45f), c, lerp(c, Color.Black, .45f)), Offset(head.x - rr, head.y - rr), Offset(head.x + rr, o.y)), alpha = fade)
-    drawPath(drop, Color.White.copy(alpha = .35f * fade), style = Stroke(pr * .08f))
-    // حلقه‌ی تیره و پرچم
-    drawCircle(Color.Black.copy(alpha = .9f * fade), rr * .80f, head)
-    drawCircle(lerp(c, Color.White, .3f).copy(alpha = .9f * fade), rr * .80f, head, style = Stroke(pr * .07f))
+    // درخشش نرم دور پرچم
+    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .38f * fade), Color.Transparent), head, rr * 1.9f), rr * 1.9f, head)
+    drawCircle(Color.Black.copy(alpha = .92f * fade), rr, head)
     flagEmoji(iso)?.let { f ->
-        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.02f).toSp()))
+        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.15f).toSp()))
         drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f), alpha = fade)
     }
-    // براقی بالای سر
-    drawOval(
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f * fade), Color.Transparent), startY = head.y - rr, endY = head.y - rr * .2f),
-        Offset(head.x - rr * .62f, head.y - rr * .96f), Size(rr * 1.24f, rr * .7f),
-    )
+    drawCircle(c.copy(alpha = fade), rr, head, style = Stroke(pr * .16f))
+    drawCircle(Color.White.copy(alpha = .5f * fade), rr + pr * .08f, head, style = Stroke(pr * .04f))
 }
 
 private fun DrawScope.neonDot(c: Color, o: Offset, r: Float) {
