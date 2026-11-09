@@ -77,13 +77,13 @@ jobs:
           if (-not $want -or $want -ne $got) { throw "Xray SHA256 mismatch: want=$want got=$got" }
           Expand-Archive xray.zip -DestinationPath xr
           Copy-Item xr\xray.exe dist\
-          $hb = "https://github.com/apernet/hysteria/releases/download/app%2F$env:HY_VERSION"
+          $hb = "https://github.com/HyNetworks/hysteria/releases/download/app%2F$env:HY_VERSION"
           Invoke-WebRequest "$hb/hysteria-windows-amd64.exe" -OutFile dist\hysteria.exe
           Invoke-WebRequest "$hb/hashes.txt" -OutFile hy-hashes.txt
           $want = (Get-Content hy-hashes.txt | Where-Object { $_ -match 'hysteria-windows-amd64\.exe$' } | Select-Object -First 1) -split '\s+' | Select-Object -First 1
           $got = (Get-FileHash dist\hysteria.exe -Algorithm SHA256).Hash.ToLower()
           if (-not $want -or $want -ne $got) { throw "Hysteria SHA256 mismatch: want=$want got=$got" }
-          Add-Content dist\LICENSES.txt "`n- Xray-core $env:XRAY_VERSION (xray.exe), MPL-2.0, https://github.com/XTLS/Xray-core`n- Hysteria $env:HY_VERSION (hysteria.exe), MIT, https://github.com/apernet/hysteria`n- tun2socks, MIT, https://github.com/xjasonlyu/tun2socks`n"
+          Add-Content dist\LICENSES.txt "`n- Xray-core $env:XRAY_VERSION (xray.exe), MPL-2.0, https://github.com/XTLS/Xray-core`n- Hysteria $env:HY_VERSION (hysteria.exe), MIT, https://github.com/HyNetworks/hysteria`n- tun2socks, MIT, https://github.com/xjasonlyu/tun2socks`n"
 
       # garble: names and strings of our code hidden in the exe; no packer (nothing for antivirus to flag)
       - name: ساخت سرویس (Go، با garble)

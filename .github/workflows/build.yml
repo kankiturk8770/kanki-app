@@ -40,13 +40,13 @@ jobs:
           ls -la app/src/main/assets
 
       # نسخه‌ی هسته ثابت است (نه «آخرین نسخه»)، تا هر ساخت دقیقاً همان هسته‌ی تست‌شده را بگیرد.
-      # برای ارتقا فقط HY_VERSION را عوض کن (فهرست نسخه‌ها: github.com/apernet/hysteria/releases).
+      # برای ارتقا فقط HY_VERSION را عوض کن (فهرست نسخه‌ها: github.com/HyNetworks/hysteria/releases؛ ریپو قبلاً apernet بود و لینک قدیمی ۵۰۴ می‌دهد).
       - name: دریافت هسته‌ی Hysteria2
         env:
           HY_VERSION: v2.12.3
         run: |
           set -e
-          base="https://github.com/apernet/hysteria/releases/download/app%2F$HY_VERSION"
+          base="https://github.com/HyNetworks/hysteria/releases/download/app%2F$HY_VERSION"
           # فهرست اثر انگشت (SHA256) فایل‌ها که خود Hysteria برای همین نسخه منتشر کرده
           curl -fsSL --retry 3 -o /tmp/hy-hashes.txt "$base/hashes.txt"
           get() { # $1=ABI اندروید  $2=اسم معماری در فایل‌های Hysteria
