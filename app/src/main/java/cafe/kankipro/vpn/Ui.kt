@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -79,6 +80,10 @@ class Palette(
     val classic: Boolean = false,
     /** رنگ آدمک‌های گیمینگ (Unspecified = همان رنگ گیمینگ، مثل دکمه) */
     val runner: Color = Color.Unspecified,
+    /** رنگ کلید وسط دکمه‌ی اتصال وقتی وصلی؛ عمداً از خانواده‌ی خود تم نیست تا «وصل» از دور معلوم باشد (۱.۲۹) */
+    val power: Color = Color(0xFF3DDC84),
+    /** تم «طلای فلزی» (۱.۲۹): لبه‌ها، دکمه‌ها و نوار پایین از جنس فلز براق لوگو، زمینه با شبکه‌ی شش‌ضلعی لوگو */
+    val metal: Boolean = false,
 ) {
     /** نام قدیمی رنگ «وصل» */
     val ok: Color get() = connected
@@ -184,6 +189,7 @@ val Themes: List<Palette> = listOf(
         toggleOn = Color(0xFFB6FF3C),
         gameAlt = Color(0xFFD4FF7A), tracer = Color(0xFFFFFFFF),
         navTop = Color(0xFFD4FF7A), navBottom = Color(0xFFA6F02A), onNav = Color(0xFF0A1200),
+        power = Color(0xFF38D9FF), // سبزِ «وصل» روی لیمویی دیده نمی‌شد: فیروزه‌ای روشن
     ),
     // یاقوت کبود: آبی روی سرمه‌ای؛ کنارش آبی یخی و نیلی
     Palette(
@@ -222,6 +228,7 @@ val Themes: List<Palette> = listOf(
         toggleOn = Color(0xFF22D3EE),
         gameAlt = Color(0xFF7CEBFA), tracer = Color(0xFFE6FEFF),
         navTop = Color(0xFF67E8F9), navBottom = Color(0xFF06B6D4), onNav = Color(0xFF00262C),
+        power = Color(0xFFB6FF3C), // سبز کنار فیروزه‌ای گم می‌شد: لیمویی
     ),
     // آمتیست: بنفش روی بنفش خیلی تیره؛ فقط بنفش‌ها (یاسی، ارکیده، نیلی) و بدون سرخابی
     Palette(
@@ -242,7 +249,32 @@ val Themes: List<Palette> = listOf(
         gameAlt = Color(0xFFCBA8FF), tracer = Color(0xFFF3E8FF),
         navTop = Color(0xFFB98AFF), navBottom = Color(0xFF7C3AED), onNav = Color(0xFFFFFFFF),
     ),
+    // طلای فلزی (۱.۲۹): کپی جنس لوگو؛ مشکی براق، طلای صیقلی با نور سفید، فقط تُن‌های طلا
+    Palette(
+        "metal", Color(0xFFE9C25C), Color(0xFFF6D27A), Color(0xFF8A5A12), Color(0xFFFFF6C8),
+        Color(0xFF000000), Color(0xFFFFF8E6), Color(0xFFB5A88A),
+        Color(0xFF0B0805), Color(0xFF050302), Color(0xFF000000),
+        Color(0xEB0A0704), Color(0xF2120D06), Color(0xFF050302), Color(0xFF1A1000),
+        accent = Color(0xFFF2DFA0),
+        connected = Color(0xFFF6D27A),
+        modeSmart = Color(0xFFE9C25C),
+        modeGame = Color(0xFFF2CF73),
+        modeAnti = Color(0xFFFFF0C2),
+        modeDns = Color(0xFFC8963A),
+        mix = Color(0xFFF2CF73),
+        danger = Color(0xFFFF5A4A), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFFFFF0C2),
+        toggleOn = Color(0xFFE9C25C),
+        gameAlt = Color(0xFFFFE7A0), tracer = Color(0xFFFFFFFF),
+        navTop = Color(0xFFFFF0C2), navBottom = Color(0xFFC8963A), onNav = Color(0xFF1A1000),
+        metal = true,
+    ),
 )
+
+/** طلای صیقلی لوگو: تیره، طلا، نور سفید، طلا، تیره، طلا (مثل لبه‌ی نشان K) */
+val MetalStops = listOf(Color(0xFF7A4E0E), Color(0xFFE9C25C), Color(0xFFFFF6C8), Color(0xFFD4A537), Color(0xFF8A5A12), Color(0xFFF2CF73))
+fun metalBrush(start: Offset = Offset.Zero, end: Offset = Offset.Infinite) = Brush.linearGradient(MetalStops, start, end)
+fun metalVertical(h: Float) = Brush.verticalGradient(listOf(Color(0xFFFFF6C8), Color(0xFFF2CF73), Color(0xFFD4A537), Color(0xFF8A5A12), Color(0xFFE9C25C)), endY = h)
 
 /** ترکیب دو پالت (برای تغییر نرم تم) */
 fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
@@ -261,6 +293,8 @@ fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
     navTop = lerp(a.navTop, b.navTop, f), navBottom = lerp(a.navBottom, b.navBottom, f), onNav = lerp(a.onNav, b.onNav, f),
     classic = b.classic,
     runner = if (a.runner.isSpecified && b.runner.isSpecified) lerp(a.runner, b.runner, f) else b.runner,
+    power = lerp(a.power, b.power, f),
+    metal = b.metal,
 )
 
 object ThemeState {
@@ -320,6 +354,8 @@ object K {
     val Warn: Color get() = ThemeState.current.warn
     val UserCountry: Color get() = ThemeState.current.userCountry
     val ToggleOn: Color get() = ThemeState.current.toggleOn
+    /** کلید «وصل» وسط دکمه‌ی اتصال */
+    val Power: Color get() = ThemeState.current.power
 }
 
 fun glow(c: Color, r: Float = 22f) = Shadow(color = c.copy(alpha = .75f), offset = Offset.Zero, blurRadius = r)
@@ -476,9 +512,44 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
                 }
             },
         )
+        if (ThemeState.current.metal) HexNet()
         Twinkles(if (calm || Motion.lowEnd) 12 else motes.size, accent)
         content()
     }
+}
+
+/** شبکه‌ی شش‌ضلعی طلایی کم‌رنگ پشت تم طلای فلزی (همان طرح داخل لوگو)، با گره‌های کوچک؛ ثابت و یک بار کشیده می‌شود */
+@Composable
+private fun HexNet() {
+    Spacer(Modifier.fillMaxSize().drawWithCache {
+        val r = 34.dp.toPx()
+        val hw = r * kotlin.math.sqrt(3f)
+        val path = Path()
+        val nodes = ArrayList<Offset>()
+        var row = 0
+        var y = -r
+        while (y < size.height + r) {
+            var x = if (row % 2 == 0) 0f else hw / 2
+            while (x < size.width + hw) {
+                for (k in 0 until 6) {
+                    val a1 = Math.toRadians((60.0 * k - 30)).toFloat()
+                    val a2 = Math.toRadians((60.0 * (k + 1) - 30)).toFloat()
+                    val p1 = Offset(x + r * cos(a1), y + r * sin(a1))
+                    path.moveTo(p1.x, p1.y); path.lineTo(x + r * cos(a2), y + r * sin(a2))
+                    if (k % 2 == 0) nodes.add(p1)
+                }
+                x += hw
+            }
+            y += r * 1.5f; row++
+        }
+        val line = Brush.verticalGradient(listOf(Color(0xFFE9C25C).copy(alpha = .10f), Color(0xFFE9C25C).copy(alpha = .03f), Color(0xFFE9C25C).copy(alpha = .08f)))
+        onDrawBehind {
+            drawPath(path, line, style = Stroke(1.dp.toPx()))
+            for (n in nodes) drawCircle(Color(0xFFF2CF73).copy(alpha = .14f), 1.6.dp.toPx(), n)
+            // وینیت: وسط روشن‌تر، لبه‌ها مشکی
+            drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .75f)), Offset(size.width / 2, size.height * .45f), size.maxDimension * .7f))
+        }
+    })
 }
 
 /** ستاره‌های چشمک‌زن در لایه‌ی جدا (عکس پشتش دوباره کشیده نمی‌شود) */
@@ -509,7 +580,22 @@ private fun Twinkles(count: Int, accent: Color) {
 
 // ------------------------------------------------------------------ لوگوی سه‌بعدی
 
-/** طلایی ثابت لوگو (لوگو با تم عوض نمی‌شود) */
+/**
+ * عکس لوگو برای هر تم (۱.۲۹): همان نشان فلزی، رنگ‌شده با خانواده‌ی همان تم (`kanki_badge_<تم>`)؛ طلایی و طلای فلزی اصل لوگو.
+ * آیکون برنامه هم با همین رنگ‌ها عوض می‌شود (`LauncherIcon`).
+ */
+fun logoRes(theme: String): Int = when (theme) {
+    "yellow" -> R.drawable.kanki_badge_yellow
+    "crimson" -> R.drawable.kanki_badge_crimson
+    "purple" -> R.drawable.kanki_badge_purple
+    "lime" -> R.drawable.kanki_badge_lime
+    "sapphire" -> R.drawable.kanki_badge_sapphire
+    "turquoise" -> R.drawable.kanki_badge_turquoise
+    "amethyst" -> R.drawable.kanki_badge_amethyst
+    else -> R.drawable.kanki_badge
+}
+
+/** طلایی لوگوی اصل (هاله‌ی پشت لوگو در تم‌های طلایی) */
 val LogoGold = Color(0xFFE8B84A)
 
 /**
@@ -521,14 +607,14 @@ val LogoGold = Color(0xFFE8B84A)
 fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float = 0f) {
     // ساعت فقط برای لوگوی متحرک؛ لوگوی ثابت هیچ فریمی نمی‌گیرد
     val clock = if (animate && sweep < 0f) motionTime() else null
-    val img = ImageBitmap.imageResource(R.drawable.kanki_badge)
+    val img = ImageBitmap.imageResource(logoRes(ThemeState.targetId))
     Canvas(Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
         val sw = if (sweep >= 0f) sweep else if (clock != null) (clock.value / 5.2f % 1f) * 2.4f - .4f else -1f
         if (glow > 0f) {
             val gr = w * .8f
-            drawCircle(Brush.radialGradient(listOf(LogoGold.copy(alpha = .34f * glow), Color.Transparent), center, gr), gr, center)
+            drawCircle(Brush.radialGradient(listOf((if (ThemeState.current.metal || ThemeState.current.id == "gold") LogoGold else K.Gold).copy(alpha = .34f * glow), Color.Transparent), center, gr), gr, center)
         }
         // سایه‌ی نرم زیر نشان (برجستگی)
         drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .55f), Color.Transparent), center + Offset(0f, h * .05f), w * .56f), w * .56f, center + Offset(0f, h * .05f))
@@ -549,7 +635,12 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
 
 @Composable
 fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
-    T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
+    if (ThemeState.current.metal) {
+        // طلای فلزی: نوشته با همان گرادیان صیقلی لوگو
+        Text(text, style = TextStyle(fontFamily = Orbitron, fontWeight = FontWeight.Black, fontSize = size, textDirection = TextDirection.Ltr,
+            brush = Brush.verticalGradient(listOf(Color(0xFFFFF6C8), Color(0xFFF2CF73), Color(0xFFB8862A), Color(0xFFF6D27A))),
+            shadow = Shadow(Color(0xFFE9C25C).copy(alpha = .55f), Offset.Zero, 22f)))
+    } else T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true)
 }
 
 // ------------------------------------------------------------------ نور نئونی
@@ -649,14 +740,17 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         bevel(shape.createOutline(size, layoutDirection, this), if (selected) 1f else .8f, lerp(tint, Color.White, .6f))
         drawContent()
     }
-    // لبه‌ی ظریف: از گوشه‌ی بالا پررنگ، وسط کم‌رنگ و دوباره کمی پررنگ در گوشه‌ی مقابل
-    .border(
-        if (selected) 1.5.dp else 1.dp,
-        Brush.linearGradient(
-            if (selected) listOf(K.Shine, tint, tint.copy(alpha = .45f), tint)
-            else listOf(tint.copy(alpha = .90f), tint.copy(alpha = .30f), tint.copy(alpha = .18f), tint.copy(alpha = .55f)),
+    // لبه‌ی ظریف: از گوشه‌ی بالا پررنگ، وسط کم‌رنگ و دوباره کمی پررنگ در گوشه‌ی مقابل (طلای فلزی: لبه‌ی فلز صیقلی)
+    .then(
+        if (ThemeState.current.metal) Modifier.border(if (selected) 2.dp else 1.4.dp, metalBrush(), shape)
+        else Modifier.border(
+            if (selected) 1.5.dp else 1.dp,
+            Brush.linearGradient(
+                if (selected) listOf(K.Shine, tint, tint.copy(alpha = .45f), tint)
+                else listOf(tint.copy(alpha = .90f), tint.copy(alpha = .30f), tint.copy(alpha = .18f), tint.copy(alpha = .55f)),
+            ),
+            shape,
         ),
-        shape,
     )
 
 /** شیشه‌ی طرح اول طلایی: رنگ تم در خود شیشه، براقی نیمه‌ی بالا و خط نور طلایی وسط لبه‌ی پایین */
@@ -703,7 +797,13 @@ fun Modifier.goldFill(shape: androidx.compose.ui.graphics.Shape, enabled: Boolea
         liftShadow(o, 4.dp.toPx(), if (enabled) .6f else .3f, K.Gold)
     }
     .clip(shape)
-    .background(Brush.verticalGradient(listOf(K.Shine, K.GoldLight, K.Gold, K.GoldDeep)))
+    .drawBehind {
+        // طلای فلزی: رویه‌ی فلز صیقلی با نوار نور مورب، مثل حرف K لوگو
+        if (ThemeState.current.metal) {
+            drawRect(metalVertical(size.height))
+            drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .35f), Color.Transparent), Offset(size.width * .2f, 0f), Offset(size.width * .55f, size.height)))
+        } else drawRect(Brush.verticalGradient(listOf(K.Shine, K.GoldLight, K.Gold, K.GoldDeep)))
+    }
     .drawWithContent {
         drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.Transparent), endY = size.height * .48f))
         bevel(shape.createOutline(size, layoutDirection, this), 1f)

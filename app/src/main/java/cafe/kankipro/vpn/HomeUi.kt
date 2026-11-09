@@ -232,7 +232,7 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
         val ts = RoundedCornerShape(D.RL)
         Box(
             Modifier.offset(x = (tabW + gap) * idx).width(tabW).height(54.dp)
-                .then(if (p.classic) Modifier.goldGlass(ts, selected = true) else Modifier
+                .then(if (p.classic) Modifier.goldGlass(ts, selected = true) else if (p.metal) Modifier.goldFill(ts) else Modifier
                     .drawBehind { liftShadow(ts.createOutline(size, layoutDirection, this), 4.dp.toPx(), .6f, p.gold) }
                     .clip(ts)
                     .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
@@ -637,17 +637,19 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
             })
             // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
             Column(Modifier.width(OrbBase * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
-                PowerGlyph(28.dp, ui.vstate, lerp(if (on) K.Green else K.Gold, GameLight, if (on) 0f else gameA))
-                Spacer(Modifier.height(3.dp))
+                // ۱.۲۹: کلید روشن/خاموش به‌جای لوگو؛ وصل بودن را رنگ کلید (K.Power، از خانواده‌ی تم نیست) نشان می‌دهد
+                SwitchGlyph(ui.vstate, lerp(K.Gold, GameLight, gameA))
+                Spacer(Modifier.height(5.dp))
                 val dnsOn = ui.mode == KMode.DNS
                 val (title, sub) = when (ui.vstate) {
-                    VState.ON -> (if (dnsOn) "DNS فعال" else "متصل") to
+                    // زیر کلید: حالتی که با آن وصلی (ضد فیلتر، گیمینگ، …) و زمان اتصال
+                    VState.ON -> (if (dnsOn) "DNS فعال" else ui.mode.title) to
                         (if (dnsOn) (ui.dns.activeRoute ?: "DNS") else elapsed(ui.elapsedSec))
                     VState.CONNECTING -> "در حال اتصال" to "لمس برای لغو"
                     VState.OFF -> "اتصال" to ui.mode.title
                 }
-                val tc = if (on) K.Green else lerp(K.Gold, GameLight, gameA)
-                T(title, size = if (ui.vstate == VState.OFF) 22.sp else 16.sp, color = tc, weight = FontWeight.Black, shadow = glow(tc, 16f), maxLines = 1)
+                val tc = if (on) K.Power else lerp(K.Gold, GameLight, gameA)
+                T(title, size = if (ui.vstate == VState.CONNECTING) 15.sp else 19.sp, color = tc, weight = FontWeight.Black, shadow = glow(tc, 14f), maxLines = 1)
                 val num = on && !dnsOn
                 T(sub, size = if (num) 14.sp else 11.sp, color = if (num) Color.White else K.Text.copy(alpha = .85f), font = if (num) Poppins else Vazir,
                     weight = FontWeight.Bold, ltr = num, maxLines = 1)
@@ -657,32 +659,32 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
 }
 
 /**
- * آیکون وسط دکمه‌ی اتصال (۱.۲۹، به‌جای لوگو): علامت جهانی روشن/خاموش. خاموش کم‌رنگ؛ در حال اتصال حلقه‌اش می‌چرخد؛
- * وصل پررنگ و درخشان به رنگ «وصل» تم.
+ * کلید وسط دکمه‌ی اتصال (۱.۲۹، خواسته‌ی صاحب اپ: «کلید بذار»): یک کلید روشن/خاموش کوچک.
+ * خاموش: دستگیره سمت خاموش، کم‌رنگ به رنگ تم؛ در حال اتصال: دستگیره وسط راه و می‌تپد؛ وصل: دستگیره سمت روشن و
+ * کل کلید به رنگ K.Power (رنگی جدا از تم، تا «وصل» از دور معلوم باشد) با درخشش.
  */
 @Composable
-private fun PowerGlyph(size: Dp, state: VState, color: Color) {
-    val spin = if (state == VState.CONNECTING) {
-        val t = rememberInfiniteTransition(label = "pw")
-        t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "r").value
+private fun SwitchGlyph(state: VState, off: Color) {
+    val pos by animateFloatAsState(when (state) { VState.ON -> 1f; VState.CONNECTING -> .5f; VState.OFF -> 0f }, spring(dampingRatio = .6f, stiffness = 300f), label = "sw")
+    val pulse = if (state == VState.CONNECTING) {
+        rememberInfiniteTransition(label = "swp").animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p").value
     } else 0f
-    val lit by animateFloatAsState(if (state == VState.ON) 1f else if (state == VState.CONNECTING) .8f else .6f, tween(500), label = "pl")
-    Canvas(Modifier.size(size)) {
-        val w = this.size.width
-        val sw = w * .12f
-        val c = color.copy(alpha = .55f + .45f * lit)
-        val r = w * .36f
-        val tl = Offset(center.x - r, center.y - r + w * .04f)
-        val sz = Size(r * 2, r * 2)
-        // درخشش
-        drawCircle(Brush.radialGradient(listOf(color.copy(alpha = .30f * lit), Color.Transparent), center, w * .7f), w * .7f, center)
-        if (state == VState.CONNECTING) {
-            drawArc(c.copy(alpha = .25f), 0f, 360f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
-            drawArc(c, spin, 110f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
-        } else {
-            drawArc(c, -60f, 300f, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
-        }
-        drawLine(c, Offset(center.x, w * .06f), Offset(center.x, w * .46f), sw, StrokeCap.Round)
+    val onA by animateFloatAsState(if (state == VState.ON) 1f else 0f, tween(450), label = "swc")
+    Canvas(Modifier.size(width = 46.dp, height = 24.dp)) {
+        val w = size.width; val h = size.height
+        val c = lerp(off, K.Power, onA)
+        val cr = CornerRadius(h / 2)
+        // درخشش وصل
+        if (onA > .01f) drawRoundRect(c.copy(alpha = .30f * onA), Offset(-h * .25f, -h * .25f), Size(w + h * .5f, h * 1.5f), CornerRadius(h * .75f))
+        // شیار: تو رفته (سایه بالا، نور پایین)
+        drawRoundRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .85f), lerp(Color.Black, c, .25f + .45f * onA))), Offset.Zero, size, cr)
+        drawRoundRect(c.copy(alpha = .55f + .45f * onA), Offset.Zero, size, cr, style = Stroke(1.4.dp.toPx()))
+        // دستگیره: کره‌ی برجسته؛ روشن سمت «روشن» (در فارسی هم مثل کلید واقعی راست = روشن)
+        val kr = h * .38f
+        val kx = kr + h * .12f + (w - 2 * (kr + h * .12f)) * pos
+        val ko = Offset(kx, h / 2)
+        drawCircle(Color.Black.copy(alpha = .5f), kr, ko + Offset(0f, h * .08f))
+        drawCircle(Brush.radialGradient(listOf(Color.White, lerp(c, Color.White, .35f), c), ko - Offset(kr * .35f, kr * .4f), kr * 1.6f), kr * (1f + .08f * pulse), ko)
     }
 }
 

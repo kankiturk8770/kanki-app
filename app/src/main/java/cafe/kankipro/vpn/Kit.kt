@@ -238,7 +238,8 @@ fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
     }
     .border(
         (1.2f + .6f * lit).dp,
-        Brush.verticalGradient(
+        if (ThemeState.current.metal) metalBrush()
+        else Brush.verticalGradient(
             listOf(lerp(tint, Color.White, .35f + .25f * lit), tint.copy(alpha = .55f + .4f * lit), lerp(tint, Color.Black, .45f).copy(alpha = .9f)),
         ),
         CircleShape,
