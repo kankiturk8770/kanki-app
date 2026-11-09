@@ -267,9 +267,9 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = D.PagePad)) {
                     LocationChip(ui.locationIso, ui.locationIsExit)
                 }
-                // نقشه و پنل‌های روی آن (هوشمند، هشدار ربات)؛ ارتفاعش با فضای مانده (۷۶ تا ۲۵۰dp)
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(.44f)) {
-                    val mapH = maxHeight.coerceIn(76.dp, 250.dp)
+                // نقشه و پنل‌های روی آن (هوشمند، هشدار ربات)؛ از ۱.۲۸ کوتاه‌تر (۷۶ تا ۱۷۰dp) تا دکمه و حالت‌ها کنار هم جا شوند
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(.32f)) {
+                    val mapH = maxHeight.coerceIn(76.dp, 170.dp)
                     // روی گوشی کوتاه پنل هوشمند فقط تعداد ردیفی که روی نقشه جا می‌شود (سرتیتر و نوار پیشرفت همیشه)
                     val rows = ((maxHeight - gap * 2 - 64.dp) / (SmartRowH + D.S1)).toInt().coerceAtLeast(1)
                     WorldMap(
@@ -290,11 +290,24 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                         }
                     }
                 }
-                // دکمه‌ی اتصال: قطرش با فضای مانده (۹۶ تا ۱۴۲dp)، انیمیشن‌ها و نسبت‌های داخلش همان است
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(.56f), contentAlignment = Alignment.Center) {
-                    val d = ((maxHeight - D.S2) / OrbFootprint).coerceIn(96.dp, 142.dp)
-                    Box(Modifier.guideTarget("connect")) {
-                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
+                // دکمه‌ی اتصال و کنارش ستون حالت‌ها (در راست‌به‌چپ: دکمه سمت راست، حالت‌ها سمت چپ).
+                // قطر دکمه با فضای مانده (۹۶ تا ۱۴۲dp)، انیمیشن‌ها و نسبت‌های داخلش همان است.
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(.68f).padding(horizontal = D.PagePad)) {
+                    val colW = if (ui.hasAccount) ModeColW else 0.dp
+                    val d = minOf((maxHeight - D.S2) / OrbFootprint, (maxWidth - colW - D.S2) / OrbFootprint).coerceIn(96.dp, 142.dp)
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Box(Modifier.guideTarget("connect")) {
+                                OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
+                            }
+                        }
+                        if (ui.hasAccount) {
+                            ModeColumn(
+                                ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
+                                modifier = Modifier.width(ModeColW).fillMaxHeight(.9f).guideTarget("protocols"),
+                                showDns = ui.dns.hasDns, onTap = act.tapMode, onLong = act.longMode,
+                            )
+                        }
                     }
                 }
                 Column(
@@ -308,7 +321,6 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     if (!ui.hasAccount) {
                         if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
                     } else {
-                        ModeRow(ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME, modifier = Modifier.guideTarget("protocols"), showDns = ui.dns.hasDns, onTap = act.tapMode, onLong = act.longMode)
                         ModeHint(ui.mode)
                         if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
                         StatsRow(ui)
@@ -319,6 +331,9 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** پهنای ستون حالت‌ها کنار دکمه‌ی اتصال */
+val ModeColW = 84.dp
 
 /** «موقعیت شما : ایران» بالای نقشه؛ وقتی وصل است «IP شما : آلمان» (کشور IP خروجی) */
 @Composable

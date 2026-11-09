@@ -40,19 +40,25 @@ jobs:
           ls -la app/src/main/assets
 
       # نسخه‌ی هسته ثابت است (نه «آخرین نسخه»)، تا هر ساخت دقیقاً همان هسته‌ی تست‌شده را بگیرد.
-      # برای ارتقا فقط HY_VERSION را عوض کن (فهرست نسخه‌ها: github.com/apernet/hysteria/releases).
+      # برای ارتقا فقط HY_VERSION را عوض کن (فهرست نسخه‌ها: github.com/HyNetworks/hysteria/releases؛ ریپو قبلاً apernet بود و لینک قدیمی ۵۰۴ می‌دهد).
       - name: دریافت هسته‌ی Hysteria2
         env:
           HY_VERSION: v2.12.3
         run: |
           set -e
-          base="https://github.com/apernet/hysteria/releases/download/app%2F$HY_VERSION"
+          base="https://github.com/HyNetworks/hysteria/releases/download/app%2F$HY_VERSION"
+          # آینه‌ی رسمی خود Hysteria؛ وقتی دانلود گیت‌هاب ۵۰۴ می‌دهد (2026-11-09 چند ساعت داد). اثر انگشت همان است.
+          mirror="https://download.hysteria.network/app/$HY_VERSION"
+          fetch() { # $1=اسم فایل  $2=مقصد: اول گیت‌هاب، بعد آینه
+            curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 -o "$2" "$base/$1" ||
+              curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 -o "$2" "$mirror/$1"
+          }
           # فهرست اثر انگشت (SHA256) فایل‌ها که خود Hysteria برای همین نسخه منتشر کرده
-          curl -fsSL --retry 3 -o /tmp/hy-hashes.txt "$base/hashes.txt"
+          fetch hashes.txt /tmp/hy-hashes.txt
           get() { # $1=ABI اندروید  $2=اسم معماری در فایل‌های Hysteria
             d=app/src/main/jniLibs/$1; mkdir -p "$d"
             f="hysteria-android-$2"
-            curl -fsSL --retry 3 -o "$d/libhysteria.so" "$base/$f"
+            fetch "$f" "$d/libhysteria.so"
             want=$(awk -v f="$f" '{ n = $2; sub(/^.*\//, "", n); if (n == f) print $1 }' /tmp/hy-hashes.txt)
             got=$(sha256sum "$d/libhysteria.so" | cut -d' ' -f1)
             if [ -z "$want" ] || [ "$want" != "$got" ]; then

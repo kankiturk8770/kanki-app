@@ -213,7 +213,11 @@ private fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () ->
 /** انتخاب تم: چهار تم AMOLED — زرشکی (پیش‌فرض)، طلایی، زرد کانکی، بنفش سلطنتی */
 @Composable
 fun ThemePicker(onSet: (String) -> Unit) {
-    val items = listOf("yellow" to "زرد و مشکی", "gold" to "طلایی", "crimson" to "زرشکی", "purple" to "بنفش سلطنتی")
+    // تم‌های تازه اول، چهار تم قبلی ردیف دوم
+    val items = listOf(
+        "lime" to "سیاه و لیمویی", "sapphire" to "یاقوت کبود", "turquoise" to "فیروزه", "amethyst" to "آمتیست",
+        "yellow" to "زرد و مشکی", "gold" to "طلایی", "crimson" to "زرشکی", "purple" to "بنفش سلطنتی",
+    )
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingIcon("palette", K.Accent)
@@ -221,8 +225,10 @@ fun ThemePicker(onSet: (String) -> Unit) {
             T("تم برنامه", size = D.TxtTitle)
         }
         Spacer(Modifier.height(D.S3))
+        items.chunked(4).forEachIndexed { ri, rowItems ->
+        if (ri > 0) Spacer(Modifier.height(D.S2))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            items.forEach { (id, name) ->
+            rowItems.forEach { (id, name) ->
                 val p = Themes.first { it.id == id }
                 val sel = ThemeState.current.id == id
                 val shape = RoundedCornerShape(D.RM)
@@ -241,9 +247,10 @@ fun ThemePicker(onSet: (String) -> Unit) {
                         Box(Modifier.size(14.dp).clip(CircleShape).background(p.connected))
                     }
                     Spacer(Modifier.height(D.S2))
-                    T(name, size = 11.sp, color = if (sel) p.gold else p.sub)
+                    T(name, size = 11.sp, color = if (sel) p.gold else p.sub, maxLines = 1)
                 }
             }
+        }
         }
     }
 }

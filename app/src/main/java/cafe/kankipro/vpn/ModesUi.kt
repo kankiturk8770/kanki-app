@@ -145,28 +145,50 @@ fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, sh
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
         // DNS only for a subscription that has Kanki DNS (the selected mode always stays visible)
         KMode.entries.filter { it != KMode.DNS || showDns || it == selected }.forEach { m ->
-            val sel = m == selected
-            val mc = modeColor(m)
-            // روشن شدن نرم کاشی موقع انتخاب
-            val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
-            val shape = RoundedCornerShape(D.RS)
-            Column(
-                Modifier.weight(1f).height(if (compact) D.TileS else D.Tile).modeGlass(shape, mc, lit)
-                    .alpha(if (enabled) 1f else .5f)
-                    .pointerInput(m, enabled) {
-                        if (enabled) detectTapGestures(
-                            onTap = { tap(m) },
-                            onLongPress = { long(m) },
-                        )
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), if (compact) 18.dp else D.Icon)
-                Spacer(Modifier.height(D.S1))
-                T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
-            }
+            ModeTile(m, m == selected, enabled, Modifier.weight(1f).height(if (compact) D.TileS else D.Tile), if (compact) 18.dp else D.Icon, tap, long)
         }
+    }
+}
+
+/**
+ * همان کاشی‌های حالت، ولی یک ستون عمودی کنار دکمه‌ی اتصال (چیدمان صفحه‌ی اول از ۱.۲۸).
+ * ارتفاع هر کاشی با فضای کنار دکمه جور می‌شود (۴۴ تا ۶۴dp) تا با چهار حالت (DNS) هم جا شود.
+ */
+@Composable
+fun ModeColumn(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
+    val tap by rememberUpdatedState(onTap)
+    val long by rememberUpdatedState(onLong)
+    val modes = KMode.entries.filter { it != KMode.DNS || showDns || it == selected }
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val tileH = ((maxHeight - D.S2 * (modes.size - 1)) / modes.size).coerceIn(44.dp, 64.dp)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(D.S2)) {
+            modes.forEach { m -> ModeTile(m, m == selected, enabled, Modifier.fillMaxWidth().height(tileH), if (tileH < 52.dp) 18.dp else D.Icon, tap, long) }
+        }
+    }
+}
+
+/** یک کاشی حالت: لبه و نور به رنگ خود حالت؛ زدن انتخاب می‌کند و نگه‌داشتن پنلش را باز می‌کند */
+@Composable
+private fun ModeTile(m: KMode, sel: Boolean, enabled: Boolean, modifier: Modifier, icon: Dp, tap: (KMode) -> Unit, long: (KMode) -> Unit) {
+    val mc = modeColor(m)
+    // روشن شدن نرم کاشی موقع انتخاب
+    val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
+    val shape = RoundedCornerShape(D.RS)
+    Column(
+        modifier.modeGlass(shape, mc, lit)
+            .alpha(if (enabled) 1f else .5f)
+            .pointerInput(m, enabled) {
+                if (enabled) detectTapGestures(
+                    onTap = { tap(m) },
+                    onLongPress = { long(m) },
+                )
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), icon)
+        Spacer(Modifier.height(D.S1))
+        T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
     }
 }
 
