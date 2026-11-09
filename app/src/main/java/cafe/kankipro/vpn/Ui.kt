@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -159,6 +160,83 @@ val Themes: List<Palette> = listOf(
         toggleOn = Color(0xFFA259FF),
         gameAlt = Color(0xFFC9A2FF), tracer = Color(0xFFFFD1F0),
         navTop = Color(0xFFB57CFF), navBottom = Color(0xFF7B3FE4), onNav = Color(0xFFFFFFFF),
+    ),
+    // ---- تم‌های تک‌رنگ ۱.۲۸: هر تم فقط یک خانواده‌ی رنگ دارد (روشن، اصلی، تیره و یک لهجه‌ی نزدیک) و زمینه‌اش تیره‌ی همان رنگ است
+    // سیاه و لیمویی: مشکی خالص AMOLED و لیمویی؛ کنارش فقط سبزهای هم‌خانواده (نعنایی، زیتونی روشن)
+    Palette(
+        "lime", Color(0xFFB6FF3C), Color(0xFFD4FF7A), Color(0xFF6FA80F), Color(0xFFEFFFD0),
+        Color(0xFF000000), Color(0xFFF6FFE8), Color(0xFF9AA38C),
+        Color(0xFF000000), Color(0xFF000000), Color(0xFF000000),
+        Color(0xE6000000), Color(0xF0040700), Color(0xFF000000), Color(0xFF0A1200),
+        accent = Color(0xFFE8FFB8), // لیمویی کم‌رنگ
+        connected = Color(0xFFD4FF7A),
+        modeSmart = Color(0xFFB6FF3C), // لیمویی
+        modeGame = Color(0xFF3CFFA0), // نعنایی
+        modeAnti = Color(0xFFE8FFB8), // لیمویی کم‌رنگ
+        modeDns = Color(0xFF8FD94A), // زیتونی روشن
+        mix = Color(0xFF3CFFA0),
+        danger = Color(0xFFFF4D4D), warn = Color(0xFFFFC23C),
+        userCountry = Color(0xFFE8FFB8),
+        toggleOn = Color(0xFFB6FF3C),
+        gameAlt = Color(0xFFD4FF7A), tracer = Color(0xFFFFFFFF),
+        navTop = Color(0xFFD4FF7A), navBottom = Color(0xFFA6F02A), onNav = Color(0xFF0A1200),
+    ),
+    // یاقوت کبود: آبی روی سرمه‌ای؛ کنارش آبی یخی و نیلی
+    Palette(
+        "sapphire", Color(0xFF3D8BFF), Color(0xFF8FBFFF), Color(0xFF1749B8), Color(0xFFD6E7FF),
+        Color(0xFF020814), Color(0xFFF2F7FF), Color(0xFF8C9BB8),
+        Color(0xFF0A1A3D), Color(0xFF060F26), Color(0xFF020611),
+        Color(0xD9081430), Color(0xE60C1C3E), Color(0xF2050C1C), Color(0xFFFFFFFF),
+        accent = Color(0xFF7FD8FF), // آبی یخی
+        connected = Color(0xFF8FD1FF),
+        modeSmart = Color(0xFF3D8BFF), // آبی
+        modeGame = Color(0xFF6C7CFF), // نیلی
+        modeAnti = Color(0xFF7FD8FF), // آبی یخی
+        modeDns = Color(0xFFB7C8FF), // آبی کم‌رنگ
+        mix = Color(0xFF6C7CFF),
+        danger = Color(0xFFFF5A6A), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFF7FD8FF),
+        toggleOn = Color(0xFF3D8BFF),
+        gameAlt = Color(0xFF8FBFFF), tracer = Color(0xFFE0F0FF),
+        navTop = Color(0xFF5A9DFF), navBottom = Color(0xFF2563EB), onNav = Color(0xFFFFFFFF),
+    ),
+    // فیروزه: فیروزه‌ای روی سبزآبی خیلی تیره؛ کنارش سبزآبی و آبی آسمانی
+    Palette(
+        "turquoise", Color(0xFF22D3EE), Color(0xFF7CEBFA), Color(0xFF0E7C8C), Color(0xFFD2FAFF),
+        Color(0xFF01090B), Color(0xFFEFFDFF), Color(0xFF88A8AD),
+        Color(0xFF04252B), Color(0xFF021519), Color(0xFF01080A),
+        Color(0xD9031A1F), Color(0xE6062A30), Color(0xF2021014), Color(0xFF00262C),
+        accent = Color(0xFF5EEAD4), // سبزآبی
+        connected = Color(0xFF7CEBFA),
+        modeSmart = Color(0xFF22D3EE), // فیروزه‌ای
+        modeGame = Color(0xFF2DD4BF), // سبزآبی
+        modeAnti = Color(0xFFA5F3FC), // فیروزه‌ای کم‌رنگ
+        modeDns = Color(0xFF38BDF8), // آبی آسمانی
+        mix = Color(0xFF2DD4BF),
+        danger = Color(0xFFFF5A6A), warn = Color(0xFFFFB547),
+        userCountry = Color(0xFFA5F3FC),
+        toggleOn = Color(0xFF22D3EE),
+        gameAlt = Color(0xFF7CEBFA), tracer = Color(0xFFE6FEFF),
+        navTop = Color(0xFF67E8F9), navBottom = Color(0xFF06B6D4), onNav = Color(0xFF00262C),
+    ),
+    // آمتیست: بنفش روی بنفش خیلی تیره؛ فقط بنفش‌ها (یاسی، ارکیده، نیلی) و بدون سرخابی
+    Palette(
+        "amethyst", Color(0xFFA970FF), Color(0xFFCBA8FF), Color(0xFF5B2BB5), Color(0xFFEBDDFF),
+        Color(0xFF05020C), Color(0xFFF7F2FF), Color(0xFFA196B8),
+        Color(0xFF1A0D36), Color(0xFF0E0720), Color(0xFF05020D),
+        Color(0xD90E0720), Color(0xE6180D33), Color(0xF208041A), Color(0xFFFFFFFF),
+        accent = Color(0xFFE3C8FF), // یاسی
+        connected = Color(0xFFCBA8FF),
+        modeSmart = Color(0xFFA970FF), // بنفش
+        modeGame = Color(0xFFC084FC), // ارکیده
+        modeAnti = Color(0xFFE3C8FF), // یاسی
+        modeDns = Color(0xFF8B8CFF), // نیلی
+        mix = Color(0xFFC084FC),
+        danger = Color(0xFFFF5A7A), warn = Color(0xFFFFB84D),
+        userCountry = Color(0xFFE3C8FF),
+        toggleOn = Color(0xFFA970FF),
+        gameAlt = Color(0xFFCBA8FF), tracer = Color(0xFFF3E8FF),
+        navTop = Color(0xFFB98AFF), navBottom = Color(0xFF7C3AED), onNav = Color(0xFFFFFFFF),
     ),
 )
 
@@ -427,18 +505,7 @@ private fun Twinkles(count: Int, accent: Color) {
 
 // ------------------------------------------------------------------ لوگوی سه‌بعدی
 
-/** سپر مدرن با لبه‌های صاف؛ inset برای لبه‌ی داخلی */
-private fun shieldPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f, inset: Float = 0f) = Path().apply {
-    val l = w * (.13f + inset); val r = w * (.87f - inset); val tp = h * (.05f + inset * 1.1f)
-    moveTo(w * .5f + dx, tp + dy)
-    lineTo(r + dx, h * (.15f + inset * .6f) + dy)
-    lineTo(r + dx, h * .50f + dy)
-    quadraticBezierTo(r + dx, h * (.79f - inset * .4f) + dy, w * .5f + dx, h * (.96f - inset * 1.4f) + dy)
-    quadraticBezierTo(l + dx, h * (.79f - inset * .4f) + dy, l + dx, h * .50f + dy)
-    lineTo(l + dx, h * (.15f + inset * .6f) + dy)
-    close()
-}
-
+/** حرف K لوگو */
 private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().apply {
     moveTo(w * .35f + dx, h * .29f + dy); lineTo(w * .45f + dx, h * .29f + dy); lineTo(w * .45f + dx, h * .45f + dy)
     lineTo(w * .58f + dx, h * .29f + dy); lineTo(w * .70f + dx, h * .29f + dy); lineTo(w * .53f + dx, h * .48f + dy)
@@ -446,10 +513,16 @@ private fun kPath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f) = Path().a
     lineTo(w * .45f + dx, h * .69f + dy); lineTo(w * .35f + dx, h * .69f + dy); close()
 }
 
+/** نشان گرد کانکی (از ۱.۲۸ جای سپر): یک دایره، inset از لبه‌ی بیرونی به داخل (نسبت به پهنا) */
+private fun badgePath(w: Float, h: Float, dx: Float = 0f, dy: Float = 0f, inset: Float = 0f) = Path().apply {
+    val r = w * (.47f - inset)
+    addOval(Rect(Offset(w * .5f + dx, h * .5f + dy), r))
+}
+
 /**
- * لوگوی کانکی: سپر طلایی با لبه‌ی برجسته، داخل تیره و حرف K طلایی.
- * sweep: جای نوار نور روی سپر (۰ تا ۱؛ منفی یعنی بدون نوار). animate: نوار نور آرام و پیوسته.
- * glow: هاله‌ی طلایی پشت سپر (۰ تا ۱).
+ * لوگوی کانکی (از ۱.۲۸ گرد، مثل آیکون برنامه): حلقه‌ی برجسته به رنگ تم، داخل تیره، یک حلقه‌ی نازک درونی و حرف K.
+ * sweep: جای نوار نور روی لوگو (۰ تا ۱؛ منفی یعنی بدون نوار). animate: نوار نور آرام و پیوسته.
+ * glow: هاله‌ی رنگ تم پشت لوگو (۰ تا ۱).
  */
 @Composable
 fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float = 0f) {
@@ -464,16 +537,20 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
             drawCircle(Brush.radialGradient(listOf(K.Gold.copy(alpha = .32f * glow), Color.Transparent), center, gr), gr, center)
         }
         // سایه برای عمق
-        drawPath(shieldPath(w, h, w * .012f, h * .02f), Color.Black.copy(alpha = .45f))
-        val face = shieldPath(w, h)
+        drawPath(badgePath(w, h, w * .012f, h * .02f), Color.Black.copy(alpha = .45f))
+        val face = badgePath(w, h)
         drawPath(face, Brush.linearGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep), Offset(0f, 0f), Offset(w, h)))
         // داخل تیره
-        val inner = shieldPath(w, h, inset = .075f)
-        drawPath(inner, Brush.verticalGradient(listOf(K.Surface2.copy(alpha = 1f), K.Ink)))
-        drawPath(inner, K.GoldDeep.copy(alpha = .95f), style = Stroke(w * .014f, join = StrokeJoin.Round))
-        // حرف K
-        drawPath(kPath(w, h, w * .01f, h * .012f), Color.Black.copy(alpha = .55f))
-        drawPath(kPath(w, h), Brush.verticalGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep)))
+        val inner = badgePath(w, h, inset = .075f)
+        drawPath(inner, Brush.radialGradient(listOf(K.Surface2.copy(alpha = 1f), K.Ink), Offset(w * .42f, h * .36f), w * .5f))
+        drawPath(inner, K.GoldDeep.copy(alpha = .95f), style = Stroke(w * .014f))
+        // حلقه‌ی نازک درونی (مثل حلقه‌ی دکمه‌ی اتصال)
+        drawPath(badgePath(w, h, inset = .12f), K.Gold.copy(alpha = .35f), style = Stroke(w * .008f))
+        // حرف K، وسط دایره
+        val kx = -w * .03f
+        val ky = h * .01f
+        drawPath(kPath(w, h, kx + w * .01f, ky + h * .012f), Color.Black.copy(alpha = .55f))
+        drawPath(kPath(w, h, kx, ky), Brush.verticalGradient(listOf(K.GoldLight, K.Gold, K.GoldDeep)))
         // براقی لبه‌ی بالا
         clipPath(face) {
             drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent)), size = Size(w, h * .22f))
