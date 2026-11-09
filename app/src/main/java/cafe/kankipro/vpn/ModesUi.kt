@@ -833,6 +833,7 @@ private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier
 fun protoColor(p: String?): Color = when (p) {
     "kankimix" -> ThemeState.current.mix
     "mtun" -> ThemeState.current.connected
+    "kping" -> ThemeState.current.modeGame
     "amneziawg", "amneziawg-direct" -> ThemeState.current.modeAnti
     "wireguard" -> ThemeState.current.modeDns
     "hysteria2" -> ThemeState.current.connected
@@ -843,6 +844,7 @@ fun protoColor(p: String?): Color = when (p) {
 fun familyColor(f: String): Color = when (f) {
     "kankimix" -> protoColor("kankimix")
     "mtun" -> protoColor("mtun")
+    "kping" -> protoColor("kping")
     "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
     else -> protoColor("wireguard")
@@ -853,7 +855,7 @@ fun DrawScope.familyIcon(f: String, c: Color) {
     val w = size.width
     val st = Stroke(w * .09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (f) {
-        "kankimix", "mtun" -> {
+        "kankimix", "mtun", "kping" -> {
             modeLogo(KMode.GAME, c)
             drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
         }

@@ -340,6 +340,8 @@ class AppState private constructor(context: Context) {
         isTunnelTwin(id) -> "tunnel"
         p == "amneziawg-direct" -> "direct"
         p == "amneziawg" -> "tunnel"
+        // KPING همیشه از سرور ایران و تانل خودش
+        p == KpingCfg.PROTO -> "tunnel"
         else -> account?.viaProto?.get(id)?.get(p) ?: if (p == "wireguard") "tunnel" else "direct"
     }
 
@@ -433,7 +435,7 @@ class AppState private constructor(context: Context) {
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
-                            MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
+                            MtunCfg.PROTO, KpingCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
                             else -> null
                         }
                         val q = series?.let { Modes.gameQ(it) }
@@ -465,7 +467,7 @@ class AppState private constructor(context: Context) {
         }
     }
 
-    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "mtun" -> "microtun"; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
+    fun familyTitle(f: String) = when (f) { "kankimix" -> "KANKI MIX"; "mtun" -> "microtun"; KpingCfg.PROTO -> KpingCfg.TITLE; "hysteria2" -> "Hysteria2"; "amnezia" -> "Amnezia"; else -> "WireGuard" }
 
     /**
      * ضد فیلتر. خودکار با «اولویت Xray» (پیش‌فرض): فقط اینباندهای Xray، کمترین پینگ اول؛ بدون آن تیک:
@@ -658,7 +660,7 @@ class AppState private constructor(context: Context) {
 
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
     /** پروتکل‌های فقط گیمینگ: نه در هوشمند، نه در ضد فیلتر خودکار */
-    private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO)
+    private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO, KpingCfg.PROTO)
     /**
      * هوشمند (روزمره) این‌ها را هم امتحان می‌کند. microtun آخرین گزینه است و KANKI MIX هیچ‌وقت: در حالت گیمینگ هر بسته‌اش
      * دو بار می‌رود و FEC هم بسته‌ی اضافه دارد، پس حجم کاربر دو برابر حساب می‌شد؛ microtun فقط بسته‌های خیلی کوچک
@@ -1028,6 +1030,8 @@ class AppState private constructor(context: Context) {
         if (!prefs.getBoolean("theme122", false)) prefs.edit().putString("theme", "yellow").putBoolean("theme122", true).apply()
         // نسخه‌ی ۱.۲۸: تم تازه‌ی «سیاه و لیمویی» یک بار برای همه انتخاب می‌شود (بعدش انتخاب خود کاربر می‌ماند)
         if (!prefs.getBoolean("theme128", false)) prefs.edit().putString("theme", "lime").putBoolean("theme128", true).apply()
+        // «طلای فلزی» (۱.۲۹) برداشته شد (۱.۳۰): هر کس آن را داشت طلایی می‌گیرد
+        if (prefs.getString("theme", null) == "metal") prefs.edit().putString("theme", "gold").apply()
         ThemeState.set(prefs.getString("theme", "yellow") ?: "yellow")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
@@ -1103,7 +1107,9 @@ class AppState private constructor(context: Context) {
         }
         // microtun: پروتکل جدای همان سرور (لینک mtun://)
         val mtun = a.mtun.map { ConfigLink(protocol = MtunCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
-        return a.copy(configs = base + direct + xray + mtun, exits = a.exits + xrayExits)
+        // KPING (فقط تسترها): همان هسته‌ی microtun، با لینک سرور ایران؛ زیر همان سرور خارج دیده می‌شود
+        val kping = a.kping.map { ConfigLink(protocol = KpingCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
+        return a.copy(configs = base + direct + xray + mtun + kping, exits = a.exits + xrayExits)
     }
 
     /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
@@ -1186,6 +1192,7 @@ class AppState private constructor(context: Context) {
     } else buildList {
         if (hasCfg(nodeId, "kankimix")) add("kankimix")
         if (hasCfg(nodeId, MtunCfg.PROTO)) add(MtunCfg.PROTO)
+        if (hasCfg(nodeId, KpingCfg.PROTO)) add(KpingCfg.PROTO)
         if (hasCfg(nodeId, "amneziawg")) add("amneziawg")
         if (hasCfg(nodeId, "wireguard")) add("wireguard")
         if (hasCfg(nodeId, "hysteria2")) add("hysteria2")
@@ -1425,13 +1432,13 @@ class AppState private constructor(context: Context) {
         protocol == "hysteria2" -> txt.contains("hysteria2://")
         protocol == "kankimix" -> KmixUri.isKmix(txt)
         protocol == "xray" -> XrayCfg.isXray(txt)
-        MtunCfg.isProto(protocol) -> MtunCfg.isMtun(txt)
+        MtunCfg.isProto(protocol) || protocol == KpingCfg.PROTO -> MtunCfg.isMtun(txt)
         else -> txt.contains("[Interface]") && txt.contains("[Peer]")
     }
 
     /** force = true: کانفیگ‌هایی که قبلاً خوانده شده‌اند هم دوباره از پنل خوانده می‌شوند */
     private suspend fun loadInfos(a: Account, force: Boolean = false) {
-        for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray", MtunCfg.PROTO) }) {
+        for (l in a.configs.filter { it.protocol in setOf("kankimix", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray", MtunCfg.PROTO, KpingCfg.PROTO) }) {
             val key = "${l.node}/${l.protocol}"
             if (!force && infos.containsKey(key)) continue
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
@@ -1476,7 +1483,12 @@ class AppState private constructor(context: Context) {
                 if (!HyEngine.isHy(cfg)) cfg = stripIpv6(cfg)
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
-                if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
+                if (link.protocol == KpingCfg.PROTO) {
+                    // KPING: فقط پابجی (هر نسخه‌ای که نصب است) و سرویس‌های گوگل وارد VPN می‌شوند؛ بقیه‌ی گوشی اینترنت خودش را دارد
+                    val games = KpingCfg.installed(ctx)
+                    if (games.isEmpty()) throw IllegalStateException(KPING_NO_GAME)
+                    cfg = KpingCfg.onlyApps(cfg, games)
+                } else if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
                     cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
                 }
                 if (!wantTry) throw IllegalStateException("cancelled")
@@ -1500,7 +1512,9 @@ class AppState private constructor(context: Context) {
             // «قطع» وسط اتصال: کار لغو شده، پس بدون NonCancellable همین down هم اجرا نمی‌شد و VPN وصل می‌ماند
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
-            if (!quiet && wantTry) {
+            if (!quiet && wantTry && e.message == KPING_NO_GAME) {
+                error = "پابجی روی این گوشی نصب نیست؛ KPING فقط برای پابجی است."
+            } else if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
                 errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -1746,13 +1760,13 @@ class AppState private constructor(context: Context) {
                 val net = Probe.underlying(ctx)
                 // وقتی VPN بالاست، پینگ‌هایی که نمی‌شود بیرون از تونل فرستاد (برنامه‌ی جدای microtun، پینگ ICMP) از داخل
                 // تونل می‌رفتند و عدد غلط می‌دادند: آخرین پینگ درست همان کانفیگ (پیش از اتصال) نشان داده می‌شود
-                val viaTunnelOnly = net != null && (p == MtunCfg.PROTO || (p != "hysteria2" && p !in setOf("amneziawg", "amneziawg-direct", "wireguard", "kankimix") &&
+                val viaTunnelOnly = net != null && (p == MtunCfg.PROTO || p == KpingCfg.PROTO || (p != "hysteria2" && p !in setOf("amneziawg", "amneziawg-direct", "wireguard", "kankimix") &&
                     infos[k]?.let { it.transport != "TCP" || it.port <= 0 } != false))
                 if (viaTunnelOnly) { skipped = true; return@runCatching pings[k]?.takeIf { it > 0 } }
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
-                    MtunCfg.PROTO -> Probe.mtun(ctx, text)
+                    MtunCfg.PROTO, KpingCfg.PROTO -> Probe.mtun(ctx, text)
                     "hysteria2" -> Probe.hysteria(ctx, net, text)
                     else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
                         // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس
@@ -1820,7 +1834,10 @@ class AppState private constructor(context: Context) {
 }
 
 /** ترتیب پروتکل‌ها در تب سرورها، پنل گیمینگ و «تست پینگ همه»: KANKI MIX، microtun، Hysteria2، Amnezia، Xray، WireGuard */
-val PROTO_ORDER = listOf("kankimix", "mtun", "hysteria2", "amneziawg-direct", "amneziawg", "xray", "wireguard")
+val PROTO_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amneziawg-direct", "amneziawg", "xray", "wireguard")
 
 /** همان ترتیب برای خانواده‌ها (AmneziaWG تانل و مستقیم یک خانواده‌اند) */
-val FAMILY_ORDER = listOf("kankimix", "mtun", "hysteria2", "amnezia", "xray", "wireguard")
+val FAMILY_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amnezia", "xray", "wireguard")
+
+/** خطای اتصال KPING وقتی هیچ نسخه‌ی پابجی نصب نیست */
+const val KPING_NO_GAME = "kping: no PUBG installed"

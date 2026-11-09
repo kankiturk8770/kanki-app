@@ -68,3 +68,37 @@ object MtunCfg {
         return id
     }
 }
+
+/*
+ * KPING: هسته‌ی مخفی بازی (پنل ۳.۳۷ به بعد)
+ * ----------------------------------------------
+ * فقط برای چند تستر که ادمین در پنل انتخاب می‌کند و فقط داخل جواب رمزشده‌ی اشتراک (فیلد kping). همان هسته‌ی microtun
+ * است (لینک mtun://) ولی به سرور ایران وصل می‌شود که با تانل جدای خودش (Game-FEC) به سرور خارج می‌رسد.
+ * انتخاب برنامه ندارد: فقط پابجی (هر نسخه) و سرویس‌های گوگل که ورود بازی با آن‌هاست وارد VPN می‌شوند؛ بقیه‌ی گوشی
+ * اینترنت معمولی خودش را دارد (addAllowedApplication).
+ */
+object KpingCfg {
+    const val PROTO = "kping"
+    const val TITLE = "KPING"
+
+    /** همه‌ی نسخه‌های پابجی موبایل: جهانی، کره، هند، ویتنام، تایوان */
+    val GAMES = setOf("com.tencent.ig", "com.pubg.krmobile", "com.pubg.imobile", "com.vng.pubgmobile", "com.rekoo.pubgm")
+
+    /** کدام نسخه‌های پابجی روی این گوشی نصب‌اند */
+    fun installed(ctx: Context): List<String> =
+        GAMES.filter { p -> runCatching { ctx.packageManager.getApplicationInfo(p, 0); true }.getOrDefault(false) }
+
+    /**
+     * فقط همین برنامه‌ها وارد VPN شوند (پابجی + GAME_NEEDS)؛ هر دروازه یا استثنای دیگری که روی کانفیگ بود برداشته می‌شود.
+     */
+    fun onlyApps(cfg: String, games: Collection<String>): String {
+        val keep = cfg.lines().filterNot { l ->
+            val k = l.trim().substringBefore("=").trim()
+            k.equals("IncludedApplications", true) || k.equals("ExcludedApplications", true) || k.equals("GameOnly", true) || k.equals("BlockOthers", true)
+        }.toMutableList()
+        val i = keep.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
+        val line = "IncludedApplications = " + (games + GAME_NEEDS).sorted().joinToString(", ")
+        if (i >= 0) keep.add(i + 1, line) else keep.add(0, line)
+        return keep.joinToString("\n")
+    }
+}

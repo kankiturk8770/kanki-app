@@ -225,28 +225,6 @@ fun ThemePicker(onSet: (String) -> Unit) {
             T("تم برنامه", size = D.TxtTitle)
         }
         Spacer(Modifier.height(D.S3))
-        // طلای فلزی (۱.۲۹): کاشی پهن بالای بقیه، با خود لوگو، چون کل برنامه را از جنس لوگو می‌کند
-        run {
-            val sel = ThemeState.current.id == "metal"
-            val shape = RoundedCornerShape(D.RM)
-            Row(
-                Modifier.fillMaxWidth().clip(shape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFF14100A), Color.Black)))
-                    .border(if (sel) 2.dp else 1.2.dp, metalBrush(), shape)
-                    .clickable { onSet("metal") }
-                    .padding(horizontal = D.S3, vertical = D.S2),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Logo3D(34.dp)
-                Spacer(Modifier.width(D.S3))
-                Column(Modifier.weight(1f)) {
-                    T("طلای فلزی", size = 13.sp, color = Color(0xFFF6D27A), maxLines = 1)
-                    T("از جنس لوگوی کانکی: طلای صیقلی روی مشکی", size = 11.sp, color = Color(0xFFB5A88A), weight = FontWeight.Normal, maxLines = 1)
-                }
-                if (sel) Dot(Color(0xFFF6D27A), 8.dp)
-            }
-            Spacer(Modifier.height(D.S2))
-        }
         items.chunked(4).forEachIndexed { ri, rowItems ->
         if (ri > 0) Spacer(Modifier.height(D.S2))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {

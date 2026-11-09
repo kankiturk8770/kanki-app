@@ -13,12 +13,13 @@ import android.content.pm.PackageManager
 object LauncherIcon {
     private val ALIASES = listOf("gold", "yellow", "crimson", "purple", "lime", "sapphire", "turquoise", "amethyst")
 
-    /** alias هر تم (طلای فلزی همان آیکون طلایی اصل) */
-    private fun aliasOf(theme: String) = if (theme in ALIASES) theme else "gold"
-
-    fun apply(ctx: Context, theme: String) {
+    /**
+     * از ۱.۳۰ (خواسته‌ی صاحب اپ) آیکون برنامه همیشه همان لوگوی طلایی اصل است، هر تمی که انتخاب شود؛ فقط لوگوی داخل برنامه و
+     * صفحه‌ی شروع رنگ تم را می‌گیرند. گوشی‌ای که آیکون تم دیگری داشت یک بار به طلایی برمی‌گردد.
+     */
+    fun apply(ctx: Context, @Suppress("UNUSED_PARAMETER") theme: String) {
         val pm = ctx.packageManager
-        val want = aliasOf(theme)
+        val want = "gold"
         fun cn(t: String) = ComponentName(ctx.packageName, "cafe.kankipro.vpn.Icon_$t")
         runCatching {
             // اگر همین الان درست است، کاری نکن (هر تغییر لانچر را دوباره بارگذاری می‌کند)

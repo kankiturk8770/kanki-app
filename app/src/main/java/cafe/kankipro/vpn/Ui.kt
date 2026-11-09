@@ -249,26 +249,6 @@ val Themes: List<Palette> = listOf(
         gameAlt = Color(0xFFCBA8FF), tracer = Color(0xFFF3E8FF),
         navTop = Color(0xFFB98AFF), navBottom = Color(0xFF7C3AED), onNav = Color(0xFFFFFFFF),
     ),
-    // طلای فلزی (۱.۲۹): کپی جنس لوگو؛ مشکی براق، طلای صیقلی با نور سفید، فقط تُن‌های طلا
-    Palette(
-        "metal", Color(0xFFE9C25C), Color(0xFFF6D27A), Color(0xFF8A5A12), Color(0xFFFFF6C8),
-        Color(0xFF000000), Color(0xFFFFF8E6), Color(0xFFB5A88A),
-        Color(0xFF0B0805), Color(0xFF050302), Color(0xFF000000),
-        Color(0xEB0A0704), Color(0xF2120D06), Color(0xFF050302), Color(0xFF1A1000),
-        accent = Color(0xFFF2DFA0),
-        connected = Color(0xFFF6D27A),
-        modeSmart = Color(0xFFE9C25C),
-        modeGame = Color(0xFFF2CF73),
-        modeAnti = Color(0xFFFFF0C2),
-        modeDns = Color(0xFFC8963A),
-        mix = Color(0xFFF2CF73),
-        danger = Color(0xFFFF5A4A), warn = Color(0xFFFFB547),
-        userCountry = Color(0xFFFFF0C2),
-        toggleOn = Color(0xFFE9C25C),
-        gameAlt = Color(0xFFFFE7A0), tracer = Color(0xFFFFFFFF),
-        navTop = Color(0xFFFFF0C2), navBottom = Color(0xFFC8963A), onNav = Color(0xFF1A1000),
-        metal = true,
-    ),
 )
 
 /** طلای صیقلی لوگو: تیره، طلا، نور سفید، طلا، تیره، طلا (مثل لبه‌ی نشان K) */

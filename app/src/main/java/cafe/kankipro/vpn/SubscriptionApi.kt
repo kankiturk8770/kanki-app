@@ -45,6 +45,8 @@ data class Account(
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
     /** microtun هر سرور (فیلد mtun؛ پنل ۳.۱۸ به بعد). ورودی تانل هر سرور هم لینک خودش را دارد. */
     val mtun: List<MtunLink> = emptyList(),
+    /** KPING (پنل ۳.۳۷ به بعد): فقط برای تسترها و فقط در جواب رمزشده؛ هر سرور خارج یک لینک mtun:// به سرور ایران */
+    val kping: List<MtunLink> = emptyList(),
 )
 
 /** یک لینک mtun:// */
@@ -289,6 +291,7 @@ object SubscriptionApi {
             awg = dataJson(html)?.optJSONArray("nodes")?.let { parseAwg(it) } ?: emptyMap(),
             viaProto = dataJson(html)?.optJSONArray("nodes")?.let { parseVia(it) } ?: emptyMap(),
             mtun = dataJson(html)?.optJSONArray("nodes")?.let { parseMtun(it) } ?: emptyList(),
+            kping = dataJson(html)?.optJSONArray("kping")?.let { parseKping(it) } ?: emptyList(),
         ).also {
             dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
                 ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
@@ -318,6 +321,14 @@ object SubscriptionApi {
             val url = if (n.isNull("mtun")) "" else n.optString("mtun").trim()
             if (id.isBlank() || !MtunCfg.supported(url)) null
             else MtunLink(id, n.optString("name").ifBlank { id }, url)
+        }
+
+    /** [{id, node, name, url}]: node = سرور خارج (پنل ۳.۳۸)؛ پنل ۳.۳۷ node ندارد، پس شناسه‌ی مسیر */
+    private fun parseKping(a: org.json.JSONArray): List<MtunLink> =
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
+            val url = n.optString("url").trim()
+            val node = n.optString("node").ifBlank { "kping-" + n.optString("id") }
+            if (!MtunCfg.supported(url) || node == "kping-") null else MtunLink(node, n.optString("name").ifBlank { node }, url)
         }
 
     private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =
