@@ -6,6 +6,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -162,6 +164,18 @@ fun WorldMap(
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bmp), size) {
             // زمینه‌ی جدا ندارد: فقط خشکی‌ها و مرزها روی بیت‌مپ شفاف کشیده می‌شوند و پشتش خود پس‌زمینه‌ی صفحه است
             clipRect {
+                // ۱.۲۹ سه‌بعدی: هر خشکی یک لایه‌ی ضخیم زیرش دارد (کمی پایین‌تر، تیره با لبه‌ی کم‌رنگ رنگ تم)، مثل نقشه‌ی برجسته
+                val depth = 2.6.dp.toPx()
+                withTransform({
+                    translate((-bv.lon0 * bsx).toFloat(), (bv.lat0 * bsy).toFloat() + depth)
+                    scale(bsx, bsy, pivot = Offset.Zero)
+                }) {
+                    countries?.forEach { c ->
+                        if (c.maxLon < bv.lon0 || c.minLon > bv.lon1 || c.maxLat < bv.lat1 || c.minLat > bv.lat0) return@forEach
+                        drawPath(c.path, Color.Black.copy(alpha = .75f))
+                        drawPath(c.path, K.GoldDeep.copy(alpha = .22f), style = Stroke(border * 2.2f))
+                    }
+                }
                 withTransform({
                     translate((-bv.lon0 * bsx).toFloat(), (bv.lat0 * bsy).toFloat())
                     scale(bsx, bsy, pivot = Offset.Zero)
@@ -170,7 +184,7 @@ fun WorldMap(
                         if (c.maxLon < bv.lon0 || c.minLon > bv.lon1 || c.maxLat < bv.lat1 || c.minLat > bv.lat0) return@forEach
                         // خشکی شیشه‌ای تیره با مرز به رنگ تم؛ کشور شما userCountry، کشور سرور به رنگ لهجه (وصل: رنگ «وصل») و درخشان
                         // خشکی تقریباً مشکی (AMOLED) فقط کمی روشن‌تر از دریا، مرزها به رنگ تم
-                        drawPath(c.path, K.Panel.copy(alpha = .55f))
+                        drawPath(c.path, lerp(K.Panel.copy(alpha = 1f), K.Gold, .07f).copy(alpha = .9f))
                         when (c.iso) {
                             selIso -> {
                                 drawPath(c.path, selColor.copy(alpha = .32f))
@@ -326,23 +340,27 @@ private class MapCache {
     var bmp: ImageBitmap? = null
 }
 
-/** سنجاق کوچک با پرچم بالای یک نقطه؛ fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه */
+/**
+ * سنجاق نقشه (۱.۲۹، خواسته‌ی صاحب اپ: «پرچم گرد شناور»): پرچم داخل دایره‌ی تیره با حلقه‌ی درخشان رنگ c، کمی بالای نقطه
+ * و یک خط نازک نوری تا خود نقطه؛ بدون شکل قطره. fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه.
+ */
 private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, pr: Float, fade: Float = 1f) {
-    val head = Offset(o.x, o.y - pr * 2.2f)
-    val stem = Path().apply {
-        moveTo(o.x, o.y - pr * .3f)
-        lineTo(head.x - pr * .62f, head.y + pr * .6f)
-        lineTo(head.x + pr * .62f, head.y + pr * .6f)
-        close()
-    }
-    drawPath(stem, c)
-    drawCircle(c.copy(alpha = .28f), pr * 1.45f, head)
-    drawCircle(c, pr * 1.12f, head)
-    drawCircle(K.Panel.copy(alpha = K.Panel.alpha * fade), pr * .96f, head)
+    val rr = pr * 1.1f
+    val head = Offset(o.x, o.y - pr * 2.4f)
+    // خط نوری از نقطه تا پرچم (پایین پررنگ، بالا محو)
+    drawLine(
+        Brush.verticalGradient(listOf(c.copy(alpha = .15f * fade), c.copy(alpha = .9f * fade)), startY = head.y + rr, endY = o.y),
+        Offset(o.x, head.y + rr), o, pr * .14f, StrokeCap.Round,
+    )
+    // درخشش نرم دور پرچم
+    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .38f * fade), Color.Transparent), head, rr * 1.9f), rr * 1.9f, head)
+    drawCircle(Color.Black.copy(alpha = .92f * fade), rr, head)
     flagEmoji(iso)?.let { f ->
-        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.1f).toSp()))
+        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.15f).toSp()))
         drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f), alpha = fade)
     }
+    drawCircle(c.copy(alpha = fade), rr, head, style = Stroke(pr * .16f))
+    drawCircle(Color.White.copy(alpha = .5f * fade), rr + pr * .08f, head, style = Stroke(pr * .04f))
 }
 
 private fun DrawScope.neonDot(c: Color, o: Offset, r: Float) {

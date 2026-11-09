@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -67,24 +68,38 @@ class GuideStep(
 val guideSteps = listOf(
     GuideStep(null, "سلام، من کانکی‌ام", "یه دور کوتاه توی برنامه می‌زنیم تا بدونی هر چیزی کجاست. هر جای صفحه رو بزنی، می‌ریم قدم بعد.",
         "Hi, I'm Kanki", "Let's take a short tour so you know where everything is. Tap anywhere to go to the next step."),
-    GuideStep("connect", "دکمه‌ی اتصال", "یه بار بزن تا با حالتی که پایین انتخاب کردی وصل شی. وقتی وصلی وسطش «متصل» و زمان اتصال نوشته می‌شه. وسط اتصال دوباره بزنی، لغو می‌شه.",
-        "Connect button", "Tap once to connect with the mode you picked below. When you're connected it says Connected with the time. Tap again while connecting to cancel."),
-    GuideStep("map", "نقشه", "می‌بینی کجایی و به کدوم کشور وصلی. پینگ، دانلود و آپلود زنده زیر نقشه‌ست.",
-        "Map", "Shows where you are and which country you're connected to. Live ping, download and upload are below the map."),
-    GuideStep("protocols", "حالت‌های اتصال", "هر حالت برای یه کاره:",
-        "Connection modes", "Each mode has one job:",
+    GuideStep("connect", "دکمه‌ی اتصال", "قلب برنامه همین دکمه‌ست. یه بار بزن تا با حالتی که کنارش روشنه وصل شی:",
+        "Connect button", "This button is the heart of the app. Tap once to connect with the mode that's lit next to it:",
+        points = listOf(
+            "اتصال" to "یعنی آماده‌ای؛ اسم حالت انتخابی زیرش نوشته شده.",
+            "در حال اتصال" to "نور دور دکمه تند می‌چرخه و من بهترین راه رو امتحان می‌کنم. اگه نخواستی، همین موقع دوباره بزن تا لغو بشه.",
+            "متصل" to "زمان اتصال وسط دکمه می‌شمره و دو موج از دکمه بیرون می‌زنه. برای قطع، یه بار دیگه بزن.",
+            "گیمینگ" to "دور دکمه نئون رنگی می‌شه و آدمک‌ها با پینگ تو می‌دوند؛ هرچی پینگ پایدارتر، آروم‌تر.",
+        ),
+        pointsEn = listOf(
+            "Connect" to "means you're ready; the selected mode is written under it.",
+            "Connecting" to "the light around the button spins fast while I try the best way. Changed your mind? Tap again to cancel.",
+            "Connected" to "the connection time counts in the middle and two waves ripple out. Tap once more to disconnect.",
+            "Gaming" to "the ring turns neon and little runners race with your ping; the steadier the ping, the calmer they run.",
+        )),
+    GuideStep("map", "نقشه", "می‌بینی کجایی و به کدوم کشور وصلی. سنجاق پرچم‌دار هر کشور یه سروره؛ سنجاق «شما» جای خودته. وقتی وصلی یه کمان نورانی از تو تا سرور کشیده می‌شه و بالای نقشه «IP شما» کشور تازه‌ت رو می‌گه.",
+        "Map", "Shows where you are and which country you're connected to. Each flag pin is a server; the You pin is you. When you're connected a glowing arc runs from you to the server, and Your IP at the top shows your new country."),
+    GuideStep("protocols", "حالت‌های اتصال", "کنار دکمه‌ی اتصال چهار دکمه‌ی گرده؛ هر حالت برای یه کاره. حالتی که باهاش وصلی، یه نور دورش می‌چرخه:",
+        "Connection modes", "Next to the connect button are round buttons, one job each. The mode you're connected with has a light circling it:",
         points = listOf(
             "هوشمند" to "پینگ همه رو می‌گیره و به کم‌پینگ‌ترین وصل می‌شه؛ اگه شبکه بد باشه خودش می‌ره سراغ تانل.",
-            "گیمینگ" to "برای بازی؛ پروتکل و سرور رو خودت انتخاب می‌کنی.",
-            "ضد فیلتر" to "وقتی محدودیت‌های شبکه شدیده؛ با یه لمس بهترین راه رو پیدا می‌کنه.",
-            "DNS" to "VPN نیست؛ فقط سایت‌ها و بازی‌های تحریمی رو باز می‌کنه و بقیه مستقیم می‌رن.",
+            "گیمینگ" to "برای بازی؛ پنلش باز می‌شه و پروتکل و سرور رو خودت انتخاب می‌کنی.",
+            "ضد فیلتر" to "وقتی محدودیت شبکه شدیده؛ یه لمس بهترین راه رو پیدا می‌کنه، لمس دوباره یا نگه داشتن پنل Xray و Amnezia رو باز می‌کنه.",
+            "DNS" to "اگه اشتراکت داشته باشه زیر ضد فیلتر میاد. VPN نیست؛ فقط سایت‌ها و بازی‌های تحریمی رو باز می‌کنه و بقیه مستقیم می‌رن.",
         ),
         pointsEn = listOf(
             "Smart" to "Pings everything and connects to the lowest ping; on a bad network it moves to a tunnel by itself.",
-            "Gaming" to "For games; you pick the protocol and the server.",
-            "Anti-filter" to "For heavy network restrictions; one tap finds the best way through.",
-            "DNS" to "Not a VPN; it only unblocks sanctioned sites and games, everything else goes direct.",
+            "Gaming" to "For games; its panel opens and you pick the protocol and the server.",
+            "Anti-filter" to "For heavy network restrictions; one tap finds the best way through, tap again or hold to open the Xray and Amnezia panel.",
+            "DNS" to "Shows under Anti-filter if your subscription has it. Not a VPN; it only unblocks sanctioned sites and games, everything else goes direct.",
         )),
+    GuideStep("stats", "پینگ، دانلود و آپلود", "وقتی وصلی، اینجا زنده عوض می‌شن: پینگ (با نوار ضربان کنارش)، سرعت دانلود و آپلود همین لحظه. پینگ سبز یعنی عالی، زرد متوسط، قرمز بد.",
+        "Ping, download and upload", "While you're connected these update live: ping (with its heartbeat line), and your download and upload speed right now. A good ping uses the theme colour, yellow is so-so, red is bad."),
     GuideStep("game_fams", "پروتکل‌های گیمینگ", "همه روی UDP‌ان، مثل خود بازی. فقط اونایی که توی اشتراکت هست دیده می‌شن:",
         "Gaming protocols", "All run on UDP, like the game itself. Only the ones in your subscription are shown:",
         points = listOf(
@@ -273,13 +288,26 @@ private fun GuideBubble(
             }
         }
         Spacer(Modifier.height(D.S3))
-        // دکمه‌های قبلی و بعدی تمام‌قد (۴۸dp، اندازه‌ی لمس انگشت) و «رد کردن» جدا بالایشان
-        if (!last) T("رد کردن", size = 13.sp, color = K.Sub, modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(D.RS)).clickable(onClick = onSkip).padding(horizontal = D.S2, vertical = D.S2))
+        // ۱.۲۹: دکمه‌ها کوچک‌تر و در همه‌ی قدم‌ها یک اندازه و یک جا («قبلی» در قدم اول کم‌رنگ می‌ماند، جابه‌جا نمی‌شود)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            if (idx > 0) LineButton("قبلی", Modifier.weight(1f), onClick = onBack)
-            GoldButton(if (last) "تمام" else "بعدی", Modifier.weight(if (idx > 0) 1.4f else 1f), onClick = onNext)
+            if (!last) T("رد کردن", size = 13.sp, color = K.Sub, modifier = Modifier.clip(RoundedCornerShape(D.RS)).clickable(onClick = onSkip).padding(horizontal = D.S2, vertical = D.S2))
+            Spacer(Modifier.weight(1f))
+            GuideBtn("قبلی", primary = false, enabled = idx > 0, onClick = onBack)
+            GuideBtn(if (last) "تمام" else "بعدی", primary = true, onClick = onNext)
         }
     }
+}
+
+/** دکمه‌ی ربات: اندازه‌ی ثابت ۹۶×۴۰، برجسته (پر برای «بعدی»، خطی برای «قبلی») */
+@Composable
+private fun GuideBtn(text: String, primary: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(D.RM)
+    Box(
+        Modifier.size(width = 96.dp, height = 40.dp).alpha(if (enabled) 1f else .35f)
+            .then(if (primary) Modifier.goldFill(shape) else Modifier.clip(shape).background(K.Gold.copy(alpha = .08f)).border(1.dp, K.Gold.copy(alpha = .7f), shape))
+            .pressable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { T(text, size = 14.sp, color = if (primary) K.OnGold else K.Gold, weight = FontWeight.Black) }
 }
 
 /** متن بدنه‌ی ربات: فاصله‌ی خط بیشتر برای وزیرمتن، تا جمله‌های بلند فارسی خوانا بمانند */

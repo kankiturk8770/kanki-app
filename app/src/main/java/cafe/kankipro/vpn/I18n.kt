@@ -177,6 +177,8 @@ private val EN = mapOf(
     "یاقوت کبود" to "Sapphire",
     "فیروزه" to "Turquoise",
     "آمتیست" to "Amethyst",
+    "طلای فلزی" to "Metal Gold",
+    "از جنس لوگوی کانکی: طلای صیقلی روی مشکی" to "Made like the Kanki logo: polished gold on black",
     "طلایی" to "Gold",
     "زرشکی" to "Crimson",
     "بنفش سلطنتی" to "Royal Purple",

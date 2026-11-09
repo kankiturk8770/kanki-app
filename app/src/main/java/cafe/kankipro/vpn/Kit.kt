@@ -10,6 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -144,7 +147,7 @@ fun Segmented(items: List<SegItem>, selected: String, modifier: Modifier = Modif
             }
             Row(
                 Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(D.RS))
-                    .background(if (sel) Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)) else Brush.verticalGradient(listOf(bg, bg)))
+                    .then(if (sel) Modifier.goldFill(RoundedCornerShape(D.RS)) else Modifier.background(Brush.verticalGradient(listOf(bg, bg))))
                     .clickable(enabled = on && !sel) { onSelect(item.key) },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -208,13 +211,45 @@ fun Spinner(size: Dp = 16.dp, color: Color = K.Gold) {
     }
 }
 
-/** دکمه‌ی گرد آیکون‌دار */
+/**
+ * شیشه‌ی دایره‌ای برجسته (۱.۲۹) برای همه‌ی دکمه‌های گرد (سربرگ، حالت‌ها، دکمه‌های آیکون‌دار):
+ * سایه‌ی نرم زیرش، رویه‌ی گنبدی (روشن بالا، تیره پایین)، نور لبه‌ی بالا و حلقه‌ی رنگی. lit: ۰ عادی تا ۱ انتخاب‌شده.
+ */
+fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
+    .drawBehind {
+        val o = CircleShape.createOutline(size, layoutDirection, this)
+        liftShadow(o, 5.dp.toPx(), .65f, tint.copy(alpha = .5f + .5f * lit))
+        if (lit > .01f) for ((w, a) in listOf(10f to .07f, 6f to .14f, 3f to .28f)) drawCircle(tint.copy(alpha = a * lit), size.minDimension / 2, style = Stroke(w.dp.toPx()))
+    }
+    .clip(CircleShape)
+    .background(K.Panel.copy(alpha = 1f))
+    .background(
+        Brush.radialGradient(
+            listOf(lerp(K.Surface2.copy(alpha = 1f), tint, .16f + .22f * lit), lerp(K.Panel.copy(alpha = 1f), tint, .04f + .08f * lit), Color.Black.copy(alpha = .9f)),
+            center = Offset.Unspecified, radius = Float.POSITIVE_INFINITY,
+        ),
+    )
+    .drawWithContent {
+        val r = size.minDimension / 2
+        // رویه‌ی گنبدی: نور نرم بالا-چپ و سایه‌ی پایین
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f + .08f * lit), Color.Transparent), Offset(size.width * .38f, size.height * .26f), r * .9f), r)
+        bevel(CircleShape.createOutline(size, layoutDirection, this), .9f + .3f * lit, lerp(tint, Color.White, .55f))
+        drawContent()
+    }
+    .border(
+        (1.2f + .6f * lit).dp,
+        if (ThemeState.current.metal) metalBrush()
+        else Brush.verticalGradient(
+            listOf(lerp(tint, Color.White, .35f + .25f * lit), tint.copy(alpha = .55f + .4f * lit), lerp(tint, Color.Black, .45f).copy(alpha = .9f)),
+        ),
+        CircleShape,
+    )
+
+/** دکمه‌ی گرد آیکون‌دار (برجسته) */
 @Composable
 fun RoundIcon(size: Dp = D.IconBox, tint: Color = K.Gold, filled: Boolean = false, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     Box(
-        Modifier.size(size).clip(CircleShape)
-            .background(if (filled) Brush.verticalGradient(listOf(tint.copy(alpha = .30f), tint.copy(alpha = .10f))) else Brush.verticalGradient(listOf(K.Surface, K.Panel)))
-            .border(1.dp, tint.copy(alpha = .55f), CircleShape)
+        Modifier.size(size).raisedCircle(tint, if (filled) .6f else 0f)
             .pressable(scale = .93f, onClick = onClick),
         contentAlignment = Alignment.Center,
         content = content,
@@ -239,25 +274,27 @@ fun HDivider(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(K.Gold.copy(alpha = .10f)))
 }
 
-/** دکمه‌ی کوچک طلایی */
+/** دکمه‌ی کوچک طلایی (برجسته) */
 @Composable
 fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(D.BtnS).clip(shape)
-            .background(Brush.verticalGradient(listOf(K.Shine, K.Gold, K.GoldDeep)))
+        modifier.height(D.BtnS).goldFill(shape)
             .pressable(onClick = onClick).padding(horizontal = D.S4),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
 
-/** دکمه‌ی کوچک خطی */
+/** دکمه‌ی کوچک خطی (برجسته) */
 @Composable
 fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(D.BtnS).clip(shape).background(color.copy(alpha = .08f))
-            .border(1.dp, color.copy(alpha = .6f), shape)
+        modifier.height(D.BtnS)
+            .drawBehind { liftShadow(shape.createOutline(size, layoutDirection, this), 3.dp.toPx(), .45f, color) }
+            .clip(shape).background(K.Panel.copy(alpha = .9f)).background(Brush.verticalGradient(listOf(color.copy(alpha = .16f), color.copy(alpha = .04f))))
+            .drawWithContent { bevel(shape.createOutline(size, layoutDirection, this), .8f, color); drawContent() }
+            .border(1.dp, color.copy(alpha = .7f), shape)
             .pressable(onClick = onClick).padding(horizontal = D.S3),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = color, weight = FontWeight.Bold) }
