@@ -110,6 +110,7 @@ fun flagOf(name: String): String {
 fun protoTitle(p: String) = when (p) {
     "kankimix" -> "KANKI MIX"
     "mtun" -> "microtun"
+    "kping" -> "KPING"
     "amneziawg" -> "AmneziaWG"
     "amneziawg-direct" -> "Amnezia Direct"
     "wireguard" -> "WireGuard"
