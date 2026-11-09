@@ -262,11 +262,17 @@ class AppState private constructor(context: Context) {
     /** اتصال در محدوده‌ی خود برنامه (با عوض شدن تب قطع نمی‌شود)، بعد از گرفتن اجازه‌ی VPN */
     fun launchConnect(reconnect: Boolean = false, block: suspend () -> Unit) {
         val go: () -> Unit = {
-            runExclusive {
+            runExclusive { my ->
                 if (reconnect && vstate != VState.OFF) disconnect()
                 wantTry = true
                 error = null; errorDetail = null
-                block()
+                // از همان لحظه‌ی لمس «در حال اتصال» دیده شود: ضد فیلتر و گیمینگ اول چند ثانیه پینگ می‌گیرند و
+                // قبلاً دکمه در این مدت هیچ تغییری نمی‌کرد (کاربر فکر می‌کرد کار نکرد و دوباره می‌زد، که تلاش را از نو شروع می‌کرد)
+                vstate = VState.CONNECTING
+                try { block() } finally {
+                    // تلاش بی‌نتیجه تمام شد (هیچ کانفیگی وصل نشد یا زود برگشت): دکمه به حالت عادی برگردد
+                    if (!stale(my) && vstate == VState.CONNECTING) vstate = VState.OFF
+                }
             }
         }
         val ask = requestVpn
@@ -1649,6 +1655,8 @@ class AppState private constructor(context: Context) {
             val k = "${l.node}/${l.protocol}"
             if (badCfg[k] == true) null else infos[k]?.takeIf { i -> i.host != "—" }?.let { k to it }
         }.distinctBy { it.first }
+            // به همان ترتیبی که در کارت هر کشور و پنل گیمینگ دیده می‌شود (بالا به پایین)، نه ترتیب اشتراک
+            .sortedBy { (k, _) -> PROTO_ORDER.indexOf(k.substringAfterLast("/")).let { if (it < 0) 99 else it } }
         val udp = targets.count { it.second.transport != "TCP" }
         pingAllUi = PingAllUi(running = true, done = 0, total = targets.size, udp = udp, tcp = targets.size - udp)
         val gate = kotlinx.coroutines.sync.Semaphore(6)
@@ -1810,3 +1818,9 @@ class AppState private constructor(context: Context) {
         error = null; errorDetail = null
     }
 }
+
+/** ترتیب پروتکل‌ها در تب سرورها، پنل گیمینگ و «تست پینگ همه»: KANKI MIX، microtun، Hysteria2، Amnezia، Xray، WireGuard */
+val PROTO_ORDER = listOf("kankimix", "mtun", "hysteria2", "amneziawg-direct", "amneziawg", "xray", "wireguard")
+
+/** همان ترتیب برای خانواده‌ها (AmneziaWG تانل و مستقیم یک خانواده‌اند) */
+val FAMILY_ORDER = listOf("kankimix", "mtun", "hysteria2", "amnezia", "xray", "wireguard")

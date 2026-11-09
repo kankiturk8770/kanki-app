@@ -130,10 +130,7 @@ fun LoginScreen(state: AppState) {
         }
 
         Spacer(Modifier.height(22.dp))
-        T(
-            "اشتراک نداری؟ از ربات بگیر", size = 14.sp, color = K.Gold, weight = FontWeight.Bold,
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { openBot(ctx) }.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
+        SmallLine("اشتراک نداری؟ از ربات بگیر") { openBot(ctx) }
         Spacer(Modifier.height(18.dp))
         RobotSays("سلام رفیق! کدت رو بزن، مهمون ما شو 😉", robotSize = 70.dp, robotAtStart = false, onClick = { openBot(ctx) })
         Spacer(Modifier.height(12.dp))
@@ -180,6 +177,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     fun startGuide() { state.tab = KTab.HOME; Guide.start() }
 
+    // بیرون رفتن از تب سرورها کشور باز را می‌بندد (برگشتن: همه بسته، مرتب)
+    LaunchedEffect(tab) { if (tab != KTab.SERVERS) state.openNode = null }
     MainFrame(tab, onTab = { state.tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
         when (tab) {
             KTab.HOME -> HomeTab(state, countries, onToggle)
@@ -554,7 +553,8 @@ private fun cellTitle(l: ConfigLink): String = when (l.protocol) {
 @Composable
 private fun ServersTab(state: AppState) {
     val a = state.account
-    val order = listOf("kankimix", "mtun", "amneziawg", "amneziawg-direct", "wireguard", "hysteria2", "xray")
+    // ترتیب ثابت داخل هر کشور (۱.۲۹، خواسته‌ی صاحب اپ): KANKI MIX و microtun اول، بعد Hysteria2، Amnezia، Xray و WireGuard آخر
+    val order = PROTO_ORDER
     val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
     // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
     // کشور هر کانفیگ = کشور خروجی واقعی سرورش (از پنل یا از داخل تونل)، نه کشور Endpoint
@@ -575,7 +575,7 @@ private fun ServersTab(state: AppState) {
         }
         val rows = links.sortedBy { order.indexOf(it.protocol) }.map { row(it) }
         // هر پروتکل هر سرور یک ردیف: تانل و مستقیم همان سرور کنار هم (Xray: لینک و نسخه‌ی «(تانل)» همان لینک)
-        val famOrder = listOf("kankimix", "mtun", "hysteria2", "amnezia", "wireguard", "xray")
+        val famOrder = FAMILY_ORDER
         val lines = links.groupBy { l ->
             val fam = when (l.protocol) { "amneziawg", "amneziawg-direct" -> "amnezia"; else -> l.protocol }
             val who = if (l.protocol == "xray") l.nodeName.removeSuffix(" (تانل)").trim() else state.parentOf(l.node)

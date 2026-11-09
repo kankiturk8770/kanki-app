@@ -131,21 +131,21 @@ fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: 
     }
 }
 
-/** سربرگ: لوگوی سپر K و KANKI VPN در یک طرف، سه دکمه‌ی کوچک مربعی (لینک، ربات، گفتگو) در طرف دیگر */
+/** سربرگ: لوگوی گرد K و KANKI VPN در یک طرف، سه دکمه‌ی گرد برجسته (لینک، ربات، گفتگو) در طرف دیگر */
 @Composable
 fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(start = D.PagePad, end = D.PagePad, top = D.S2, bottom = D.S1), verticalAlignment = Alignment.CenterVertically) {
-        Logo3D(30.dp)
+    Row(Modifier.fillMaxWidth().padding(start = D.PagePad, end = D.PagePad, top = D.S2, bottom = D.S2), verticalAlignment = Alignment.CenterVertically) {
+        Logo3D(34.dp)
         Spacer(Modifier.width(D.S2))
         BrandTitle(15.sp)
         Spacer(Modifier.weight(1f))
         Box(Modifier.guideTarget("emergency")) {
             HeaderIcon(K.Accent, onEmergency) { emergencyChatIcon(it) }
-            UnreadBadge(EmergencyStore.unread, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
+            UnreadBadge(EmergencyStore.unread, Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp))
         }
-        Spacer(Modifier.width(D.S2))
-        Box(Modifier.guideTarget("robot")) { HeaderIcon(K.Gold, onRobot) { drawRobot(body = false) } }
-        Spacer(Modifier.width(D.S2))
+        Spacer(Modifier.width(D.S3))
+        Box(Modifier.guideTarget("robot")) { HeaderIcon(K.Gold, onRobot) { robotHeadIcon(it) } }
+        Spacer(Modifier.width(D.S3))
         Box(Modifier.guideTarget("account")) { HeaderIcon(K.Gold, onAccount) { linkIcon(it) } }
     }
 }
@@ -164,80 +164,104 @@ fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
     ) { T(if (LangState.en) txt else faDigits(txt), size = 10.sp, color = Color.White, font = Poppins, weight = FontWeight.Bold, ltr = true) }
 }
 
-/** دکمه‌ی کوچک مربعی شیشه‌ای سربرگ با لبه‌ی طلایی */
+/** دکمه‌ی گرد برجسته‌ی سربرگ (۱.۲۹: دایره به‌جای مربع، با سایه و لبه‌ی نورانی) */
 @Composable
 fun HeaderIcon(tint: Color, onClick: () -> Unit, draw: DrawScope.(Color) -> Unit) {
-    val shape = RoundedCornerShape(D.RS)
     Box(
-        Modifier.size(D.IconBox).goldGlass(shape)
-            .clickable(onClick = onClick),
+        Modifier.size(40.dp).raisedCircle(tint).pressable(scale = .9f, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Canvas(Modifier.size(D.Icon)) { draw(tint) } }
+    ) { Canvas(Modifier.size(22.dp)) { draw(tint) } }
 }
 
-/** حباب گفتگو با علامت تعجب (چت اضطراری) */
+/** چت اضطراری: حباب گفتگوی گرد دوتُن با علامت تعجب و دو موج کوچک سیگنال */
 fun DrawScope.emergencyChatIcon(c: Color) {
-    val w = size.width
-    val st = Stroke(w * .085f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    val bubble = Path().apply {
-        moveTo(w * .14f, w * .20f)
-        lineTo(w * .86f, w * .20f)
-        lineTo(w * .86f, w * .68f)
-        lineTo(w * .40f, w * .68f)
-        lineTo(w * .20f, w * .86f)
-        lineTo(w * .22f, w * .68f)
-        lineTo(w * .14f, w * .68f)
-        close()
-    }
-    drawPath(bubble, c, style = st)
-    drawLine(c, Offset(w * .5f, w * .32f), Offset(w * .5f, w * .47f), w * .09f, StrokeCap.Round)
-    drawCircle(c, w * .05f, Offset(w * .5f, w * .58f))
+    val bubble = "M3.5 6A2.5 2.5 0 0 1 6 3.5h10A2.5 2.5 0 0 1 18.5 6v7.5A2.5 2.5 0 0 1 16 16h-5.5L6 19.8V16A2.5 2.5 0 0 1 3.5 13.5z"
+    iconPath(bubble, c, 1.9f, fill = Brush.verticalGradient(listOf(c.copy(alpha = .42f), c.copy(alpha = .10f)), endY = size.height))
+    val u = size.width / 24f
+    drawLine(lerp(c, Color.White, .4f), Offset(11f * u, 6.6f * u), Offset(11f * u, 10.6f * u), 2.2f * u, StrokeCap.Round)
+    drawCircle(lerp(c, Color.White, .4f), 1.25f * u, Offset(11f * u, 13.2f * u))
+    // موج‌های سیگنال گوشه‌ی بالا (اضطراری: حتی وقتی اینترنت محدود است)
+    drawArc(c, -80f, 70f, false, Offset(16.5f * u, 1.2f * u), Size(5.6f * u, 5.6f * u), style = Stroke(1.6f * u, cap = StrokeCap.Round))
+    drawArc(c.copy(alpha = .6f), -80f, 70f, false, Offset(15.2f * u, -.2f * u), Size(8.4f * u, 8.4f * u), style = Stroke(1.4f * u, cap = StrokeCap.Round))
 }
 
-/** دو حلقه‌ی زنجیر (لینک اشتراک) */
+/** دو حلقه‌ی زنجیر در هم (لینک اشتراک)، دوتُن */
 fun DrawScope.linkIcon(c: Color) {
-    val w = size.width
-    val st = Stroke(w * .095f, cap = StrokeCap.Round)
-    rotate(-45f) {
-        drawRoundRect(c, Offset(w * .06f, w * .36f), Size(w * .48f, w * .28f), CornerRadius(w * .14f), style = st)
-        drawRoundRect(c, Offset(w * .46f, w * .36f), Size(w * .48f, w * .28f), CornerRadius(w * .14f), style = st)
-    }
+    val u = size.width / 24f
+    drawCircle(c.copy(alpha = .14f), 9f * u, center)
+    iconPath("M10 13.5a4.6 4.6 0 0 0 6.9.5l2.8-2.8a4.6 4.6 0 0 0-6.5-6.5l-1.6 1.6", c, 2.3f)
+    iconPath("M14 10.5a4.6 4.6 0 0 0-6.9-.5l-2.8 2.8a4.6 4.6 0 0 0 6.5 6.5l1.6-1.6", lerp(c, Color.White, .3f), 2.3f)
 }
 
+/** سر ربات راهنما برای دکمه‌ی سربرگ: سر گرد طلایی، صفحه‌ی صورت تیره، دو چشم روشن و آنتن */
+fun DrawScope.robotHeadIcon(c: Color) {
+    val u = size.width / 24f
+    val eye = K.Accent
+    drawLine(c, Offset(12f * u, 5.6f * u), Offset(12f * u, 2.8f * u), 1.6f * u, StrokeCap.Round)
+    drawCircle(eye, 1.6f * u, Offset(12f * u, 2.4f * u))
+    drawRoundRect(c, Offset(1.6f * u, 10f * u), Size(2.6f * u, 5.4f * u), CornerRadius(1.2f * u))
+    drawRoundRect(c, Offset(19.8f * u, 10f * u), Size(2.6f * u, 5.4f * u), CornerRadius(1.2f * u))
+    drawRoundRect(Brush.verticalGradient(listOf(lerp(c, Color.White, .35f), c, lerp(c, Color.Black, .35f)), startY = 5.5f * u, endY = 21f * u),
+        Offset(3.6f * u, 5.6f * u), Size(16.8f * u, 15f * u), CornerRadius(5.2f * u))
+    drawRoundRect(Color.Black.copy(alpha = .82f), Offset(5.6f * u, 9f * u), Size(12.8f * u, 8.2f * u), CornerRadius(3.6f * u))
+    for (x in listOf(9.3f, 14.7f)) {
+        drawCircle(eye.copy(alpha = .30f), 2.4f * u, Offset(x * u, 13.1f * u))
+        drawCircle(eye, 1.5f * u, Offset(x * u, 13.1f * u))
+        drawCircle(Color.White.copy(alpha = .9f), .55f * u, Offset((x - .5f) * u, 12.6f * u))
+    }
+    drawRoundRect(Color.White.copy(alpha = .35f), Offset(6.5f * u, 6.6f * u), Size(11f * u, 1.3f * u), CornerRadius(.7f * u))
+}
+
+/**
+ * نوار تب‌های پایین (۱.۲۹): قرص رنگی تب انتخاب‌شده با فنر از تبی به تب دیگر می‌لغزد، آیکون تب تازه کمی بالا
+ * می‌پرد و پر می‌شود. نوار و قرص هر دو برجسته (سایه و لبه‌ی نورانی).
+ */
 @Composable
 fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
-    val shape = RoundedCornerShape(D.RL)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = D.S3, vertical = D.S2).goldGlass(shape)
-            .padding(D.S1),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(D.S1),
+    val shape = RoundedCornerShape(D.RX)
+    val idx by animateFloatAsState(current.ordinal.toFloat(), spring(dampingRatio = .72f, stiffness = 420f), label = "nav")
+    val p = ThemeState.current
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().padding(horizontal = D.S3, vertical = D.S2).goldGlass(shape).padding(D.S1),
     ) {
-        KTab.entries.forEachIndexed { i, t ->
-            val sel = t == current
-            val p = ThemeState.current
-            val c = if (sel) (if (p.classic) K.Gold else p.onNav) else K.Sub
-            val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
-            val ts = RoundedCornerShape(D.RM)
-            // تب انتخاب‌شده: پر با گرادیان رنگ تم (navTop ← navBottom)، لبه‌ی روشن و درخشش ملایم
-            val selMod = Modifier
-                .drawBehind {
-                    val o = ts.createOutline(size, layoutDirection, this)
-                    for ((w, a) in listOf(10f to .08f, 5f to .16f)) drawOutline(o, p.gold.copy(alpha = a), style = Stroke(w.dp.toPx()))
+        val n = KTab.entries.size
+        val gap = D.S1
+        val tabW = (maxWidth - gap * (n - 1)) / n
+        // قرص لغزان زیر تب انتخاب‌شده (offset با جهت صفحه برمی‌گردد، مثل خود ردیف)
+        val ts = RoundedCornerShape(D.RL)
+        Box(
+            Modifier.offset(x = (tabW + gap) * idx).width(tabW).height(54.dp)
+                .then(if (p.classic) Modifier.goldGlass(ts, selected = true) else Modifier
+                    .drawBehind { liftShadow(ts.createOutline(size, layoutDirection, this), 4.dp.toPx(), .6f, p.gold) }
+                    .clip(ts)
+                    .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
+                    .drawWithContent {
+                        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f), Color.Transparent), endY = size.height * .5f))
+                        bevel(ts.createOutline(size, layoutDirection, this), 1f)
+                        drawContent()
+                    }
+                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .6f), p.goldLight.copy(alpha = .25f), p.goldDeep)), ts)),
+        )
+        Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            KTab.entries.forEachIndexed { i, t ->
+                val sel = t == current
+                val c = if (sel) (if (p.classic) K.Gold else p.onNav) else K.Sub
+                val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
+                val lift by animateFloatAsState(if (sel) 1f else 0f, spring(dampingRatio = .45f, stiffness = 380f), label = "lift")
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().clip(ts)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(t) }
+                        .guideTarget(ids[i]),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Canvas(Modifier.size(22.dp).graphicsLayer {
+                        translationY = -2.dp.toPx() * lift
+                        scaleX = 1f + .12f * lift; scaleY = 1f + .12f * lift
+                    }) { navIcon(i, c, lift) }
+                    Spacer(Modifier.height(3.dp))
+                    T(t.title, size = 11.sp, color = c, weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
                 }
-                .clip(ts)
-                .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
-                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f), p.goldLight.copy(alpha = .25f))), ts)
-            Column(
-                Modifier.weight(1f).then(if (sel) (if (p.classic) Modifier.goldGlass(ts, selected = true) else selMod) else Modifier.clip(ts))
-                    .clickable { onSelect(t) }
-                    .guideTarget(ids[i])
-                    .padding(vertical = D.S2),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Canvas(Modifier.size(D.Icon)) { navIcon(i, c) }
-                Spacer(Modifier.height(D.S1))
-                T(t.title, size = 11.sp, color = c, weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
             }
         }
     }
@@ -305,7 +329,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                             ModeColumn(
                                 ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
                                 modifier = Modifier.width(ModeColW).fillMaxHeight(.9f).guideTarget("protocols"),
-                                showDns = ui.dns.hasDns, onTap = act.tapMode, onLong = act.longMode,
+                                showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
                             )
                         }
                     }
@@ -323,7 +347,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     } else {
                         ModeHint(ui.mode)
                         if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
-                        StatsRow(ui)
+                        Box(Modifier.guideTarget("stats")) { StatsRow(ui) }
                     }
                     ui.sub?.let { UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount) }
                 }
@@ -555,11 +579,19 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp,
                 // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان (گیمینگ: شیشه‌ی تیره به رنگ گیمینگ و لبه‌ی نئونی چرخان)
                 val glowA = (.35f + .25f * lit * breathe) * (1f + .4f * env * amp * gOn)
                 drawCircle(Brush.radialGradient(listOf(lerp(K.Gold, Game, .6f * gameA).copy(alpha = glowA.coerceAtMost(1f)), Color.Transparent), c, r * 1.32f), r * 1.32f, c)
-                drawCircle(lerp(K.Ink, K.GoldDeep, .06f), r + 4.dp.toPx(), c)
+                // ۱.۲۹: به‌جای دایره‌ی تیره‌ی تخت دور دکمه (که روی تم‌های رنگی مثل یک لکه‌ی سیاه دیده می‌شد): سایه‌ی نرم
+                // زیر دکمه، بزل فلزی برجسته و رویه‌ای که از رنگ زمینه‌ی همان تم ساخته می‌شود
+                val sc = Offset(c.x, c.y + r * .12f)
+                drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Black.copy(alpha = .28f), Color.Transparent), sc, r * 1.28f), r * 1.28f, sc)
+                val bz = r + 5.dp.toPx()
+                drawCircle(Brush.verticalGradient(listOf(lerp(K.Surface2.copy(alpha = 1f), Color.White, .16f), K.Panel.copy(alpha = 1f), Color.Black), startY = c.y - bz, endY = c.y + bz), bz, c)
+                val faceBase = lerp(K.BgTop, K.Ink, .35f)
                 val glass = listOf(
-                    lerp(lerp(K.Ink, K.GoldDeep, .24f), lerp(K.Ink, Game, .2f), gameA), lerp(lerp(K.Ink, K.GoldDeep, .08f), lerp(K.Ink, Game, .08f), gameA), K.Ink,
+                    lerp(lerp(faceBase, K.GoldDeep, .26f), lerp(faceBase, Game, .22f), gameA), lerp(lerp(faceBase, K.GoldDeep, .09f), lerp(faceBase, Game, .09f), gameA), lerp(faceBase, Color.Black, .5f),
                 )
                 drawCircle(Brush.radialGradient(glass, Offset(c.x, c.y - r * .3f), r * 1.1f), r, c)
+                // سایه‌ی پایین رویه (گنبدی)
+                drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .38f)), startY = c.y + r * .1f, endY = c.y + r), r, c)
                 if (goldA > .01f) drawCircle(
                     Brush.verticalGradient(listOf(K.Shine, gold, K.GoldDeep, K.GoldLight), startY = c.y - r, endY = c.y + r),
                     r + 1.dp.toPx(), c, alpha = goldA, style = Stroke(5.dp.toPx()),

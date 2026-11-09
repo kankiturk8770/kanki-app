@@ -22,6 +22,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
@@ -95,9 +97,12 @@ fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad),
         verticalArrangement = Arrangement.spacedBy(D.CardGap),
     ) {
-        ServersHero(cards.size, cards.sumOf { c -> c.lines.count { it.tunnel != null } + c.lines.count { it.direct != null } }, Modifier.padding(top = D.S1))
+        // ۱.۲۹: فاصله‌ی بیشتر از سربرگ بالا و بین سربرگ، تست پینگ و کشورها
+        Spacer(Modifier.height(D.S2))
+        ServersHero(cards.size, cards.sumOf { c -> c.lines.count { it.tunnel != null } + c.lines.count { it.direct != null } })
         tip?.let { RobotBanner(it, onClose = act.closeTip) }
-        PingAllCard(ping, act.pingAll, Modifier.guideTarget("ping_all"))
+        PingAllCard(ping, act.pingAll, Modifier.padding(top = D.S2).guideTarget("ping_all"))
+        Spacer(Modifier.height(D.S2))
         if (cards.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
         }
@@ -113,16 +118,11 @@ fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?
 private fun ServersHero(countries: Int, configs: Int, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(D.RL)
     Row(
-        modifier.fillMaxWidth().clip(shape)
-            .background(Brush.linearGradient(listOf(K.Gold.copy(alpha = .20f), K.Gold.copy(alpha = .04f), K.Accent.copy(alpha = .08f))))
-            .border(1.dp, Brush.linearGradient(listOf(K.Gold.copy(alpha = .7f), K.Gold.copy(alpha = .12f), K.Accent.copy(alpha = .45f))), shape)
+        modifier.fillMaxWidth().goldGlass(shape, selected = true)
             .padding(D.CardPad),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        androidx.compose.foundation.Image(
-            androidx.compose.ui.res.painterResource(R.drawable.kanki_logo), contentDescription = null,
-            modifier = Modifier.size(60.dp).clip(CircleShape).border(1.5.dp, K.Gold.copy(alpha = .6f), CircleShape),
-        )
+        Logo3D(60.dp)
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
             T("سرورهای کانکی", size = D.TxtPage, color = K.Text, weight = FontWeight.Black, maxLines = 1)
@@ -165,7 +165,7 @@ private fun PingAllCard(p: PingAllUi, onStart: () -> Unit, modifier: Modifier = 
             if (p.running) {
                 Box(Modifier.size(width = 80.dp, height = D.BtnS), contentAlignment = Alignment.Center) { Spinner(D.Icon) }
             } else {
-                SmallGold(if (p.finished) "دوباره" else "شروع", Modifier.widthIn(min = 80.dp), onClick = onStart)
+                PingStartButton(if (p.finished) "دوباره" else "شروع", p.finished, onStart)
             }
         }
         Spacer(Modifier.height(D.S2))
@@ -176,6 +176,33 @@ private fun PingAllCard(p: PingAllUi, onStart: () -> Unit, modifier: Modifier = 
             else -> 0f
         }
         ProgressLine(f, K.Gold, height = 4.dp)
+    }
+}
+
+/** دکمه‌ی «شروع / دوباره» تست پینگ: قرص برجسته‌ی رنگ تم با آیکون پخش یا تکرار */
+@Composable
+private fun PingStartButton(text: String, again: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(D.BtnS + 4.dp).widthIn(min = 104.dp).goldFill(shape).pressable(onClick = onClick).padding(horizontal = D.S4),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(K.OnGold.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.size(12.dp)) {
+                val w = size.width
+                val c = K.OnGold
+                if (again) {
+                    drawArc(c, -60f, 290f, false, style = Stroke(w * .18f, cap = StrokeCap.Round))
+                    drawPath(Path().apply { moveTo(w * .78f, -w * .05f); lineTo(w * 1.02f, w * .30f); lineTo(w * .62f, w * .34f); close() }, c)
+                } else {
+                    // مثلث پخش؛ در فارسی هم رو به جلو (چپ‌به‌راست نمی‌چرخد، نماد جهانی است)
+                    drawPath(Path().apply { moveTo(w * .22f, w * .08f); lineTo(w * .92f, w * .5f); lineTo(w * .22f, w * .92f); close() }, c)
+                }
+            }
+        }
+        Spacer(Modifier.width(D.S2))
+        T(text, size = 14.sp, color = K.OnGold, weight = FontWeight.Black)
     }
 }
 

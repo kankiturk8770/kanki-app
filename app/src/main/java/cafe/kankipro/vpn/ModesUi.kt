@@ -4,6 +4,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +19,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -134,103 +144,60 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
 }
 
 /**
- * چهار کاشی حالت (هوشمند، گیمینگ، ضد فیلتر، DNS)؛ گیمینگ با نگه‌داشتن هم پنلش را باز می‌کند.
- * هر کاشی لبه و نور خودش را به رنگ همان حالت دارد: انتخاب‌شده لبه‌ی پررنگ با درخشش، بقیه لبه‌ی کم‌رنگ.
+ * حالت‌ها یک ستون عمودی کنار دکمه‌ی اتصال (از ۱.۲۸). از ۱.۲۹ هر حالت یک دکمه‌ی گرد برجسته است با اسمش زیرش؛
+ * DNS (اگر اشتراک دارد) همیشه آخر، زیر ضد فیلتر. live: VPN وصل است؛ دور دکمه‌ی حالتی که با آن وصلیم یک نور می‌چرخد.
  */
 @Composable
-fun ModeRow(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
-    val tap by rememberUpdatedState(onTap)
-    val long by rememberUpdatedState(onLong)
-    val compact = LocalCompact.current
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-        // DNS only for a subscription that has Kanki DNS (the selected mode always stays visible)
-        KMode.entries.filter { it != KMode.DNS || showDns || it == selected }.forEach { m ->
-            ModeTile(m, m == selected, enabled, Modifier.weight(1f).height(if (compact) D.TileS else D.Tile), if (compact) 18.dp else D.Icon, tap, long)
-        }
-    }
-}
-
-/**
- * همان کاشی‌های حالت، ولی یک ستون عمودی کنار دکمه‌ی اتصال (چیدمان صفحه‌ی اول از ۱.۲۸).
- * ارتفاع هر کاشی با فضای کنار دکمه جور می‌شود (۴۴ تا ۶۴dp) تا با چهار حالت (DNS) هم جا شود.
- */
-@Composable
-fun ModeColumn(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
+fun ModeColumn(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
     val modes = KMode.entries.filter { it != KMode.DNS || showDns || it == selected }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        val tileH = ((maxHeight - D.S2 * (modes.size - 1)) / modes.size).coerceIn(44.dp, 64.dp)
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(D.S2)) {
-            modes.forEach { m -> ModeTile(m, m == selected, enabled, Modifier.fillMaxWidth().height(tileH), if (tileH < 52.dp) 18.dp else D.Icon, tap, long) }
+        val slot = ((maxHeight - D.S2 * (modes.size - 1)) / modes.size).coerceIn(56.dp, 84.dp)
+        val d = (slot - 22.dp).coerceIn(38.dp, 54.dp)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(D.S2), horizontalAlignment = Alignment.CenterHorizontally) {
+            modes.forEach { m -> ModeOrb(m, m == selected, enabled, live && m == selected, d, tap, long) }
         }
     }
 }
 
-/** یک کاشی حالت: لبه و نور به رنگ خود حالت؛ زدن انتخاب می‌کند و نگه‌داشتن پنلش را باز می‌کند */
+/** یک حالت: دکمه‌ی گرد برجسته به رنگ خود حالت و اسمش زیرش؛ زدن انتخاب می‌کند و نگه‌داشتن پنلش را باز می‌کند */
 @Composable
-private fun ModeTile(m: KMode, sel: Boolean, enabled: Boolean, modifier: Modifier, icon: Dp, tap: (KMode) -> Unit, long: (KMode) -> Unit) {
+private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, live: Boolean, d: Dp, tap: (KMode) -> Unit, long: (KMode) -> Unit) {
     val mc = modeColor(m)
-    // روشن شدن نرم کاشی موقع انتخاب
     val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
-    val shape = RoundedCornerShape(D.RS)
+    val liveA by animateFloatAsState(if (live) 1f else 0f, tween(500), label = "live")
+    val press = remember { Animatable(1f) }
     Column(
-        modifier.modeGlass(shape, mc, lit)
-            .alpha(if (enabled) 1f else .5f)
+        Modifier.alpha(if (enabled) 1f else .5f)
+            .graphicsLayer { scaleX = press.value; scaleY = press.value }
             .pointerInput(m, enabled) {
                 if (enabled) detectTapGestures(
+                    onPress = { press.animateTo(.92f, tween(80)); tryAwaitRelease(); press.animateTo(1f, spring(Spring.DampingRatioMediumBouncy)) },
                     onTap = { tap(m) },
                     onLongPress = { long(m) },
                 )
             },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        ModeIcon(m, if (sel) lerp(mc, Color.White, .18f) else mc.copy(alpha = .8f), icon)
-        Spacer(Modifier.height(D.S1))
-        T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .78f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
+        Box(Modifier.size(d + 10.dp), contentAlignment = Alignment.Center) {
+            // وصل با همین حالت: یک نور دنباله‌دار دور دکمه می‌چرخد
+            if (liveA > .01f) {
+                val t = rememberInfiniteTransition(label = "ring")
+                val rot by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "rot")
+                Canvas(Modifier.fillMaxSize()) {
+                    val r = size.minDimension / 2 - 2.dp.toPx()
+                    drawCircle(mc.copy(alpha = .22f * liveA), r, style = Stroke(1.5.dp.toPx()))
+                    neonComet(lerp(mc, Color.White, .25f), rot, 110f, center, r, 2.dp.toPx(), liveA)
+                }
+            }
+            Box(Modifier.size(d).raisedCircle(mc, lit), contentAlignment = Alignment.Center) {
+                ModeIcon(m, if (sel) lerp(mc, Color.White, .22f) else mc.copy(alpha = .9f), d * .42f)
+            }
+        }
+        T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .8f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
     }
 }
-
-/**
- * شیشه‌ی کاشی حالت به رنگ خود حالت (lit: ۰ = انتخاب‌نشده، ۱ = انتخاب‌شده):
- * انتخاب‌نشده لبه‌ی ۱dp با ٪۳۰ رنگ و بدون درخشش؛ انتخاب‌شده لبه‌ی ۱.۵dp پررنگ، درخشش نرم بیرون و داخل کمی روشن‌تر.
- */
-fun Modifier.modeGlass(shape: RoundedCornerShape, c: Color, lit: Float): Modifier = this
-    .drawBehind {
-        if (lit > .01f) {
-            val o = shape.createOutline(size, layoutDirection, this)
-            for ((w, a) in listOf(11f to .06f, 6.5f to .12f, 3.2f to .26f)) drawOutline(o, c.copy(alpha = a * lit), style = Stroke(w.dp.toPx()))
-        }
-    }
-    .clip(shape)
-    .background(K.Surface)
-    .background(
-        Brush.linearGradient(
-            listOf(c.copy(alpha = .05f + .17f * lit), Color.White.copy(alpha = .015f), Color.Black.copy(alpha = .32f - .08f * lit), c.copy(alpha = .03f + .08f * lit)),
-        ),
-    )
-    .drawWithContent {
-        // براقی شیشه در نیمه‌ی بالا
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .07f + .07f * lit), Color.Transparent), endY = size.height * .5f))
-        drawContent()
-        // خط نور کوتاه وسط لبه‌ی پایین، به رنگ حالت (فقط برای انتخاب‌شده پررنگ)
-        val y = size.height - 1.dp.toPx()
-        val line = Brush.horizontalGradient(listOf(Color.Transparent, lerp(c, Color.White, .25f), Color.Transparent), startX = size.width * .2f, endX = size.width * .8f)
-        drawLine(line, Offset(size.width * .2f, y), Offset(size.width * .8f, y), 3.dp.toPx(), alpha = .3f * lit)
-        drawLine(line, Offset(size.width * .2f, y), Offset(size.width * .8f, y), 1.1.dp.toPx(), alpha = .25f + .75f * lit)
-    }
-    .border(
-        (1f + .5f * lit).dp,
-        Brush.linearGradient(
-            listOf(
-                lerp(c, Color.White, .3f * lit).copy(alpha = .30f + .70f * lit),
-                c.copy(alpha = .22f + .68f * lit),
-                c.copy(alpha = .30f + .70f * lit),
-            ),
-        ),
-        shape,
-    )
 
 /** یک خط باریک زیر کاشی‌ها: حالت انتخاب‌شده چه می‌کند */
 @Composable
@@ -416,16 +383,32 @@ fun ModeSheet(
             exit = slideOutVertically(tween(220)) { it } + fadeOut(),
         ) {
             val shape = RoundedCornerShape(topStart = D.RX, topEnd = D.RX)
+            // کشیدن سربرگ پنل به پایین می‌بندد (۱.۲۹)؛ کمتر از ۹۶dp با فنر برمی‌گردد
+            val drag = remember { Animatable(0f) }
+            val scope = rememberCoroutineScope()
+            val dragMod = Modifier.pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (drag.value > 96.dp.toPx()) { onClose(); scope.launch { drag.snapTo(0f) } }
+                        else scope.launch { drag.animateTo(0f, spring(Spring.DampingRatioMediumBouncy)) }
+                    },
+                    onDragCancel = { scope.launch { drag.animateTo(0f) } },
+                ) { _, dy -> scope.launch { drag.snapTo((drag.value + dy).coerceAtLeast(0f)) } }
+            }
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 660.dp).clip(shape)
+                Modifier.fillMaxWidth().heightIn(max = 660.dp)
+                    .graphicsLayer { translationY = drag.value }
+                    .clip(shape)
                     .background(Brush.verticalGradient(listOf(K.Surface.copy(alpha = 1f), K.Panel)))
                     .border(1.dp, Brush.verticalGradient(listOf(K.Gold.copy(alpha = .55f), K.Gold.copy(alpha = .08f))), shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                     .padding(horizontal = D.PagePad, vertical = D.S2),
             ) {
-                Box(Modifier.align(Alignment.CenterHorizontally).width(D.S6 * 2).height(4.dp).clip(CircleShape).background(K.Gold.copy(alpha = .3f)))
-                Spacer(Modifier.height(D.S3))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.fillMaxWidth().height(D.S5).then(dragMod), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(D.S6 * 2).height(5.dp).clip(CircleShape).background(K.Gold.copy(alpha = .45f)))
+                }
+                Spacer(Modifier.height(D.S1))
+                Row(Modifier.then(dragMod), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(D.IconBox + D.S1).clip(RoundedCornerShape(D.RS)).background(mc.copy(alpha = .10f)).border(1.dp, K.Gold.copy(alpha = .5f), RoundedCornerShape(D.RS)),
                         contentAlignment = Alignment.Center,
@@ -436,6 +419,15 @@ fun ModeSheet(
                         T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
                     }
                     trailing()
+                    Spacer(Modifier.width(D.S2))
+                    // دکمه‌ی بستن (قبلاً فقط با لمس روی نقشه بسته می‌شد)
+                    RoundIcon(D.IconBox, K.Sub, onClick = onClose) {
+                        Canvas(Modifier.size(14.dp)) {
+                            val w = size.width
+                            drawLine(K.Text, Offset(0f, 0f), Offset(w, w), w * .16f, StrokeCap.Round)
+                            drawLine(K.Text, Offset(w, 0f), Offset(0f, w), w * .16f, StrokeCap.Round)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(D.S2))
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { content() }

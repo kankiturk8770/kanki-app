@@ -37,12 +37,19 @@ data class SpeedUi(
 
 @Composable
 fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
-        Spacer(Modifier.height(D.S1))
+    // ۱.۲۹: روی صفحه‌ی بلند فضای خالی پایین نمی‌ماند؛ کارت و عقربه به وسط صفحه می‌آیند و عقربه بزرگ‌تر می‌شود
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val gaugeH = (maxHeight * .36f).coerceIn(232.dp, 300.dp)
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = D.PagePad),
+        verticalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        Column {
+        Spacer(Modifier.height(D.S2))
         Heading("تست سرعت", if (ui.viaVpn) "از داخل تونل کانکی" else "بدون VPN")
         tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = onCloseTip) }
-        Spacer(Modifier.height(D.S3))
-        KCard(Modifier.fillMaxWidth(), padding = D.CardPad) {
+        }
+        KCard(Modifier.fillMaxWidth().padding(vertical = D.S3), padding = D.CardPad) {
             // مرحله‌ها
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                 PhaseChip("ping", "پینگ UDP", ui, Modifier.weight(1f))
@@ -54,7 +61,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                 ui.running && (ui.phase == "down" || ui.phase == "up") -> ui.live
                 else -> ui.down ?: 0.0
             }
-            Box(Modifier.fillMaxWidth().height(232.dp).guideTarget("speed"), contentAlignment = Alignment.BottomCenter) {
+            Box(Modifier.fillMaxWidth().height(gaugeH).guideTarget("speed"), contentAlignment = Alignment.BottomCenter) {
                 SpeedGauge(shown, gaugeColor, Modifier.fillMaxSize())
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
                     T(String.format(java.util.Locale.US, "%.1f", shown), size = 40.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(gaugeColor, 18f), ltr = true)
@@ -118,7 +125,8 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                 size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
             )
         }
-        Spacer(Modifier.height(D.S4))
+        Spacer(Modifier.height(D.S2))
+    }
     }
 }
 
