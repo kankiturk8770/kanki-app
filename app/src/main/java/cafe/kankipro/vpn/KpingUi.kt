@@ -185,7 +185,7 @@ private fun KpingSettings(c: Color) {
                 T("خودکار", size = 13.sp, color = K.Text)
                 T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و پریتی را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
-            Switch(v.auto, { set(v.copy(auto = it)) }, colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn, uncheckedTrackColor = K.Panel))
+            GlassSwitch(v.auto, { set(v.copy(auto = it)) })
         }
         if (!v.auto) {
             T("نسخه‌ی دوم وقتی یک مسیر داری", size = 12.sp, color = K.Text)
@@ -201,7 +201,7 @@ private fun KpingSettings(c: Color) {
                     T("نسخه‌ی دوم روی هر دو مسیر", size = 13.sp, color = K.Text)
                     T("وقتی وای‌فای و دیتا هر دو ضعیف‌اند (حجم بیشتر)", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
                 }
-                Switch(v.every, { set(v.copy(every = it)) }, colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn, uncheckedTrackColor = K.Panel))
+                GlassSwitch(v.every, { set(v.copy(every = it)) })
             }
         }
     }

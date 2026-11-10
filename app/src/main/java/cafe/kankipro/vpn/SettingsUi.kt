@@ -136,13 +136,7 @@ fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChan
             T(title, size = D.TxtTitle, maxLines = 1)
             T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Switch(
-            checked = checked, onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn,
-                uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF), uncheckedBorderColor = Color(0x33FFFFFF),
-            ),
-        )
+        GlassSwitch(checked, onChange)
     }
 }
 

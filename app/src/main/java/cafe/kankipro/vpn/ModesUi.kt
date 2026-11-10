@@ -503,10 +503,7 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
             T(title, size = 13.sp, color = K.Text, weight = FontWeight.Bold)
             sub?.let { T(it, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal) }
         }
-        Switch(
-            checked = on, onCheckedChange = onChange, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn, uncheckedTrackColor = K.Panel),
-        )
+        GlassSwitch(on, onChange, enabled)
     }
 }
 

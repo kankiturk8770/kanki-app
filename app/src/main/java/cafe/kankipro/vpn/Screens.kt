@@ -699,10 +699,7 @@ private fun AppPickerPanel(title: String, sub: String, selected: List<String>, o
                                 T(app.label, size = 14.sp)
                                 T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
                             }
-                            Switch(
-                                checked = on, onCheckedChange = { onToggle(app.pkg) },
-                                colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold, uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF)),
-                            )
+                            GlassSwitch(on, { onToggle(app.pkg) })
                         }
                         HDivider()
                     }

@@ -293,17 +293,12 @@ fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) 
     ) { T(text, size = 13.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
 
-/** دکمه‌ی کوچک خطی (برجسته) */
+/** دکمه‌ی کوچک شیشه‌ای (۱.۳۲) با نوشته‌ی رنگی */
 @Composable
 fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(D.BtnS)
-            .drawBehind { liftShadow(shape.createOutline(size, layoutDirection, this), 3.dp.toPx(), .45f, color) }
-            .clip(shape).background(K.Panel.copy(alpha = .9f)).background(Brush.verticalGradient(listOf(color.copy(alpha = .16f), color.copy(alpha = .04f))))
-            .drawWithContent { bevel(shape.createOutline(size, layoutDirection, this), .8f, color); drawContent() }
-            .border(1.dp, color.copy(alpha = .7f), shape)
-            .pressable(onClick = onClick).padding(horizontal = D.S3),
+        modifier.height(D.BtnS).goldGlass(shape).pressable(onClick = onClick).padding(horizontal = D.S3),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = color, weight = FontWeight.Bold) }
 }
