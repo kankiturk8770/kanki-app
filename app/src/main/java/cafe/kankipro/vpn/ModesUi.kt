@@ -572,7 +572,7 @@ private fun PairHeader(c: Color) {
     Row(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
         for (k in listOf("تانل", "مستقیم")) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                T(k, size = 11.sp, color = if (k == "تانل") c else K.Sub, weight = FontWeight.Black)
+                T(k, size = 11.sp, color = Color.White, weight = FontWeight.Black)
             }
         }
     }
@@ -625,7 +625,7 @@ private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(5.dp).clip(CircleShape).background(dot))
             Spacer(Modifier.width(3.dp))
-            T(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 9.5.sp, color = if (selected) color else K.Sub, weight = FontWeight.SemiBold, maxLines = 1)
+            T(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 10.sp, color = Color.White, weight = FontWeight.Bold, maxLines = 1)
         }
         val p = sv.ping
         CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
