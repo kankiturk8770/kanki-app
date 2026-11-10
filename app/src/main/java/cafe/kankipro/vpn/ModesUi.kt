@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -144,67 +146,95 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
 }
 
 /**
- * چهار حالت روی یک مدار دور دکمه‌ی اتصال (۱.۳۲، طرح «Kanki Glass»): دو حالت سمت شروع صفحه (هوشمند بالا، گیمینگ
- * پایین) و دو حالت سمت مقابل (ضد فیلتر بالا، DNS پایین)، قرینه و با زاویه‌ی ±۳۴ درجه. دو قوس نقطه‌چین ظریف هر جفت را به
- * هم وصل می‌کنند و نوری آرام رویشان می‌دود. بدون DNS، ضد فیلتر وسط سمت مقابل می‌نشیند.
- * dial: قطر دکمه‌ی اتصال (جای حالت‌ها و اندازه‌شان با آن مقیاس می‌شود). live: VPN وصل است؛ دور حالتی که با آن وصلیم
- * یک نور می‌چرخد.
+ * چهار حالت روی یک مدار دور دکمه‌ی اتصال (۱.۳۲، طرح «Kanki Glass»): هوشمند و گیمینگ سمت شروع صفحه، ضد فیلتر و DNS سمت
+ * مقابل، قرینه. مرکز هر دایره دقیقاً روی جای خودش است و اسمش زیرش. دو خط منحنی نقطه‌چین هر جفت را از وسط پایینِ دکمه‌ی
+ * بالا به وسط بالای دکمه‌ی پایین (و برعکس در طرف مقابل) وصل می‌کنند؛ نور نئونی یک چرخه‌ی پیوسته دارد: هوشمند ← گیمینگ،
+ * محو؛ بعد DNS ← ضد فیلتر، محو؛ و دوباره از هوشمند. dial: قطر دکمه‌ی اتصال (جا و اندازه‌ی حالت‌ها با آن مقیاس می‌شود).
  */
 @Composable
 fun ModeOrbit(selected: KMode, dial: Dp, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
-    // DNS همیشه سر جایش می‌ماند (خواسته‌ی صاحب اپ): چهار دکمه‌ی ثابت و قرینه
-    @Suppress("UNUSED_VARIABLE") val hasDns = showDns
-    val dns = true
+    @Suppress("UNUSED_VARIABLE") val hasDns = showDns // DNS همیشه سر جایش می‌ماند (خواسته‌ی صاحب اپ)
     val s = dial / OrbBase
     val dx = dial * ORBIT_DX
     val dy = dial * ORBIT_DY
-    val d = (40.dp * s).coerceAtLeast(34.dp)
-    // جای هر حالت: x مثبت = سمت پایان صفحه (offset خودش با جهت صفحه برمی‌گردد)، y مثبت = پایین
-    val slots = buildList {
-        add(KMode.SMART to (-dx to -dy))
-        add(KMode.GAME to (-dx to dy))
-        if (dns) { add(KMode.FILTER to (dx to -dy)); add(KMode.DNS to (dx to dy)) } else add(KMode.FILTER to (dx * 1.12f to 0.dp))
-    }
+    val d = (47.dp * s).coerceAtLeast(40.dp)
+    val labelGap = 9.dp
+    val labelH = 16.dp
+    // x منفی = سمت شروع صفحه (offset خودش با جهت صفحه برمی‌گردد)، y مثبت = پایین
+    val slots = listOf(KMode.SMART to (-dx to -dy), KMode.GAME to (-dx to dy), KMode.FILTER to (dx to -dy), KMode.DNS to (dx to dy))
     val clock = motionTime()
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Box(modifier, contentAlignment = Alignment.Center) {
-        // دو قوس مدار (نقطه‌چین) و نوری که رویشان می‌دود
-        Canvas(Modifier.size(dial * ORBIT_R * 2)) {
-            val r = size.minDimension / 2
-            val tl = Offset(center.x - r, center.y - r)
-            val sz = Size(r * 2, r * 2)
+        Canvas(Modifier.fillMaxSize()) {
+            val c = center
+            val startSign = if (rtl) 1f else -1f // سمت شروع صفحه روی بوم
+            val dxp = dx.toPx(); val dyp = dy.toPx()
+            val rp = d.toPx() / 2
+            val below = rp + labelGap.toPx() + labelH.toPx() // زیر اسم دکمه‌ی بالا
+            val bulge = (dial * ORBIT_R).toPx() - dxp
+            fun curve(sign: Float, downward: Boolean): Path {
+                val x = c.x + sign * dxp
+                val top = Offset(x, c.y - dyp + below)
+                val bottom = Offset(x, c.y + dyp - rp - 3.dp.toPx())
+                val (p0, p1) = if (downward) top to bottom else bottom to top
+                return Path().apply { moveTo(p0.x, p0.y); quadraticBezierTo(x + sign * bulge * 2f, c.y, p1.x, p1.y) }
+            }
+            val right = curve(startSign, true)   // هوشمند ← گیمینگ
+            val left = curve(-startSign, false)  // DNS ← ضد فیلتر
             val dot = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(1.5.dp.toPx(), 5.5.dp.toPx())))
-            val run = (clock.value / 4.5f % 1f)
-            for (start in listOf(-34f, 146f)) {
-                drawArc(Color.White.copy(alpha = .16f), start, 68f, false, tl, sz, style = dot)
-                val head = start + 68f * run - 8f
-                val from = head.coerceAtLeast(start)
-                val to = (head + 16f).coerceAtMost(start + 68f)
-                if (to > from) {
-                    drawArc(K.Gold.copy(alpha = .35f), from, to - from, false, tl, sz, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
-                    drawArc(K.Gold, from, to - from, false, tl, sz, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(right, Color.White.copy(alpha = .16f), style = dot)
+            drawPath(left, Color.White.copy(alpha = .16f), style = dot)
+            // چرخه‌ی پیوسته: نیمه‌ی اول روی خط سمت شروع، نیمه‌ی دوم روی خط مقابل؛ سرِ نور در انتها محو می‌شود
+            val ph = clock.value / 3.6f % 1f
+            val path = if (ph < .5f) right else left
+            val u = (ph % .5f) * 2f
+            val pm = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+            val len = pm.length
+            val head = u * len * 1.2f
+            val tail = len * .3f
+            val a = when { head > len -> (1f - (head - len) / (len * .2f)).coerceIn(0f, 1f); head < len * .1f -> head / (len * .1f); else -> 1f }
+            val from = (head - tail).coerceIn(0f, len)
+            val to = head.coerceIn(0f, len)
+            if (to > from && a > 0f) {
+                val seg = Path()
+                pm.getSegment(from, to, seg, true)
+                drawPath(seg, K.Gold.copy(alpha = .3f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(seg, K.Gold.copy(alpha = a), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(seg, Color.White.copy(alpha = .8f * a), style = Stroke(.8.dp.toPx(), cap = StrokeCap.Round))
+                if (head <= len) {
+                    val hp = pm.getPosition(to)
+                    drawCircle(K.Gold.copy(alpha = a), 2.6.dp.toPx(), hp)
+                    drawCircle(Color.White.copy(alpha = a), 1.3.dp.toPx(), hp)
                 }
             }
         }
         slots.forEach { (m, xy) ->
-            // مرکز دایره‌ی حالت روی مدار؛ اسم زیرش
-            Box(Modifier.offset(x = xy.first, y = xy.second + 8.dp * s)) {
-                ModeOrb(m, m == selected, enabled, live && m == selected, d, tap, long)
+            // مرکز دایره درست روی جای حالت، اسم زیرش
+            Box(Modifier.offset(x = xy.first, y = xy.second)) {
+                ModeOrb(m, m == selected, enabled, d, tap, long)
+            }
+            // اسم کمی رو به بیرون، تا روی قاب دکمه‌ی اتصال نیفتد
+            Box(Modifier.offset(x = xy.first + (if (xy.first < 0.dp) (-6).dp else 6.dp), y = xy.second + d / 2 + labelGap + labelH / 2 - 2.dp)) {
+                T(m.title, size = 10.5.sp, color = if (m == selected) K.Gold else K.Sub, weight = if (m == selected) FontWeight.Black else FontWeight.Bold, maxLines = 1)
             }
         }
     }
 }
 
-/** یک حالت: دکمه‌ی گرد برجسته به رنگ خود حالت و اسمش زیرش؛ زدن انتخاب می‌کند و نگه‌داشتن پنلش را باز می‌کند */
+/**
+ * دکمه‌ی گرد یک حالت: شیشه‌ی تمیز و تاریک (حالت فعال هم هیچ ته‌رنگی روی دکمه نمی‌گیرد) با آیکون به رنگ تم. حالت فعال: دو
+ * نقطه‌ی نور با دنباله‌ی ظریف، ۱۸۰ درجه از هم، کمی بیرون از لبه آرام دورش می‌چرخند. زدن انتخاب، نگه‌داشتن پنلش را باز می‌کند.
+ */
 @Composable
-private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, live: Boolean, d: Dp, tap: (KMode) -> Unit, long: (KMode) -> Unit) {
-    val mc = modeColor(m)
-    val lit by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "mode")
-    val liveA by animateFloatAsState(if (live) 1f else 0f, tween(500), label = "live")
+private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, d: Dp, tap: (KMode) -> Unit, long: (KMode) -> Unit) {
+    val ac = K.Gold
+    val selA by animateFloatAsState(if (sel) 1f else 0f, tween(300), label = "sel")
     val press = remember { Animatable(1f) }
-    Column(
-        Modifier.alpha(if (enabled) 1f else .5f)
+    val clock = motionTime()
+    Box(
+        Modifier.size(d + 14.dp).alpha(if (enabled) 1f else .5f)
             .graphicsLayer { scaleX = press.value; scaleY = press.value }
             .pointerInput(m, enabled) {
                 if (enabled) detectTapGestures(
@@ -213,24 +243,30 @@ private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, live: Boolean, d: 
                     onLongPress = { long(m) },
                 )
             },
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(d + 8.dp), contentAlignment = Alignment.Center) {
-            // وصل با همین حالت: یک نور دنباله‌دار دور دکمه می‌چرخد
-            if (liveA > .01f) {
-                val t = rememberInfiniteTransition(label = "ring")
-                val rot by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "rot")
-                Canvas(Modifier.fillMaxSize()) {
-                    val r = size.minDimension / 2 - 2.dp.toPx()
-                    drawCircle(mc.copy(alpha = .22f * liveA), r, style = Stroke(1.5.dp.toPx()))
-                    neonComet(lerp(mc, Color.White, .25f), rot, 110f, center, r, 2.dp.toPx(), liveA)
+        if (selA > .01f) Canvas(Modifier.fillMaxSize()) {
+            val r = d.toPx() / 2 + 4.dp.toPx()
+            val tl = Offset(center.x - r, center.y - r)
+            val sz = Size(r * 2, r * 2)
+            val rot = clock.value * 70f % 360f
+            for (k in 0 until 2) {
+                val headDeg = rot + k * 180f
+                // دنباله: چند تکه‌ی باریک که رو به سر پررنگ می‌شوند (بدون محو پهن)
+                val n = 10
+                for (i in 0 until n) {
+                    val f = (i + 1f) / n
+                    drawArc(ac.copy(alpha = selA * f * .9f), headDeg - 70f + 70f * i / n, 70f / n + .5f, false, tl, sz, style = Stroke(1.6.dp.toPx() * (.5f + .5f * f), cap = StrokeCap.Round))
                 }
-            }
-            Box(Modifier.size(d).raisedCircle(mc, lit), contentAlignment = Alignment.Center) {
-                ModeIcon(m, if (sel) lerp(mc, Color.White, .22f) else mc.copy(alpha = .9f), d * .42f)
+                val rad = Math.toRadians(headDeg.toDouble())
+                val hp = Offset(center.x + r * kotlin.math.cos(rad).toFloat(), center.y + r * kotlin.math.sin(rad).toFloat())
+                drawCircle(ac.copy(alpha = selA), 2.6.dp.toPx(), hp)
+                drawCircle(Color.White.copy(alpha = selA), 1.3.dp.toPx(), hp)
             }
         }
-        T(m.title, size = 10.5.sp, color = if (sel) mc else K.Sub, weight = if (sel) FontWeight.Black else FontWeight.Bold, shadow = if (sel) glow(mc, 10f) else null, maxLines = 1)
+        Box(Modifier.size(d).raisedCircle(ac, 0f), contentAlignment = Alignment.Center) {
+            ModeIcon(m, if (sel) ac else ac.copy(alpha = .8f), d * .46f)
+        }
     }
 }
 
@@ -572,7 +608,7 @@ private fun PairHeader(c: Color) {
     Row(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
         for (k in listOf("تانل", "مستقیم")) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                T(k, size = 11.sp, color = if (k == "تانل") c else K.Sub, weight = FontWeight.Black)
+                T(k, size = 11.sp, color = Color.White, weight = FontWeight.Black)
             }
         }
     }
@@ -625,7 +661,7 @@ private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(5.dp).clip(CircleShape).background(dot))
             Spacer(Modifier.width(3.dp))
-            T(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 9.5.sp, color = if (selected) color else K.Sub, weight = FontWeight.SemiBold, maxLines = 1)
+            T(sv.tag?.takeIf { label == "تانل" && it != tr("تانل") } ?: label, size = 10.sp, color = Color.White, weight = FontWeight.Bold, maxLines = 1)
         }
         val p = sv.ping
         CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
