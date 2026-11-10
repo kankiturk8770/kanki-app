@@ -470,7 +470,7 @@ fun DrawScope.bevel(o: Outline, strength: Float = 1f, light: Color = Color.White
 }
 
 /**
- * شیشه‌ی کریستالی (۱.۳۲، طرح «Kanki Glass»): رویه‌ی نیمه‌شفاف تیره با نور مورب، برق لبه‌ی بالا (specular)، سایه‌ی
+ * شیشه‌ی کریستالی (۱.۳۲، طرح «Kanki Glass»؛ از ۱.۳۲.۳ برق سفید نصف شد تا رویه تیره و شفاف بماند و فقط لبه بدرخشد): رویه‌ی نیمه‌شفاف تیره با نور مورب، برق لبه‌ی بالا (specular)، سایه‌ی
  * عمیق زیر کارت برای جدا شدن لایه‌ها و لبه‌ی گرادیانی (سفید در گوشه‌ی بالا، کم‌رنگ وسط، رنگ تم در گوشه‌ی پایین).
  * selected: ته‌رنگ تم داخل شیشه، لبه‌ی نئونی کامل و درخشش ملایم بیرون لبه (فقط برای حالت فعال).
  */
@@ -489,12 +489,12 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         drawRect(
             Brush.linearGradient(
                 if (selected) listOf(lerp(K.BgMid, tint, .24f), lerp(K.BgMid, tint, .09f), lerp(K.BgMid, Color.Black, .4f))
-                else listOf(lerp(K.BgMid, Color.White, if (small) .13f else .10f), lerp(K.BgMid, Color.White, .035f), lerp(K.BgMid, Color.Black, .36f)),
+                else listOf(lerp(K.BgMid, Color.White, if (small) .065f else .05f), lerp(K.BgMid, Color.White, .018f), lerp(K.BgMid, Color.Black, .36f)),
                 Offset(0f, 0f), Offset(w * .45f, h * 1.1f),
             ),
         )
         // نور نرم گوشه‌ی بالا
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (small) .20f else .12f), Color.Transparent), Offset(w * .28f, 0f), maxOf(w, h) * .75f), maxOf(w, h) * .75f, Offset(w * .28f, 0f))
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (small) .10f else .06f), Color.Transparent), Offset(w * .28f, 0f), maxOf(w, h) * .75f), maxOf(w, h) * .75f, Offset(w * .28f, 0f))
     }
     .drawWithContent {
         val small = size.height < 76.dp.toPx()
@@ -504,7 +504,7 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         val capH = if (small) h * .8f else minOf(h * .5f, 70.dp.toPx())
         val capW = if (small) w * .72f else w * .9f
         drawOval(
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = if (small) .28f else .16f), Color.Transparent), startY = 0f, endY = capH * .55f),
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = if (small) .14f else .08f), Color.Transparent), startY = 0f, endY = capH * .55f),
             Offset((w - capW) / 2, -capH * .45f), Size(capW, capH),
         )
         // سایه‌ی داخلی پایین و خط نور لبه‌ی بالا
@@ -534,7 +534,7 @@ fun Modifier.goldFill(shape: androidx.compose.ui.graphics.Shape, enabled: Boolea
     .clip(shape)
     .drawBehind { drawRect(Brush.verticalGradient(listOf(K.GoldLight, K.Gold, lerp(K.Gold, K.GoldDeep, .55f)))) }
     .drawWithContent {
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f), Color.White.copy(alpha = .08f), Color.Transparent), endY = size.height * .5f))
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .04f), Color.Transparent), endY = size.height * .5f))
         drawRect(Brush.verticalGradient(listOf(Color.Transparent, K.GoldDeep.copy(alpha = .45f)), startY = size.height * .55f, endY = size.height))
         drawContent()
     }
