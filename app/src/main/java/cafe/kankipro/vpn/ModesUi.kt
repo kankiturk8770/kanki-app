@@ -726,6 +726,8 @@ fun GameSheet(
             }
         }
         T(f?.sub ?: "", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(top = D.S2, start = D.S1))
+        // KPING: آمار زنده (مسیرها، نجات‌یافته‌ها) و تنظیماتش
+        if (fam == "kping" && f?.servers?.isNotEmpty() == true) KpingPanel(c)
         if (fam == "kankimix" && f?.servers?.isNotEmpty() == true) {
             SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
         }

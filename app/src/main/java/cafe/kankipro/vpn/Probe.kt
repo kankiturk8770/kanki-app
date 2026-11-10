@@ -161,6 +161,18 @@ object Probe {
         }.getOrNull()
     }
 
+    /** KPING: سه PING خود هسته مستقیم به رله‌ی ایران (فقط با کلید همین کاربر جواب می‌دهد) */
+    fun kping(ctx: Context, cfg: String): Long? {
+        val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
+        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libkping.so")
+        if (!bin.exists()) return null
+        return runCatching {
+            val p = ProcessBuilder(bin.path, "ping", "--url", link).redirectErrorStream(true).start()
+            if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return null }
+            p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
+        }.getOrNull()
+    }
+
     /** Xray روی TCP: زمان اتصال به پورت خود اینباند (کمترین از دو بار) */
     fun tcp(net: Network?, host: String, port: Int): Long? {
         val ip = resolve(net, host) ?: return null

@@ -435,7 +435,8 @@ class AppState private constructor(context: Context) {
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
-                            MtunCfg.PROTO, KpingCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
+                            MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
+                            KpingCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.kping(ctx, t) } }
                             else -> null
                         }
                         val q = series?.let { Modes.gameQ(it) }
@@ -1107,8 +1108,8 @@ class AppState private constructor(context: Context) {
         }
         // microtun: پروتکل جدای همان سرور (لینک mtun://)
         val mtun = a.mtun.map { ConfigLink(protocol = MtunCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
-        // KPING (فقط تسترها): همان هسته‌ی microtun، با لینک سرور ایران؛ زیر همان سرور خارج دیده می‌شود
-        val kping = a.kping.map { ConfigLink(protocol = KpingCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
+        // KPING (فقط تسترها): هسته‌ی خودش (kping://)، به سرور ایران؛ زیر همان سرور خارج دیده می‌شود
+        val kping = a.kping.map { ConfigLink(protocol = KpingCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "kping:" + it.url) }
         return a.copy(configs = base + direct + xray + mtun + kping, exits = a.exits + xrayExits)
     }
 
@@ -1131,6 +1132,7 @@ class AppState private constructor(context: Context) {
     private fun fetchConfig(l: ConfigLink, forceNet: Boolean = false): String {
         if (l.protocol == "xray") return XrayCfg.wrap(l.url.removePrefix("xray:"))
         if (l.url.startsWith("mtun:")) return MtunCfg.wrap(l.url.removePrefix("mtun:"))
+        if (l.url.startsWith("kping:")) return KpingCfg.wrap(l.url.removePrefix("kping:"))
         val url = l.url.substringBefore("#direct=")
         val host = l.url.substringAfter("#direct=", "")
         val cacheKey = "cfg_${l.node}_${l.protocol.substringBefore("-direct")}"
@@ -1432,7 +1434,8 @@ class AppState private constructor(context: Context) {
         protocol == "hysteria2" -> txt.contains("hysteria2://")
         protocol == "kankimix" -> KmixUri.isKmix(txt)
         protocol == "xray" -> XrayCfg.isXray(txt)
-        MtunCfg.isProto(protocol) || protocol == KpingCfg.PROTO -> MtunCfg.isMtun(txt)
+        MtunCfg.isProto(protocol) -> MtunCfg.isMtun(txt)
+        protocol == KpingCfg.PROTO -> KpingCfg.isKping(txt)
         else -> txt.contains("[Interface]") && txt.contains("[Peer]")
     }
 
@@ -1484,10 +1487,8 @@ class AppState private constructor(context: Context) {
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
                 if (link.protocol == KpingCfg.PROTO) {
-                    // KPING: فقط پابجی (هر نسخه‌ای که نصب است) و سرویس‌های گوگل وارد VPN می‌شوند؛ بقیه‌ی گوشی اینترنت خودش را دارد
-                    val games = KpingCfg.installed(ctx)
-                    if (games.isEmpty()) throw IllegalStateException(KPING_NO_GAME)
-                    cfg = KpingCfg.onlyApps(cfg, games)
+                    // KPING: فقط پابجی گلوبال و سرویس‌های گوگل اینترنت دارند؛ بقیه‌ی برنامه‌ها بسته (دروازه، در خود سرویس)
+                    if (!KpingCfg.installed(ctx) || !AppGate.supported) throw IllegalStateException(KPING_NO_GAME)
                 } else if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
                     cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
                 }
@@ -1513,7 +1514,7 @@ class AppState private constructor(context: Context) {
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             if (!quiet && wantTry && e.message == KPING_NO_GAME) {
-                error = "پابجی روی این گوشی نصب نیست؛ KPING فقط برای پابجی است."
+                error = if (!AppGate.supported) "KPING روی اندروید ۱۰ به بالا کار می‌کند (بستن بقیه‌ی برنامه‌ها)." else "پابجی گلوبال روی این گوشی نصب نیست؛ KPING فقط برای پابجی گلوبال است."
             } else if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
                 errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
@@ -1766,7 +1767,8 @@ class AppState private constructor(context: Context) {
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
-                    MtunCfg.PROTO, KpingCfg.PROTO -> Probe.mtun(ctx, text)
+                    MtunCfg.PROTO -> Probe.mtun(ctx, text)
+                    KpingCfg.PROTO -> Probe.kping(ctx, text)
                     "hysteria2" -> Probe.hysteria(ctx, net, text)
                     else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
                         // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس
@@ -1840,4 +1842,4 @@ val PROTO_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amneziawg-di
 val FAMILY_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amnezia", "xray", "wireguard")
 
 /** خطای اتصال KPING وقتی هیچ نسخه‌ی پابجی نصب نیست */
-const val KPING_NO_GAME = "kping: no PUBG installed"
+const val KPING_NO_GAME = "kping: PUBG Global is not installed"
