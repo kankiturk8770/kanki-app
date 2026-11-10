@@ -43,7 +43,7 @@ abstract class ShotsBase {
 
     protected val out = File(System.getProperty("user.dir") ?: ".", "build/shots").apply { mkdirs() }
 
-    protected fun shot(name: String, theme: String = "crimson", content: @Composable () -> Unit) {
+    protected fun shot(name: String, theme: String = "kanki", content: @Composable () -> Unit) {
         ThemeState.set(theme)
         LangState.lang = "fa"
         rule.mainClock.autoAdvance = false
@@ -96,7 +96,7 @@ abstract class ShotsBase {
         sub = SubUi("42", "23", "Active", 0.35f),
         alert = alert,
         countries = countries(),
-        pins = pins.map { if (vs != VState.OFF && it.iso == "DE") it.copy(selected = true) else it },
+        pins = pins.map { if (it.iso == "DE") it.copy(selected = true) else it },
         userGeo = Geo(35.7, 51.4),
         userIso = "IR",
         locationIso = if (on) "DE" else "IR",
@@ -265,7 +265,7 @@ abstract class ShotsBase {
      */
     @Test fun z_orb_frames() {
         org.junit.Assume.assumeTrue(System.getenv("KANKI_ORB") != null)
-        ThemeState.set("gold")
+        ThemeState.set("malt")
         LangState.lang = "fa"
         val mode = mutableStateOf(KMode.SMART)
         val vs = mutableStateOf(VState.OFF)
@@ -313,7 +313,7 @@ abstract class ShotsBase {
 
     @Test fun z_game_frames() {
         org.junit.Assume.assumeTrue(System.getenv("KANKI_ORB") != null)
-        ThemeState.set("gold")
+        ThemeState.set("malt")
         LangState.lang = "fa"
         val mode = mutableStateOf(KMode.SMART)
         val vs = mutableStateOf(VState.OFF)
@@ -365,18 +365,18 @@ abstract class ShotsBase {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h640dp-xxhdpi")
 class ShotsSmall : ShotsBase() {
-    @Test fun w01() = shot("s640-crimson-01-home-off", "crimson", pgHomeOff())
-    @Test fun w02() = shot("s640-crimson-02-home-on", "crimson", pgHomeOn())
-    @Test fun w03() = shot("s640-crimson-03-home-smart", "crimson", pgHomeSmart())
-    @Test fun w04() = shot("s640-crimson-11-home-connecting", "crimson", pgHomeConnecting())
-    @Test fun w05() = shot("s640-crimson-12-home-dns", "crimson", pgHomeDns())
-    @Test fun w06() = shot("s640-crimson-13-home-alert", "crimson", pgHomeAlert())
-    @Test fun w07() = shot("s640-crimson-14-home-game-on", "crimson", pgHomeGameOn())
-    @Test fun w08() = shot("s640-gold-01-home-off", "gold", pgHomeOff())
-    @Test fun w09() = shot("s640-gold-02-home-on", "gold", pgHomeOn())
-    @Test fun w10() = shot("s640-purple-01-home-off", "purple", pgHomeOff())
-    @Test fun w11() = shot("s640-purple-02-home-on", "purple", pgHomeOn())
-    @Test fun w12() = shot("s640-crimson-04-servers", "crimson", pgServers())
+    @Test fun w01() = shot("s640-kanki-01-home-off", "kanki", pgHomeOff())
+    @Test fun w02() = shot("s640-kanki-02-home-on", "kanki", pgHomeOn())
+    @Test fun w03() = shot("s640-kanki-03-home-smart", "kanki", pgHomeSmart())
+    @Test fun w04() = shot("s640-kanki-11-home-connecting", "kanki", pgHomeConnecting())
+    @Test fun w05() = shot("s640-kanki-12-home-dns", "kanki", pgHomeDns())
+    @Test fun w06() = shot("s640-kanki-13-home-alert", "kanki", pgHomeAlert())
+    @Test fun w07() = shot("s640-kanki-14-home-game-on", "kanki", pgHomeGameOn())
+    @Test fun w08() = shot("s640-malt-01-home-off", "malt", pgHomeOff())
+    @Test fun w09() = shot("s640-malt-02-home-on", "malt", pgHomeOn())
+    @Test fun w10() = shot("s640-cyber-01-home-off", "cyber", pgHomeOff())
+    @Test fun w11() = shot("s640-cyber-02-home-on", "cyber", pgHomeOn())
+    @Test fun w12() = shot("s640-kanki-04-servers", "kanki", pgServers())
 }
 
 /** گوشی‌های میانی (۳۶۰×۷۴۰ و ۳۹۳×۸۵۰): همان حالت‌های صفحه‌ی خانه، برای چک جا شدن بدون اسکرول */
@@ -384,22 +384,22 @@ class ShotsSmall : ShotsBase() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h740dp-xxhdpi")
 class ShotsMid : ShotsBase() {
-    @Test fun a01() = shot("s740-crimson-01-home-off", "crimson", pgHomeOff())
-    @Test fun a02() = shot("s740-crimson-02-home-on", "crimson", pgHomeOn())
-    @Test fun a03() = shot("s740-crimson-03-home-smart", "crimson", pgHomeSmart())
-    @Test fun a04() = shot("s740-crimson-12-home-dns", "crimson", pgHomeDns())
-    @Test fun a05() = shot("s740-crimson-13-home-alert", "crimson", pgHomeAlert())
+    @Test fun a01() = shot("s740-kanki-01-home-off", "kanki", pgHomeOff())
+    @Test fun a02() = shot("s740-kanki-02-home-on", "kanki", pgHomeOn())
+    @Test fun a03() = shot("s740-kanki-03-home-smart", "kanki", pgHomeSmart())
+    @Test fun a04() = shot("s740-kanki-12-home-dns", "kanki", pgHomeDns())
+    @Test fun a05() = shot("s740-kanki-13-home-alert", "kanki", pgHomeAlert())
 }
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w393dp-h850dp-xxhdpi")
 class ShotsTall : ShotsBase() {
-    @Test fun b01() = shot("s850-crimson-01-home-off", "crimson", pgHomeOff())
-    @Test fun b02() = shot("s850-crimson-02-home-on", "crimson", pgHomeOn())
-    @Test fun b03() = shot("s850-crimson-03-home-smart", "crimson", pgHomeSmart())
-    @Test fun b04() = shot("s850-crimson-12-home-dns", "crimson", pgHomeDns())
-    @Test fun b05() = shot("s850-crimson-13-home-alert", "crimson", pgHomeAlert())
+    @Test fun b01() = shot("s850-kanki-01-home-off", "kanki", pgHomeOff())
+    @Test fun b02() = shot("s850-kanki-02-home-on", "kanki", pgHomeOn())
+    @Test fun b03() = shot("s850-kanki-03-home-smart", "kanki", pgHomeSmart())
+    @Test fun b04() = shot("s850-kanki-12-home-dns", "kanki", pgHomeDns())
+    @Test fun b05() = shot("s850-kanki-13-home-alert", "kanki", pgHomeAlert())
 }
 
 // ------------------------------------------------------------------ عکس‌های اصلی: همه‌ی صفحه‌ها در هر چهار تم (۴۱۱×۹۱۵dp)
@@ -407,90 +407,92 @@ class ShotsTall : ShotsBase() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w411dp-h915dp-xxhdpi")
 class Shots : ShotsBase() {
-    @Test fun g01() = shot("gold-01-home-off", "gold", pgHomeOff())
-    @Test fun g02() = shot("gold-02-home-on", "gold", pgHomeOn())
-    @Test fun g03() = shot("gold-03-home-smart", "gold", pgHomeSmart())
-    @Test fun g04() = shot("gold-04-servers", "gold", pgServers())
-    @Test fun g05() = shot("gold-05-speed", "gold", pgSpeed())
-    @Test fun g06() = shot("gold-06-settings", "gold", pgSettings())
-    @Test fun g07() = shot("gold-07-account", "gold", pgAccount())
-    @Test fun g08() = shot("gold-08-gaming", "gold", pgGame())
-    @Test fun g09() = shot("gold-09-intro", "gold", pgIntro())
-    @Test fun g10() = shot("gold-10-emergency", "gold", pgEmergency())
+    @Test fun l01() = shot("kanki-00-login", "kanki") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
+    @Test fun l02() = shot("malt-00-login", "malt") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
+    @Test fun g01() = shot("malt-01-home-off", "malt", pgHomeOff())
+    @Test fun g02() = shot("malt-02-home-on", "malt", pgHomeOn())
+    @Test fun g03() = shot("malt-03-home-smart", "malt", pgHomeSmart())
+    @Test fun g04() = shot("malt-04-servers", "malt", pgServers())
+    @Test fun g05() = shot("malt-05-speed", "malt", pgSpeed())
+    @Test fun g06() = shot("malt-06-settings", "malt", pgSettings())
+    @Test fun g07() = shot("malt-07-account", "malt", pgAccount())
+    @Test fun g08() = shot("malt-08-gaming", "malt", pgGame())
+    @Test fun g09() = shot("malt-09-intro", "malt", pgIntro())
+    @Test fun g10() = shot("malt-10-emergency", "malt", pgEmergency())
 
     // ------------------------------------------------------------------ تم زرشکی (AMOLED)
-    @Test fun m01() = shot("crimson-01-home-off", "crimson", pgHomeOff())
-    @Test fun m02() = shot("crimson-02-home-on", "crimson", pgHomeOn())
-    @Test fun m03() = shot("crimson-03-home-smart", "crimson", pgHomeSmart())
-    @Test fun m04() = shot("crimson-04-servers", "crimson", pgServers())
-    @Test fun m05() = shot("crimson-05-speed", "crimson", pgSpeed())
-    @Test fun m06() = shot("crimson-06-settings", "crimson", pgSettings())
-    @Test fun m07() = shot("crimson-07-account", "crimson", pgAccount())
-    @Test fun m08() = shot("crimson-08-gaming", "crimson", pgGame())
-    @Test fun m09() = shot("crimson-09-intro", "crimson", pgIntro())
-    @Test fun m10() = shot("crimson-10-emergency", "crimson", pgEmergency())
+    @Test fun m01() = shot("kanki-01-home-off", "kanki", pgHomeOff())
+    @Test fun m02() = shot("kanki-02-home-on", "kanki", pgHomeOn())
+    @Test fun m03() = shot("kanki-03-home-smart", "kanki", pgHomeSmart())
+    @Test fun m04() = shot("kanki-04-servers", "kanki", pgServers())
+    @Test fun m05() = shot("kanki-05-speed", "kanki", pgSpeed())
+    @Test fun m06() = shot("kanki-06-settings", "kanki", pgSettings())
+    @Test fun m07() = shot("kanki-07-account", "kanki", pgAccount())
+    @Test fun m08() = shot("kanki-08-gaming", "kanki", pgGame())
+    @Test fun m09() = shot("kanki-09-intro", "kanki", pgIntro())
+    @Test fun m10() = shot("kanki-10-emergency", "kanki", pgEmergency())
 
     // ------------------------------------------------------------------ تم زرد کانکی
-    @Test fun y01() = shot("yellow-01-home-off", "yellow", pgHomeOff())
-    @Test fun y02() = shot("yellow-02-home-on", "yellow", pgHomeOn())
-    @Test fun y03() = shot("yellow-03-home-smart", "yellow", pgHomeSmart())
-    @Test fun y04() = shot("yellow-04-servers", "yellow", pgServers())
-    @Test fun y05() = shot("yellow-05-speed", "yellow", pgSpeed())
-    @Test fun y06() = shot("yellow-06-settings", "yellow", pgSettings())
-    @Test fun y07() = shot("yellow-07-account", "yellow", pgAccount())
-    @Test fun y08() = shot("yellow-08-gaming", "yellow", pgGame())
-    @Test fun y09() = shot("yellow-09-intro", "yellow", pgIntro())
-    @Test fun y10() = shot("yellow-10-emergency", "yellow", pgEmergency())
+    @Test fun y01() = shot("vulcan-01-home-off", "vulcan", pgHomeOff())
+    @Test fun y02() = shot("vulcan-02-home-on", "vulcan", pgHomeOn())
+    @Test fun y03() = shot("vulcan-03-home-smart", "vulcan", pgHomeSmart())
+    @Test fun y04() = shot("vulcan-04-servers", "vulcan", pgServers())
+    @Test fun y05() = shot("vulcan-05-speed", "vulcan", pgSpeed())
+    @Test fun y06() = shot("vulcan-06-settings", "vulcan", pgSettings())
+    @Test fun y07() = shot("vulcan-07-account", "vulcan", pgAccount())
+    @Test fun y08() = shot("vulcan-08-gaming", "vulcan", pgGame())
+    @Test fun y09() = shot("vulcan-09-intro", "vulcan", pgIntro())
+    @Test fun y10() = shot("vulcan-10-emergency", "vulcan", pgEmergency())
 
     // ------------------------------------------------------------------ تم‌های تک‌رنگ ۱.۲۸ (سیاه و لیمویی، یاقوت کبود، فیروزه، آمتیست)
-    @Test fun t01() = shot("lime-01-home-off", "lime", pgHomeOff())
-    @Test fun t02() = shot("lime-02-home-on", "lime", pgHomeOn())
-    @Test fun t03() = shot("lime-04-servers", "lime", pgServers())
-    @Test fun t04() = shot("lime-06-settings", "lime", pgSettings())
-    @Test fun t05() = shot("lime-08-gaming", "lime", pgGame())
-    @Test fun t06() = shot("lime-11-game-on", "lime", pgHomeGameOn())
-    @Test fun t07() = shot("lime-09-intro", "lime", pgIntro())
-    @Test fun t11() = shot("sapphire-01-home-off", "sapphire", pgHomeOff())
-    @Test fun t12() = shot("sapphire-02-home-on", "sapphire", pgHomeOn())
-    @Test fun t13() = shot("sapphire-04-servers", "sapphire", pgServers())
-    @Test fun t14() = shot("sapphire-11-game-on", "sapphire", pgHomeGameOn())
-    @Test fun t21() = shot("turquoise-01-home-off", "turquoise", pgHomeOff())
-    @Test fun t22() = shot("turquoise-02-home-on", "turquoise", pgHomeOn())
-    @Test fun t23() = shot("turquoise-04-servers", "turquoise", pgServers())
-    @Test fun t24() = shot("turquoise-11-game-on", "turquoise", pgHomeGameOn())
-    @Test fun t31() = shot("amethyst-01-home-off", "amethyst", pgHomeOff())
-    @Test fun t32() = shot("amethyst-02-home-on", "amethyst", pgHomeOn())
-    @Test fun t33() = shot("amethyst-04-servers", "amethyst", pgServers())
-    @Test fun t34() = shot("amethyst-11-game-on", "amethyst", pgHomeGameOn())
+    @Test fun t01() = shot("tiffany-01-home-off", "tiffany", pgHomeOff())
+    @Test fun t02() = shot("tiffany-02-home-on", "tiffany", pgHomeOn())
+    @Test fun t03() = shot("tiffany-04-servers", "tiffany", pgServers())
+    @Test fun t04() = shot("tiffany-06-settings", "tiffany", pgSettings())
+    @Test fun t05() = shot("tiffany-08-gaming", "tiffany", pgGame())
+    @Test fun t06() = shot("tiffany-11-game-on", "tiffany", pgHomeGameOn())
+    @Test fun t07() = shot("tiffany-09-intro", "tiffany", pgIntro())
+    @Test fun t11() = shot("cyprus-01-home-off", "cyprus", pgHomeOff())
+    @Test fun t12() = shot("cyprus-02-home-on", "cyprus", pgHomeOn())
+    @Test fun t13() = shot("cyprus-04-servers", "cyprus", pgServers())
+    @Test fun t14() = shot("cyprus-11-game-on", "cyprus", pgHomeGameOn())
+    @Test fun t21() = shot("tiffany-01-home-off", "tiffany", pgHomeOff())
+    @Test fun t22() = shot("tiffany-02-home-on", "tiffany", pgHomeOn())
+    @Test fun t23() = shot("tiffany-04-servers", "tiffany", pgServers())
+    @Test fun t24() = shot("tiffany-11-game-on", "tiffany", pgHomeGameOn())
+    @Test fun t31() = shot("cyber-01-home-off", "cyber", pgHomeOff())
+    @Test fun t32() = shot("cyber-02-home-on", "cyber", pgHomeOn())
+    @Test fun t33() = shot("cyber-04-servers", "cyber", pgServers())
+    @Test fun t34() = shot("cyber-11-game-on", "cyber", pgHomeGameOn())
 
     // ------------------------------------------------------------------ گیمینگ وصل (آدمک‌ها روی حلقه) در هر چهار تم
-    @Test fun q01() = shot("crimson-11-game-on", "crimson", pgHomeGameOn())
-    @Test fun q02() = shot("gold-11-game-on", "gold", pgHomeGameOn())
-    @Test fun q03() = shot("yellow-11-game-on", "yellow", pgHomeGameOn())
-    @Test fun q04() = shot("purple-11-game-on", "purple", pgHomeGameOn())
+    @Test fun q01() = shot("kanki-11-game-on", "kanki", pgHomeGameOn())
+    @Test fun q02() = shot("malt-11-game-on", "malt", pgHomeGameOn())
+    @Test fun q03() = shot("vulcan-11-game-on", "vulcan", pgHomeGameOn())
+    @Test fun q04() = shot("cyber-11-game-on", "cyber", pgHomeGameOn())
 
     // ------------------------------------------------------------------ ربات راهنما: پنل گیمینگ، کارت کشور، دکمه‌ی اتصال
-    @Test fun r01() = guideShot("gold-12-guide-game", "gold", 4, pgGame())
-    @Test fun r02() = guideShot("gold-13-guide-servers", "gold", 11, pgServers())
-    @Test fun r05() = guideShot("gold-15-guide-ping", "gold", 7, pgGame())
-    @Test fun r03() = guideShot("crimson-12-guide-connect", "crimson", 1, pgHomeOff())
-    @Test fun r06() = guideShot("yellow-12-guide-modes", "yellow", 3, pgHomeOff())
-    @Test fun r07() = guideShot("yellow-13-guide-game-only", "yellow", 5, pgGame())
+    @Test fun r01() = guideShot("malt-12-guide-game", "malt", 4, pgGame())
+    @Test fun r02() = guideShot("malt-13-guide-servers", "malt", 11, pgServers())
+    @Test fun r05() = guideShot("malt-15-guide-ping", "malt", 7, pgGame())
+    @Test fun r03() = guideShot("kanki-12-guide-connect", "kanki", 1, pgHomeOff())
+    @Test fun r06() = guideShot("vulcan-12-guide-modes", "vulcan", 3, pgHomeOff())
+    @Test fun r07() = guideShot("vulcan-13-guide-game-only", "vulcan", 5, pgGame())
     @Test fun r04() {
         Guide.asking = true
-        try { shot("gold-14-guide-ask", "gold", pgGuide(pgHomeOff())) } finally { Guide.asking = false }
+        try { shot("malt-14-guide-ask", "malt", pgGuide(pgHomeOff())) } finally { Guide.asking = false }
     }
 
     // ------------------------------------------------------------------ تم بنفش سلطنتی
-    @Test fun n01() = shot("purple-01-home-off", "purple", pgHomeOff())
-    @Test fun n02() = shot("purple-02-home-on", "purple", pgHomeOn())
-    @Test fun n03() = shot("purple-03-home-smart", "purple", pgHomeSmart())
-    @Test fun n04() = shot("purple-04-servers", "purple", pgServers())
-    @Test fun n05() = shot("purple-05-speed", "purple", pgSpeed())
-    @Test fun n06() = shot("purple-06-settings", "purple", pgSettings())
-    @Test fun n07() = shot("purple-07-account", "purple", pgAccount())
-    @Test fun n08() = shot("purple-08-gaming", "purple", pgGame())
-    @Test fun n09() = shot("purple-09-intro", "purple", pgIntro())
-    @Test fun n10() = shot("purple-10-emergency", "purple", pgEmergency())
+    @Test fun n01() = shot("cyber-01-home-off", "cyber", pgHomeOff())
+    @Test fun n02() = shot("cyber-02-home-on", "cyber", pgHomeOn())
+    @Test fun n03() = shot("cyber-03-home-smart", "cyber", pgHomeSmart())
+    @Test fun n04() = shot("cyber-04-servers", "cyber", pgServers())
+    @Test fun n05() = shot("cyber-05-speed", "cyber", pgSpeed())
+    @Test fun n06() = shot("cyber-06-settings", "cyber", pgSettings())
+    @Test fun n07() = shot("cyber-07-account", "cyber", pgAccount())
+    @Test fun n08() = shot("cyber-08-gaming", "cyber", pgGame())
+    @Test fun n09() = shot("cyber-09-intro", "cyber", pgIntro())
+    @Test fun n10() = shot("cyber-10-emergency", "cyber", pgEmergency())
 
 }
