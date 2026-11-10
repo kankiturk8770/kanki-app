@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- زمینه‌ی آیکون: تیره با گرمای ملایم آتشی از پایین -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="66" android:gradientRadius="78"
+                android:startColor="#FF2A0E07" android:centerColor="#FF120706" android:endColor="#FF060404" />
+        </aapt:attr>
+    </path>
+</vector>
