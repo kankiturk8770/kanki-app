@@ -198,7 +198,7 @@ abstract class ShotsBase {
         Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) }
         AccountSheet(true, account, AccountActions())
     }
-    protected fun pgGame(): @Composable () -> Unit = {
+    protected fun pgGame(init: String = "kankimix"): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.GAME), HomeActions()) }
         // ترکیه: مستقیم ۶۱ و تانلش ۹۰ روبه‌رویش، حتی اگر تانل آلمان (۸۱) بهتر باشد؛ هلند فقط مستقیم
         val servers = listOf(
@@ -212,11 +212,15 @@ abstract class ShotsBase {
             visible = true,
             families = listOf(
                 GameFamilyUi("kankimix", "KANKI MIX", "مخصوص بازی", servers),
+                GameFamilyUi("kping", "KPING", "", listOf(
+                    SheetServer("tr", "kping", "🇹🇷", "ترکیه · استانبول", "تانل", 74, "tunnel"),
+                    SheetServer("de", "kping", "🇩🇪", "آلمان · فرانکفورت", "تانل", 88, "tunnel"),
+                )),
                 GameFamilyUi("hysteria2", "Hysteria2", "روی UDP", servers.map { it.copy(proto = "hysteria2") }),
                 GameFamilyUi("amnezia", "Amnezia", "ضد فیلتر", servers.map { it.copy(proto = if (it.side == "tunnel") "amneziawg" else "amneziawg-direct") }),
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
-            initFamily = "kankimix", current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
+            initFamily = init, current = "tr|" + (if (init == "kping") "kping" else "kankimix"), currentAuto = false, busy = false, kmixDup = true,
             onKmixDup = {}, gameOnly = true, gameCount = 2, onGameOnly = {}, onPickGames = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
@@ -429,6 +433,7 @@ class Shots : ShotsBase() {
     @Test fun m06() = shot("kanki-06-settings", "kanki", pgSettings())
     @Test fun m07() = shot("kanki-07-account", "kanki", pgAccount())
     @Test fun m08() = shot("kanki-08-gaming", "kanki", pgGame())
+    @Test fun m08k() = shot("kanki-08-gaming-kping", "kanki", pgGame("kping"))
     @Test fun m09() = shot("kanki-09-intro", "kanki", pgIntro())
     @Test fun m10() = shot("kanki-10-emergency", "kanki", pgEmergency())
 
