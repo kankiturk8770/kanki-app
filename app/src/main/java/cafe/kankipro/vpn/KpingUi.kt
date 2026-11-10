@@ -15,6 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,17 +45,22 @@ private fun PathIcon(d: String, on: Boolean, c: Color, size: Int = 20) {
 @Composable
 fun KpingPanel(c: Color) {
     var st by remember { mutableStateOf(HyEngine.kpStat.takeIf { HyEngine.kping }) }
+    // ۲۴ ثانیه‌ی آخر هر شاخص، برای نمودار کوچک هر کارت
+    val hist = remember { List(4) { mutableStateListOf<Float>() } }
     LaunchedEffect(Unit) {
         while (true) {
             st = HyEngine.kpStat.takeIf { HyEngine.kping }
+            st?.let { s ->
+                val vals = listOf(s.ping.toFloat(), s.jit.toFloat(), kpLoss(s).toFloat(), (s.rescued + s.fixed).toFloat())
+                vals.forEachIndexed { i, v -> hist[i].add(v); if (hist[i].size > 24) hist[i].removeAt(0) }
+            }
             delay(1000)
         }
     }
     var open by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(D.RS)
+    val shape = RoundedCornerShape(D.RL)
     Column(
-        Modifier.fillMaxWidth().padding(top = D.S2).clip(shape)
-            .background(c.copy(alpha = .08f)).border(1.dp, c.copy(alpha = .25f), shape).padding(D.S3),
+        Modifier.fillMaxWidth().padding(top = D.S2).goldGlass(shape, tint = c).padding(D.S3),
         verticalArrangement = Arrangement.spacedBy(D.S2),
     ) {
         val s = st
@@ -76,10 +85,14 @@ fun KpingPanel(c: Color) {
                     }, size = 12.sp, color = K.Text,
                 )
             }
+            // چهار شاخص زنده، هر کدام کارت کوچک با آیکون و نمودار ۲۴ ثانیه‌ی آخر
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                Stat("پینگ", if (s.ping > 0) "${s.ping.toInt()} ms" else "—", Modifier.weight(1f))
-                Stat("لرزش", if (s.ping > 0) "${s.jit.toInt()} ms" else "—", Modifier.weight(1f))
-                Stat("نجات‌یافته", "${s.rescued + s.fixed}", Modifier.weight(1f))
+                Metric("پینگ", if (s.ping > 0) "${s.ping.toInt()}" else "—", "ms", ICON_PING, hist[0], c, false, Modifier.weight(1f))
+                Metric("لرزش", if (s.ping > 0) "${s.jit.toInt()}" else "—", "ms", ICON_JIT, hist[1], c, false, Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                Metric("افت", String.format(java.util.Locale.US, "%.1f", kpLoss(s)), "%", ICON_LOSS, hist[2], c, false, Modifier.weight(1f))
+                Metric("نجات‌یافته", "${s.rescued + s.fixed}", "", ICON_SAVE, hist[3], c, true, Modifier.weight(1f))
             }
             // هر مسیر: پینگ، افت خودش، و چند بسته را فقط همین مسیر رساند (دیگری گمش کرده بود)
             s.paths.forEach { p ->
@@ -107,11 +120,49 @@ fun KpingPanel(c: Color) {
     }
 }
 
+private const val ICON_PING = "M3 12h4l2-6 4 12 2-6h6"
+private const val ICON_JIT = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2"
+private const val ICON_LOSS = "M12 4v13m0 0 5-5m-5 5-5-5M5 21h14"
+private const val ICON_SAVE = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10ZM9 12l2 2 4-4"
+
+/** افت مؤثر: وقتی هر دو مسیر زنده‌اند کمترینِ دو مسیر (هر بسته از هر دو می‌رود)، وگرنه افت همان مسیر */
+private fun kpLoss(s: KpStat): Double = s.paths.filter { it.alive }.minOfOrNull { it.loss } ?: 0.0
+
+/** یک شاخص KPING: آیکون در دکمه‌ی کوچک، اسم و عدد، و زیرش نمودار کوچک ۲۴ ثانیه‌ی آخر با نقطه‌ی نورانی سرِ آن */
 @Composable
-private fun Stat(label: String, value: String, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x0CFFFFFF)).padding(vertical = D.S2), horizontalAlignment = Alignment.CenterHorizontally) {
-        T(value, size = 14.sp, color = K.Text, weight = FontWeight.Black, ltr = true)
-        T(label, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+private fun Metric(label: String, value: String, unit: String, icon: String, hist: List<Float>, c: Color, hot: Boolean, modifier: Modifier) {
+    val shape = RoundedCornerShape(D.RM)
+    Column(modifier.goldGlass(shape, selected = hot, tint = c).padding(horizontal = D.S2, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(26.dp).then(if (hot) Modifier.goldFill(RoundedCornerShape(8.dp)) else Modifier.raisedCircle(c)), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(14.dp)) { iconPath(icon, if (hot) K.OnGold else c, 2.2f) }
+            }
+            Spacer(Modifier.width(6.dp))
+            T(label, size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1, modifier = Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.Bottom) {
+                T(value, size = 15.sp, color = if (hot) c else K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
+                if (unit.isNotEmpty()) {
+                    Spacer(Modifier.width(3.dp))
+                    T(unit, size = 9.5.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.padding(bottom = 2.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+            if (hist.size < 2) {
+                drawLine(c.copy(alpha = .25f), Offset(0f, size.height * .7f), Offset(size.width, size.height * .7f), 1.dp.toPx())
+                return@Canvas
+            }
+            val lo = hist.min(); val hi = hist.max()
+            val span = (hi - lo).coerceAtLeast(1e-3f)
+            val pts = hist.mapIndexed { i, v -> Offset(size.width * i / (hist.size - 1), size.height - 2.dp.toPx() - (v - lo) / span * (size.height - 4.dp.toPx())) }
+            val line = Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
+            val area = Path().apply { addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
+            drawPath(area, c.copy(alpha = .14f))
+            drawPath(line, c, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round))
+            drawCircle(c.copy(alpha = .4f), 3.5.dp.toPx(), pts.last())
+            drawCircle(Color.White, 1.8.dp.toPx(), pts.last())
+        }
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -212,35 +213,42 @@ fun Spinner(size: Dp = 16.dp, color: Color = K.Gold) {
 }
 
 /**
- * شیشه‌ی دایره‌ای برجسته (۱.۲۹) برای همه‌ی دکمه‌های گرد (سربرگ، حالت‌ها، دکمه‌های آیکون‌دار):
- * سایه‌ی نرم زیرش، رویه‌ی گنبدی (روشن بالا، تیره پایین)، نور لبه‌ی بالا و حلقه‌ی رنگی. lit: ۰ عادی تا ۱ انتخاب‌شده.
+ * دکمه‌ی گرد کریستالی (۱.۳۲) برای همه‌ی دکمه‌های گرد (سربرگ، حالت‌ها، آیکون‌ها): سایه‌ی عمیق زیرش، رویه‌ی شیشه‌ای
+ * تیره با برق بالا، لبه‌ی گرادیانی (سفید بالا، رنگ پایین). lit: ۰ عادی تا ۱ انتخاب‌شده (ته‌رنگ رنگ داخل شیشه، حلقه‌ی
+ * نئونی کامل و درخشش ملایم).
  */
 fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
     .drawBehind {
         val o = CircleShape.createOutline(size, layoutDirection, this)
-        liftShadow(o, 5.dp.toPx(), .65f, tint.copy(alpha = .5f + .5f * lit))
-        if (lit > .01f) for ((w, a) in listOf(10f to .07f, 6f to .14f, 3f to .28f)) drawCircle(tint.copy(alpha = a * lit), size.minDimension / 2, style = Stroke(w.dp.toPx()))
+        liftShadow(o, 5.dp.toPx(), .5f)
+        if (lit > .01f) for ((w, a) in listOf(12f to .06f, 7f to .12f, 3f to .24f)) drawCircle(tint.copy(alpha = a * lit), size.minDimension / 2, style = Stroke(w.dp.toPx()))
     }
     .clip(CircleShape)
-    .background(K.Panel.copy(alpha = 1f))
     .background(
-        Brush.radialGradient(
-            listOf(lerp(K.Surface2.copy(alpha = 1f), tint, .16f + .22f * lit), lerp(K.Panel.copy(alpha = 1f), tint, .04f + .08f * lit), Color.Black.copy(alpha = .9f)),
-            center = Offset.Unspecified, radius = Float.POSITIVE_INFINITY,
+        Brush.verticalGradient(
+            listOf(lerp(lerp(K.BgMid, Color.White, .10f), tint, .20f * lit), lerp(lerp(K.BgMid, Color.Black, .45f), tint, .08f * lit)),
         ),
     )
     .drawWithContent {
         val r = size.minDimension / 2
-        // رویه‌ی گنبدی: نور نرم بالا-چپ و سایه‌ی پایین
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f + .08f * lit), Color.Transparent), Offset(size.width * .38f, size.height * .26f), r * .9f), r)
-        bevel(CircleShape.createOutline(size, layoutDirection, this), .9f + .3f * lit, lerp(tint, Color.White, .55f))
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), Offset(size.width * .34f, size.height * .2f), r * .95f), r)
+        // برق نیم‌دایره‌ی بالا
+        drawOval(
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent), startY = 0f, endY = size.height * .45f),
+            Offset(size.width * .18f, size.height * .03f), Size(size.width * .64f, size.height * .42f),
+        )
+        if (lit > .01f) drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = .22f * lit), Color.Transparent), center, r), r)
         drawContent()
     }
     .border(
-        (1.2f + .6f * lit).dp,
-        if (ThemeState.current.metal) metalBrush()
-        else Brush.verticalGradient(
-            listOf(lerp(tint, Color.White, .35f + .25f * lit), tint.copy(alpha = .55f + .4f * lit), lerp(tint, Color.Black, .45f).copy(alpha = .9f)),
+        (1f + .4f * lit).dp,
+        Brush.linearGradient(
+            listOf(
+                lerp(Color.White.copy(alpha = .55f), lerp(tint, Color.White, .5f), lit),
+                lerp(Color.White.copy(alpha = .08f), tint, lit),
+                Color.Black.copy(alpha = .4f * (1f - lit)),
+                tint.copy(alpha = .5f + .5f * lit),
+            ),
         ),
         CircleShape,
     )
