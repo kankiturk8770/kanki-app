@@ -482,44 +482,35 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
     }
     .clip(shape)
     .drawBehind {
-        // کوچک (دکمه، چیپ، خانه): شیشه‌ی کریستالی روشن‌تر مثل طرح؛ بزرگ (کارت): شیشه‌ی تیره‌تر و آرام‌تر
+        // همه (دکمه، چیپ، کارت): شیشه‌ی کریستالی مثل طرح؛ رویه‌ی روشن‌تر بالا-چپ، تیره پایین-راست
         val small = size.height < 76.dp.toPx()
         val w = size.width
         val h = size.height
-        if (small) {
-            drawRect(
-                Brush.linearGradient(
-                    if (selected) listOf(lerp(K.BgMid, tint, .22f), lerp(K.BgMid, tint, .08f).copy(alpha = 1f), lerp(K.BgMid, Color.Black, .4f))
-                    else listOf(lerp(K.BgMid, Color.White, .11f), lerp(K.BgMid, Color.White, .03f), lerp(K.BgMid, Color.Black, .38f)),
-                    Offset(0f, 0f), Offset(w * .35f, h),
-                ),
-            )
-        } else {
-            drawRect(K.Surface)
-            drawRect(
-                Brush.linearGradient(
-                    if (selected) listOf(tint.copy(alpha = .20f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .18f))
-                    else listOf(Color.White.copy(alpha = .10f), Color.White.copy(alpha = .025f), Color.Black.copy(alpha = .16f)),
-                    Offset(0f, 0f), Offset(w, h),
-                ),
-            )
-        }
+        drawRect(
+            Brush.linearGradient(
+                if (selected) listOf(lerp(K.BgMid, tint, .24f), lerp(K.BgMid, tint, .09f), lerp(K.BgMid, Color.Black, .4f))
+                else listOf(lerp(K.BgMid, Color.White, if (small) .13f else .10f), lerp(K.BgMid, Color.White, .035f), lerp(K.BgMid, Color.Black, .36f)),
+                Offset(0f, 0f), Offset(w * .45f, h * 1.1f),
+            ),
+        )
         // نور نرم گوشه‌ی بالا
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (small) .18f else .07f), Color.Transparent), Offset(w * .3f, 0f), maxOf(w, h) * .8f), maxOf(w, h) * .8f, Offset(w * .3f, 0f))
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (small) .20f else .12f), Color.Transparent), Offset(w * .28f, 0f), maxOf(w, h) * .75f), maxOf(w, h) * .75f, Offset(w * .28f, 0f))
     }
     .drawWithContent {
         val small = size.height < 76.dp.toPx()
         val w = size.width
         val h = size.height
-        // کلاهک براق شیشه (نیم‌بیضی بالا)، مثل دکمه‌های طرح
-        if (small) drawOval(
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .22f else .26f), Color.Transparent), startY = 0f, endY = h * .45f),
-            Offset(w * .14f, -h * .38f), Size(w * .72f, h * .8f),
-        ) else drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .11f else .08f), Color.Transparent), endY = h * .35f))
+        // کلاهک براق شیشه (نیم‌بیضی بالا)، مثل دکمه‌های طرح؛ روی کارت بزرگ پهن‌تر و کم‌ارتفاع‌تر
+        val capH = if (small) h * .8f else minOf(h * .5f, 70.dp.toPx())
+        val capW = if (small) w * .72f else w * .9f
+        drawOval(
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = if (small) .28f else .16f), Color.Transparent), startY = 0f, endY = capH * .55f),
+            Offset((w - capW) / 2, -capH * .45f), Size(capW, capH),
+        )
         // سایه‌ی داخلی پایین و خط نور لبه‌ی بالا
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = if (small) .30f else .22f)), startY = h * .55f, endY = h))
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = if (small) .30f else .24f)), startY = h * .6f, endY = h))
         val o = shape.createOutline(size, layoutDirection, this)
-        drawOutline(o, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (small) .45f else .30f), Color.Transparent), endY = h * .35f), style = Stroke(1.2.dp.toPx()))
+        drawOutline(o, Brush.verticalGradient(listOf(Color.White.copy(alpha = .5f), Color.Transparent), endY = minOf(h * .35f, 40.dp.toPx())), style = Stroke(1.2.dp.toPx()))
         drawContent()
     }
     .border(

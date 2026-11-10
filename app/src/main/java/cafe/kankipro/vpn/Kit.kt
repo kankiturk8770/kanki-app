@@ -226,16 +226,17 @@ fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
     .clip(CircleShape)
     .background(
         Brush.verticalGradient(
-            listOf(lerp(lerp(K.BgMid, Color.White, .10f), tint, .20f * lit), lerp(lerp(K.BgMid, Color.Black, .45f), tint, .08f * lit)),
+            listOf(lerp(lerp(K.BgMid, Color.White, .17f), tint, .22f * lit), lerp(lerp(K.BgMid, Color.Black, .42f), tint, .08f * lit)),
         ),
     )
     .drawWithContent {
         val r = size.minDimension / 2
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), Offset(size.width * .34f, size.height * .2f), r * .95f), r)
-        // برق نیم‌دایره‌ی بالا
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .24f), Color.Transparent), Offset(size.width * .34f, size.height * .2f), r * .95f), r)
+        // سایه‌ی داخلی پایین و برق نیم‌دایره‌ی بالا (کلاهک شیشه)
+        drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .35f)), startY = size.height * .55f, endY = size.height), r)
         drawOval(
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent), startY = 0f, endY = size.height * .45f),
-            Offset(size.width * .18f, size.height * .03f), Size(size.width * .64f, size.height * .42f),
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = .40f), Color.Transparent), startY = 0f, endY = size.height * .46f),
+            Offset(size.width * .16f, size.height * .04f), Size(size.width * .68f, size.height * .44f),
         )
         if (lit > .01f) drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = .22f * lit), Color.Transparent), center, r), r)
         drawContent()
@@ -244,7 +245,7 @@ fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
         (1f + .4f * lit).dp,
         Brush.linearGradient(
             listOf(
-                lerp(Color.White.copy(alpha = .55f), lerp(tint, Color.White, .5f), lit),
+                lerp(Color.White.copy(alpha = .7f), lerp(tint, Color.White, .5f), lit),
                 lerp(Color.White.copy(alpha = .08f), tint, lit),
                 Color.Black.copy(alpha = .4f * (1f - lit)),
                 tint.copy(alpha = .5f + .5f * lit),
