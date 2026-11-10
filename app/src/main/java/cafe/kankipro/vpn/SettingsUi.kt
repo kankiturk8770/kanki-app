@@ -16,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -127,9 +126,6 @@ private fun Group(title: String, modifier: Modifier = Modifier, content: @Compos
     KCard(modifier.fillMaxWidth(), padding = D.CardPad, content = content)
 }
 
-/** جای ثابت انتهای هر ردیف تنظیمات: کلید و فلش‌ها در یک راستا */
-private val TrailW = 48.dp
-
 @Composable
 fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().height(D.RowH), verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +135,13 @@ fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChan
             T(title, size = D.TxtTitle, maxLines = 1)
             T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Box(Modifier.width(TrailW), contentAlignment = Alignment.Center) { GlassSwitch(checked, onChange, small = true) }
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = K.OnGold, checkedTrackColor = K.ToggleOn,
+                uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF), uncheckedBorderColor = Color(0x33FFFFFF),
+            ),
+        )
     }
 }
 
@@ -158,12 +160,10 @@ fun MenuRow(
             T(title, size = D.TxtTitle, color = if (danger) K.Red else K.Text, maxLines = 1)
             T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Box(Modifier.width(TrailW), contentAlignment = Alignment.Center) {
-            when {
-                danger -> {}
-                arrow -> Chevron(K.Gold)
-                else -> T(if (expanded) "▲" else "▼", size = 12.sp, color = K.Gold)
-            }
+        when {
+            danger -> {}
+            arrow -> Chevron(K.Gold)
+            else -> T(if (expanded) "▲" else "▼", size = 12.sp, color = K.Gold)
         }
     }
 }
@@ -210,12 +210,14 @@ private fun DnsRow(title: String, sub: String, selected: Boolean, onClick: () ->
     }
 }
 
-/**
- * انتخاب تم (۱.۳۲): شش تم شیشه‌ای در دو ردیف سه‌تایی. هر خانه یک دایره از زمینه و رنگ نئونی همان تم و نامش؛
- * انتخاب‌شده حلقه‌ی نئونی می‌گیرد.
- */
+/** انتخاب تم: چهار تم AMOLED — زرشکی (پیش‌فرض)، طلایی، زرد کانکی، بنفش سلطنتی */
 @Composable
 fun ThemePicker(onSet: (String) -> Unit) {
+    // تم‌های تازه اول، چهار تم قبلی ردیف دوم
+    val items = listOf(
+        "lime" to "سیاه و لیمویی", "sapphire" to "یاقوت کبود", "turquoise" to "فیروزه", "amethyst" to "آمتیست",
+        "yellow" to "زرد و مشکی", "gold" to "طلایی", "crimson" to "زرشکی", "purple" to "بنفش سلطنتی",
+    )
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingIcon("palette", K.Accent)
@@ -223,31 +225,32 @@ fun ThemePicker(onSet: (String) -> Unit) {
             T("تم برنامه", size = D.TxtTitle)
         }
         Spacer(Modifier.height(D.S3))
-        Themes.chunked(3).forEachIndexed { ri, rowItems ->
-            if (ri > 0) Spacer(Modifier.height(D.S2))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                rowItems.forEach { p ->
-                    val sel = ThemeState.targetId == p.id
-                    val shape = RoundedCornerShape(D.RM)
-                    Column(
-                        Modifier.weight(1f).height(64.dp).goldGlass(shape, selected = sel).clickable { onSet(p.id) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        // زمینه‌ی تم دور، رنگ نئونی وسط (مثل نمونه‌ی طرح)
-                        Box(
-                            Modifier.size(26.dp).drawBehind {
-                                drawCircle(p.gold.copy(alpha = .35f), size.minDimension * .75f)
-                                drawCircle(p.bgMid, size.minDimension / 2)
-                                drawCircle(p.gold, size.minDimension * .27f)
-                                drawCircle(Color.White.copy(alpha = .25f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                            },
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        T(ThemeNames[p.id] ?: p.id, size = 10.5.sp, color = if (sel) K.Text else K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1)
+        items.chunked(4).forEachIndexed { ri, rowItems ->
+        if (ri > 0) Spacer(Modifier.height(D.S2))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            rowItems.forEach { (id, name) ->
+                val p = Themes.first { it.id == id }
+                val sel = ThemeState.current.id == id
+                val shape = RoundedCornerShape(D.RM)
+                Column(
+                    Modifier.weight(1f).clip(shape)
+                        .background(Brush.verticalGradient(listOf(p.bgMid, p.bgBottom)))
+                        .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else p.gold.copy(alpha = .3f), shape)
+                        .clickable { onSet(id) }
+                        .padding(vertical = D.S3),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // سه رنگ خود همان تم: رنگ اصلی، لهجه و رنگ «وصل»
+                    Row(horizontalArrangement = Arrangement.spacedBy(D.S1)) {
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.gold))
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.accent))
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.connected))
                     }
+                    Spacer(Modifier.height(D.S2))
+                    T(name, size = 11.sp, color = if (sel) p.gold else p.sub, maxLines = 1)
                 }
             }
+        }
         }
     }
 }

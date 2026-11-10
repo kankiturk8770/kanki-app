@@ -72,23 +72,25 @@ val guideSteps = listOf(
         "Connect button", "This button is the heart of the app. Tap once to connect with the mode that's lit next to it:",
         points = listOf(
             "اتصال" to "یعنی آماده‌ای؛ اسم حالت انتخابی زیرش نوشته شده.",
-            "در حال اتصال" to "حلقه‌ی دور دکمه تکه‌تکه روشن می‌شه و من بهترین راه رو امتحان می‌کنم. اگه نخواستی، همین موقع دوباره بزن تا لغو بشه.",
-            "متصل" to "کل حلقه و نشان پاور روشن می‌شن و زمان اتصال وسط دکمه می‌شمره. برای قطع، یه بار دیگه بزن.",
+            "در حال اتصال" to "نور دور دکمه تند می‌چرخه و من بهترین راه رو امتحان می‌کنم. اگه نخواستی، همین موقع دوباره بزن تا لغو بشه.",
+            "متصل" to "زمان اتصال وسط دکمه می‌شمره و دو موج از دکمه بیرون می‌زنه. برای قطع، یه بار دیگه بزن.",
+            "گیمینگ" to "دور دکمه نئون رنگی می‌شه و آدمک‌ها با پینگ تو می‌دوند؛ هرچی پینگ پایدارتر، آروم‌تر.",
         ),
         pointsEn = listOf(
             "Connect" to "means you're ready; the selected mode is written under it.",
-            "Connecting" to "the ring around the button lights up piece by piece while I try the best way. Changed your mind? Tap again to cancel.",
-            "Connected" to "the whole ring and the power mark light up and the connection time counts in the middle. Tap once more to disconnect.",
+            "Connecting" to "the light around the button spins fast while I try the best way. Changed your mind? Tap again to cancel.",
+            "Connected" to "the connection time counts in the middle and two waves ripple out. Tap once more to disconnect.",
+            "Gaming" to "the ring turns neon and little runners race with your ping; the steadier the ping, the calmer they run.",
         )),
-    GuideStep("map", "نقشه", "می‌بینی کجایی و به کدوم کشور وصلی. هر پرچم گرد یه سروره؛ نقطه‌ی «شما» جای خودته. وقتی وصلی یه پرتو نورانی از تو تا سرور کشیده می‌شه و بسته‌ها روش جریان دارن، و بالای نقشه «IP شما» کشور تازه‌ت رو می‌گه.",
-        "Map", "Shows where you are and which country you're connected to. Each round flag is a server; the You dot is you. When you're connected a glowing beam runs from you to the server with packets flowing on it, and Your IP at the top shows your new country."),
-    GuideStep("protocols", "حالت‌های اتصال", "دور دکمه‌ی اتصال چهار دکمه‌ی گرد روی یه مداره، دو تا هر طرف؛ هر حالت برای یه کاره. حالتی که باهاش وصلی، یه نور دورش می‌چرخه:",
-        "Connection modes", "Round buttons sit on an orbit around the connect button, two on each side, one job each. The mode you're connected with has a light circling it:",
+    GuideStep("map", "نقشه", "می‌بینی کجایی و به کدوم کشور وصلی. سنجاق پرچم‌دار هر کشور یه سروره؛ سنجاق «شما» جای خودته. وقتی وصلی یه کمان نورانی از تو تا سرور کشیده می‌شه و بالای نقشه «IP شما» کشور تازه‌ت رو می‌گه.",
+        "Map", "Shows where you are and which country you're connected to. Each flag pin is a server; the You pin is you. When you're connected a glowing arc runs from you to the server, and Your IP at the top shows your new country."),
+    GuideStep("protocols", "حالت‌های اتصال", "کنار دکمه‌ی اتصال چهار دکمه‌ی گرده؛ هر حالت برای یه کاره. حالتی که باهاش وصلی، یه نور دورش می‌چرخه:",
+        "Connection modes", "Next to the connect button are round buttons, one job each. The mode you're connected with has a light circling it:",
         points = listOf(
             "هوشمند" to "پینگ همه رو می‌گیره و به کم‌پینگ‌ترین وصل می‌شه؛ اگه شبکه بد باشه خودش می‌ره سراغ تانل.",
             "گیمینگ" to "برای بازی؛ پنلش باز می‌شه و پروتکل و سرور رو خودت انتخاب می‌کنی.",
             "ضد فیلتر" to "وقتی محدودیت شبکه شدیده؛ یه لمس بهترین راه رو پیدا می‌کنه، لمس دوباره یا نگه داشتن پنل Xray و Amnezia رو باز می‌کنه.",
-            "DNS" to "اگه اشتراکت داشته باشه پایین سمت ضد فیلتر میاد. VPN نیست؛ فقط سایت‌ها و بازی‌های تحریمی رو باز می‌کنه و بقیه مستقیم می‌رن.",
+            "DNS" to "اگه اشتراکت داشته باشه زیر ضد فیلتر میاد. VPN نیست؛ فقط سایت‌ها و بازی‌های تحریمی رو باز می‌کنه و بقیه مستقیم می‌رن.",
         ),
         pointsEn = listOf(
             "Smart" to "Pings everything and connects to the lowest ping; on a bad network it moves to a tunnel by itself.",
@@ -200,16 +202,13 @@ fun GuideOverlay(onAnswer: (Boolean) -> Unit = {}, onFinish: () -> Unit) {
             Canvas(Modifier.fillMaxSize().graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)) {
                 drawRect(Color(0xD9000000))
                 if (holeAlpha > 0f) {
-                    // هدف گرد (دکمه‌ی اتصال، دکمه‌های گرد): سوراخ گرد؛ بقیه گوشه‌گرد
-                    val round = kotlin.math.abs((r - l) - (b - t)) < 24.dp.toPx()
-                    val cr = CornerRadius(if (round) minOf(r - l, b - t) / 2 else 20.dp.toPx())
+                    val cr = CornerRadius(20.dp.toPx())
                     val tl = Offset(l, t); val sz = Size(r - l, b - t)
                     drawRoundRect(Color.Black, tl, sz, cr, blendMode = BlendMode.Clear, alpha = holeAlpha)
-                    // قاب نئونی تپنده دور بخش روشن، با درخشش نرم
+                    // قاب طلایی تپنده دور بخش روشن
                     val grow = pulse * 10.dp.toPx()
                     drawRoundRect(K.Gold.copy(alpha = .45f * (1f - pulse) * holeAlpha), Offset(l - grow, t - grow), Size(sz.width + grow * 2, sz.height + grow * 2), CornerRadius(cr.x + grow), style = Stroke(2.dp.toPx()))
-                    for ((w, a) in listOf(12f to .08f, 6f to .18f)) drawRoundRect(K.Gold.copy(alpha = a * holeAlpha), tl, sz, cr, style = Stroke(w.dp.toPx()))
-                    drawRoundRect(K.GoldLight.copy(alpha = holeAlpha), tl, sz, cr, style = Stroke(2.dp.toPx()))
+                    drawRoundRect(K.Gold.copy(alpha = holeAlpha), tl, sz, cr, style = Stroke(2.dp.toPx()))
                 }
             }
 
@@ -267,7 +266,7 @@ private fun GuideBubble(
     KCard(modifier.widthIn(max = 440.dp).fillMaxWidth(), padding = D.S4, border = K.Gold.copy(alpha = .7f)) {
         Row(Modifier.fillMaxWidth().height(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             guideSteps.indices.forEach { i ->
-                Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (i <= idx) K.Gold else Color.White.copy(alpha = .12f)))
+                Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (i <= idx) K.Gold else K.Sub.copy(alpha = .22f)))
             }
         }
         Spacer(Modifier.height(D.S3))
@@ -305,10 +304,10 @@ private fun GuideBtn(text: String, primary: Boolean, enabled: Boolean = true, on
     val shape = RoundedCornerShape(D.RM)
     Box(
         Modifier.size(width = 96.dp, height = 40.dp).alpha(if (enabled) 1f else .35f)
-            .then(if (primary) Modifier.goldFill(shape) else Modifier.goldGlass(shape))
+            .then(if (primary) Modifier.goldFill(shape) else Modifier.clip(shape).background(K.Gold.copy(alpha = .08f)).border(1.dp, K.Gold.copy(alpha = .7f), shape))
             .pressable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { T(text, size = 14.sp, color = if (primary) K.OnGold else K.Text, weight = FontWeight.Black) }
+    ) { T(text, size = 14.sp, color = if (primary) K.OnGold else K.Gold, weight = FontWeight.Black) }
 }
 
 /** متن بدنه‌ی ربات: فاصله‌ی خط بیشتر برای وزیرمتن، تا جمله‌های بلند فارسی خوانا بمانند */
@@ -416,8 +415,7 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
         RobotFace(D.IconBox)
         Spacer(Modifier.width(D.S2))
         Column(Modifier.weight(1f)) {
-            // جمله‌ی فارسی با اسم لاتین (WireGuard، …): جهت راست‌به‌چپ قفل و هر تکه‌ی لاتین جدا، تا «…» و کلمه‌ها جابه‌جا نشوند
-            T("\u200F" + tr(alert.text).replace(Regex("[A-Za-z0-9][A-Za-z0-9 .:/_-]*[A-Za-z0-9]|[A-Za-z0-9]")) { "\u2066" + it.value + "\u2069" }, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 3)
+            T(alert.text, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 2)
             alert.detail?.let { d ->
                 T(if (showDetail) "▲ جزئیات" else "▼ جزئیات", size = 11.sp, color = K.Sub, modifier = Modifier.clickable { showDetail = !showDetail }.padding(vertical = 2.dp))
                 if (showDetail) T(d, size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)

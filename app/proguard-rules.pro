@@ -15,5 +15,7 @@
 # نشانه‌هایی که بازتاب و کاتلین لازم دارند
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod, SourceFile, LineNumberTable
 
-# از ۱.۳۲.۴ مبهم‌سازی تهاجمی (-repackageclasses، -allowaccessmodification، حالت کامل R8) برداشته شد: فقط بهینه‌سازی
-# استاندارد اندروید، تا ساختار برنامه برای اسکنرها (Play Protect) عادی بماند.
+# مبهم‌سازی قوی‌تر: کلاس‌هایی که نگه داشته نشده‌اند (کتابخانه‌ها) به ریشه منتقل و دسترسی‌هاشان بازتر می‌شود
+# تا R8 بیشتر ادغام و تغییرِ نام بدهد. کد cafe.kankipro.vpn و موتورها بالا نگه داشته شده‌اند، پس دست نمی‌خورند.
+-allowaccessmodification
+-repackageclasses ''

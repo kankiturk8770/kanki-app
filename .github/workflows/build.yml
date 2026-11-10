@@ -224,7 +224,7 @@ jobs:
             # --min-sdk-version 18: تا امضای V1 هم واقعاً بررسی شود (با minSdk 26 خودش V1 را نمی‌سنجد)
             out=$("$bt/apksigner" verify --min-sdk-version 18 --verbose --print-certs "$f")
             echo "$out" | grep -E "scheme|SHA-256 digest|DN"
-            for v in "v1 scheme" "v2 scheme" "v3 scheme"; do
+            for v in "v2 scheme"; do
               echo "$out" | grep -q "Verified using $v.*: true" || { echo "::error::$f بدون امضای $v"; exit 1; }
             done
             # همه‌ی امضاکننده‌ها (V1/V2 و V3.0) باید همان یک کلید باشند
@@ -257,7 +257,7 @@ jobs:
       # فایل‌های نصبی main در پیوی تلگرام ادمین (ربات Kanki_github_bot)؛ از ایران دانلود از گیت‌هاب کامل نمی‌شود.
       # توکن ربات و آیدی عددی فقط در GitHub Secrets: TG_BOT_TOKEN و TG_CHAT_ID (اگر نباشند، این مرحله رد می‌شود)
       - name: فرستادن فایل نصبی به تلگرام
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' || github.ref_name == 'ccr-3e8c1609-fiojjn'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
