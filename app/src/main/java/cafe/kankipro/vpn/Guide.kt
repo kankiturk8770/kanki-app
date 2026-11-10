@@ -416,7 +416,8 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
         RobotFace(D.IconBox)
         Spacer(Modifier.width(D.S2))
         Column(Modifier.weight(1f)) {
-            T(alert.text, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 2)
+            // جمله‌ی فارسی با اسم لاتین (WireGuard، …): جهت راست‌به‌چپ قفل و هر تکه‌ی لاتین جدا، تا «…» و کلمه‌ها جابه‌جا نشوند
+            T("\u200F" + tr(alert.text).replace(Regex("[A-Za-z0-9][A-Za-z0-9 .:/_-]*[A-Za-z0-9]|[A-Za-z0-9]")) { "\u2066" + it.value + "\u2069" }, size = 12.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 3)
             alert.detail?.let { d ->
                 T(if (showDetail) "▲ جزئیات" else "▼ جزئیات", size = 11.sp, color = K.Sub, modifier = Modifier.clickable { showDetail = !showDetail }.padding(vertical = 2.dp))
                 if (showDetail) T(d, size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)

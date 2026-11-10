@@ -325,17 +325,19 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(.63f).padding(horizontal = D.PagePad, vertical = D.S1), contentAlignment = Alignment.Center) {
                     val side = if (ui.hasAccount) 30.dp else 0.dp
                     // ارتفاع لازم: دکمه + حالت‌های بالا و پایین مدار با اسمشان (حدود ۱.۰۴ قطر + ۳۶dp)
-                    val byH = if (ui.hasAccount) (maxHeight - 36.dp) / 1.04f else maxHeight - D.S2
-                    val d = minOf(byH, (maxWidth / 2 - side) / ORBIT_DX).coerceIn(112.dp, 240.dp)
+                    // ارتفاع لازم: دکمه + حالت‌های بالا و پایین با اسمشان؛ پهنا: حالت‌ها با نیم‌دایره‌شان داخل صفحه
+                    val byH = if (ui.hasAccount) (maxHeight - 52.dp) / 1.0f else maxHeight - D.S2
+                    val byW = if (ui.hasAccount) (maxWidth / 2 - 10.dp) / (ORBIT_DX + 47f / 212f / 2f) else maxWidth
+                    val d = minOf(byH, byW).coerceIn(112.dp, 240.dp)
+                    Box(Modifier.guideTarget("connect")) {
+                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
+                    }
                     if (ui.hasAccount) {
                         ModeOrbit(
                             ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
                             modifier = Modifier.fillMaxSize().guideTarget("protocols"),
                             showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
                         )
-                    }
-                    Box(Modifier.guideTarget("connect")) {
-                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
                     }
                 }
                 Column(
@@ -463,29 +465,40 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             val step = 360f / SEGS
             val gap = 2.6f
             val litN = if (on) SEGS else if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
-            val spark = (t * 22f).toInt() % SEGS
             val tl = Offset(c.x - sr, c.y - sr)
             val sz = Size(sr * 2, sr * 2)
             for (i in 0 until SEGS) {
                 val start = i * step - 90f + gap / 2
                 val isLit = i < litN
-                val hot = (on && (i == spark || i == (spark + SEGS - 1) % SEGS)) || (connecting && i == litN - 1) || (!on && !connecting && i == spark)
-                if (isLit || hot) drawArc(ac.copy(alpha = if (hot && !isLit) .18f else .32f), start, step - gap, false, tl, sz, style = Stroke(sw * 2.3f, cap = StrokeCap.Round))
+                // فقط سرِ پرشونده‌ی «در حال اتصال» سفید است؛ نور تند دور حلقه دیگر نیست
+                val hot = connecting && i == litN - 1
+                // هاله‌ی باریک و کم‌رنگ (بدون محو پهن)، تا تکه‌ها شارپ و زنده بمانند
+                if (isLit) drawArc(ac.copy(alpha = .16f), start, step - gap, false, tl, sz, style = Stroke(sw * 1.45f, cap = StrokeCap.Round))
                 val col = when {
-                    hot && (on || connecting) -> Color.White
-                    hot -> Color.White.copy(alpha = .45f)
-                    isLit -> ac
+                    hot -> Color.White
+                    isLit -> lerp(ac, Color.White, .12f)
                     else -> Color.White.copy(alpha = .09f)
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- سه نقطه‌ی نور روی یک مدار، ۱۲۰ درجه از هم
+            // ---- وصل: سه کمان باریک با ۱۲۰ درجه فاصله که آرام و یکنواخت دور دکمه می‌چرخند
+            if (onA > .01f) {
+                val ar = r * .955f
+                val atl = Offset(c.x - ar, c.y - ar)
+                val asz = Size(ar * 2, ar * 2)
+                for (k in 0 until 3) {
+                    val st = t * 14f + k * 120f
+                    drawArc(lerp(ac, Color.White, .35f).copy(alpha = onA), st, 46f, false, atl, asz, style = Stroke(1.6f * u, cap = StrokeCap.Round))
+                }
+            }
+            // ---- سه نقطه‌ی نور شارپ روی یک مدار، ۱۲۰ درجه از هم
             val orbitR = r + 5f * u
-            for ((k, d) in listOf(0 to 3f, 1 to 2f, 2 to 2.5f)) {
+            for ((k, d) in listOf(0 to 2.6f, 1 to 2f, 2 to 2.3f)) {
                 val ang = Math.toRadians((t * 40f + k * 120f).toDouble())
                 val o = Offset(c.x + orbitR * cos(ang).toFloat(), c.y + orbitR * sin(ang).toFloat())
-                drawCircle(ac.copy(alpha = .35f), d * u * 2.4f, o)
-                drawCircle(lerp(ac, Color.White, .45f), d * u, o)
+                drawCircle(ac.copy(alpha = .22f), d * u * 1.7f, o)
+                drawCircle(ac, d * u, o)
+                drawCircle(Color.White, d * u * .5f, o)
             }
             // ---- گنبد شیشه‌ای تیره وسط
             val dr = r * .59f
@@ -873,9 +886,9 @@ private fun ecgAt(u: Float): Float {
 private fun UsageCell(value: String, unit: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val v = faDigits(value)
-        val latin = isLatin(v)
+        val latin = isLatin(v) || v.none { it in '\u0600'..'\u06FF' }
         T(v, size = 14.sp, color = K.Text, font = if (latin) Poppins else Vazir, weight = FontWeight.Black, ltr = latin)
-        Spacer(Modifier.width(D.S1))
+        Spacer(Modifier.width(6.dp))
         T(unit, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
     }
 }

@@ -337,6 +337,7 @@ private val EN = mapOf(
     "گیگ مانده" to "GB left",
     "سرور انتخابی" to "Selected server",
     "آماده" to "Ready",
+    "متصل به VPN · %s" to "Connected to VPN · %s",
     "ورود به کانکی" to "Sign in to Kanki",
     "کد اشتراکی که ربات فرستاده را این‌جا بگذار." to "Paste the subscription code the bot sent you.",
     "گرفتن کد از ربات تلگرام" to "Get a code from the Telegram bot",
