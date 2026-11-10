@@ -210,6 +210,28 @@ jobs:
       - name: حجم فایل‌ها
         run: ls -la app/build/outputs/apk/release/
 
+      # قفل کلید امضا: هر APK باید با همان کلید همیشگی (همانی که نسخه‌های قبلی کاربران با آن نصب شده) امضا شده باشد،
+      # با V1 و V2 و V3، و تراز (zipalign) درست. اگر نه، ساخت قرمز می‌شود و هیچ فایلی منتشر یا به تلگرام فرستاده نمی‌شود.
+      - name: بررسی امضا و تراز فایل‌های نصبی
+        env:
+          KANKI_CERT_SHA256: d2f8b9c44c65183126fdc192d14b6bca275f3d4cb4850b2bc9be7b7982d54df8
+        run: |
+          set -e
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for f in app/build/outputs/apk/release/*.apk; do
+            echo "== $f"
+            "$bt/zipalign" -c -P 16 4 "$f" || "$bt/zipalign" -c 4 "$f"
+            # --min-sdk-version 18: تا امضای V1 هم واقعاً بررسی شود (با minSdk 26 خودش V1 را نمی‌سنجد)
+            out=$("$bt/apksigner" verify --min-sdk-version 18 --verbose --print-certs "$f")
+            echo "$out" | grep -E "scheme|SHA-256 digest|DN"
+            for v in "v1 scheme" "v2 scheme" "v3 scheme"; do
+              echo "$out" | grep -q "Verified using $v.*: true" || { echo "::error::$f بدون امضای $v"; exit 1; }
+            done
+            # همه‌ی امضاکننده‌ها (V1/V2 و V3.0) باید همان یک کلید باشند
+            certs=$(echo "$out" | grep -oE 'certificate SHA-256 digest: [0-9a-f]+' | awk '{print $NF}' | sort -u)
+            [ "$certs" = "$KANKI_CERT_SHA256" ] || { echo "::error::$f با کلید دیگری امضا شده است: $certs"; exit 1; }
+          done
+
       # فایل نصبی در Releases گذاشته می‌شود (یک نسخه‌ی پیش‌انتشار برای هر شاخه که هر بار جایگزین می‌شود).
       # فضای Releases جدا از سهمیه‌ی Artifacts حساب است و پر نمی‌شود.
       - name: انتشار فایل نصبی در Releases

@@ -27,7 +27,7 @@
 | ترجمه (فارسی → انگلیسی) | `I18n.kt` |
 | اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
 | نقشه | `MapView.kt`، `WorldMap.kt` |
-| لوگوی داخل برنامه (`Logo3D`: دایره‌ی شیشه‌ای با K نئونی به رنگ تم، کشیده با کد، بی‌عکس) و آیکون برنامه (یک آیکون `ic_launcher`؛ هشت activity-alias `.Icon_*` فقط برای گوشی‌هایی مانده که یکی را روشن کرده‌اند، `LauncherIcon.kt` فقط `Icon_gold` را روشن نگه می‌دارد) | `Ui.kt`، `LauncherIcon.kt` |
+| لوگوی داخل برنامه (`Logo3D`: دایره‌ی شیشه‌ای با K نئونی به رنگ تم، کشیده با کد، بی‌عکس) و آیکون برنامه (از ۱.۳۲.۴ وکتور: `drawable/ic_launcher*.xml`؛ یک ورودی لانچر روی `MainActivity`، بی activity-alias و بی عوض کردن آیکون در اجرا) | `Ui.kt` |
 | رنگ «وصل» (`power` در `Palette`، همان رنگ نئونی تم) | `Ui.kt` |
 | شیشه‌ی کریستالی مشترک (۱.۳۲): `goldGlass` (کارت: برق لبه‌ی بالا، سایه‌ی عمیق، لبه‌ی گرادیانی، `selected` = نئون)، `goldFill` (دکمه‌ی پر براق)، `liftShadow`، `bevel` در `Ui.kt`؛ `raisedCircle` (دکمه‌ی گرد) در `Kit.kt`؛ آیکون SVG با `iconPath` | `Ui.kt`، `Kit.kt` |
 | ترتیب ثابت پروتکل‌ها (تب سرورها، گیمینگ، «تست پینگ همه») | `PROTO_ORDER`/`FAMILY_ORDER` ته `AppState.kt` |
@@ -59,6 +59,8 @@
   `Version` در `KankiVPN.csproj` و `windows/CHANGES.md`.
 
 ## ساخت و تست
+- **امضا:** همه‌ی APKها با یک کلید release (اثر انگشت SHA-256 `d2f8b9c44c65…4df8`، V1+V2+V3)؛ CI (`build.yml`، «بررسی امضا و تراز») با کلید دیگر قرمز می‌شود.
+  activity-alias لانچر، پنهان کردن آیکون و مبهم‌سازی تهاجمی R8 برنگردد (Play Protect).
 - CI (`build.yml`) روی هر push فایل APK می‌سازد؛ `shots.yml` عکس صفحه‌ها (`app/src/test/.../Shots.kt`).
 - ساخت محلی به Android SDK نیاز دارد که در محیط ابری نیست؛ پس بعد از push نتیجه‌ی CI را چک کن.
 
