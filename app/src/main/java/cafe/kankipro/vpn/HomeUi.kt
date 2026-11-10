@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -232,21 +233,12 @@ fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
         val ts = RoundedCornerShape(D.RL)
         Box(
             Modifier.offset(x = (tabW + gap) * idx).width(tabW).height(54.dp)
-                .then(if (p.classic) Modifier.goldGlass(ts, selected = true) else if (p.metal) Modifier.goldFill(ts) else Modifier
-                    .drawBehind { liftShadow(ts.createOutline(size, layoutDirection, this), 4.dp.toPx(), .6f, p.gold) }
-                    .clip(ts)
-                    .background(Brush.verticalGradient(listOf(p.navTop, p.navBottom)))
-                    .drawWithContent {
-                        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f), Color.Transparent), endY = size.height * .5f))
-                        bevel(ts.createOutline(size, layoutDirection, this), 1f)
-                        drawContent()
-                    }
-                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .6f), p.goldLight.copy(alpha = .25f), p.goldDeep)), ts)),
+                .goldFill(ts),
         )
         Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(gap)) {
             KTab.entries.forEachIndexed { i, t ->
                 val sel = t == current
-                val c = if (sel) (if (p.classic) K.Gold else p.onNav) else K.Sub
+                val c = if (sel) p.onNav else K.Sub
                 val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
                 val lift by animateFloatAsState(if (sel) 1f else 0f, spring(dampingRatio = .45f, stiffness = 380f), label = "lift")
                 Column(
@@ -315,24 +307,21 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                         }
                     }
                 }
-                // دکمه‌ی اتصال و کنارش ستون حالت‌ها (در راست‌به‌چپ: دکمه سمت راست، حالت‌ها سمت چپ).
-                // قطر دکمه با فضای مانده (۹۶ تا ۱۴۲dp)، انیمیشن‌ها و نسبت‌های داخلش همان است.
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(.68f).padding(horizontal = D.PagePad)) {
-                    val colW = if (ui.hasAccount) ModeColW else 0.dp
-                    val d = minOf((maxHeight - D.S2) / OrbFootprint, (maxWidth - colW - D.S2) / OrbFootprint).coerceIn(96.dp, 142.dp)
-                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                            Box(Modifier.guideTarget("connect")) {
-                                OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
-                            }
-                        }
-                        if (ui.hasAccount) {
-                            ModeColumn(
-                                ui.mode, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
-                                modifier = Modifier.width(ModeColW).fillMaxHeight(.9f).guideTarget("protocols"),
-                                showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
-                            )
-                        }
+                // دکمه‌ی اتصال دقیقاً وسط و چهار حالت روی یک مدار دورش (دو تا هر طرف، قرینه). قطر دکمه با فضای مانده.
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(.68f).padding(horizontal = D.PagePad), contentAlignment = Alignment.Center) {
+                    val side = if (ui.hasAccount) 30.dp else 0.dp
+                    // ارتفاع لازم: دکمه + حالت‌های بالا و پایین مدار با اسمشان (حدود ۱.۰۴ قطر + ۳۶dp)
+                    val byH = if (ui.hasAccount) (maxHeight - 36.dp) / 1.04f else maxHeight - D.S2
+                    val d = minOf(byH, (maxWidth / 2 - side) / ORBIT_DX).coerceIn(112.dp, OrbBase)
+                    if (ui.hasAccount) {
+                        ModeOrbit(
+                            ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
+                            modifier = Modifier.fillMaxSize().guideTarget("protocols"),
+                            showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
+                        )
+                    }
+                    Box(Modifier.guideTarget("connect")) {
+                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
                     }
                 }
                 Column(
@@ -340,25 +329,30 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
-                    AnimatedVisibility(on && ui.server != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                        ui.server?.let { ConnectedCard(it, mc) }
-                    }
+                    // کارت سرور: وصل = سرور واقعی با «اتصال پایدار»؛ قطع = سرور انتخابی روی نقشه با «آماده»
+                    val pick = ui.pins.firstOrNull { it.selected }
+                    if (on && ui.server != null) ConnectedCard(ui.server, mc)
+                    else if (ui.hasAccount && pick != null && ui.mode != KMode.DNS) StripCard(
+                        flagEmoji(pick.iso) ?: "🌐", countryName(pick.iso) ?: pick.iso ?: "—", tr("سرور انتخابی"),
+                        if (ui.vstate == VState.CONNECTING) "در حال اتصال" else "آماده", K.Gold, selected = false,
+                    )
                     if (!ui.hasAccount) {
                         if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
                     } else {
                         ModeHint(ui.mode)
                         if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
-                        Box(Modifier.guideTarget("stats")) { StatsRow(ui) }
                     }
-                    ui.sub?.let { UsageStrip(it, Modifier.guideTarget("sub"), act.openAccount) }
+                    if (ui.hasAccount || ui.sub != null) StatsCard(ui, act.openAccount)
                 }
             }
         }
     }
 }
 
-/** پهنای ستون حالت‌ها کنار دکمه‌ی اتصال */
-val ModeColW = 84.dp
+/** جای حالت‌ها روی مدار دور دکمه‌ی اتصال، نسبت به قطر دکمه (مثل طرح: دکمه ۲۱۲، مدار ۱۴۶، زاویه ±۳۴ درجه) */
+const val ORBIT_R = 146f / 212f
+const val ORBIT_DX = 121f / 212f
+const val ORBIT_DY = 82f / 212f
 
 /** «موقعیت شما : ایران» بالای نقشه؛ وقتی وصل است «IP شما : آلمان» (کشور IP خروجی) */
 @Composable
@@ -378,650 +372,307 @@ private fun LocationChip(iso: String?, on: Boolean) {
     }
 }
 
-/** ستاره‌ی تک دور دکمه: آرام دور دکمه می‌چرخد و چشمک می‌زند؛ بزرگ‌ترها برق چهارپر دارند */
-private class OrbStar(val orbit: Float, val start: Float, val size: Float, val twinkle: Float, val white: Boolean)
-
-/** ستاره‌های ثابت (با بذر ثابت)، تا با هر بار ساخته شدن صفحه جایشان نپرد */
-private val orbStars: List<OrbStar> = run {
-    val rnd = java.util.Random(2077)
-    List(26) {
-        OrbStar(
-            orbit = 1.55f + rnd.nextFloat() * rnd.nextFloat() * .55f,
-            start = rnd.nextFloat() * 360f,
-            size = .5f + rnd.nextFloat() * rnd.nextFloat() * 1.3f,
-            twinkle = .8f + rnd.nextFloat() * 2f,
-            white = rnd.nextFloat() < .5f,
-        )
-    }
-}
+/** تعداد تکه‌های حلقه‌ی نئونی دور دکمه‌ی اتصال */
+private const val SEGS = 44
 
 /**
- * دکمه‌ی گرد اتصال (مثل طرح): پشتش پرتوهای نور طلایی آرام می‌چرخند و چند ستاره‌ی تک دورش می‌گردند؛
- * دورش حلقه‌ی نئونی طلایی با دو نور دنباله‌دار که دور آن می‌چرخند و یک حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد؛
- * خود دکمه شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان است و وسطش لوگو، عنوان و یک خط توضیح.
- * موقع اتصال همه‌چیز تند می‌چرخد و نور سفیدی دور لبه می‌دود؛ وقتی وصل است موج‌های طلایی از دکمه بیرون می‌زند.
- * حالت گیمینگ (پایین‌تر: Chase، chaseScene، connectBlast، heartbeat): نورها و حلقه به رنگ گیمینگ تم در می‌آیند و روی حلقه دو آدمک نئونی
- * اندازه‌ی مورچه می‌دوند؛ یکی فرار می‌کند و دیگری با اسلحه دنبالش است. خاموش آرام راه می‌روند، در حال اتصال می‌دوند و
- * وقتی وصل است تیرانداز تیر می‌زند: هرچه دیتای بیشتری رد و بدل شود تندتر شلیک می‌کند، هرچه پینگ کمتر تیرها
- * تندتر می‌روند، و با هر نمونه‌ی تازه‌ی پینگ یک رگبار زیر پای فراری می‌رسد که از رویش می‌پرد.
+ * دکمه‌ی اتصال (۱.۳۲، طرح «Kanki Glass»): بزل شیشه‌ای با برق چرخان، حلقه‌ای از ۴۴ تکه‌ی نئونی، سه نقطه‌ی نور که با
+ * فاصله‌ی برابر دورش می‌چرخند، و وسطش گنبد شیشه‌ای تیره با نشان پاور، اسم حالت و زمان اتصال.
+ * خاموش: تکه‌ها کم‌رنگ‌اند و یک جرقه آرام دورشان می‌گردد؛ در حال اتصال: تکه‌ها یکی‌یکی روشن می‌شوند و نور دور
+ * نشان پاور تند می‌چرخد؛ وصل: همه‌ی تکه‌ها به رنگ اتصال روشن‌اند، دو جرقه‌ی سفید رویشان می‌دوند، گنبد از داخل
+ * می‌درخشد و هاله‌ی پشت دکمه آرام نفس می‌کشد. خود گنبد هیچ‌وقت رنگی و پر نمی‌شود (فقط حلقه و نشان پاور).
  */
 @Composable
-fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = 138.dp, onClick: () -> Unit) {
+fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase, onClick: () -> Unit) {
     val on = ui.vstate == VState.ON
     val connecting = ui.vstate == VState.CONNECTING
-    // سرعت چرخش نرم عوض می‌شود تا با تغییر وضعیت نپرد
-    val speed by animateFloatAsState(if (connecting) 4.5f else if (on) 1.3f else .6f, tween(900), label = "spd")
-    val game = ui.mode == KMode.GAME
-    val gameA by animateFloatAsState(if (game) 1f else 0f, tween(500), label = "game")
-    val gCon by animateFloatAsState(if (game && connecting) 1f else 0f, tween(350), label = "gcon")
-    val gOn by animateFloatAsState(if (game && on) 1f else 0f, tween(700), label = "gon")
-    val period by rememberUpdatedState(beatPeriod(ui.livePing))
-    // شدت تپش گیمینگ: پایه از نوسان چند پینگ آخر، و هر نمونه‌ی تازه که با قبلی فرق دارد یک «ضربه» می‌دهد که آرام فروکش می‌کند
-    val hist = ui.pingHist
-    val calm = remember(hist, ui.livePing) { pingBase(hist, ui.livePing) }
-    val kick = remember { Animatable(0f) }
-    LaunchedEffect(hist.size, hist.lastOrNull()) {
-        if (hist.size < 2) return@LaunchedEffect
-        val k = (abs(hist[hist.size - 1] - hist[hist.size - 2]) / 20f).coerceAtMost(1f)
-        if (k < .05f) return@LaunchedEffect
-        kick.snapTo(max(kick.value, k))
-        kick.animateTo(0f, tween(3000, easing = LinearOutSlowInEasing))
-    }
-    // لحظه‌ی وصل شدن در گیمینگ: یک بار انفجار نور
-    val blast = remember { Animatable(1f) }
-    LaunchedEffect(game && on) {
-        if (game && on) { blast.snapTo(0f); blast.animateTo(1f, tween(1400, easing = LinearEasing)) }
-    }
-    var spin by remember { mutableFloatStateOf(0f) }
-    var tick by remember { mutableFloatStateOf(0f) }
-    var time by remember { mutableFloatStateOf(0f) }
-    var beat by remember { mutableFloatStateOf(0f) }
-    // تعقیب گیمینگ روی حلقه: تیرها از دیتا (چند تیر در ثانیه) و پینگ (سرعت تیر)
-    val chase = remember { Chase() }
-    val rate by rememberUpdatedState(fireRate(ui.rx + ui.tx))
-    val flight by rememberUpdatedState(bulletFlight(hist.lastOrNull() ?: ui.livePing))
-    // هر نمونه‌ی تازه‌ی پینگ: یک رگبار سه‌تیری زیر پای فراری که از رویش می‌پرد
-    LaunchedEffect(hist.size, hist.lastOrNull()) {
-        if (game && on && hist.isNotEmpty()) { chase.burst = 3; chase.jumpAt = time + flight - .07f }
-    }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                // فقط سر فاصله‌ی Motion.frameNs جلو می‌رود (گوشی ضعیف ۳۰ فریم، بقیه ۶۰)
-                if (last != 0L && now - last < Motion.frameNs) return@withFrameNanos
-                if (last != 0L) {
-                    val dt = ((now - last) / 1e9f).coerceAtMost(.1f)
-                    spin += dt * speed
-                    tick += dt * speed
-                    time += dt
-                    beat += dt / period
-                    // آدمک‌ها: خاموش راه می‌روند، در حال اتصال تند می‌دوند، وصل می‌دوند (پینگ که ناگهان عوض شود تندتر و نزدیک‌تر)
-                    val run = if (gCon > .5f) 1.7f else if (gOn > .5f) .9f + .7f * kick.value else .32f
-                    chase.step(dt, time, run, kick.value, gOn > .5f, rate, flight)
-                }
-                last = now
-            }
-        }
-    }
-    val lit by animateFloatAsState(if (on) 1f else if (connecting) .85f else .6f, tween(700), label = "lit")
-    val onA by animateFloatAsState(if (on) 1f else 0f, tween(700), label = "on")
-    val conA by animateFloatAsState(if (connecting) 1f else 0f, tween(400), label = "con")
-    val halo = 78.dp
-    // دکمه همیشه در اندازه‌ی طرح (OrbBase) کشیده می‌شود و فقط کل آن با diameter بزرگ و کوچک می‌شود، تا نسبت‌ها و
-    // انیمیشن‌های داخلش دست نخورند. جایی که در صفحه می‌گیرد diameter × OrbFootprint است (حلقه و آدمک‌ها)؛
-    // پرتوهای کم‌رنگ پشتش می‌توانند کمی بیرون از آن بیایند.
-    val scale = diameter / OrbBase
-
+    val clock = motionTime()
+    val onA by animateFloatAsState(if (on) 1f else 0f, tween(600), label = "on")
+    val conA by animateFloatAsState(if (connecting) 1f else 0f, tween(300), label = "con")
+    // لحظه‌ی شروع «در حال اتصال»: حلقه از همان لحظه تکه‌تکه پر می‌شود
+    var conStart by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(connecting) { if (connecting) conStart = clock.value }
+    val ac = color
+    val s = diameter / OrbBase
     Box(
-        Modifier.size(diameter * OrbFootprint).alpha(if (enabled) 1f else .55f).clickable(
+        Modifier.size(diameter).alpha(if (enabled) 1f else .55f).clickable(
             enabled = enabled,
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
         ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.requiredSize(OrbBase + halo).graphicsLayer { scaleX = scale; scaleY = scale }, contentAlignment = Alignment.Center) {
-            // شکل پرتوها یک بار برای هر اندازه ساخته می‌شود، نه در هر فریم (کمتر کار برای حافظه و رشته‌ی اصلی)
-            Spacer(Modifier.fillMaxSize().drawWithCache {
-                val c0 = Offset(size.width / 2, size.height / 2)
-                val r0 = OrbBase.toPx() / 2
-                fun rayPath(len: Float) = Path().apply {
-                    moveTo(c0.x - 1.5.dp.toPx(), c0.y)
-                    lineTo(c0.x - r0 * .13f, c0.y - len)
-                    lineTo(c0.x + r0 * .13f, c0.y - len)
-                    lineTo(c0.x + 1.5.dp.toPx(), c0.y)
-                    close()
-                }
-                val rayShort = rayPath(r0 * 1.5f)
-                val rayLong = rayPath(r0 * 1.78f)
-                onDrawBehind {
-                val c = center
-                val r = OrbBase.toPx() / 2
-                val gold = K.Gold
-                val breathe = .5f + .5f * sin(time * 2.1f)
-                val deg = Math.toDegrees(spin.toDouble()).toFloat()
-                val u = beat % 1f
-                val env = beatEnv(u)
-                // گیمینگ: پرتوها و هاله به رنگ گیمینگ می‌روند؛ amp شدت تپش از پینگ (۰.۲۵ آرام تا ۱.۳ خیلی ناآرام)
-                val amp = (calm + .8f * kick.value).coerceIn(.25f, 1.3f)
-                val rayC = lerp(gold, Game, .75f * gameA)
-                val warm = lerp(K.Gold, Game, .8f * gameA)
-                val pump = 1f + .7f * env * amp * gOn
-
-                // ---- پرتوهای نور که آرام می‌چرخند
-                val rayA = ((.10f + .08f * lit) * (.7f + .3f * breathe) * pump).coerceIn(0f, 1f)
-                fun rayBrush(len: Float) = Brush.verticalGradient(0f to rayC.copy(alpha = 0f), .45f to rayC, 1f to rayC.copy(alpha = 0f), startY = c.y - len, endY = c.y)
-                val brushShort = rayBrush(r * 1.5f)
-                val brushLong = rayBrush(r * 1.78f)
-                rotate(deg * .12f, c) {
-                    for (i in 0 until 16) {
-                        rotate(i * 22.5f, c) {
-                            if (i % 2 == 1) drawPath(rayShort, brushShort, alpha = rayA) else drawPath(rayLong, brushLong, alpha = rayA)
-                        }
-                    }
-                }
-                // ---- هاله‌ی گرم پشت دکمه
+        Canvas(Modifier.fillMaxSize()) {
+            val t = clock.value
+            val r = size.minDimension / 2
+            val c = center
+            val u = 1.dp.toPx()
+            // ---- هاله‌ی پشت دکمه (وصل: پررنگ و نفس‌کشان)
+            val breathe = .5f + .5f * sin(t * 1.85f)
+            val haloA = .3f + .7f * onA * (.85f + .15f * breathe)
+            drawCircle(
+                Brush.radialGradient(0f to ac.copy(alpha = .30f * haloA), .45f to ac.copy(alpha = .08f * haloA), 1f to Color.Transparent, center = c, radius = r * 1.3f),
+                r * 1.3f, c,
+            )
+            // ---- سایه‌ی عمیق زیر دکمه
+            val sc = c + Offset(0f, r * .1f)
+            drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .7f), Color.Transparent), sc, r * 1.12f), r * 1.12f, sc)
+            // ---- بزل شیشه‌ای (بین ۰.۶۷ و ۱ شعاع) با برق مخروطی
+            val bw = r * .33f
+            val br = r - bw / 2
+            drawCircle(lerp(K.BgMid, Color.Black, .35f), br, c, style = Stroke(bw))
+            rotate(t * 6f % 360f, c) {
                 drawCircle(
-                    Brush.radialGradient(
-                        0f to warm.copy(alpha = 0f), .45f to warm.copy(alpha = ((.30f + .2f * lit) * (.75f + .25f * breathe) * pump).coerceAtMost(1f)),
-                        .72f to warm.copy(alpha = .07f * pump), 1f to Color.Transparent,
-                        center = c, radius = r * 2f,
+                    Brush.sweepGradient(
+                        listOf(
+                            Color.White.copy(alpha = .20f), Color.White.copy(alpha = .03f), ac.copy(alpha = .14f), Color.White.copy(alpha = .02f),
+                            Color.White.copy(alpha = .15f), Color.White.copy(alpha = .02f), Color.White.copy(alpha = .20f),
+                        ),
+                        c,
                     ),
-                    r * 2f, c,
+                    br, c, style = Stroke(bw),
                 )
-                // ---- ستاره‌های تک
-                orbStars.forEach { s ->
-                    val rad = Math.toRadians((s.start + deg * .07f / s.orbit).toDouble())
-                    val o = Offset(c.x + r * s.orbit * cos(rad).toFloat(), c.y + r * s.orbit * sin(rad).toFloat() * .8f)
-                    val tw = .5f + .5f * sin(time * s.twinkle + s.start)
-                    val col = if (s.white) Color.White else lerp(K.GoldLight, GameLight, gameA)
-                    val sz = s.size.dp.toPx()
-                    val a = .35f + .65f * tw
-                    drawCircle(col.copy(alpha = .16f * a), sz * 4f, o)
-                    drawCircle(col.copy(alpha = a), sz * .8f, o)
-                    if (s.size > 1.1f && !Motion.lowEnd) {
-                        val l = sz * 6f
-                        drawLine(col.copy(alpha = .7f * a), Offset(o.x - l, o.y), Offset(o.x + l, o.y), .7.dp.toPx(), StrokeCap.Round)
-                        drawLine(col.copy(alpha = .7f * a), Offset(o.x, o.y - l), Offset(o.x, o.y + l), .7.dp.toPx(), StrokeCap.Round)
-                    }
-                }
-
-                // ---- حلقه‌ی نئونی بیرونی با دو نور دنباله‌دار (گیمینگ: نئون گیمینگ تم، بی‌نورِ دنباله‌دار، جای دویدن آدمک‌ها)
-                val r2 = r * 1.42f
-                val goldA = 1f - gameA
-                if (goldA > .01f) neonRing(gold, c, r2, 1.2.dp.toPx(), strength = (.45f + .25f * lit) * goldA)
-                if (gameA > .01f) rgbRing(c, r2, 1.2.dp.toPx(), gameA, -deg * .6f)
-                // دنباله‌دارها فقط روی گوشی قوی (کم کردن کار نقاشی هر فریم روی گوشی ضعیف، بدون تغییر شکل دکمه)
-                if (goldA > .01f && !Motion.lowEnd) {
-                    neonComet(K.GoldLight, deg, 80f, c, r2, 1.6.dp.toPx(), goldA)
-                    neonComet(K.GoldLight, deg + 180f, 80f, c, r2, 1.6.dp.toPx(), goldA)
-                }
-                // ---- حلقه‌ی درجه‌دار ظریف که برعکس می‌چرخد (روی گوشی ضعیف نصف درجه‌ها، نرم‌تر)
-                rotate(-Math.toDegrees(tick.toDouble()).toFloat() * .35f, c) {
-                    val r1 = r * 1.2f
-                    val ticks = if (Motion.lowEnd) 36 else 72
-                    for (i in 0 until ticks) {
-                        val a = Math.toRadians(i * (360.0 / ticks))
-                        val major = i % (ticks / 12) == 0
-                        val h = (if (major) 5f else 3f).dp.toPx()
-                        val ca = cos(a).toFloat(); val sa = sin(a).toFloat()
-                        // گیمینگ: هر درجه رنگ همان جای حلقه‌ی نئونی
-                        val base = if (major) K.GoldLight else gold
-                        val tc = if (gameA > .01f) lerp(base, rgbAt(i.toFloat() / ticks), .85f * gameA) else base
-                        drawLine(
-                            tc.copy(alpha = if (major) .85f else .4f),
-                            Offset(c.x + (r1 - h) * ca, c.y + (r1 - h) * sa), Offset(c.x + (r1 + h) * ca, c.y + (r1 + h) * sa),
-                            (if (major) 2f else 1.1f).dp.toPx(), StrokeCap.Round,
-                        )
-                    }
-                }
-                if (gameA > .01f) chaseScene(chase, c, r2, time, gameA, gOn)
-
-                // ---- دکمه: شیشه‌ی مشکی با لبه‌ی طلایی ضخیم و درخشان (گیمینگ: شیشه‌ی تیره به رنگ گیمینگ و لبه‌ی نئونی چرخان)
-                val glowA = (.35f + .25f * lit * breathe) * (1f + .4f * env * amp * gOn)
-                drawCircle(Brush.radialGradient(listOf(lerp(K.Gold, Game, .6f * gameA).copy(alpha = glowA.coerceAtMost(1f)), Color.Transparent), c, r * 1.32f), r * 1.32f, c)
-                // ۱.۲۹: به‌جای دایره‌ی تیره‌ی تخت دور دکمه (که روی تم‌های رنگی مثل یک لکه‌ی سیاه دیده می‌شد): سایه‌ی نرم
-                // زیر دکمه، بزل فلزی برجسته و رویه‌ای که از رنگ زمینه‌ی همان تم ساخته می‌شود
-                val sc = Offset(c.x, c.y + r * .12f)
-                drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Black.copy(alpha = .28f), Color.Transparent), sc, r * 1.28f), r * 1.28f, sc)
-                val bz = r + 5.dp.toPx()
-                drawCircle(Brush.verticalGradient(listOf(lerp(K.Surface2.copy(alpha = 1f), Color.White, .16f), K.Panel.copy(alpha = 1f), Color.Black), startY = c.y - bz, endY = c.y + bz), bz, c)
-                val faceBase = lerp(K.BgTop, K.Ink, .35f)
-                val glass = listOf(
-                    lerp(lerp(faceBase, K.GoldDeep, .26f), lerp(faceBase, Game, .22f), gameA), lerp(lerp(faceBase, K.GoldDeep, .09f), lerp(faceBase, Game, .09f), gameA), lerp(faceBase, Color.Black, .5f),
-                )
-                drawCircle(Brush.radialGradient(glass, Offset(c.x, c.y - r * .3f), r * 1.1f), r, c)
-                // سایه‌ی پایین رویه (گنبدی)
-                drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .38f)), startY = c.y + r * .1f, endY = c.y + r), r, c)
-                if (goldA > .01f) drawCircle(
-                    Brush.verticalGradient(listOf(K.Shine, gold, K.GoldDeep, K.GoldLight), startY = c.y - r, endY = c.y + r),
-                    r + 1.dp.toPx(), c, alpha = goldA, style = Stroke(5.dp.toPx()),
-                )
-                if (gameA > .01f) {
-                    // لبه‌ی نئونی: با چرخش دکمه می‌چرخد (موقع اتصال تند) و وصل با هر ضربان پینگ پررنگ‌تر می‌درخشد
-                    val rgb = Brush.sweepGradient(GameRgb, c)
-                    val glowUp = 1f + env * gOn * (.6f + .5f * amp)
-                    rotate(deg * 1.6f, c) {
-                        drawCircle(rgb, r + 1.dp.toPx(), c, alpha = (.16f * glowUp * gameA).coerceAtMost(1f), style = Stroke(15.dp.toPx()))
-                        drawCircle(rgb, r + 1.dp.toPx(), c, alpha = (.32f * glowUp * gameA).coerceAtMost(1f), style = Stroke(9.dp.toPx()))
-                        drawCircle(rgb, r + 1.dp.toPx(), c, alpha = gameA, style = Stroke(5.dp.toPx()))
-                    }
-                    drawCircle(Color.White.copy(alpha = .45f * gameA), r + 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
-                }
-                drawCircle(lerp(K.GoldLight, GameCyan, gameA).copy(alpha = .5f), r - 6.dp.toPx(), c, style = Stroke(1.dp.toPx()))
-                drawOval(
-                    Brush.verticalGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), startY = c.y - r, endY = c.y - r * .1f),
-                    Offset(c.x - r * .7f, c.y - r * .9f), Size(r * 1.4f, r * .8f),
-                )
-                // در حال اتصال: نور سفید دور لبه می‌دود
-                if (conA > .01f) {
-                    val rr = r + 1.dp.toPx()
-                    drawArc(
-                        lerp(K.Shine, GameLight, gCon).copy(alpha = conA), time * 344f, 69f, false,
-                        Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(5.dp.toPx(), cap = StrokeCap.Round),
-                    )
-                }
-                // وصل: لبه‌ی خط‌چین و دو موج به رنگ دوم تم که از دکمه بیرون می‌زنند (طلایی: فقط دو موج طلایی روشن، مثل طرح اول)
-                val classic = ThemeState.current.classic
-                if (onA > .01f && goldA > .01f && !classic) drawCircle(
-                    K.Accent.copy(alpha = .55f * onA * goldA), r + 1.dp.toPx(), c,
-                    style = Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(r * .75f, r * .25f), -time * r)),
-                )
-                if (onA > .01f) for (k in 0 until 2) {
-                    val p = ((time / 2.6f) + k * .5f) % 1f
-                    drawCircle((if (classic) K.GoldLight else K.Accent).copy(alpha = (1f - p) * .55f * onA * (1f - gOn)), r * (1.05f + p * .75f), c, style = Stroke(1.6.dp.toPx()))
-                }
-                if (gOn > .01f) heartbeat(env * (.6f + .5f * amp), gOn, c, r)
-                if (game && blast.value < 1f) connectBlast(blast.value, c, r)
-                }
-            })
-            // ---- وسط دکمه: لوگو، عنوان و یک خط توضیح، همه وسط‌چین و در اندازه‌ی دکمه
-            Column(Modifier.width(OrbBase * .74f), horizontalAlignment = Alignment.CenterHorizontally) {
-                // ۱.۲۹: کلید روشن/خاموش به‌جای لوگو؛ وصل بودن را رنگ کلید (K.Power، از خانواده‌ی تم نیست) نشان می‌دهد
-                SwitchGlyph(ui.vstate, lerp(K.Gold, GameLight, gameA))
-                Spacer(Modifier.height(5.dp))
-                val dnsOn = ui.mode == KMode.DNS
-                val (title, sub) = when (ui.vstate) {
-                    // زیر کلید: حالتی که با آن وصلی (ضد فیلتر، گیمینگ، …) و زمان اتصال
-                    VState.ON -> (if (dnsOn) "DNS فعال" else ui.mode.title) to
-                        (if (dnsOn) (ui.dns.activeRoute ?: "DNS") else elapsed(ui.elapsedSec))
-                    VState.CONNECTING -> "در حال اتصال" to "لمس برای لغو"
-                    VState.OFF -> "اتصال" to ui.mode.title
-                }
-                val tc = if (on) K.Power else lerp(K.Gold, GameLight, gameA)
-                T(title, size = if (ui.vstate == VState.CONNECTING) 15.sp else 19.sp, color = tc, weight = FontWeight.Black, shadow = glow(tc, 14f), maxLines = 1)
-                val num = on && !dnsOn
-                T(sub, size = if (num) 14.sp else 11.sp, color = if (num) Color.White else K.Text.copy(alpha = .85f), font = if (num) Poppins else Vazir,
-                    weight = FontWeight.Bold, ltr = num, maxLines = 1)
             }
+            drawCircle(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = .38f), Color.White.copy(alpha = .04f), Color.Black.copy(alpha = .5f)), startY = c.y - r, endY = c.y + r),
+                r - .5f * u, c, style = Stroke(1.2f * u),
+            )
+            drawCircle(Color.Black.copy(alpha = .55f), r * .67f, c, style = Stroke(1.5f * u))
+            // ---- حلقه‌ی تکه‌تکه‌ی نئونی
+            val sr = r * .82f
+            val sw = r * .058f
+            val step = 360f / SEGS
+            val gap = 3.2f
+            val litN = if (on) SEGS else if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
+            val spark = (t * 22f).toInt() % SEGS
+            val tl = Offset(c.x - sr, c.y - sr)
+            val sz = Size(sr * 2, sr * 2)
+            for (i in 0 until SEGS) {
+                val start = i * step - 90f + gap / 2
+                val isLit = i < litN
+                val hot = (on && (i == spark || i == (spark + SEGS - 1) % SEGS)) || (connecting && i == litN - 1) || (!on && !connecting && i == spark)
+                if (isLit || hot) drawArc(ac.copy(alpha = if (hot && !isLit) .18f else .32f), start, step - gap, false, tl, sz, style = Stroke(sw * 2.3f, cap = StrokeCap.Round))
+                val col = when {
+                    hot && (on || connecting) -> Color.White
+                    hot -> Color.White.copy(alpha = .45f)
+                    isLit -> ac
+                    else -> Color.White.copy(alpha = .09f)
+                }
+                drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+            }
+            // ---- سه نقطه‌ی نور روی یک مدار، ۱۲۰ درجه از هم
+            val orbitR = r + 5f * u
+            for ((k, d) in listOf(0 to 3f, 1 to 2f, 2 to 2.5f)) {
+                val ang = Math.toRadians((t * 40f + k * 120f).toDouble())
+                val o = Offset(c.x + orbitR * cos(ang).toFloat(), c.y + orbitR * sin(ang).toFloat())
+                drawCircle(ac.copy(alpha = .35f), d * u * 2.4f, o)
+                drawCircle(lerp(ac, Color.White, .45f), d * u, o)
+            }
+            // ---- گنبد شیشه‌ای تیره وسط
+            val dr = r * .59f
+            drawCircle(Color.Black.copy(alpha = .4f), dr + 6f * u, c)
+            drawCircle(lerp(Color.White.copy(alpha = .07f), ac.copy(alpha = .4f), onA), dr + 6.5f * u, c, style = Stroke(1.2f * u))
+            drawCircle(
+                Brush.linearGradient(listOf(lerp(K.BgMid, Color.White, .12f), lerp(K.BgMid, Color.Black, .5f)), Offset(c.x - dr, c.y - dr), Offset(c.x + dr * .3f, c.y + dr)),
+                dr, c,
+            )
+            drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset(c.x - dr * .32f, c.y - dr * .56f), dr * .9f), dr, c)
+            drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f + .15f * onA), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
+            if (onA > .01f) {
+                drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .26f * onA)), c, dr), dr, c)
+                drawCircle(ac.copy(alpha = .14f * onA), dr + 3f * u, c, style = Stroke(6f * u))
+                drawCircle(ac.copy(alpha = .65f * onA), dr, c, style = Stroke(1.5f * u))
+            }
+            drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .45f)), startY = c.y, endY = c.y + dr), dr, c)
+            drawOval(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = .28f), Color.Transparent), startY = c.y - dr * .94f, endY = c.y - dr * .3f),
+                Offset(c.x - dr * .6f, c.y - dr * .94f), Size(dr * 1.2f, dr * .62f),
+            )
+            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .3f), Color.Transparent), startY = c.y - dr, endY = c.y), dr, c, style = Stroke(1.2f * u))
+        }
+        // ---- وسط گنبد: نشان پاور، اسم حالت و زمان اتصال
+        Column(Modifier.width(diameter * .5f), horizontalAlignment = Alignment.CenterHorizontally) {
+            PowerEmblem(ui.vstate, ac, 34.dp * s)
+            Spacer(Modifier.height(5.dp * s))
+            val dnsOn = ui.mode == KMode.DNS
+            val (title, sub) = when (ui.vstate) {
+                VState.ON -> (if (dnsOn) "DNS فعال" else ui.mode.title) to (if (dnsOn) (ui.dns.activeRoute ?: "DNS") else elapsed(ui.elapsedSec))
+                VState.CONNECTING -> "در حال اتصال" to "لمس برای لغو"
+                VState.OFF -> "اتصال" to ui.mode.title
+            }
+            val lit = on || connecting
+            val tc = if (lit) ac else K.Text
+            T(title, size = (if (connecting) 15f else 20f).sp * s.coerceAtMost(1.1f), color = tc, weight = FontWeight.Black, shadow = if (lit) glow(ac, 16f) else null, maxLines = 1)
+            val num = on && !dnsOn
+            T(sub, size = (if (num) 15f else 12f).sp * s.coerceAtMost(1.1f), color = if (num) K.Text else K.Sub, font = if (num) Poppins else Vazir,
+                weight = FontWeight.Bold, ltr = num, maxLines = 1)
         }
     }
 }
 
 /**
- * کلید وسط دکمه‌ی اتصال (۱.۲۹، خواسته‌ی صاحب اپ: «کلید بذار»): یک کلید روشن/خاموش کوچک.
- * خاموش: دستگیره سمت خاموش، کم‌رنگ به رنگ تم؛ در حال اتصال: دستگیره وسط راه و می‌تپد؛ وصل: دستگیره سمت روشن و
- * کل کلید به رنگ K.Power (رنگی جدا از تم، تا «وصل» از دور معلوم باشد) با درخشش.
+ * نشان پاور وسط دکمه‌ی اتصال (۱.۳۲، به‌جای کلید): عدسی شیشه‌ای کوچک. خاموش خاکستری؛ در حال اتصال نوری دورش تند
+ * می‌چرخد و آیکون به رنگ اتصال در می‌آید؛ وصل: عدسی پر از رنگ اتصال، با برق و درخشش.
  */
 @Composable
-private fun SwitchGlyph(state: VState, off: Color) {
-    val pos by animateFloatAsState(when (state) { VState.ON -> 1f; VState.CONNECTING -> .5f; VState.OFF -> 0f }, spring(dampingRatio = .6f, stiffness = 300f), label = "sw")
-    val pulse = if (state == VState.CONNECTING) {
-        rememberInfiniteTransition(label = "swp").animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p").value
-    } else 0f
-    val onA by animateFloatAsState(if (state == VState.ON) 1f else 0f, tween(450), label = "swc")
-    Canvas(Modifier.size(width = 46.dp, height = 24.dp)) {
-        val w = size.width; val h = size.height
-        val c = lerp(off, K.Power, onA)
-        val cr = CornerRadius(h / 2)
-        // درخشش وصل
-        if (onA > .01f) drawRoundRect(c.copy(alpha = .30f * onA), Offset(-h * .25f, -h * .25f), Size(w + h * .5f, h * 1.5f), CornerRadius(h * .75f))
-        // شیار: تو رفته (سایه بالا، نور پایین)
-        drawRoundRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .85f), lerp(Color.Black, c, .25f + .45f * onA))), Offset.Zero, size, cr)
-        drawRoundRect(c.copy(alpha = .55f + .45f * onA), Offset.Zero, size, cr, style = Stroke(1.4.dp.toPx()))
-        // دستگیره: کره‌ی برجسته؛ روشن سمت «روشن» (در فارسی هم مثل کلید واقعی راست = روشن)
-        val kr = h * .38f
-        val kx = kr + h * .12f + (w - 2 * (kr + h * .12f)) * pos
-        val ko = Offset(kx, h / 2)
-        drawCircle(Color.Black.copy(alpha = .5f), kr, ko + Offset(0f, h * .08f))
-        drawCircle(Brush.radialGradient(listOf(Color.White, lerp(c, Color.White, .35f), c), ko - Offset(kr * .35f, kr * .4f), kr * 1.6f), kr * (1f + .08f * pulse), ko)
+private fun PowerEmblem(state: VState, ac: Color, d: Dp) {
+    val clock = motionTime()
+    val onA by animateFloatAsState(if (state == VState.ON) 1f else 0f, tween(450), label = "pwOn")
+    val conA by animateFloatAsState(if (state == VState.CONNECTING) 1f else 0f, tween(250), label = "pwCon")
+    Canvas(Modifier.size(d)) {
+        val r = size.minDimension / 2
+        val c = center
+        val u = 1.dp.toPx()
+        drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent), c + Offset(0f, r * .25f), r * 1.3f), r * 1.3f, c + Offset(0f, r * .25f))
+        if (onA > .01f) drawCircle(ac.copy(alpha = .3f * onA), r + 4f * u, c, style = Stroke(5f * u))
+        val top = lerp(lerp(K.BgMid, Color.White, .16f), lerp(ac, Color.White, .45f), onA)
+        val bot = lerp(lerp(K.BgMid, Color.Black, .5f), lerp(ac, Color.Black, .4f), onA)
+        drawCircle(Brush.verticalGradient(listOf(top, bot)), r, c)
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f + .35f * onA), Color.Transparent), Offset(c.x - r * .3f, c.y - r * .5f), r * .9f), r, c)
+        drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .35f + .45f * onA), Color.White.copy(alpha = .05f))), r - .5f * u, c, style = Stroke(u))
+        if (conA > .01f) {
+            val rr = r + 3f * u
+            drawArc(ac.copy(alpha = conA), clock.value * 400f % 360f, 110f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(2f * u, cap = StrokeCap.Round))
+        }
+        val ic = lerp(lerp(K.Sub, ac, conA), K.OnGold, onA)
+        inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
     }
 }
 
 /** قطر دکمه‌ی اتصال در طرح اصلی؛ اندازه‌ی واقعی با diameter از همین مقیاس می‌شود */
-val OrbBase = 138.dp
+val OrbBase = 212.dp
 
-/** جای عمودی دکمه نسبت به قطرش (حلقه‌ی بیرونی ۱.۴۲ برابر و آدمک‌های گیمینگ روی آن، تا روی کارت‌ها نیفتند) */
-const val OrbFootprint = 1.7f
-
-// ------------------------------------------------------------------ لایه‌ی گیمینگ دکمه‌ی اتصال
-
-/** رنگ گیمینگ همان تم (یاقوت سرخ، سرخ پاستلی یا سرخابی) و نسخه‌ی روشنش به سمت gameAlt (برای آدمک‌ها و سرِ نورها) */
-private val Game get() = modeColor(KMode.GAME)
-private val GameLight get() = lerp(lerp(Game, ThemeState.current.gameAlt, .3f), Color.White, .15f)
-
-/** رنگ آدمک‌ها: رنگ آدمک خود تم (زرد کانکی: قرمز)، وگرنه همان رنگ گیمینگ */
-private val Runner get() = ThemeState.current.runner.takeOrElse { Game }
-private val RunnerLight get() = ThemeState.current.runner.let { if (it.isSpecified) lerp(it, Color.White, .12f) else GameLight }
-
-/**
- * رنگ‌های نئونی حالت گیمینگ (لبه‌ی دکمه و حلقه‌ها): فقط رنگ گیمینگ تم، نئون دومِ هم‌خانواده‌اش (gameAlt) و نسخه‌ی روشنش،
- * تا کنار لوگو و تیرها یکدست بماند
- */
-private val GameCyan get() = ThemeState.current.gameAlt
-private val GameRgb get() = listOf(Game, GameCyan, Game, GameLight, Game)
-
-/** رنگ نئونی گیمینگ در جای f (۰..۱) دور حلقه */
-private fun rgbAt(f: Float): Color {
-    val p = GameRgb
-    val x = (((f % 1f) + 1f) % 1f) * (p.size - 1)
-    val i = x.toInt().coerceAtMost(p.size - 2)
-    return lerp(p[i], p[i + 1], x - i)
-}
-
-/** حلقه‌ی نئونی گیمینگ (رنگ گیمینگ، gameAlt و نسخه‌ی روشن) که rot درجه چرخیده؛ w ضخامت خط اصلی */
-private fun DrawScope.rgbRing(c: Offset, r: Float, w: Float, a: Float, rot: Float) {
-    val b = Brush.sweepGradient(GameRgb, c)
-    rotate(rot, c) {
-        for ((m, al) in listOf(4.5f to .07f, 3f to .15f, 1.9f to .32f)) drawCircle(b, r, c, alpha = al * a, style = Stroke(w * m))
-        drawCircle(b, r, c, alpha = a, style = Stroke(w))
-    }
-    drawCircle(Color.White.copy(alpha = .4f * a), r, c, style = Stroke(w * .35f))
-}
-
-/** دوره‌ی هر ضربان (ثانیه) از پینگ: پینگ کم آرام و منظم، پینگ بالا تند و نگران */
+/** دوره‌ی هر ضربان نوار قلب پینگ (ثانیه): پینگ کم آرام، پینگ بالا تند */
 private fun beatPeriod(ping: Long?): Float = if (ping == null || ping < 0) 1.15f else (1.25f - ping / 400f).coerceIn(.55f, 1.15f)
 
-/** شدت تپش در یک دوره (۰..۱): «تاپ» قوی و پشتش «توپ» ضعیف‌تر، مثل ضربان قلب */
-private fun beatEnv(u: Float): Float {
-    fun bump(c: Float, w: Float) = (1f - abs(u - c) / w).coerceIn(0f, 1f).let { it * it }
-    return max(bump(.05f, .06f), .6f * bump(.22f, .07f))
-}
-
-/** نرم شدن آغاز و پایان (۰..۱) */
 private fun smooth(x: Float) = x * x * (3f - 2f * x)
-
-/** یک دور کامل (رادیان) */
-private const val TAU = (2 * PI).toFloat()
-
-/** شدت پایه‌ی تپش گیمینگ از پینگ (حدود ۰.۳ تا ۰.۸): نوسان چند نمونه‌ی آخر و خود عدد پینگ */
-private fun pingBase(hist: List<Long>, ping: Long?): Float {
-    val t = hist.takeLast(6)
-    val jit = if (t.size < 2) 0f else t.zipWithNext { a, b -> abs(a - b).toFloat() }.average().toFloat()
-    val lvl = (((ping ?: 0L) - 40L).coerceAtLeast(0L) / 300f).coerceAtMost(.2f)
-    return .3f + (jit / 30f).coerceAtMost(.3f) + lvl
-}
-
-/** عدد شبه‌تصادفی ثابت (۰..۱) */
-private fun hash(a: Int, b: Int): Float {
-    var x = a * 374761393 + b * 668265263
-    x = (x xor (x ushr 13)) * 1274126177
-    return ((x xor (x ushr 16)) and 0xFFFFFF) / 16777215f
-}
-
-/** چند تیر در ثانیه از دیتای رد و بدل شده (بایت بر ثانیه): بی‌دیتا نیم تیر، چند مگ در ثانیه چهار تیر */
-private fun fireRate(bps: Long): Float = .5f + 3.5f * (kotlin.math.log10(1f + bps / 8_000f) / 2.5f).coerceIn(0f, 1f)
-
-/** زمان پرواز هر تیر (ثانیه) از پینگ: پینگ کم تیر تند، پینگ بالا تیر کند */
-private fun bulletFlight(ping: Long?): Float = (.28f + (ping ?: 60L) / 280f).coerceIn(.3f, 1.1f)
-
-/** رنگ تیرها (از تم، جدا از رنگ آدمک‌ها) و سرِ روشنشان */
-private val Tracer get() = ThemeState.current.tracer
-private val TracerHot get() = lerp(Tracer, Color.White, .5f)
-
-/**
- * تعقیب گیمینگ روی حلقه: جای دو آدمک (رادیان، صفر بالا و ساعت‌گرد)، فاز قدم‌ها، تیرهای در راه و پرش فراری.
- * هر فریم یک بار step صدا می‌شود؛ کشیدنش با chaseScene است.
- */
-private class Chase {
-    /** یک تیر: کی و از کجا شلیک شد، کجا به زمین حلقه می‌خورد و چند ثانیه در راه است */
-    class Shot(val t0: Float, val a0: Float, val a1: Float, val dur: Float)
-
-    var pos = 0f
-    var speed = .3f
-    var stride = 0f
-    var gap = .8f
-    var lastShot = -9f
-    var jumpAt = -9f
-    var burst = 0
-    private var fireAcc = 0f
-    private var burstAcc = 0f
-    private var count = 0
-    val shots = ArrayList<Shot>()
-
-    /** target: سرعت دویدن (رادیان بر ثانیه)؛ closer: تیرانداز چقدر نزدیک‌تر شود (۰..۱)؛ firing: وصل است و تیر می‌زند */
-    fun step(dt: Float, time: Float, target: Float, closer: Float, firing: Boolean, rate: Float, flight: Float) {
-        speed += (target - speed) * min(1f, dt * 2.5f)
-        pos = (pos + dt * speed) % TAU
-        stride += dt * (speed * 14f + 4f)
-        gap += (.8f + .08f * sin(time * .6f) - .22f * closer - gap) * min(1f, dt * 2f)
-        if (firing) {
-            fireAcc += dt * rate
-            if (fireAcc >= 1f) { fireAcc -= 1f; fire(time, flight, aimed = false) }
-            if (burst > 0) {
-                burstAcc += dt
-                if (burstAcc >= .09f) { burstAcc = 0f; burst--; fire(time, flight, aimed = true) }
-            }
-        } else {
-            fireAcc = 0f; burst = 0
-        }
-        shots.removeAll { time - it.t0 > it.dur + .3f }
-    }
-
-    /** تیرهای معمولی کمی پشت پای فراری به زمین می‌خورند؛ تیرهای رگبار پینگ درست زیر پایش (او می‌پرد) */
-    private fun fire(time: Float, flight: Float, aimed: Boolean) {
-        val miss = if (aimed) 0f else .06f + .1f * hash(count++, 3)
-        shots.add(Shot(time, pos, pos + gap + speed * flight - miss, flight))
-        lastShot = time
-    }
-}
-
-/** جهت «بالا» (بیرون حلقه) و «جلو» (ساعت‌گرد) در زاویه‌ی th */
-private fun upAt(th: Float) = Offset(sin(th), -cos(th))
-private fun fwdAt(th: Float) = Offset(cos(th), sin(th))
-
-/**
- * یک آدمک نئونی خطی روی حلقه (پا روی حلقه، سر رو به بیرون، رو به جلوی حرکت): run ۰ راه رفتن تا ۱ دویدن؛ lift: پرش (px)؛
- * gun: اسلحه در دست (تیرانداز) با لگد شلیک recoil (۰..۱). سر لوله‌ی اسلحه را برمی‌گرداند.
- */
-private fun DrawScope.stickman(
-    c: Offset, rr: Float, th: Float, h: Float, step: Float, run: Float, lift: Float, gun: Boolean, recoil: Float, a: Float,
-): Offset {
-    val up = upAt(th)
-    val fw = fwdAt(th)
-    val base = c + up * rr
-    fun w(p: Offset) = base + fw * (p.x * h) + up * (p.y * h)
-    fun dn(ang: Float) = Offset(sin(ang), -cos(ang))
-    val jump = (lift / (.55f * h)).coerceIn(0f, 1f)
-    val lean = .08f + .22f * run
-    val spine = Offset(sin(lean), cos(lean))
-    val hip = Offset(0f, .43f + .035f * run * cos(2 * step) + lift / h)
-    val neck = hip + spine * .3f
-    val head = neck + spine * .17f + Offset(.02f, 0f)
-    val shoulder = hip + spine * .27f
-    val body = Path()
-    fun seg(p0: Offset, p1: Offset, p2: Offset? = null) {
-        body.moveTo(w(p0).x, w(p0).y)
-        body.lineTo(w(p1).x, w(p1).y)
-        if (p2 != null) body.lineTo(w(p2).x, w(p2).y)
-    }
-    seg(hip, neck)
-    for (k in 0..1) {
-        val p = step + k * PI.toFloat()
-        val thigh = (.25f + .45f * run) * sin(p) + .5f * jump
-        val bend = .15f + (.25f + run) * max(0f, cos(p)) + 1.1f * jump
-        val knee = hip + dn(thigh) * .23f
-        seg(hip, knee, knee + dn(thigh - bend) * .23f)
-    }
-    var muzzle = Offset.Zero
-    val gunPath = Path()
-    if (gun) {
-        val grip = shoulder + Offset(.2f - .06f * recoil, -.04f)
-        val fore = grip + Offset(.13f, .01f)
-        seg(shoulder, shoulder + Offset(.06f, -.11f), grip)
-        seg(shoulder, shoulder + Offset(.12f, -.08f), fore)
-        val stock = grip + Offset(-.11f, .02f)
-        val tip = grip + Offset(.36f, .035f)
-        muzzle = w(tip)
-        gunPath.moveTo(w(stock).x, w(stock).y); gunPath.lineTo(muzzle.x, muzzle.y)
-        val mag = grip + Offset(.06f, 0f)
-        gunPath.moveTo(w(mag).x, w(mag).y); w(mag + Offset(.025f, -.09f)).let { gunPath.lineTo(it.x, it.y) }
-    } else {
-        for (k in 0..1) {
-            val q = step + k * PI.toFloat()
-            val upper = -(.2f + .6f * run) * sin(q) - .4f * jump
-            val elbow = shoulder + dn(upper) * .19f
-            seg(shoulder, elbow, elbow + dn(upper + .5f + run) * .17f)
-        }
-    }
-    val hc = w(head)
-    val hr = .13f * h
-    drawPath(body, Runner.copy(alpha = .16f * a), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(Runner.copy(alpha = .2f * a), hr + 2.dp.toPx(), hc)
-    drawPath(body, RunnerLight.copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawPath(body, Color.White.copy(alpha = .5f * a), style = Stroke(.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawCircle(RunnerLight.copy(alpha = a), hr, hc)
-    drawCircle(Color.White.copy(alpha = .55f * a), hr * .5f, hc)
-    if (gun) {
-        drawPath(gunPath, Color.White.copy(alpha = .22f * a), style = Stroke(3.4.dp.toPx(), cap = StrokeCap.Round))
-        drawPath(gunPath, lerp(K.Sub, Color.White, .7f).copy(alpha = a), style = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round))
-    }
-    return muzzle
-}
-
-/**
- * حالت گیمینگ: دو آدمک نئونی اندازه‌ی مورچه روی حلقه؛ یکی فرار می‌کند و دیگری با اسلحه دنبالش می‌دود و تیر
- * می‌زند. تیرها دنباله دارند، کمی پشت پای فراری به زمین حلقه می‌خورند و جرقه می‌زنند؛ تیرهای رگبار پینگ زیر پای او
- * می‌رسند و او از رویشان می‌پرد. a: پیدا بودن؛ firing: تیر زدن (وصل)
- */
-private fun DrawScope.chaseScene(ch: Chase, c: Offset, ring: Float, time: Float, a: Float, firing: Float) {
-    val h = 18.dp.toPx()
-    val rr = ring + 1.dp.toPx()
-    val run = ((ch.speed - .3f) / .6f).coerceIn(0f, 1f)
-    val muzzleAng = .62f * h / rr
-    val gunH = .74f * h
-
-    // تیرها و جرقه‌ی برخوردشان (پشت آدمک‌ها)
-    for (s in ch.shots) {
-        val t = time - s.t0
-        val span = s.a1 - s.a0 - muzzleAng
-        if (t <= s.dur) {
-            val p = t / s.dur
-            val tailP = (p - (12.dp.toPx() / rr) / max(.05f, span)).coerceAtLeast(0f)
-            fun at(q: Float): Offset {
-                val th = s.a0 + muzzleAng + span * q
-                return c + upAt(th) * (rr + gunH * (1f - q * q))
-            }
-            val head = at(p)
-            val tail = at(tailP)
-            drawLine(Tracer.copy(alpha = .35f * a), tail, head, 3.4.dp.toPx(), StrokeCap.Round)
-            drawLine(TracerHot.copy(alpha = a), tail, head, 1.4.dp.toPx(), StrokeCap.Round)
-            drawCircle(Color.White.copy(alpha = a), 1.1.dp.toPx(), head)
-        } else {
-            val k = ((t - s.dur) / .3f).coerceIn(0f, 1f)
-            val hit = c + upAt(s.a1) * rr
-            val up = upAt(s.a1)
-            val back = fwdAt(s.a1) * -1f
-            drawCircle(Tracer.copy(alpha = .5f * (1f - k) * a), (1.5f + 3f * k).dp.toPx(), hit)
-            for (i in 0 until 5) {
-                val ang = -.9f + .45f * i
-                val d = up * cos(ang) + back * sin(ang)
-                val len = (2f + 6f * k).dp.toPx() * (.6f + .4f * hash(i, s.t0.toBits()))
-                drawLine(TracerHot.copy(alpha = (1f - k) * a), hit + d * (len * .4f), hit + d * len, 1.dp.toPx(), StrokeCap.Round)
-            }
-        }
-    }
-
-    // فراری جلوتر (با پرش از روی رگبار) و تیرانداز پشت سرش با اسلحه
-    val jt = time - ch.jumpAt
-    val lift = if (jt in 0f..0.5f) .55f * h * sin(jt / .5f * PI.toFloat()) else 0f
-    stickman(c, rr, ch.pos + ch.gap, h, ch.stride + 1.3f, run, lift, gun = false, recoil = 0f, a = a)
-    val since = time - ch.lastShot
-    val recoil = if (firing > .5f) kotlin.math.exp(-since * 22f) else 0f
-    val muzzle = stickman(c, rr, ch.pos, h, ch.stride, run, 0f, gun = true, recoil = recoil, a = a)
-
-    // برق سر لوله
-    if (firing > .5f && since < .08f) {
-        val f = 1f - since / .08f
-        val fw = fwdAt(ch.pos)
-        val up = upAt(ch.pos)
-        drawCircle(Tracer.copy(alpha = .45f * f * a), 4.dp.toPx() * f, muzzle)
-        for (d in listOf(fw, fw * .8f + up * .5f, fw * .8f - up * .5f)) {
-            drawLine(TracerHot.copy(alpha = f * a), muzzle, muzzle + d * (5.dp.toPx() * f), 1.1.dp.toPx(), StrokeCap.Round)
-        }
-        drawCircle(Color.White.copy(alpha = f * a), 1.2.dp.toPx(), muzzle)
-    }
-}
-
-/** لحظه‌ی وصل شدن در گیمینگ (p: ۰ تا ۱): برق گیمینگ روی دکمه که آرام محو می‌شود */
-private fun DrawScope.connectBlast(p: Float, c: Offset, r: Float) {
-    val q = 1f - p
-    drawCircle(Brush.radialGradient(listOf(GameLight.copy(alpha = .5f * q * q), Color.Transparent), c, r * 1.6f), r * 1.6f, c)
-}
-
-/** لبه‌ی دکمه در گیمینگ وصل با هر ضربان می‌درخشد (e: شدت همان لحظه) */
-private fun DrawScope.heartbeat(e: Float, a: Float, c: Offset, r: Float) {
-    for ((w, al) in listOf(12f to .07f, 6f to .16f, 2.6f to .45f)) drawCircle(Game.copy(alpha = (al * e * a).coerceAtMost(1f)), r + 2.dp.toPx(), c, style = Stroke(w.dp.toPx()))
-}
 
 private fun elapsed(s: Long?): String {
     val v = s ?: 0
     return String.format(java.util.Locale.US, "%02d:%02d:%02d", v / 3600, v / 60 % 60, v % 60)
 }
 
-/** کارت سرور وصل‌شده (مثل طرح): پرچم، کشور و شهر، پروتکل و «اتصال پایدار» */
+/** کارت سرور وصل‌شده: پرچم، کشور و شهر، پروتکل و «اتصال پایدار» */
 @Composable
-private fun ConnectedCard(s: ServerChipUi, c: Color, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(D.RM)
+private fun ConnectedCard(s: ServerChipUi, c: Color) {
+    StripCard(s.flag, s.country, listOfNotNull(s.city, protoTitle(s.proto)).joinToString(" · "), "اتصال پایدار", c, selected = true)
+}
+
+/** کارت باریک سرور زیر دکمه‌ی اتصال: پرچم گرد، کشور، یک خط توضیح و یک برچسب وضعیت با نقطه‌ی نورانی */
+@Composable
+private fun StripCard(flag: String, country: String, sub: String, pill: String, c: Color, selected: Boolean) {
+    val shape = RoundedCornerShape(D.RL)
     Row(
-        modifier.fillMaxWidth().height(if (LocalCompact.current) D.HomeRowS else D.HomeRow).goldGlass(shape, selected = true)
+        Modifier.fillMaxWidth().height(if (LocalCompact.current) D.HomeRowS else D.HomeRow + 4.dp).goldGlass(shape, selected = selected, tint = c)
             .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        T(s.flag, size = 18.sp, weight = FontWeight.Normal)
-        Spacer(Modifier.width(D.S2))
+        Box(
+            Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = .4f)).border(1.5.dp, Color.White.copy(alpha = .45f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { T(flag, size = 19.sp, weight = FontWeight.Normal) }
+        Spacer(Modifier.width(D.S2 + 2.dp))
         Column(Modifier.weight(1f)) {
-            T(s.country, size = 13.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
-            T(listOfNotNull(s.city, protoTitle(s.proto)).joinToString(" · "), size = 10.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1)
+            T(country, size = 14.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            AutoText(sub, size = 11.sp, color = K.Sub, weight = FontWeight.Bold)
         }
         val sh = RoundedCornerShape(50)
         Row(
-            Modifier.clip(sh).background(K.Green.copy(alpha = .1f)).border(1.dp, K.Green.copy(alpha = .5f), sh).padding(horizontal = D.S2, vertical = 3.dp),
+            Modifier.clip(sh).background(Color.Black.copy(alpha = .35f)).border(1.dp, c.copy(alpha = .6f), sh).padding(horizontal = D.S3, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Dot(K.Green, 6.dp)
-            Spacer(Modifier.width(D.S1))
-            T("اتصال پایدار", size = 10.sp, color = K.Green, weight = FontWeight.Bold, maxLines = 1)
+            Dot(c, 6.dp)
+            Spacer(Modifier.width(6.dp))
+            T(pill, size = 11.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
 
-/** یک کارت شیشه‌ای با سه خانه‌ی هم‌اندازه: پینگ (با نمودار زنده)، دانلود، آپلود */
+/**
+ * کارت پایین صفحه‌ی خانه (۱.۳۲): بالا یک خط نازک اشتراک (گیگ و روز مانده، وضعیت) با نوار نئونی ۶dp حجم مانده،
+ * زیرش سه خانه‌ی کم‌ارتفاع پینگ (با ضربان زنده)، دانلود و آپلود. زدن خط اشتراک پنل حساب را باز می‌کند.
+ */
 @Composable
-private fun StatsRow(ui: HomeUi) {
+private fun StatsCard(ui: HomeUi, onAccount: () -> Unit) {
     val on = ui.vstate == VState.ON
-    val shape = RoundedCornerShape(D.RM)
-    Row(
-        Modifier.fillMaxWidth().height(if (LocalCompact.current) D.HomeStatS else D.HomeStat).goldGlass(shape).padding(horizontal = D.S1),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1.25f), horizontalAlignment = Alignment.CenterHorizontally) {
-            T("پینگ", size = 11.sp, color = K.Text, weight = FontWeight.Bold)
-            val p = if (on) ui.livePing else null
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+    val shape = RoundedCornerShape(D.RL)
+    val compact = LocalCompact.current
+    Column(Modifier.fillMaxWidth().goldGlass(shape)) {
+        ui.sub?.let { s ->
+            val active = isActive(s.status)
+            Column(
+                Modifier.fillMaxWidth().clickable(onClick = onAccount).guideTarget("sub").padding(start = D.S3, end = D.S3, top = if (compact) 6.dp else D.S2, bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    T(p?.toString() ?: "--", size = 14.sp, color = if (p != null) pingColor(p) else K.Sub, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                    Spacer(Modifier.width(3.dp))
-                    T("ms", size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+                    UsageCell(s.gbLeft, "گیگ مانده")
+                    Spacer(Modifier.width(D.S3))
+                    UsageCell(s.daysLeft, "روز")
+                    Spacer(Modifier.weight(1f))
+                    val c = if (active) K.Green else K.Red
+                    Dot(c, 7.dp)
                     Spacer(Modifier.width(6.dp))
-                    PingPulse(if (on) ui.pingHist else emptyList(), p, Modifier.width(44.dp).height(18.dp))
+                    T(faStatus(s.status), size = 12.sp, color = c, weight = FontWeight.Black, maxLines = 1)
+                }
+                // نوار نئونی حجم مانده (فقط اگر حجم نامحدود نیست)
+                s.usedFrac?.let { f -> NeonBar(1f - f.coerceIn(0f, 1f), warn = f > .85f) }
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = D.S3).height(1.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = .10f), Color.Transparent))))
+        }
+        if (ui.hasAccount) Row(
+            Modifier.fillMaxWidth().height(if (compact) 36.dp else 40.dp).guideTarget("stats").padding(horizontal = D.S1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1.25f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MiniIcon("pulse", K.Gold, 11.dp)
+                    Spacer(Modifier.width(D.S1))
+                    T("پینگ", size = 11.sp, color = K.Sub, weight = FontWeight.Bold)
+                }
+                val p = if (on) ui.livePing else null
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PingPulse(if (on) ui.pingHist else emptyList(), p, Modifier.width(44.dp).height(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        T(p?.toString() ?: "--", size = 14.sp, color = if (p != null) pingColor(p) else K.Sub, font = Poppins, weight = FontWeight.Bold, ltr = true)
+                        Spacer(Modifier.width(3.dp))
+                        T("ms", size = 10.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
+                    }
                 }
             }
+            StatDivider()
+            SpeedCell("down", "دانلود", K.Gold, if (on) ui.rx else null, Modifier.weight(1f))
+            StatDivider()
+            SpeedCell("up", "آپلود", K.Gold, if (on) ui.tx else null, Modifier.weight(1f))
         }
-        StatDivider()
-        SpeedCell("down", "دانلود", K.Accent, if (on) ui.rx else null, Modifier.weight(1f))
-        StatDivider()
-        SpeedCell("up", "آپلود", K.Gold, if (on) ui.tx else null, Modifier.weight(1f))
+    }
+}
+
+/**
+ * نوار نئونی باریک (۶dp): شیار تو رفته، پرشده با گرادیان رنگ تم و یک نقطه‌ی نورانی سرِ آن.
+ * fraction: سهم پر (۰ تا ۱)، از سمت شروع صفحه. warn: رنگ هشدار (حجم رو به پایان).
+ */
+@Composable
+fun NeonBar(fraction: Float, modifier: Modifier = Modifier, warn: Boolean = false, color: Color = K.Gold) {
+    val f by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(600), label = "neon")
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val c = if (warn) K.Warn else color
+    Canvas(modifier.fillMaxWidth().height(6.dp)) {
+        val h = size.height
+        val w = size.width
+        val cr = CornerRadius(h / 2)
+        drawRoundRect(Color.Black.copy(alpha = .45f), Offset.Zero, size, cr)
+        drawRoundRect(Color.White.copy(alpha = .07f), Offset.Zero, size, cr)
+        val fw = (w * f).coerceAtLeast(h)
+        val x0 = if (rtl) w - fw else 0f
+        val tip = if (rtl) x0 + h / 2 else fw - h / 2
+        val stops = listOf(lerp(c, Color.Black, .45f), c, lerp(c, Color.White, .4f))
+        drawRoundRect(c.copy(alpha = .28f), Offset(x0, -h * .35f), Size(fw, h * 1.7f), CornerRadius(h))
+        drawRoundRect(
+            Brush.horizontalGradient(if (rtl) stops.reversed() else stops, startX = x0, endX = x0 + fw),
+            Offset(x0, h * .12f), Size(fw, h * .76f), cr,
+        )
+        drawCircle(c.copy(alpha = .5f), h * 1.1f, Offset(tip, h / 2))
+        drawCircle(Color.White, h * .62f, Offset(tip, h / 2))
     }
 }
 
@@ -1198,43 +849,9 @@ private fun ecgAt(u: Float): Float {
     return 0f
 }
 
-/** نوار باریک وضعیت اشتراک: گیگ باقی‌مانده · روز باقی‌مانده · وضعیت (فقط عدد)، و زیرش نوار حجم مصرف‌شده */
 @Composable
-fun UsageStrip(s: SubUi, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val active = isActive(s.status)
-    val shape = RoundedCornerShape(D.RM)
-    Column(
-        modifier.fillMaxWidth().goldGlass(shape)
-            .clickable(onClick = onClick),
-    ) {
-        Row(Modifier.fillMaxWidth().height(if (LocalCompact.current) D.HomeUsageS else D.HomeUsage).padding(horizontal = D.S3), verticalAlignment = Alignment.CenterVertically) {
-            UsageCell(s.gbLeft, "گیگ", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
-            UsageCell(s.daysLeft, "روز", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(18.dp).background(K.Gold.copy(alpha = .18f)))
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                val c = if (active) K.Green else K.Red
-                Dot(c, 7.dp)
-                Spacer(Modifier.width(6.dp))
-                T(faStatus(s.status), size = 12.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
-            }
-        }
-        // نوار حجم مصرف‌شده (فقط اگر حجم نامحدود نیست)
-        s.usedFrac?.let { f ->
-            val bar = RoundedCornerShape(2.dp)
-            Box(Modifier.fillMaxWidth().padding(start = D.S3, end = D.S3, bottom = D.S2).height(4.dp).clip(bar).background(Color.White.copy(alpha = .08f))) {
-                Box(
-                    Modifier.fillMaxWidth(f.coerceIn(0f, 1f)).fillMaxHeight().clip(bar)
-                        .background(Brush.horizontalGradient(if (f > .85f) listOf(K.Warn, K.Red) else listOf(K.GoldDeep, K.Gold, K.GoldLight))),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun UsageCell(value: String, unit: String, modifier: Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+private fun UsageCell(value: String, unit: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         val v = faDigits(value)
         val latin = isLatin(v)
         T(v, size = 14.sp, color = K.Text, font = if (latin) Poppins else Vazir, weight = FontWeight.Black, ltr = latin)

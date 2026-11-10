@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -92,46 +93,129 @@ fun protoDesc(p: String) = when (p) {
     else -> "سازگاری بالا"
 }
 
+/** خانواده‌ی هر پروتکل برای دکمه‌های بالای صفحه‌ی سرورها (Amnezia با تانل و مستقیمش یکی است) */
+private fun protoFamily(p: String) = when (p) {
+    "amneziawg", "amneziawg-direct" -> "Amnezia"
+    "kankimix" -> "KANKI MIX"
+    "wireguard" -> "WireGuard"
+    "hysteria2" -> "Hysteria2"
+    "xray" -> "Xray"
+    "mtun" -> "microtun"
+    "kping" -> "KPING"
+    else -> p
+}
+
+/** ترتیب دکمه‌های پروتکل (همان ترتیب ثابت برنامه) */
+private val FamilyOrderUi = listOf("KANKI MIX", "Amnezia", "WireGuard", "Xray", "Hysteria2", "microtun", "KPING")
+
 @Composable
 fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions) {
+    // فیلتر پروتکل (۱.۳۲): «همه» یا یک خانواده؛ فقط کشورهایی که آن پروتکل را دارند و فقط همان کانفیگ‌ها
+    var fam by rememberSaveable { mutableStateOf("") }
+    val fams = remember(cards) {
+        val have = cards.flatMap { c -> c.lines.flatMap { listOfNotNull(it.tunnel, it.direct) } }.map { protoFamily(it.proto) }.toSet()
+        FamilyOrderUi.filter { it in have } + (have - FamilyOrderUi.toSet()).sorted()
+    }
+    if (fam.isNotEmpty() && fam !in fams) fam = ""
+    val shown = if (fam.isEmpty()) cards else cards.mapNotNull { c ->
+        val ls = c.lines.mapNotNull { l ->
+            val t = l.tunnel?.takeIf { protoFamily(it.proto) == fam }
+            val d = l.direct?.takeIf { protoFamily(it.proto) == fam }
+            if (t == null && d == null) null else l.copy(tunnel = t, direct = d)
+        }
+        if (ls.isEmpty()) null else c.copy(lines = ls, best = ls.flatMap { listOfNotNull(it.tunnel?.ping, it.direct?.ping) }.filter { it >= 0 }.minOrNull())
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad),
         verticalArrangement = Arrangement.spacedBy(D.CardGap),
     ) {
-        // ۱.۲۹: فاصله‌ی بیشتر از سربرگ بالا و بین سربرگ، تست پینگ و کشورها
         Spacer(Modifier.height(D.S2))
-        ServersHero(cards.size, cards.sumOf { c -> c.lines.count { it.tunnel != null } + c.lines.count { it.direct != null } })
+        ServersHero(cards.size, cards.sumOf { c -> c.lines.count { it.tunnel != null } + c.lines.count { it.direct != null } }, ping, act.pingAll)
         tip?.let { RobotBanner(it, onClose = act.closeTip) }
-        PingAllCard(ping, act.pingAll, Modifier.padding(top = D.S2).guideTarget("ping_all"))
-        Spacer(Modifier.height(D.S2))
-        if (cards.isEmpty()) {
+        if (fams.size > 1) ProtoChips(fams, fam) { fam = it }
+        fam.takeIf { it.isNotEmpty() }?.let { f ->
+            val any = shown.firstNotNullOfOrNull { c -> c.lines.firstNotNullOfOrNull { it.tunnel ?: it.direct } }
+            any?.let { r ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Dot(K.Gold, 6.dp)
+                    Spacer(Modifier.width(6.dp))
+                    T(tr(protoDesc(r.proto)) + " · " + trf("%d کشور", shown.size), size = 11.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+                }
+            }
+        }
+        if (shown.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(D.S6), contentAlignment = Alignment.Center) { T("سروری پیدا نشد", color = K.Sub) }
         }
         // کلید هر کارت اسم کشور است: وقتی ترتیب با پینگ تازه عوض می‌شود یا کارتی بسته می‌شود،
         // کانفیگ‌های باز یک کشور هیچ‌وقت زیر کارت کشور دیگری نمی‌مانند
-        cards.forEachIndexed { i, c -> key(c.id) { CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) } }
+        shown.forEachIndexed { i, c -> key(c.id) { CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) } }
         Spacer(Modifier.height(D.S2))
     }
 }
 
-/** سربرگ صفحه‌ی سرورها: لوگوی کانکی، عنوان، یک خط و شمار کشورها و کانفیگ‌ها */
+/**
+ * سربرگ صفحه‌ی سرورها (۱.۳۲): لوگوی کانکی وسط با حلقه‌ی نور چرخان، عنوان، یک خط و شمار کشورها و کانفیگ‌ها، و زیرش
+ * دکمه‌ی کوچک «تست پینگ همه» با نوار پیشرفت باریک (به‌جای کارت جدای تست پینگ).
+ */
 @Composable
-private fun ServersHero(countries: Int, configs: Int, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(D.RL)
-    Row(
-        modifier.fillMaxWidth().goldGlass(shape, selected = true)
-            .padding(D.CardPad),
-        verticalAlignment = Alignment.CenterVertically,
+private fun ServersHero(countries: Int, configs: Int, p: PingAllUi, onPing: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(D.RX)
+    Column(
+        modifier.fillMaxWidth().goldGlass(shape).padding(horizontal = D.CardPad, vertical = D.S4),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Logo3D(60.dp)
-        Spacer(Modifier.width(D.S3))
-        Column(Modifier.weight(1f)) {
-            T("سرورهای کانکی", size = D.TxtPage, color = K.Text, weight = FontWeight.Black, maxLines = 1)
-            T("پرسرعت، امن و همیشه آماده؛ با یک لمس وصل شو", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+        Logo3D(64.dp, animate = true, glow = .6f)
+        Spacer(Modifier.height(D.S2))
+        T("پروتکل‌های کانکی", size = 19.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+        T("پرسرعت، امن و همیشه آماده؛ با یک لمس وصل شو", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+        Spacer(Modifier.height(D.S2))
+        Row(horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            HeroChip(trf("%d کشور", countries))
+            HeroChip(trf("%d کانفیگ", configs))
+        }
+        Spacer(Modifier.height(D.S3))
+        Box(Modifier.guideTarget("ping_all")) {
+            if (p.running) {
+                Row(Modifier.height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spinner(14.dp)
+                    Spacer(Modifier.width(D.S2))
+                    T(trf("در حال تست… %d از %d", p.done, p.total), size = 12.sp, color = K.Text, weight = FontWeight.Bold)
+                }
+            } else PingStartButton(if (p.finished) "دوباره" else "تست پینگ همه", p.finished, onPing)
+        }
+        val f = when {
+            p.total == 0 -> 0f
+            p.running -> p.done.toFloat() / p.total
+            p.finished -> 1f
+            else -> 0f
+        }
+        if (p.running || p.finished) {
+            Spacer(Modifier.height(D.S2))
+            NeonBar(f, Modifier.padding(horizontal = D.S6))
             Spacer(Modifier.height(D.S1))
-            Row(horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                HeroChip(trf("%d کشور", countries))
-                HeroChip(trf("%d کانفیگ", configs))
+            T("UDP " + faDigits(p.udp.toString()) + " · TCP " + faDigits(p.tcp.toString()), size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+        }
+    }
+}
+
+/** دکمه‌های کوچک پروتکل در یک خط («همه» اول)؛ اگر جا نشد خط افقی می‌لغزد */
+@Composable
+private fun ProtoChips(fams: List<String>, sel: String, onPick: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = D.S2).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        (listOf("") + fams).forEach { f ->
+            val on = f == sel
+            val shape = RoundedCornerShape(D.RS)
+            Box(
+                Modifier.height(32.dp).widthIn(min = 58.dp)
+                    .then(if (on) Modifier.goldGlass(shape, selected = true) else Modifier.goldGlass(shape))
+                    .clickable { onPick(f) }.padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (f.isEmpty()) T("همه", size = 12.sp, color = if (on) K.Gold else K.Text, weight = FontWeight.Black, maxLines = 1)
+                else T(f, size = 11.sp, color = if (on) K.Gold else K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
             }
         }
     }
@@ -139,45 +223,11 @@ private fun ServersHero(countries: Int, configs: Int, modifier: Modifier = Modif
 
 @Composable
 private fun HeroChip(text: String) {
-    val sh = RoundedCornerShape(D.RT)
+    val sh = RoundedCornerShape(50)
     T(
         text, size = 11.sp, color = K.GoldLight, weight = FontWeight.Bold, maxLines = 1,
-        modifier = Modifier.clip(sh).background(K.Gold.copy(alpha = .12f)).border(1.dp, K.Gold.copy(alpha = .3f), sh).padding(horizontal = D.S2, vertical = 2.dp),
+        modifier = Modifier.clip(sh).background(Color.Black.copy(alpha = .3f)).border(1.dp, K.Gold.copy(alpha = .35f), sh).padding(horizontal = D.S3, vertical = 2.dp),
     )
-}
-
-/** کارت «تست پینگ همه»: همه‌ی کانفیگ‌ها (UDP با پینگ ICMP، TCP با زمان اتصال) با هم سنجیده می‌شوند */
-@Composable
-private fun PingAllCard(p: PingAllUi, onStart: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(D.RL)
-    Column(
-        modifier.fillMaxWidth().goldGlass(shape)
-            .padding(horizontal = D.CardPad, vertical = D.S2),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                T("تست پینگ همه", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black)
-                val line = when {
-                    p.running -> trf("در حال تست… %d از %d", p.done, p.total)
-                    else -> "UDP " + faDigits(p.udp.toString()) + " · TCP " + faDigits(p.tcp.toString())
-                }
-                T(line, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
-            }
-            if (p.running) {
-                Box(Modifier.size(width = 80.dp, height = D.BtnS), contentAlignment = Alignment.Center) { Spinner(D.Icon) }
-            } else {
-                PingStartButton(if (p.finished) "دوباره" else "شروع", p.finished, onStart)
-            }
-        }
-        Spacer(Modifier.height(D.S2))
-        val f = when {
-            p.total == 0 -> 0f
-            p.running -> p.done.toFloat() / p.total
-            p.finished -> 1f
-            else -> 0f
-        }
-        ProgressLine(f, K.Gold, height = 4.dp)
-    }
 }
 
 /** دکمه‌ی «شروع / دوباره» تست پینگ: قرص برجسته‌ی رنگ تم با آیکون پخش یا تکرار */
@@ -215,10 +265,10 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifie
         modifier.fillMaxWidth().goldGlass(shape, selected = lit),
     ) {
         Row(
-            Modifier.fillMaxWidth().height(D.RowH).clickable { act.toggle(c.id) }.padding(horizontal = D.CardPad),
+            Modifier.fillMaxWidth().height(48.dp).clickable { act.toggle(c.id) }.padding(horizontal = D.CardPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FlagBadge(c.flag, D.Flag, ring = if (lit) K.Gold else K.Accent.copy(alpha = .7f))
+            FlagBadge(c.flag, 30.dp, ring = if (lit) K.Gold else Color.White.copy(alpha = .45f))
             Spacer(Modifier.width(D.S3))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
