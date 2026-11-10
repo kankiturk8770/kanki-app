@@ -227,8 +227,9 @@ jobs:
             for v in "v1 scheme" "v2 scheme" "v3 scheme"; do
               echo "$out" | grep -q "Verified using $v.*: true" || { echo "::error::$f بدون امضای $v"; exit 1; }
             done
-            echo "$out" | grep -q "Signer #1 certificate SHA-256 digest: $KANKI_CERT_SHA256" || { echo "::error::$f با کلید دیگری امضا شده است"; exit 1; }
-            [ "$(echo "$out" | grep -c 'Signer #[0-9]* certificate SHA-256')" = 1 ] || { echo "::error::$f بیش از یک امضاکننده دارد"; exit 1; }
+            # همه‌ی امضاکننده‌ها (V1/V2 و V3.0) باید همان یک کلید باشند
+            certs=$(echo "$out" | grep -oE 'certificate SHA-256 digest: [0-9a-f]+' | awk '{print $NF}' | sort -u)
+            [ "$certs" = "$KANKI_CERT_SHA256" ] || { echo "::error::$f با کلید دیگری امضا شده است: $certs"; exit 1; }
           done
 
       # فایل نصبی در Releases گذاشته می‌شود (یک نسخه‌ی پیش‌انتشار برای هر شاخه که هر بار جایگزین می‌شود).
