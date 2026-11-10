@@ -291,7 +291,14 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     val rows = ((maxHeight - gap * 2 - 64.dp) / (SmartRowH + D.S1)).toInt().coerceAtLeast(1)
                     WorldMap(
                         ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
-                        Modifier.fillMaxWidth().height(mapH).align(Alignment.Center).guideTarget("map"),
+                        // نقشه داخل یک قاب گرد تیره با لبه‌ی شیشه‌ای (مثل طرح)
+                        Modifier.fillMaxWidth().padding(horizontal = D.PagePad).height(mapH).align(Alignment.Center)
+                            .drawBehind { liftShadow(RoundedCornerShape(D.RX).createOutline(size, layoutDirection, this), 6.dp.toPx(), .5f) }
+                            .clip(RoundedCornerShape(D.RX))
+                            .background(Brush.radialGradient(listOf(K.Gold.copy(alpha = .07f), Color.Transparent), radius = 900f))
+                            .background(lerp(K.BgMid, Color.Black, .45f).copy(alpha = .85f))
+                            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.White.copy(alpha = .03f))), RoundedCornerShape(D.RX))
+                            .guideTarget("map"),
                         accent = if (ui.vstate == VState.OFF) K.Gold else mc,
                         dns = ui.mode == KMode.DNS,
                     )
@@ -312,7 +319,7 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     val side = if (ui.hasAccount) 30.dp else 0.dp
                     // ارتفاع لازم: دکمه + حالت‌های بالا و پایین مدار با اسمشان (حدود ۱.۰۴ قطر + ۳۶dp)
                     val byH = if (ui.hasAccount) (maxHeight - 36.dp) / 1.04f else maxHeight - D.S2
-                    val d = minOf(byH, (maxWidth / 2 - side) / ORBIT_DX).coerceIn(112.dp, OrbBase)
+                    val d = minOf(byH, (maxWidth / 2 - side) / ORBIT_DX).coerceIn(112.dp, 240.dp)
                     if (ui.hasAccount) {
                         ModeOrbit(
                             ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,

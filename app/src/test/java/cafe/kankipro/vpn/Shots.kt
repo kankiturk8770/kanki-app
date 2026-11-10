@@ -96,7 +96,7 @@ abstract class ShotsBase {
         sub = SubUi("42", "23", "Active", 0.35f),
         alert = alert,
         countries = countries(),
-        pins = pins.map { if (vs != VState.OFF && it.iso == "DE") it.copy(selected = true) else it },
+        pins = pins.map { if (it.iso == "DE") it.copy(selected = true) else it },
         userGeo = Geo(35.7, 51.4),
         userIso = "IR",
         locationIso = if (on) "DE" else "IR",

@@ -215,6 +215,8 @@ class AppState private constructor(context: Context) {
                 launchConnect(reconnect = true) { connectFilter() }
             }
             KMode.DNS -> {
+                // دکمه‌ی DNS همیشه دیده می‌شود (۱.۳۲)؛ اشتراکی که DNS ندارد همان لحظه پیامش را می‌گیرد و حالت عوض نمی‌شود
+                if (account != null && account?.dns == null) { error = "اشتراک شما DNS ندارد"; errorDetail = null; return }
                 val wasOther = mode != KMode.DNS && vstate == VState.ON
                 changeMode(m)
                 if (wasOther) launchConnect(reconnect = true) { connectDns() }
