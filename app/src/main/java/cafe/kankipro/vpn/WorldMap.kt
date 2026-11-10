@@ -315,7 +315,8 @@ fun WorldMap(
         shown.forEachIndexed { i, p ->
             val pt = pts[i]
             val isSel = pt[4] == 1f
-            val o = Offset(pt[0].coerceIn(fr * 1.2f, w - fr * 1.2f), pt[1].coerceIn(fr * 1.2f, h - fr * 1.2f))
+            // پرچم‌ها هیچ‌وقت به لبه‌ی قاب نقشه نمی‌چسبند
+            val o = Offset(pt[0].coerceIn(fr * 1.9f, w - fr * 1.9f), pt[1].coerceIn(fr * 2.1f, h - fr * 1.9f))
             val real = Offset(pt[2], pt[3])
             val e = if (isSel) 1f else edgeFade(real, w, h).coerceAtLeast(edgeFade(o, w, h))
             if (e <= .01f) return@forEachIndexed

@@ -1023,11 +1023,12 @@ fun DrawScope.settingIcon(kind: String, c: Color) {
  * به سمت پایان صفحه. به‌جای Switch خود اندروید در همه‌ی برنامه.
  */
 @Composable
-fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier) {
+fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, small: Boolean = false) {
+    val k = if (small) .85f else 1f
     val f by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = .7f, stiffness = 500f), label = "gsw")
     val shape = RoundedCornerShape(50)
     Box(
-        modifier.size(width = 48.dp, height = 28.dp).alpha(if (enabled) 1f else .45f)
+        modifier.size(width = 48.dp * k, height = 28.dp * k).alpha(if (enabled) 1f else .45f)
             .drawBehind {
                 if (f > .01f) drawRoundRect(K.Gold.copy(alpha = .25f * f), Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(size.height))
             }
@@ -1043,7 +1044,7 @@ fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: B
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
-            Modifier.offset(x = 3.dp + 20.dp * f).size(22.dp)
+            Modifier.offset(x = 3.dp * k + 20.dp * k * f).size(22.dp * k)
                 .drawBehind {
                     drawCircle(Color.Black.copy(alpha = .5f), size.minDimension / 2, center + Offset(0f, 1.5.dp.toPx()))
                     drawCircle(Brush.verticalGradient(listOf(Color.White, Color(0xFFBFC6C1))), size.minDimension / 2)

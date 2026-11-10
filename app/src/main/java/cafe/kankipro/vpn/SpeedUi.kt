@@ -31,6 +31,8 @@ data class SpeedUi(
     val udpTarget: String? = null,
     val server: String? = null,
     val viaVpn: Boolean = false,
+    /** کشور سروری که الان به آن وصلیم (برای زیرعنوان صفحه) */
+    val vpnPlace: String? = null,
     val usedBytes: Long? = null,
     val error: String? = null,
 )
@@ -46,7 +48,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
     ) {
         Column {
         Spacer(Modifier.height(D.S2))
-        Heading("تست سرعت", if (ui.viaVpn) "از داخل تونل کانکی" else "بدون VPN")
+        Heading("تست سرعت", if (ui.viaVpn) (ui.vpnPlace?.let { trf("متصل به VPN · %s", it) } ?: "از داخل تونل کانکی") else "بدون VPN")
         tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = onCloseTip) }
         }
         KCard(Modifier.fillMaxWidth().padding(vertical = D.S3), padding = D.CardPad) {

@@ -193,7 +193,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
             KTab.HOME -> HomeTab(state, countries, onToggle)
             KTab.SERVERS -> ServersTab(state)
             KTab.TEST -> SpeedContent(
-                state.speed.copy(live = state.speedLive),
+                // زیرعنوان همیشه وضعیت واقعی اتصال (نه فقط لحظه‌ی شروع تست)
+                state.speed.copy(
+                    live = state.speedLive,
+                    viaVpn = if (state.speed.running) state.speed.viaVpn else state.vstate == VState.ON,
+                    vpnPlace = if (state.vstate == VState.ON) state.node?.let { n -> countryName(state.isoOfNode(n)) ?: state.placeName(n) } else null,
+                ),
                 tip = if (state.tipsSeen["test"] == true) null else RobotAlert("tip_test", 0, "برای دیدن سرعت واقعی اینترنتت از داخل VPN، اول وصل شو. تست حجم مصرف می‌کنه، پس زیاد تکرارش نکن 😉"),
                 onStart = { state.runSpeedTest() },
                 onCloseTip = { state.markTip("test") },
