@@ -1027,10 +1027,13 @@ class AppState private constructor(context: Context) {
         watchState()
         watchHealth()
         watchSync()
-        // ۱.۳۲: همه‌ی تم‌های قبلی برداشته شدند (طرح شیشه‌ای)؛ هر کس تمی دارد که دیگر نیست Kanki Default می‌گیرد
-        val savedTheme = prefs.getString("theme", null)
-        if (Themes.none { it.id == savedTheme }) prefs.edit().putString("theme", Themes[0].id).remove("theme122").remove("theme128").apply()
-        ThemeState.set(prefs.getString("theme", Themes[0].id) ?: Themes[0].id)
+        // نسخه‌ی ۱.۲۲: تم زرد کانکی پیش‌فرض است و یک بار برای همه انتخاب می‌شود (بعدش انتخاب خود کاربر می‌ماند)
+        if (!prefs.getBoolean("theme122", false)) prefs.edit().putString("theme", "yellow").putBoolean("theme122", true).apply()
+        // نسخه‌ی ۱.۲۸: تم تازه‌ی «سیاه و لیمویی» یک بار برای همه انتخاب می‌شود (بعدش انتخاب خود کاربر می‌ماند)
+        if (!prefs.getBoolean("theme128", false)) prefs.edit().putString("theme", "lime").putBoolean("theme128", true).apply()
+        // «طلای فلزی» (۱.۲۹) برداشته شد (۱.۳۰): هر کس آن را داشت طلایی می‌گیرد
+        if (prefs.getString("theme", null) == "metal") prefs.edit().putString("theme", "gold").apply()
+        ThemeState.set(prefs.getString("theme", "yellow") ?: "yellow")
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
 

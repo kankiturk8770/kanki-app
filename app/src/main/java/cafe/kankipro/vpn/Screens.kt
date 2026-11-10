@@ -88,11 +88,9 @@ fun LoginScreen(state: AppState) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { accept(it) },
-                    modifier = Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
-                    // آیکون کلید سمت راست کادر، خودش وسطِ ارتفاع کادر می‌نشیند
-                    trailingIcon = { Canvas(Modifier.size(20.dp)) { iconPath("M8 15a4 4 0 1 0 0 .01M11 12l9-9M17 6l3 3M15 8l2 2", K.Sub, 2f) } },
                     // خط‌چین کل عرض فیلد (نه چند خط تیره‌ی کوتاه وسط)
                     placeholder = {
                         Canvas(Modifier.fillMaxWidth().height(2.dp)) {
@@ -108,8 +106,8 @@ fun LoginScreen(state: AppState) {
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = K.Gold.copy(alpha = .8f), unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = Color(0x33000000), unfocusedContainerColor = Color(0x33000000),
+                        focusedBorderColor = K.Gold, unfocusedBorderColor = K.Gold.copy(alpha = .35f),
+                        focusedContainerColor = Color(0x66000000), unfocusedContainerColor = Color(0x66000000),
                         cursorColor = K.Gold,
                     ),
                 )

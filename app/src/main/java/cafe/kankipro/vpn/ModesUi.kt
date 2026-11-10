@@ -144,52 +144,19 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
 }
 
 /**
- * چهار حالت روی یک مدار دور دکمه‌ی اتصال (۱.۳۲، طرح «Kanki Glass»): دو حالت سمت شروع صفحه (هوشمند بالا، گیمینگ
- * پایین) و دو حالت سمت مقابل (ضد فیلتر بالا، DNS پایین)، قرینه و با زاویه‌ی ±۳۴ درجه. دو قوس نقطه‌چین ظریف هر جفت را به
- * هم وصل می‌کنند و نوری آرام رویشان می‌دود. بدون DNS، ضد فیلتر وسط سمت مقابل می‌نشیند.
- * dial: قطر دکمه‌ی اتصال (جای حالت‌ها و اندازه‌شان با آن مقیاس می‌شود). live: VPN وصل است؛ دور حالتی که با آن وصلیم
- * یک نور می‌چرخد.
+ * حالت‌ها یک ستون عمودی کنار دکمه‌ی اتصال (از ۱.۲۸). از ۱.۲۹ هر حالت یک دکمه‌ی گرد برجسته است با اسمش زیرش؛
+ * DNS (اگر اشتراک دارد) همیشه آخر، زیر ضد فیلتر. live: VPN وصل است؛ دور دکمه‌ی حالتی که با آن وصلیم یک نور می‌چرخد.
  */
 @Composable
-fun ModeOrbit(selected: KMode, dial: Dp, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
+fun ModeColumn(selected: KMode, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
-    val dns = showDns || selected == KMode.DNS
-    val s = dial / OrbBase
-    val dx = dial * ORBIT_DX
-    val dy = dial * ORBIT_DY
-    val d = (40.dp * s).coerceAtLeast(34.dp)
-    // جای هر حالت: x مثبت = سمت پایان صفحه (offset خودش با جهت صفحه برمی‌گردد)، y مثبت = پایین
-    val slots = buildList {
-        add(KMode.SMART to (-dx to -dy))
-        add(KMode.GAME to (-dx to dy))
-        if (dns) { add(KMode.FILTER to (dx to -dy)); add(KMode.DNS to (dx to dy)) } else add(KMode.FILTER to (dx * 1.12f to 0.dp))
-    }
-    val clock = motionTime()
-    Box(modifier, contentAlignment = Alignment.Center) {
-        // دو قوس مدار (نقطه‌چین) و نوری که رویشان می‌دود
-        Canvas(Modifier.size(dial * ORBIT_R * 2)) {
-            val r = size.minDimension / 2
-            val tl = Offset(center.x - r, center.y - r)
-            val sz = Size(r * 2, r * 2)
-            val dot = Stroke(1.7.dp.toPx(), cap = StrokeCap.Round, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(1.5.dp.toPx(), 5.5.dp.toPx())))
-            val run = (clock.value / 4.5f % 1f)
-            for (start in listOf(-34f, 146f)) {
-                drawArc(Color.White.copy(alpha = .16f), start, 68f, false, tl, sz, style = dot)
-                val head = start + 68f * run - 8f
-                val from = head.coerceAtLeast(start)
-                val to = (head + 16f).coerceAtMost(start + 68f)
-                if (to > from) {
-                    drawArc(K.Gold.copy(alpha = .35f), from, to - from, false, tl, sz, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
-                    drawArc(K.Gold, from, to - from, false, tl, sz, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round))
-                }
-            }
-        }
-        slots.forEach { (m, xy) ->
-            // مرکز دایره‌ی حالت روی مدار؛ اسم زیرش
-            Box(Modifier.offset(x = xy.first, y = xy.second + 8.dp * s)) {
-                ModeOrb(m, m == selected, enabled, live && m == selected, d, tap, long)
-            }
+    val modes = KMode.entries.filter { it != KMode.DNS || showDns || it == selected }
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val slot = ((maxHeight - D.S2 * (modes.size - 1)) / modes.size).coerceIn(56.dp, 84.dp)
+        val d = (slot - 22.dp).coerceIn(38.dp, 54.dp)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(D.S2), horizontalAlignment = Alignment.CenterHorizontally) {
+            modes.forEach { m -> ModeOrb(m, m == selected, enabled, live && m == selected, d, tap, long) }
         }
     }
 }
@@ -213,7 +180,7 @@ private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, live: Boolean, d: 
             },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(d + 8.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(d + 10.dp), contentAlignment = Alignment.Center) {
             // وصل با همین حالت: یک نور دنباله‌دار دور دکمه می‌چرخد
             if (liveA > .01f) {
                 val t = rememberInfiniteTransition(label = "ring")
@@ -228,7 +195,7 @@ private fun ModeOrb(m: KMode, sel: Boolean, enabled: Boolean, live: Boolean, d: 
                 ModeIcon(m, if (sel) lerp(mc, Color.White, .22f) else mc.copy(alpha = .9f), d * .42f)
             }
         }
-        T(m.title, size = 10.5.sp, color = if (sel) mc else K.Sub, weight = if (sel) FontWeight.Black else FontWeight.Bold, shadow = if (sel) glow(mc, 10f) else null, maxLines = 1)
+        T(m.title, size = 11.sp, color = if (sel) K.Text else K.Text.copy(alpha = .8f), weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -610,8 +577,9 @@ private fun PairRow(p: SheetPair, current: String?, auto: Boolean, color: Color,
 private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: Color, enabled: Boolean, modifier: Modifier, onClick: (SheetServer) -> Unit) {
     val shape = RoundedCornerShape(D.RT)
     Column(
-        modifier.height(D.RowH + D.S1)
-            .then(if (sv != null) Modifier.goldGlass(shape, selected = selected, tint = color) else Modifier.clip(shape).border(1.dp, Color.White.copy(alpha = .05f), shape))
+        modifier.height(D.RowH + D.S3).clip(shape)
+            .background(if (selected) color.copy(alpha = .16f) else if (sv != null) Color(0x0AFFFFFF) else Color.Transparent)
+            .border(if (selected) 1.3.dp else 1.dp, if (selected) color else if (sv != null) K.Gold.copy(alpha = .16f) else K.Gold.copy(alpha = .06f), shape)
             .alpha(if (sv == null) .45f else if (enabled) 1f else .55f)
             .clickable(enabled = enabled && sv != null) { sv?.let(onClick) }
             .padding(horizontal = D.S2),
@@ -686,48 +654,31 @@ private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled:
     }
 }
 
-/**
- * ردیف «بهترین سرور برای بازی» (۱.۳۲): قاب ویژه با لبه‌ی گرادیان نئونی، آیکون صاعقه در دکمه‌ی گرد پر، برچسب «پایدار» و
- * پینگ؛ خودش پایدارترین سرور همین پروتکل را انتخاب و وصل می‌کند.
- */
+/** ردیف «سریع‌ترین سرور»: خودش کم‌پینگ‌ترین سرور همین پروتکل را انتخاب و وصل می‌کند */
 @Composable
 private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(D.RL)
+    val shape = RoundedCornerShape(D.RS)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH + 4.dp)
-            .drawBehind {
-                val o = shape.createOutline(size, layoutDirection, this)
-                liftShadow(o, 6.dp.toPx(), .5f, color)
-                for ((m, a) in listOf(10f to .05f, 5f to .12f)) drawOutline(o, color.copy(alpha = a * (if (selected) 1.5f else 1f)), style = Stroke(m.dp.toPx()))
-            }
-            .clip(shape)
-            .background(Brush.linearGradient(listOf(lerp(K.BgMid, color, .16f), lerp(K.BgMid, Color.Black, .45f))))
-            .border(1.5.dp, Brush.linearGradient(listOf(lerp(color, Color.White, .5f), color, Color.Transparent, color.copy(alpha = .5f), lerp(color, Color.White, .5f))), shape)
+        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH).clip(shape)
+            .background(Brush.horizontalGradient(listOf(color.copy(alpha = if (selected) .26f else .14f), color.copy(alpha = .04f))))
+            .border(if (selected) 1.5.dp else 1.dp, color.copy(alpha = if (selected) .9f else .45f), shape)
             .alpha(if (enabled) 1f else .5f)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(34.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { MiniIcon("bolt", K.OnGold, 15.dp) }
+        T("⚡", size = 16.sp, weight = FontWeight.Normal)
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
             T("بهترین سرور برای بازی", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
             T("پایدارترین را با پینگ، لرزش و افت پیدا و وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Spacer(Modifier.width(D.S2))
-        val sh = RoundedCornerShape(50)
-        Row(
-            Modifier.clip(sh).background(color.copy(alpha = .15f)).border(1.dp, color.copy(alpha = .4f), sh).padding(horizontal = D.S2, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Dot(color, 5.dp)
-            Spacer(Modifier.width(4.dp))
-            T("پایدار", size = 10.sp, color = color, weight = FontWeight.Black, maxLines = 1)
-        }
         // جای عدد همیشه هست (خالی تا اولین پینگ): متن کنارش با رسیدن عدد جابه‌جا نمی‌شود
-        Box(Modifier.width(48.dp), contentAlignment = Alignment.CenterEnd) {
-            best?.let { T("$it ms", size = 12.sp, color = K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1) }
+        Box(Modifier.width(50.dp), contentAlignment = Alignment.CenterEnd) {
+            best?.let { T("$it ms", size = 11.sp, color = pingColor(it), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1) }
         }
+        Spacer(Modifier.width(D.S2))
+        Chevron(color)
     }
 }
 

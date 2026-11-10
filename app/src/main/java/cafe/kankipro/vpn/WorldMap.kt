@@ -12,8 +12,6 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
@@ -236,113 +234,51 @@ fun WorldMap(
                 style = Stroke(sw, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(sw * 4f, sw * 4f), flow * sw * 8f)),
             )
         }
-        // پرتو داده (۱.۳۲): منحنی از شما (کم‌رنگ) تا سرور (نئون کامل) با درخشش، خط‌چین روانِ بسته‌ها روی آن و یک سرِ
-        // نورانی که از شما تا سرور می‌رود؛ دور هر دو سر موج راداری
+        // کمان نئونی به رنگ «وصل» تم از شما تا سرور
         if (user != null && sel != null && draw > 0f) {
             val a = proj(user)
             val b = proj(sel.geo)
-            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .28).toFloat()
+            val lift = (kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) * .30).toFloat()
             val mid = Offset((a.x + b.x) / 2, (a.y + b.y) / 2 - lift)
             fun bez(q: Float) = Offset(
                 (1 - q) * (1 - q) * a.x + 2 * (1 - q) * q * mid.x + q * q * b.x,
                 (1 - q) * (1 - q) * a.y + 2 * (1 - q) * q * mid.y + q * q * b.y,
             )
-            val steps = 48
             val path = Path().apply {
                 moveTo(a.x, a.y)
+                val steps = 48
                 for (i in 1..(steps * draw).toInt().coerceAtLeast(1)) { val o = bez(i / steps.toFloat()); lineTo(o.x, o.y) }
             }
             val sw = w / 240f
-            val c = K.Gold
-            fun beam(al: Float) = Brush.linearGradient(listOf(c.copy(alpha = al * .12f), c.copy(alpha = al * .6f), c.copy(alpha = al)), start = a, end = b)
-            for ((m, al) in listOf(5f to .08f, 3f to .18f, 1.6f to .9f)) drawPath(path, beam(al), style = Stroke(sw * m, cap = StrokeCap.Round))
-            drawPath(path, Color.White.copy(alpha = .45f), style = Stroke(sw * .4f, cap = StrokeCap.Round))
-            if (draw >= 1f) {
-                // بسته‌ها: خط‌چین روشن که از شما به سمت سرور جریان دارد
-                drawPath(path, Color.White.copy(alpha = .9f), style = Stroke(sw * .9f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(sw * 1.5f, sw * 5f), -flow * sw * 13f)))
-                // سرِ نورانی
-                val q = (clock / 1.8f) % 1f
-                val head = bez(q)
-                for (k in 0 until 8) {
-                    val tq = (q - k * .012f).coerceAtLeast(0f)
-                    drawCircle(lerp(c, Color.White, .6f).copy(alpha = (1f - k / 8f) * .8f), sw * (1.6f - k * .12f), bez(tq))
-                }
-                drawCircle(c.copy(alpha = .35f), sw * 4f, head)
-                drawCircle(Color.White, sw * 1.2f, head)
-                // موج راداری دور شما و دور سرور
-                for (o in listOf(a, b)) for (k in 0 until 2) {
-                    val ph = (pulse + k * .5f) % 1f
-                    drawCircle(c.copy(alpha = (1f - ph) * .8f), w / 90f * (.6f + ph * 2.6f), o, style = Stroke(w / 380f))
-                }
+            // کمان از رنگ کشور شما به رنگ اصلی تم (سرور)، با نور سفیدی که رویش می‌دود
+            fun arc(al: Float) = Brush.linearGradient(listOf(K.UserCountry.copy(alpha = al), K.Gold.copy(alpha = al)), start = a, end = b)
+            for ((m, al) in listOf(5f to .07f, 3f to .16f, 1.8f to .36f, 1f to 1f)) {
+                drawPath(path, arc(al), style = Stroke(sw * m, cap = StrokeCap.Round))
             }
+            drawPath(path, Color.White.copy(alpha = .55f), style = Stroke(sw * .3f, cap = StrokeCap.Round))
+            if (draw >= 1f) for (k in 0 until 3) neonDot(Color.White, bez((flow + k / 3f) % 1f), sw * 1.2f)
         }
 
-        // پرچم‌های گرد روی خود نقطه (۱.۳۲، بی‌میله). پرچم‌های شلوغ (آلمان، فرانسه، انگلیس…) از هم فاصله می‌گیرند تا روی هم
-        // نیفتند؛ سرور انتخابی و برچسبش سر جایشان می‌مانند و هر پرچمی که جابه‌جا شده با یک خط باریک به جای واقعی‌اش وصل است.
-        val fr = w / 34f
+        val pr = w / 34f
+        // بقیه‌ی سرورها: نقطه‌ی درخشان طلایی با سنجاق کوچک پرچم
+        // (سروری که در کشور خود کاربر است جدا کشیده نمی‌شود تا دو سنجاق روی هم نیفتند)
+        // (با DNS وصل کم‌رنگ‌اند: ترافیک به هیچ‌کدام نمی‌رود)
         val pinAlpha = if (dns) 1f - .5f * draw else 1f
-        val shown = pins.filter { user == null || it.iso != userIso || it.selected }
-        val pts = shown.map { p -> val o = proj(p.geo); floatArrayOf(o.x, o.y, o.x, o.y, if (!dns && p.selected) 1f else 0f) }
-        val selPt = pts.firstOrNull { it[4] == 1f }
-        // برچسب سرور انتخابی بالای پرچمش جا می‌گیرد؛ پرچم‌های دیگر از آن‌جا هم کنار می‌روند
-        val blocks = if (selPt != null) listOf(-1.4f, -.45f, .45f, 1.4f).map { k -> floatArrayOf(selPt[0] + k * fr * 1.5f, selPt[1] - fr * 2.4f) } else emptyList()
-        val minD = fr * 2.6f
-        repeat(50) {
-            var moved = false
-            for (i in pts.indices) for (j in i + 1 until pts.size) {
-                val pa = pts[i]; val pb = pts[j]
-                if (pa[4] == 1f && pb[4] == 1f) continue
-                var dx = pb[0] - pa[0]; var dy = pb[1] - pa[1]
-                var dd = kotlin.math.hypot(dx, dy)
-                if (dd >= minD) continue
-                moved = true
-                if (dd < .01f) { dx = .3f; dy = 1f; dd = 1.04f }
-                val ux = dx / dd; val uy = dy / dd; val push = minD - dd
-                when {
-                    pa[4] == 1f -> { pb[0] += ux * push; pb[1] += uy * push }
-                    pb[4] == 1f -> { pa[0] -= ux * push; pa[1] -= uy * push }
-                    else -> { pa[0] -= ux * push / 2; pa[1] -= uy * push / 2; pb[0] += ux * push / 2; pb[1] += uy * push / 2 }
-                }
-            }
-            for (pt in pts) if (pt[4] != 1f) for (bk in blocks) {
-                val dx = pt[0] - bk[0]; val dy = pt[1] - bk[1]
-                val dd = kotlin.math.hypot(dx, dy).coerceAtLeast(.01f)
-                val mn = fr * 2f
-                if (dd < mn) { moved = true; pt[0] += dx / dd * (mn - dd); pt[1] += dy / dd * (mn - dd) }
-            }
-            if (!moved) return@repeat
+        pins.filter { (dns || !it.selected) && (user == null || it.iso != userIso) }.forEach { p ->
+            val o = proj(p.geo)
+            val e = edgeFade(o, w, h)
+            if (e <= .01f) return@forEach
+            neonDot(K.Gold.copy(alpha = .85f * pinAlpha * e), o, w / 170f)
+            flagPin(tm, o, p.iso, K.Gold.copy(alpha = .8f * pinAlpha * e), pr * .78f, e)
         }
-        shown.forEachIndexed { i, p ->
-            val pt = pts[i]
-            val isSel = pt[4] == 1f
-            val o = Offset(pt[0].coerceIn(fr * 1.2f, w - fr * 1.2f), pt[1].coerceIn(fr * 1.2f, h - fr * 1.2f))
-            val real = Offset(pt[2], pt[3])
-            val e = if (isSel) 1f else edgeFade(real, w, h).coerceAtLeast(edgeFade(o, w, h))
-            if (e <= .01f) return@forEachIndexed
-            val col = if (isSel) selColor else K.Gold
-            if ((o - real).getDistance() > fr * .4f) {
-                drawLine(col.copy(alpha = .55f * e * pinAlpha), real, o, w / 420f)
-                drawCircle(col.copy(alpha = e * pinAlpha), w / 260f, real)
-            }
-            if (isSel) {
-                val r = w / 14f
-                drawCircle(Brush.radialGradient(listOf(selColor.copy(alpha = .32f), selColor.copy(alpha = .10f), Color.Transparent), o, r * 1.3f), r * 1.3f, o)
-                if (connected && !dns) drawCircle(selColor.copy(alpha = (1 - pulse) * .7f), r * (.35f + pulse * .9f), o, style = Stroke(w / 300f))
-            }
-            roundFlag(tm, o, p.iso, col, if (isSel) fr * 1.12f else fr * .92f, isSel, e * pinAlpha)
-        }
-        // برچسب سرور انتخابی (شیشه‌ای، بالای پرچم)
-        if (selPt != null && !dns) shown.firstOrNull { it.selected }?.let { sp ->
-            val name = countryName(sp.iso) ?: sp.iso ?: return@let
-            val lay = tm.measure(name, androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 32f).toSp(), color = K.Text))
-            val pw = lay.size.width + fr * 1.4f
-            val ph = lay.size.height + fr * .3f
-            val cx = selPt[0].coerceIn(pw / 2 + 4f, w - pw / 2 - 4f)
-            val top = (selPt[1] - fr * 1.25f - ph - fr * .35f).coerceAtLeast(2f)
-            val rr = androidx.compose.ui.geometry.CornerRadius(ph / 2)
-            drawRoundRect(Color.Black.copy(alpha = .6f), Offset(cx - pw / 2, top), Size(pw, ph), rr)
-            drawRoundRect(selColor.copy(alpha = .55f), Offset(cx - pw / 2, top), Size(pw, ph), rr, style = Stroke(w / 400f))
-            drawText(lay, topLeft = Offset(cx - lay.size.width / 2f, top + (ph - lay.size.height) / 2f))
+        // سرور انتخابی: هاله، موج تپنده و سنجاق بزرگ‌تر
+        sel?.let {
+            val o = proj(it.geo)
+            val r = w / 14f
+            drawCircle(Brush.radialGradient(listOf(selColor.copy(alpha = .32f), selColor.copy(alpha = .10f), Color.Transparent), o, r * 1.3f), r * 1.3f, o)
+            if (connected) drawCircle(selColor.copy(alpha = (1 - pulse) * .7f), r * (.35f + pulse * .9f), o, style = Stroke(w / 300f))
+            neonDot(selColor, o, w / 110f)
+            flagPin(tm, o, it.iso, selColor, pr)
         }
         // DNS وصل: سپر دور شما (سه موج پشت هم، مدار خط‌چین و سه درخواست که دورتان می‌چرخند)
         if (dns && user != null && draw > 0f) {
@@ -375,8 +311,10 @@ fun WorldMap(
             val o = proj(it)
             drawCircle(youColor.copy(alpha = (1 - pulse) * .55f), w / 120f * (1.5f + pulse * 3f), o, style = Stroke(w / 400f))
             neonDot(youColor, o, w / 125f)
-            val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 36f).toSp(), color = K.Sub))
-            drawText(layout, topLeft = Offset((o.x - layout.size.width / 2f).coerceAtMost(w - layout.size.width - 4f), (o.y + w / 60f).coerceAtMost(h - layout.size.height - 2f)))
+            // اگر سرور انتخابی در همین کشور است، سنجاق پرچم همان سرور کافی است
+            if (sel == null || sel.iso != userIso) flagPin(tm, o, userIso, youColor, pr * .85f)
+            val layout = tm.measure(tr("شما"), androidx.compose.ui.text.TextStyle(fontFamily = Vazir, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = (w / 34f).toSp(), color = K.Text))
+            drawText(layout, topLeft = Offset(o.x + pr * 1.1f, o.y - pr * 2.2f - layout.size.height / 2f))
         }
     })
 }
@@ -403,23 +341,26 @@ private class MapCache {
 }
 
 /**
- * پرچم گرد نقشه (۱.۳۲): پرچم داخل دایره، حلقه‌ی سفید نازک و حلقه‌ی تیره دورش، برق کوچک بالا؛ انتخاب‌شده با حلقه‌ی
- * رنگ اتصال و درخشش. alpha: کم‌رنگ شدن نزدیک لبه‌ی نقشه.
+ * سنجاق نقشه (۱.۲۹، خواسته‌ی صاحب اپ: «پرچم گرد شناور»): پرچم داخل دایره‌ی تیره با حلقه‌ی درخشان رنگ c، کمی بالای نقطه
+ * و یک خط نازک نوری تا خود نقطه؛ بدون شکل قطره. fade: کم‌رنگ شدن نزدیک لبه‌ی نقشه.
  */
-private fun DrawScope.roundFlag(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, r: Float, sel: Boolean, alpha: Float = 1f) {
-    drawCircle(Color.Black.copy(alpha = .55f * alpha), r * 1.25f, o + Offset(0f, r * .18f))
-    if (sel) drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .55f * alpha), Color.Transparent), o, r * 2f), r * 2f, o)
-    drawCircle(Color(0xFF1B1F1C).copy(alpha = alpha), r, o)
+private fun DrawScope.flagPin(tm: androidx.compose.ui.text.TextMeasurer, o: Offset, iso: String?, c: Color, pr: Float, fade: Float = 1f) {
+    val rr = pr * 1.1f
+    val head = Offset(o.x, o.y - pr * 2.4f)
+    // خط نوری از نقطه تا پرچم (پایین پررنگ، بالا محو)
+    drawLine(
+        Brush.verticalGradient(listOf(c.copy(alpha = .15f * fade), c.copy(alpha = .9f * fade)), startY = head.y + rr, endY = o.y),
+        Offset(o.x, head.y + rr), o, pr * .14f, StrokeCap.Round,
+    )
+    // درخشش نرم دور پرچم
+    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = .38f * fade), Color.Transparent), head, rr * 1.9f), rr * 1.9f, head)
+    drawCircle(Color.Black.copy(alpha = .92f * fade), rr, head)
     flagEmoji(iso)?.let { f ->
-        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (r * 1.75f).toSp()))
-        clipPath(Path().apply { addOval(Rect(o, r)) }) {
-            drawText(layout, topLeft = Offset(o.x - layout.size.width / 2f, o.y - layout.size.height / 2f), alpha = alpha)
-        }
+        val layout = tm.measure(f, androidx.compose.ui.text.TextStyle(fontSize = (pr * 1.15f).toSp()))
+        drawText(layout, topLeft = Offset(head.x - layout.size.width / 2f, head.y - layout.size.height / 2f), alpha = fade)
     }
-    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = .5f * alpha), Color.Transparent), startY = o.y - r, endY = o.y - r * .2f), Offset(o.x - r * .55f, o.y - r * .9f), Size(r * 1.1f, r * .6f))
-    drawCircle(Color.Black.copy(alpha = .45f * alpha), r + r * .2f, o, style = Stroke(r * .14f))
-    drawCircle((if (sel) Color.White else Color.White.copy(alpha = .6f)).copy(alpha = alpha * (if (sel) 1f else .6f)), r, o, style = Stroke(r * .1f))
-    if (sel) drawCircle(c.copy(alpha = alpha), r + r * .22f, o, style = Stroke(r * .14f))
+    drawCircle(c.copy(alpha = fade), rr, head, style = Stroke(pr * .16f))
+    drawCircle(Color.White.copy(alpha = .5f * fade), rr + pr * .08f, head, style = Stroke(pr * .04f))
 }
 
 private fun DrawScope.neonDot(c: Color, o: Offset, r: Float) {
