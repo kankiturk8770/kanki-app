@@ -301,7 +301,7 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifie
                 Row(Modifier.fillMaxWidth().padding(bottom = D.S1), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                     for (k in listOf("تانل", "مستقیم")) {
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            T(k, size = 11.sp, color = Color.White, weight = FontWeight.Black)
+                            T(k, size = 11.sp, color = if (k == "تانل") K.Gold else K.Sub, weight = FontWeight.Black)
                         }
                     }
                 }
@@ -361,7 +361,7 @@ private fun MiniCfg(r: CfgRowUi?, label: String, act: ServersActions) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        T(label, size = 10.sp, color = Color.White, weight = FontWeight.Bold, maxLines = 1)
+        T(label, size = 9.5.sp, color = if (r?.selected == true) K.Gold else K.Sub, weight = FontWeight.SemiBold, maxLines = 1)
         if (r == null) { T("—", size = 11.sp, color = K.Sub, ltr = true); return@Column }
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(verticalAlignment = Alignment.CenterVertically) {

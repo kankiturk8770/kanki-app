@@ -127,9 +127,6 @@ private fun Group(title: String, modifier: Modifier = Modifier, content: @Compos
     KCard(modifier.fillMaxWidth(), padding = D.CardPad, content = content)
 }
 
-/** جای ثابت انتهای هر ردیف تنظیمات: کلید و فلش‌ها در یک راستا */
-private val TrailW = 48.dp
-
 @Composable
 fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().height(D.RowH), verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +136,7 @@ fun SwitchRow(icon: String, title: String, sub: String, checked: Boolean, onChan
             T(title, size = D.TxtTitle, maxLines = 1)
             T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Box(Modifier.width(TrailW), contentAlignment = Alignment.Center) { GlassSwitch(checked, onChange, small = true) }
+        GlassSwitch(checked, onChange)
     }
 }
 
@@ -158,12 +155,10 @@ fun MenuRow(
             T(title, size = D.TxtTitle, color = if (danger) K.Red else K.Text, maxLines = 1)
             T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
-        Box(Modifier.width(TrailW), contentAlignment = Alignment.Center) {
-            when {
-                danger -> {}
-                arrow -> Chevron(K.Gold)
-                else -> T(if (expanded) "▲" else "▼", size = 12.sp, color = K.Gold)
-            }
+        when {
+            danger -> {}
+            arrow -> Chevron(K.Gold)
+            else -> T(if (expanded) "▲" else "▼", size = 12.sp, color = K.Gold)
         }
     }
 }

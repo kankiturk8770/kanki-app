@@ -41,7 +41,7 @@ private fun PathIcon(d: String, on: Boolean, c: Color, size: Int = 20) {
     Canvas(Modifier.size(size.dp)) { iconPath(d, col, 2f) }
 }
 
-/** آمار زنده‌ی KPING (وقتی وصلی) و تنظیماتش؛ با دکمه‌ی «تنظیمات» پنل گیمینگ باز می‌شود */
+/** آمار زنده‌ی KPING و دکمه‌ی تنظیمات؛ زیر توضیح KPING در پنل گیمینگ */
 @Composable
 fun KpingPanel(c: Color) {
     var st by remember { mutableStateOf(HyEngine.kpStat.takeIf { HyEngine.kping }) }
@@ -57,13 +57,16 @@ fun KpingPanel(c: Color) {
             delay(1000)
         }
     }
+    var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(D.RL)
     Column(
         Modifier.fillMaxWidth().padding(top = D.S2).goldGlass(shape, tint = c).padding(D.S3),
         verticalArrangement = Arrangement.spacedBy(D.S2),
     ) {
         val s = st
-        if (s != null) {
+        if (s == null) {
+            T("وقتی وصل شوی اینجا می‌بینی بسته‌ها از کدام راه می‌روند و چند بسته‌ی گم‌شده نجات پیدا کرد.", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+        } else {
             val wifi = s.paths.firstOrNull { it.name == "wifi" }
             val cell = s.paths.firstOrNull { it.name == "cell" }
             val both = wifi?.alive == true && cell?.alive == true
@@ -105,14 +108,15 @@ fun KpingPanel(c: Color) {
                 }
             }
             T(
-                trf("ترمیم‌شده: %d · نسخه‌ی دوم: %s · بسته‌ی ترمیم: %s%s", s.fixed,
+                trf("بازسازی با پریتی: %d · نسخه‌ی دوم: %s · پریتی: %s%s", s.fixed,
                     if (s.dupMs > 0) "${s.dupMs} ms" else tr("خاموش"),
                     if (s.fec >= 2) trf("هر %d بسته", s.fec) else tr("خاموش"),
                     if (s.auto) " · " + tr("خودکار") else ""),
                 size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
             )
         }
-        KpingSettings(c)
+        SmallLine(if (open) "بستن تنظیمات KPING" else "تنظیمات KPING", onClick = { open = !open })
+        AnimatedVisibility(open) { KpingSettings(c) }
     }
 }
 
@@ -179,7 +183,7 @@ private fun KpingSettings(c: Color) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 T("خودکار", size = 13.sp, color = K.Text)
-                T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و بسته‌ی ترمیم را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و پریتی را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
             GlassSwitch(v.auto, { set(v.copy(auto = it)) })
         }
@@ -188,7 +192,7 @@ private fun KpingSettings(c: Color) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S1)) {
                 listOf(0, 5, 10, 15, 20).forEach { ms -> Chip(if (ms == 0) "خاموش" else "$ms ms", v.dupMs == ms, c, Modifier.weight(1f)) { set(v.copy(dupMs = ms)) } }
             }
-            T("بسته‌ی ترمیم (یکی برای هر …)", size = 12.sp, color = K.Text)
+            T("پریتی (یک بسته‌ی ترمیم برای هر …)", size = 12.sp, color = K.Text)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S1)) {
                 listOf(0, 2, 4, 8).forEach { k -> Chip(if (k == 0) "خاموش" else "$k", v.fec == k, c, Modifier.weight(1f)) { set(v.copy(fec = k)) } }
             }
