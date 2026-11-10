@@ -38,7 +38,7 @@
             android:exported="true"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- آیکون برنامه به رنگ تم (۱.۲۹): هر تم یک alias با آیکون خودش؛ فقط یکی روشن است (LauncherIcon). طلایی و طلای فلزی: Icon_gold -->
+        <!-- ورودی‌های آیکون برنامه: از ۱.۳۲ همه همان یک آیکون را دارند. نگه داشته شده‌اند چون گوشی‌ای که یکی از آن‌ها را روشن کرده (۱.۲۹) بدون آن آیکونی نمی‌داشت؛ LauncherIcon فقط Icon_gold را روشن نگه می‌دارد -->
         <activity-alias
             android:name=".Icon_gold"
             android:targetActivity=".MainActivity"
@@ -56,8 +56,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_yellow"
-            android:roundIcon="@drawable/ic_launcher_yellow">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -68,8 +68,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_crimson"
-            android:roundIcon="@drawable/ic_launcher_crimson">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -80,8 +80,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_purple"
-            android:roundIcon="@drawable/ic_launcher_purple">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -92,8 +92,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_lime"
-            android:roundIcon="@drawable/ic_launcher_lime">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -104,8 +104,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_sapphire"
-            android:roundIcon="@drawable/ic_launcher_sapphire">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -116,8 +116,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_turquoise"
-            android:roundIcon="@drawable/ic_launcher_turquoise">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -128,8 +128,8 @@
             android:targetActivity=".MainActivity"
             android:exported="true"
             android:enabled="false"
-            android:icon="@drawable/ic_launcher_amethyst"
-            android:roundIcon="@drawable/ic_launcher_amethyst">
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
