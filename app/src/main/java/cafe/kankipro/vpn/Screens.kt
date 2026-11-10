@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -66,22 +67,19 @@ fun LoginScreen(state: AppState) {
     }
     LaunchedEffect(Unit) { Sfx.preload(ctx, R.raw.kanki_switch) }
 
+    // صفحه‌ی ورود (۱.۳۲، طرح شیشه‌ای): لوگو با حلقه‌ی نور، کارت «ورود به کانکی»، کادر کد، «ورود» و «گرفتن کد از ربات تلگرام»
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(28.dp))
-        Logo3D(132.dp, animate = true, glow = 1f)
-        Spacer(Modifier.height(18.dp))
-        BrandTitle(32.sp)
-        Spacer(Modifier.height(4.dp))
-        T("Secure · Fast · Low Ping", size = 13.sp, color = K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true)
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(48.dp))
+        Logo3D(96.dp, animate = true, glow = 1f)
+        Spacer(Modifier.height(26.dp))
 
-        KCard(Modifier.fillMaxWidth(), padding = 18.dp, border = K.Gold.copy(alpha = .30f)) {
-            T("ورود به حساب", size = 22.sp, weight = FontWeight.Black)
-            Spacer(Modifier.height(4.dp))
-            T("لذت اینترنتی ایمن، سریع و آزاد", size = 13.sp, color = K.Sub, weight = FontWeight.Normal)
+        KCard(Modifier.fillMaxWidth(), padding = 18.dp, radius = D.RX) {
+            T("ورود به کانکی", size = 21.sp, weight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
+            Spacer(Modifier.height(6.dp))
+            T("کد اشتراکی که ربات فرستاده را این‌جا بگذار.", size = 13.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(16.dp))
 
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -91,9 +89,15 @@ fun LoginScreen(state: AppState) {
                     modifier = Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(16.dp)),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
+                    // جای‌گذاری از کلیپ‌بورد: آیکون سمت چپ کادر
+                    leadingIcon = {
+                        Box(Modifier.size(36.dp).clip(CircleShape).clickable { clip.getText()?.text?.let { accept(it) } }, contentAlignment = Alignment.Center) {
+                            Canvas(Modifier.size(18.dp)) { iconPath("M9 4h6v3H9zM8 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H16M9 12h6M9 16h4", K.Sub, 1.8f) }
+                        }
+                    },
                     // آیکون کلید سمت راست کادر، خودش وسطِ ارتفاع کادر می‌نشیند
                     trailingIcon = { Canvas(Modifier.size(20.dp)) { iconPath("M8 15a4 4 0 1 0 0 .01M11 12l9-9M17 6l3 3M15 8l2 2", K.Sub, 2f) } },
-                    // خط‌چین کل عرض فیلد (نه چند خط تیره‌ی کوتاه وسط)
+                    // خط‌چین کل عرض کادر (نه چند خط تیره‌ی کوتاه وسط)
                     placeholder = {
                         Canvas(Modifier.fillMaxWidth().height(2.dp)) {
                             val y = size.height / 2
@@ -101,7 +105,7 @@ fun LoginScreen(state: AppState) {
                                 color = K.Sub.copy(alpha = .45f),
                                 start = Offset(0f, y), end = Offset(size.width, y),
                                 strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 7.dp.toPx())),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 6.dp.toPx())),
                             )
                         }
                     },
@@ -120,21 +124,24 @@ fun LoginScreen(state: AppState) {
                 T(it, size = 13.sp, color = K.Red)
             }
 
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GoldButton("ورود", Modifier.weight(1f), loading = state.loading) {
-                    scope.launch { state.login(text, baseHint) }
-                }
-                LineButton("جای‌گذاری", Modifier.weight(1f)) {
-                    clip.getText()?.text?.let { accept(it) }
-                }
+            Spacer(Modifier.height(14.dp))
+            GoldButton("ورود", Modifier.fillMaxWidth(), loading = state.loading) {
+                scope.launch { state.login(text, baseHint) }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().height(D.BtnH).goldGlass(RoundedCornerShape(D.RL)).pressable { openBot(ctx) },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Canvas(Modifier.size(20.dp)) { robotHeadIcon(K.Text) }
+                Spacer(Modifier.width(D.S2))
+                T("گرفتن کد از ربات تلگرام", size = 14.sp, color = K.Text, weight = FontWeight.Black)
             }
         }
 
-        Spacer(Modifier.height(22.dp))
-        SmallLine("اشتراک نداری؟ از ربات بگیر") { openBot(ctx) }
-        Spacer(Modifier.height(18.dp))
-        RobotSays("سلام رفیق! کدت رو بزن، مهمون ما شو 😉", robotSize = 70.dp, robotAtStart = false, onClick = { openBot(ctx) })
+        Spacer(Modifier.height(20.dp))
+        T("لینک کامل اشتراک را هم می‌توانی بگذاری؛ فقط کدش برداشته می‌شود.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -186,7 +193,12 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
             KTab.HOME -> HomeTab(state, countries, onToggle)
             KTab.SERVERS -> ServersTab(state)
             KTab.TEST -> SpeedContent(
-                state.speed.copy(live = state.speedLive),
+                // زیرعنوان همیشه وضعیت واقعی اتصال (نه فقط لحظه‌ی شروع تست)
+                state.speed.copy(
+                    live = state.speedLive,
+                    viaVpn = if (state.speed.running) state.speed.viaVpn else state.vstate == VState.ON,
+                    vpnPlace = if (state.vstate == VState.ON) state.node?.let { n -> countryName(state.isoOfNode(n)) ?: state.placeName(n) } else null,
+                ),
                 tip = if (state.tipsSeen["test"] == true) null else RobotAlert("tip_test", 0, "برای دیدن سرعت واقعی اینترنتت از داخل VPN، اول وصل شو. تست حجم مصرف می‌کنه، پس زیاد تکرارش نکن 😉"),
                 onStart = { state.runSpeedTest() },
                 onCloseTip = { state.markTip("test") },
@@ -692,10 +704,7 @@ private fun AppPickerPanel(title: String, sub: String, selected: List<String>, o
                                 T(app.label, size = 14.sp)
                                 T(app.pkg, size = 10.sp, color = K.Sub, font = Poppins, ltr = true)
                             }
-                            Switch(
-                                checked = on, onCheckedChange = { onToggle(app.pkg) },
-                                colors = SwitchDefaults.colors(checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold, uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF)),
-                            )
+                            GlassSwitch(on, { onToggle(app.pkg) })
                         }
                         HDivider()
                     }

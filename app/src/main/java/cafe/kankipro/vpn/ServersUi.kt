@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,12 +112,15 @@ private val FamilyOrderUi = listOf("KANKI MIX", "Amnezia", "WireGuard", "Xray", 
 @Composable
 fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions) {
     // فیلتر پروتکل (۱.۳۲): «همه» یا یک خانواده؛ فقط کشورهایی که آن پروتکل را دارند و فقط همان کانفیگ‌ها
-    var fam by rememberSaveable { mutableStateOf("") }
+    // پیش‌فرض اولین پروتکل (مثل طرح)؛ «همه» کارت‌های کامل بازشونده را نشان می‌دهد
+    var fam by rememberSaveable { mutableStateOf("?") }
     val fams = remember(cards) {
         val have = cards.flatMap { c -> c.lines.flatMap { listOfNotNull(it.tunnel, it.direct) } }.map { protoFamily(it.proto) }.toSet()
         FamilyOrderUi.filter { it in have } + (have - FamilyOrderUi.toSet()).sorted()
     }
-    if (fam.isNotEmpty() && fam !in fams) fam = ""
+    if (fam == "?" && fams.isNotEmpty()) fam = fams.first()
+    if (fam != "?" && fam.isNotEmpty() && fam !in fams) fam = ""
+    if (fam == "?") fam = ""
     val shown = if (fam.isEmpty()) cards else cards.mapNotNull { c ->
         val ls = c.lines.mapNotNull { l ->
             val t = l.tunnel?.takeIf { protoFamily(it.proto) == fam }
@@ -148,7 +152,12 @@ fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?
         }
         // کلید هر کارت اسم کشور است: وقتی ترتیب با پینگ تازه عوض می‌شود یا کارتی بسته می‌شود،
         // کانفیگ‌های باز یک کشور هیچ‌وقت زیر کارت کشور دیگری نمی‌مانند
-        shown.forEachIndexed { i, c -> key(c.id) { CountryCard(c, act, if (i == 0) Modifier.guideTarget("country") else Modifier) } }
+        shown.forEachIndexed { i, c ->
+            key(c.id) {
+                val m = if (i == 0) Modifier.guideTarget("country") else Modifier
+                if (fam.isEmpty()) CountryCard(c, act, m) else CountryRow(c, act, m)
+            }
+        }
         Spacer(Modifier.height(D.S2))
     }
 }
@@ -292,7 +301,7 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifie
                 Row(Modifier.fillMaxWidth().padding(bottom = D.S1), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
                     for (k in listOf("تانل", "مستقیم")) {
                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            T(k, size = 11.sp, color = if (k == "تانل") K.Gold else K.Sub, weight = FontWeight.Black)
+                            T(k, size = 11.sp, color = Color.White, weight = FontWeight.Black)
                         }
                     }
                 }
@@ -303,6 +312,64 @@ private fun CountryCard(c: CountryCardUi, act: ServersActions, modifier: Modifie
                         lastPlace = l.place
                     }
                     key(l.tunnel?.let { it.node + "|" + it.proto } ?: "", l.direct?.let { it.node + "|" + it.proto } ?: "", i) { CfgLine(l, act) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * ردیف باریک یک کشور وقتی یک پروتکل انتخاب شده (۱.۳۲، مثل طرح): پرچم گرد، اسم و شهر، و کنارش دو خانه‌ی کوچک تانل و
+ * مستقیم با پینگ و آنتن؛ لمس هر خانه = انتخاب و اتصال. کشوری که چند سرور دارد زیرش یک ردیف دیگر برای هر سرور دارد.
+ */
+@Composable
+private fun CountryRow(c: CountryCardUi, act: ServersActions, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(D.RL)
+    val lit = c.selected || c.lines.any { l -> l.tunnel?.selected == true || l.direct?.selected == true }
+    Column(modifier.fillMaxWidth().goldGlass(shape, selected = lit).padding(horizontal = D.S3, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        c.lines.forEachIndexed { i, l ->
+            Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (i == 0) {
+                    FlagBadge(c.flag, 30.dp, ring = if (lit) K.Gold else Color.White.copy(alpha = .45f))
+                    Spacer(Modifier.width(D.S3))
+                    Column(Modifier.weight(1f)) {
+                        AutoText(c.name, size = D.TxtTitle, color = K.Text)
+                        AutoText(l.place ?: c.city, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+                    }
+                } else {
+                    Spacer(Modifier.width(30.dp + D.S3))
+                    AutoText(l.place ?: c.city, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.weight(1f))
+                }
+                MiniCfg(l.tunnel, "تانل", act)
+                Spacer(Modifier.width(6.dp))
+                MiniCfg(l.direct, "مستقیم", act)
+            }
+        }
+    }
+}
+
+/** خانه‌ی کوچک یک کانفیگ در ردیف کشور: اسم راه، پینگ و آنتن؛ انتخاب‌شده شیشه‌ی نئونی */
+@Composable
+private fun MiniCfg(r: CfgRowUi?, label: String, act: ServersActions) {
+    val shape = RoundedCornerShape(10.dp)
+    val pick by rememberUpdatedState(act.pick)
+    Column(
+        Modifier.size(width = 68.dp, height = 38.dp)
+            .then(if (r != null) Modifier.goldGlass(shape, selected = r.selected) else Modifier.clip(shape).border(1.dp, Color.White.copy(alpha = .06f), shape))
+            .alpha(if (r == null) .4f else 1f)
+            .then(if (r != null) Modifier.clickable { pick(r.node, r.proto) } else Modifier),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        T(label, size = 10.sp, color = Color.White, weight = FontWeight.Bold, maxLines = 1)
+        if (r == null) { T("—", size = 11.sp, color = K.Sub, ltr = true); return@Column }
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (r.busy) Spinner(10.dp) else {
+                    val col = r.ping?.let { pingColor(it) } ?: K.Sub
+                    T(when { r.ping == null -> "-"; r.ping < 0 -> "✕"; else -> "${r.ping}" }, size = 12.sp, color = K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
+                    Spacer(Modifier.width(3.dp))
+                    SignalBars(r.ping, col)
                 }
             }
         }

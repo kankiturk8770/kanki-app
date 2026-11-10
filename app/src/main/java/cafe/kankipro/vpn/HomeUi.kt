@@ -285,13 +285,27 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     LocationChip(ui.locationIso, ui.locationIsExit)
                 }
                 // نقشه و پنل‌های روی آن (هوشمند، هشدار ربات)؛ از ۱.۲۸ کوتاه‌تر (۷۶ تا ۱۷۰dp) تا دکمه و حالت‌ها کنار هم جا شوند
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(.32f)) {
-                    val mapH = maxHeight.coerceIn(76.dp, 170.dp)
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(.37f).padding(top = D.S2)) {
+                    val mapH = maxHeight.coerceIn(80.dp, 210.dp)
                     // روی گوشی کوتاه پنل هوشمند فقط تعداد ردیفی که روی نقشه جا می‌شود (سرتیتر و نوار پیشرفت همیشه)
                     val rows = ((maxHeight - gap * 2 - 64.dp) / (SmartRowH + D.S1)).toInt().coerceAtLeast(1)
                     WorldMap(
                         ui.countries, ui.pins, ui.userGeo, ui.userIso, on,
-                        Modifier.fillMaxWidth().height(mapH).align(Alignment.Center).guideTarget("map"),
+                        // نقشه داخل یک قاب گرد تیره با لبه‌ی شیشه‌ای (مثل طرح)
+                        Modifier.fillMaxWidth().padding(horizontal = D.PagePad).height(mapH).align(Alignment.Center)
+                            .drawBehind { liftShadow(RoundedCornerShape(D.RX).createOutline(size, layoutDirection, this), 6.dp.toPx(), .5f) }
+                            .clip(RoundedCornerShape(D.RX))
+                            .background(Brush.radialGradient(listOf(K.Gold.copy(alpha = .07f), Color.Transparent), radius = 900f))
+                            .background(lerp(K.BgMid, Color.Black, .45f).copy(alpha = .85f))
+                            .drawWithContent {
+                                drawContent()
+                                // شیشه‌ی روی نقشه: نور مورب کم‌رنگ و کلاهک براق بالا
+                                drawRect(Brush.linearGradient(listOf(Color.White.copy(alpha = .07f), Color.Transparent, Color.Black.copy(alpha = .12f)), Offset.Zero, Offset(size.width * .5f, size.height)))
+                                drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = .14f), Color.Transparent), startY = 0f, endY = 34.dp.toPx()),
+                                    Offset(size.width * .05f, -30.dp.toPx()), Size(size.width * .9f, 64.dp.toPx()))
+                            }
+                            .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .5f), Color.White.copy(alpha = .07f), Color.Black.copy(alpha = .3f), K.Gold.copy(alpha = .45f))), RoundedCornerShape(D.RX))
+                            .guideTarget("map"),
                         accent = if (ui.vstate == VState.OFF) K.Gold else mc,
                         dns = ui.mode == KMode.DNS,
                     )
@@ -308,20 +322,21 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     }
                 }
                 // دکمه‌ی اتصال دقیقاً وسط و چهار حالت روی یک مدار دورش (دو تا هر طرف، قرینه). قطر دکمه با فضای مانده.
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(.68f).padding(horizontal = D.PagePad), contentAlignment = Alignment.Center) {
-                    val side = if (ui.hasAccount) 30.dp else 0.dp
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(.63f).padding(horizontal = D.PagePad, vertical = D.S1), contentAlignment = Alignment.Center) {
                     // ارتفاع لازم: دکمه + حالت‌های بالا و پایین مدار با اسمشان (حدود ۱.۰۴ قطر + ۳۶dp)
-                    val byH = if (ui.hasAccount) (maxHeight - 36.dp) / 1.04f else maxHeight - D.S2
-                    val d = minOf(byH, (maxWidth / 2 - side) / ORBIT_DX).coerceIn(112.dp, OrbBase)
+                    // ارتفاع لازم: دکمه + حالت‌های بالا و پایین با اسمشان؛ پهنا: حالت‌ها با نیم‌دایره‌شان داخل صفحه
+                    val byH = if (ui.hasAccount) (maxHeight - 62.dp) / 1.06f else maxHeight - D.S2
+                    val byW = if (ui.hasAccount) (maxWidth / 2 - 14.dp - ORBIT_PUSH) / (ORBIT_DX + 54f / 212f / 2f) else maxWidth
+                    val d = minOf(byH, byW).coerceIn(112.dp, 240.dp)
+                    Box(Modifier.guideTarget("connect")) {
+                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
+                    }
                     if (ui.hasAccount) {
                         ModeOrbit(
                             ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
                             modifier = Modifier.fillMaxSize().guideTarget("protocols"),
                             showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
                         )
-                    }
-                    Box(Modifier.guideTarget("connect")) {
-                        OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
                     }
                 }
                 Column(
@@ -353,6 +368,10 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
 const val ORBIT_R = 146f / 212f
 const val ORBIT_DX = 121f / 212f
 const val ORBIT_DY = 82f / 212f
+
+/** قطر دکمه‌ی هر حالت روی دکمه‌ی پایه و فاصله‌ی اضافه‌ی آن‌ها رو به بیرون (۱.۳۲.۳) */
+val ORBIT_MODE = 54.dp
+val ORBIT_PUSH = 14.dp
 
 /** «موقعیت شما : ایران» بالای نقشه؛ وقتی وصل است «IP شما : آلمان» (کشور IP خروجی) */
 @Composable
@@ -419,7 +438,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             // ---- بزل شیشه‌ای (بین ۰.۶۷ و ۱ شعاع) با برق مخروطی
             val bw = r * .33f
             val br = r - bw / 2
-            drawCircle(lerp(K.BgMid, Color.Black, .35f), br, c, style = Stroke(bw))
+            drawCircle(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.White, .14f), lerp(K.BgMid, Color.Black, .45f)), startY = c.y - r, endY = c.y + r), br, c, style = Stroke(bw))
             rotate(t * 6f % 360f, c) {
                 drawCircle(
                     Brush.sweepGradient(
@@ -437,35 +456,40 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 r - .5f * u, c, style = Stroke(1.2f * u),
             )
             drawCircle(Color.Black.copy(alpha = .55f), r * .67f, c, style = Stroke(1.5f * u))
+            // برق شیشه روی بزل: کمان نور سفید بالا و لبه‌ی روشن
+            drawArc(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = .42f), Color.Transparent), startY = c.y - r, endY = c.y - r * .2f),
+                200f, 140f, false, Offset(c.x - (r - bw * .3f), c.y - (r - bw * .3f)), Size((r - bw * .3f) * 2, (r - bw * .3f) * 2), style = Stroke(bw * .45f, cap = StrokeCap.Round),
+            )
+            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .6f), Color.White.copy(alpha = .05f), K.Gold.copy(alpha = .35f)), startY = c.y - r, endY = c.y + r), r - .6f * u, c, style = Stroke(1.3f * u))
             // ---- حلقه‌ی تکه‌تکه‌ی نئونی
             val sr = r * .82f
-            val sw = r * .058f
+            val sw = r * .078f
             val step = 360f / SEGS
-            val gap = 3.2f
-            val litN = if (on) SEGS else if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
-            val spark = (t * 22f).toInt() % SEGS
+            val gap = 2.6f
+            val litN = if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
             val tl = Offset(c.x - sr, c.y - sr)
             val sz = Size(sr * 2, sr * 2)
             for (i in 0 until SEGS) {
                 val start = i * step - 90f + gap / 2
                 val isLit = i < litN
-                val hot = (on && (i == spark || i == (spark + SEGS - 1) % SEGS)) || (connecting && i == litN - 1) || (!on && !connecting && i == spark)
-                if (isLit || hot) drawArc(ac.copy(alpha = if (hot && !isLit) .18f else .32f), start, step - gap, false, tl, sz, style = Stroke(sw * 2.3f, cap = StrokeCap.Round))
+                // فقط سرِ پرشونده‌ی «در حال اتصال» سفید است؛ نور تند دور حلقه دیگر نیست
+                val hot = connecting && i == litN - 1
+                // هاله‌ی باریک و کم‌رنگ (بدون محو پهن)، تا تکه‌ها شارپ و زنده بمانند
+                if (isLit) drawArc(ac.copy(alpha = .16f), start, step - gap, false, tl, sz, style = Stroke(sw * 1.45f, cap = StrokeCap.Round))
                 val col = when {
-                    hot && (on || connecting) -> Color.White
-                    hot -> Color.White.copy(alpha = .45f)
-                    isLit -> ac
+                    hot -> Color.White
+                    isLit -> lerp(ac, Color.White, .12f)
                     else -> Color.White.copy(alpha = .09f)
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- سه نقطه‌ی نور روی یک مدار، ۱۲۰ درجه از هم
-            val orbitR = r + 5f * u
-            for ((k, d) in listOf(0 to 3f, 1 to 2f, 2 to 2.5f)) {
-                val ang = Math.toRadians((t * 40f + k * 120f).toDouble())
-                val o = Offset(c.x + orbitR * cos(ang).toFloat(), c.y + orbitR * sin(ang).toFloat())
-                drawCircle(ac.copy(alpha = .35f), d * u * 2.4f, o)
-                drawCircle(lerp(ac, Color.White, .45f), d * u, o)
+            // ---- وصل: سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر) روی همان حلقه، شارپ و بی‌هاله، خیلی آرام می‌چرخند
+            if (onA > .01f) {
+                for (k in 0 until 3) {
+                    val st = t * 9f + k * 120f - 90f
+                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
+                }
             }
             // ---- گنبد شیشه‌ای تیره وسط
             val dr = r * .59f
@@ -853,9 +877,9 @@ private fun ecgAt(u: Float): Float {
 private fun UsageCell(value: String, unit: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val v = faDigits(value)
-        val latin = isLatin(v)
+        val latin = isLatin(v) || v.none { it in '\u0600'..'\u06FF' }
         T(v, size = 14.sp, color = K.Text, font = if (latin) Poppins else Vazir, weight = FontWeight.Black, ltr = latin)
-        Spacer(Modifier.width(D.S1))
+        Spacer(Modifier.width(6.dp))
         T(unit, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
     }
 }

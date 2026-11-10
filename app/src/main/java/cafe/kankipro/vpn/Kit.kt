@@ -226,16 +226,17 @@ fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
     .clip(CircleShape)
     .background(
         Brush.verticalGradient(
-            listOf(lerp(lerp(K.BgMid, Color.White, .10f), tint, .20f * lit), lerp(lerp(K.BgMid, Color.Black, .45f), tint, .08f * lit)),
+            listOf(lerp(lerp(K.BgMid, Color.White, .085f), tint, .22f * lit), lerp(lerp(K.BgMid, Color.Black, .42f), tint, .08f * lit)),
         ),
     )
     .drawWithContent {
         val r = size.minDimension / 2
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), Offset(size.width * .34f, size.height * .2f), r * .95f), r)
-        // برق نیم‌دایره‌ی بالا
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .12f), Color.Transparent), Offset(size.width * .34f, size.height * .2f), r * .95f), r)
+        // سایه‌ی داخلی پایین و برق نیم‌دایره‌ی بالا (کلاهک شیشه)
+        drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .35f)), startY = size.height * .55f, endY = size.height), r)
         drawOval(
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = .26f), Color.Transparent), startY = 0f, endY = size.height * .45f),
-            Offset(size.width * .18f, size.height * .03f), Size(size.width * .64f, size.height * .42f),
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = .20f), Color.Transparent), startY = 0f, endY = size.height * .46f),
+            Offset(size.width * .16f, size.height * .04f), Size(size.width * .68f, size.height * .44f),
         )
         if (lit > .01f) drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = .22f * lit), Color.Transparent), center, r), r)
         drawContent()
@@ -244,7 +245,7 @@ fun Modifier.raisedCircle(tint: Color, lit: Float = 0f): Modifier = this
         (1f + .4f * lit).dp,
         Brush.linearGradient(
             listOf(
-                lerp(Color.White.copy(alpha = .55f), lerp(tint, Color.White, .5f), lit),
+                lerp(Color.White.copy(alpha = .7f), lerp(tint, Color.White, .5f), lit),
                 lerp(Color.White.copy(alpha = .08f), tint, lit),
                 Color.Black.copy(alpha = .4f * (1f - lit)),
                 tint.copy(alpha = .5f + .5f * lit),
@@ -293,17 +294,12 @@ fun SmallGold(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) 
     ) { T(text, size = 13.sp, color = K.OnGold, weight = FontWeight.Black) }
 }
 
-/** دکمه‌ی کوچک خطی (برجسته) */
+/** دکمه‌ی کوچک شیشه‌ای (۱.۳۲) با نوشته‌ی رنگی */
 @Composable
 fun SmallLine(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     Box(
-        modifier.height(D.BtnS)
-            .drawBehind { liftShadow(shape.createOutline(size, layoutDirection, this), 3.dp.toPx(), .45f, color) }
-            .clip(shape).background(K.Panel.copy(alpha = .9f)).background(Brush.verticalGradient(listOf(color.copy(alpha = .16f), color.copy(alpha = .04f))))
-            .drawWithContent { bevel(shape.createOutline(size, layoutDirection, this), .8f, color); drawContent() }
-            .border(1.dp, color.copy(alpha = .7f), shape)
-            .pressable(onClick = onClick).padding(horizontal = D.S3),
+        modifier.height(D.BtnS).goldGlass(shape).pressable(onClick = onClick).padding(horizontal = D.S3),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 13.sp, color = color, weight = FontWeight.Bold) }
 }

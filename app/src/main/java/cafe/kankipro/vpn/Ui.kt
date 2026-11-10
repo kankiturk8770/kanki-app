@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.drawBehind
@@ -469,7 +470,7 @@ fun DrawScope.bevel(o: Outline, strength: Float = 1f, light: Color = Color.White
 }
 
 /**
- * شیشه‌ی کریستالی (۱.۳۲، طرح «Kanki Glass»): رویه‌ی نیمه‌شفاف تیره با نور مورب، برق لبه‌ی بالا (specular)، سایه‌ی
+ * شیشه‌ی کریستالی (۱.۳۲، طرح «Kanki Glass»؛ از ۱.۳۲.۳ برق سفید نصف شد تا رویه تیره و شفاف بماند و فقط لبه بدرخشد): رویه‌ی نیمه‌شفاف تیره با نور مورب، برق لبه‌ی بالا (specular)، سایه‌ی
  * عمیق زیر کارت برای جدا شدن لایه‌ها و لبه‌ی گرادیانی (سفید در گوشه‌ی بالا، کم‌رنگ وسط، رنگ تم در گوشه‌ی پایین).
  * selected: ته‌رنگ تم داخل شیشه، لبه‌ی نئونی کامل و درخشش ملایم بیرون لبه (فقط برای حالت فعال).
  */
@@ -480,26 +481,43 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
         if (selected) for ((m, a) in listOf(12f to .05f, 7f to .10f, 3.5f to .18f)) drawOutline(o, tint.copy(alpha = a), style = Stroke(m.dp.toPx()))
     }
     .clip(shape)
-    .background(K.Surface)
-    .background(
-        Brush.linearGradient(
-            if (selected) listOf(tint.copy(alpha = .20f), tint.copy(alpha = .06f), Color.Black.copy(alpha = .18f))
-            else listOf(Color.White.copy(alpha = .09f), Color.White.copy(alpha = .02f), Color.Black.copy(alpha = .16f)),
-        ),
-    )
+    .drawBehind {
+        // همه (دکمه، چیپ، کارت): شیشه‌ی کریستالی مثل طرح؛ رویه‌ی روشن‌تر بالا-چپ، تیره پایین-راست
+        val small = size.height < 76.dp.toPx()
+        val w = size.width
+        val h = size.height
+        drawRect(
+            Brush.linearGradient(
+                if (selected) listOf(lerp(K.BgMid, tint, .24f), lerp(K.BgMid, tint, .09f), lerp(K.BgMid, Color.Black, .4f))
+                else listOf(lerp(K.BgMid, Color.White, if (small) .065f else .05f), lerp(K.BgMid, Color.White, .018f), lerp(K.BgMid, Color.Black, .36f)),
+                Offset(0f, 0f), Offset(w * .45f, h * 1.1f),
+            ),
+        )
+        // نور نرم گوشه‌ی بالا
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (small) .10f else .06f), Color.Transparent), Offset(w * .28f, 0f), maxOf(w, h) * .75f), maxOf(w, h) * .75f, Offset(w * .28f, 0f))
+    }
     .drawWithContent {
-        // برق شیشه در نیمه‌ی بالا و سایه‌ی داخلی پایین
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (selected) .12f else .08f), Color.Transparent), endY = size.height * .42f))
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .22f)), startY = size.height * .6f, endY = size.height))
+        val small = size.height < 76.dp.toPx()
+        val w = size.width
+        val h = size.height
+        // کلاهک براق شیشه (نیم‌بیضی بالا)، مثل دکمه‌های طرح؛ روی کارت بزرگ پهن‌تر و کم‌ارتفاع‌تر
+        val capH = if (small) h * .8f else minOf(h * .5f, 70.dp.toPx())
+        val capW = if (small) w * .72f else w * .9f
+        drawOval(
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = if (small) .14f else .08f), Color.Transparent), startY = 0f, endY = capH * .55f),
+            Offset((w - capW) / 2, -capH * .45f), Size(capW, capH),
+        )
+        // سایه‌ی داخلی پایین و خط نور لبه‌ی بالا
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = if (small) .30f else .24f)), startY = h * .6f, endY = h))
         val o = shape.createOutline(size, layoutDirection, this)
-        drawOutline(o, Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.Transparent), endY = size.height * .35f), style = Stroke(1.2.dp.toPx()))
+        drawOutline(o, Brush.verticalGradient(listOf(Color.White.copy(alpha = .5f), Color.Transparent), endY = minOf(h * .35f, 40.dp.toPx())), style = Stroke(1.2.dp.toPx()))
         drawContent()
     }
     .border(
         if (selected) 1.4.dp else 1.dp,
         Brush.linearGradient(
             if (selected) listOf(lerp(tint, Color.White, .5f), tint, tint.copy(alpha = .35f), tint)
-            else listOf(Color.White.copy(alpha = .34f), Color.White.copy(alpha = .07f), Color.White.copy(alpha = .03f), tint.copy(alpha = .32f)),
+            else listOf(Color.White.copy(alpha = .50f), Color.White.copy(alpha = .08f), Color.Black.copy(alpha = .35f), tint.copy(alpha = .45f)),
         ),
         shape,
     )
@@ -516,7 +534,7 @@ fun Modifier.goldFill(shape: androidx.compose.ui.graphics.Shape, enabled: Boolea
     .clip(shape)
     .drawBehind { drawRect(Brush.verticalGradient(listOf(K.GoldLight, K.Gold, lerp(K.Gold, K.GoldDeep, .55f)))) }
     .drawWithContent {
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .45f), Color.White.copy(alpha = .08f), Color.Transparent), endY = size.height * .5f))
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .04f), Color.Transparent), endY = size.height * .5f))
         drawRect(Brush.verticalGradient(listOf(Color.Transparent, K.GoldDeep.copy(alpha = .45f)), startY = size.height * .55f, endY = size.height))
         drawContent()
     }
@@ -535,17 +553,12 @@ fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = f
     }
 }
 
+/** دکمه‌ی شیشه‌ای دوم (۱.۳۲): همان شیشه‌ی کریستالی دکمه‌ها با نوشته‌ی رنگ تم */
 @Composable
 fun LineButton(text: String, modifier: Modifier = Modifier, color: Color = K.Gold, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RL)
     Box(
-        modifier.height(D.BtnH)
-            .drawBehind { liftShadow(shape.createOutline(size, layoutDirection, this), 4.dp.toPx(), .5f, color) }
-            .clip(shape).background(K.Panel.copy(alpha = .9f))
-            .background(Brush.verticalGradient(listOf(color.copy(alpha = .14f), Color.Transparent)))
-            .drawWithContent { bevel(shape.createOutline(size, layoutDirection, this), .9f, color); drawContent() }
-            .border(1.5.dp, color.copy(alpha = .8f), shape)
-            .pressable(onClick = onClick),
+        modifier.height(D.BtnH).goldGlass(shape).pressable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 15.sp, color = color, weight = FontWeight.Black) }
 }
@@ -1002,5 +1015,42 @@ fun DrawScope.settingIcon(kind: String, c: Color) {
             drawLine(c, pt(3.5f, 15f), pt(20.5f, 15f), st.width, StrokeCap.Round)
         }
         else -> drawCircle(c, 8f * u, pt(12f, 12f), style = st)
+    }
+}
+
+/**
+ * کلید شیشه‌ای (۱.۳۲، مثل طرح): شیار تو رفته‌ی تیره، دستگیره‌ی سفید براق؛ روشن: شیار گرادیان رنگ تم با درخشش و دستگیره
+ * به سمت پایان صفحه. به‌جای Switch خود اندروید در همه‌ی برنامه.
+ */
+@Composable
+fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, small: Boolean = false) {
+    val k = if (small) .85f else 1f
+    val f by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = .7f, stiffness = 500f), label = "gsw")
+    val shape = RoundedCornerShape(50)
+    Box(
+        modifier.size(width = 48.dp * k, height = 28.dp * k).alpha(if (enabled) 1f else .45f)
+            .drawBehind {
+                if (f > .01f) drawRoundRect(K.Gold.copy(alpha = .25f * f), Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(size.height))
+            }
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .55f), Color.White.copy(alpha = .06f))))
+            .drawBehind {
+                if (f > .01f) drawRect(Brush.verticalGradient(listOf(lerp(K.Gold, Color.Black, .35f), K.Gold)), alpha = f)
+                // سایه‌ی داخلی بالای شیار
+                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent), endY = size.height * .45f))
+            }
+            .border(1.dp, lerp(Color.White.copy(alpha = .16f), K.Gold.copy(alpha = .7f), f), shape)
+            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null) { onCheckedChange(!checked) },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            Modifier.offset(x = 3.dp * k + 20.dp * k * f).size(22.dp * k)
+                .drawBehind {
+                    drawCircle(Color.Black.copy(alpha = .5f), size.minDimension / 2, center + Offset(0f, 1.5.dp.toPx()))
+                    drawCircle(Brush.verticalGradient(listOf(Color.White, Color(0xFFBFC6C1))), size.minDimension / 2)
+                    drawOval(Brush.verticalGradient(listOf(Color.White, Color.White.copy(alpha = 0f))), Offset(size.width * .22f, size.height * .08f), Size(size.width * .56f, size.height * .4f))
+                    if (f > .5f) drawCircle(Color.White.copy(alpha = .35f * f), size.minDimension / 2 + 2.dp.toPx(), style = Stroke(2.dp.toPx()))
+                },
+        )
     }
 }

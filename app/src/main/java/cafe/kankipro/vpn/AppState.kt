@@ -215,6 +215,8 @@ class AppState private constructor(context: Context) {
                 launchConnect(reconnect = true) { connectFilter() }
             }
             KMode.DNS -> {
+                // دکمه‌ی DNS همیشه دیده می‌شود (۱.۳۲)؛ اشتراکی که DNS ندارد همان لحظه پیامش را می‌گیرد و حالت عوض نمی‌شود
+                if (account != null && account?.dns == null) { error = "اشتراک شما DNS ندارد"; errorDetail = null; return }
                 val wasOther = mode != KMode.DNS && vstate == VState.ON
                 changeMode(m)
                 if (wasOther) launchConnect(reconnect = true) { connectDns() }
@@ -313,7 +315,8 @@ class AppState private constructor(context: Context) {
             fun panelName(x: String) = account?.configs?.firstOrNull { it.node == x }?.nodeName?.trim().orEmpty()
             val n = panelName(id)
             val p = panelName(parentOf(id))
-            n.takeIf { it.isNotBlank() && it != id && it != p && it != "$p (تانل)" } ?: tr("تانل")
+            // اسم فنی تانل (مثل Game-FEC یا KCP) به کاربر نشان داده نمی‌شود
+            n.takeIf { it.isNotBlank() && it != id && it != p && it != "$p (تانل)" && !TECH_NAME.containsMatchIn(it) } ?: tr("تانل")
         }
         hasTwin(id) -> tr("مستقیم")
         else -> null
@@ -323,6 +326,8 @@ class AppState private constructor(context: Context) {
      * پروتکل‌های دیگر که پنل گفته به آدرس ایران می‌رود «تانل»؛ بقیه برچسب tunnelTag را می‌گیرند.
      */
     fun cfgTag(id: String, p: String): String? = when {
+        // KPING همیشه از سرور ایران و تانل خودش است
+        p == KpingCfg.PROTO -> tr("تانل")
         p == "amneziawg-direct" -> tr("مستقیم")
         p == "amneziawg" && !isTunnelTwin(id) -> tr("تانل")
         isTunnelTwin(id) -> tunnelTag(id)
@@ -1833,6 +1838,9 @@ class AppState private constructor(context: Context) {
 }
 
 /** ترتیب پروتکل‌ها در تب سرورها، پنل گیمینگ و «تست پینگ همه»: KANKI MIX، microtun، Hysteria2، Amnezia، Xray، WireGuard */
+/** اسم‌های فنی زیرساخت تانل که در اپ نشان داده نمی‌شوند */
+val TECH_NAME = Regex("(?i)fec|kcp|quic|faketcp|game|h2ws|\\bhq\\b|obfs|salamander|mux|dgram|awg")
+
 val PROTO_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amneziawg-direct", "amneziawg", "xray", "wireguard")
 
 /** همان ترتیب برای خانواده‌ها (AmneziaWG تانل و مستقیم یک خانواده‌اند) */
