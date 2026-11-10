@@ -45,7 +45,7 @@ data class Account(
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
     /** microtun هر سرور (فیلد mtun؛ پنل ۳.۱۸ به بعد). ورودی تانل هر سرور هم لینک خودش را دارد. */
     val mtun: List<MtunLink> = emptyList(),
-    /** KPING (پنل ۳.۳۷ به بعد): فقط برای تسترها و فقط در جواب رمزشده؛ هر سرور خارج یک لینک mtun:// به سرور ایران */
+    /** KPING (پنل ۳.۳۹ به بعد): فقط برای تسترها و فقط در جواب رمزشده؛ هر مسیر یک لینک kping:// به سرور ایران */
     val kping: List<MtunLink> = emptyList(),
 )
 
@@ -323,12 +323,12 @@ object SubscriptionApi {
             else MtunLink(id, n.optString("name").ifBlank { id }, url)
         }
 
-    /** [{id, node, name, url}]: node = سرور خارج (پنل ۳.۳۸)؛ پنل ۳.۳۷ node ندارد، پس شناسه‌ی مسیر */
+    /** [{id, node, name, url}]: url = kping:// (پنل ۳.۳۹)؛ node = سرور VPN همان دستگاه خارج، یا شناسه‌ی مسیر وقتی سرور خارج فقط ایجنت است */
     private fun parseKping(a: org.json.JSONArray): List<MtunLink> =
         (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
             val url = n.optString("url").trim()
             val node = n.optString("node").ifBlank { "kping-" + n.optString("id") }
-            if (!MtunCfg.supported(url) || node == "kping-") null else MtunLink(node, n.optString("name").ifBlank { node }, url)
+            if (!KpingCfg.supported(url) || node == "kping-") null else MtunLink(node, n.optString("name").ifBlank { node }, url)
         }
 
     private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =

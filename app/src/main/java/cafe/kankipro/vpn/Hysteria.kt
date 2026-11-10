@@ -101,11 +101,14 @@ object HyEngine {
     @Volatile internal var mtun = false
     @Volatile internal var mtunRx = 0L
     @Volatile internal var mtunTx = 0L
+    /** اتصال فعلی KPING است؛ آمار زنده از گزارش هر ثانیه‌ی هسته */
+    @Volatile internal var kping = false
+    @Volatile internal var kpStat: KpStat? = null
     /** حالت DNS بدون دروازه: شمارنده‌های کل گوشی در لحظه‌ی اتصال (سرعت واقعی اینترنت گوشی) */
     @Volatile internal var dnsBase: Pair<Long, Long>? = null
 
     /** این متن با این موتور بالا می‌آید: Hysteria2، Xray، DNS کانکی یا KANKI MIX */
-    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || MtunCfg.isMtun(text)
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || MtunCfg.isMtun(text) || KpingCfg.isKping(text)
 
     fun isUp() = state == UP
 
@@ -154,7 +157,7 @@ object HyEngine {
     fun stats(): Pair<Long, Long>? = when {
         state != UP -> null
         kmix -> KmixCore.stats()
-        mtun -> mtunRx to mtunTx
+        mtun || kping -> mtunRx to mtunTx
         dnsMode && !dnsGate -> deviceStats()?.let { now ->
             val b = dnsBase ?: now.also { dnsBase = it }
             (now.first - b.first).coerceAtLeast(0) to (now.second - b.second).coerceAtLeast(0)
@@ -227,6 +230,7 @@ class KankiHyService : VpnService() {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         if (XrayCfg.isXray(text)) return startXray(v("URI") ?: error("xray: link missing"), lines, my)
         if (MtunCfg.isMtun(text)) return startMtun(v("URI") ?: error("microtun: link missing"), lines, my)
+        if (KpingCfg.isKping(text)) return startKping(v("URI") ?: error("kping: link missing"), lines, my)
         if (KankiDns.isDns(text)) return startDns(lines, my)
         if (KmixUri.isKmix(text)) return startKmix(v("URI") ?: error("kanki mix: link missing"), lines, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
@@ -604,6 +608,173 @@ class KankiHyService : VpnService() {
         }, "kanki-mtun-addr").start()
     }
 
+    // ---------------------------------------------------------------- KPING
+
+    /** سوکت یونیکس هسته‌ی KPING (null = وصل نیست) */
+    @Volatile private var kpSock: File? = null
+    /** درخواست‌های شبکه (وای‌فای، دیتا) که تا قطع باز می‌مانند */
+    private val kpNets = java.util.concurrent.CopyOnWriteArrayList<android.net.ConnectivityManager.NetworkCallback>()
+
+    /**
+     * KPING: هسته‌ی libkping.so با سوکت جدا روی هر شبکه‌ی گوشی (وای‌فای و دیتا با هم، دیتا حتی وقتی وای‌فای هست روشن می‌ماند).
+     * همه‌ی برنامه‌ها داخل VPN‌اند و دروازه فقط پابجی گلوبال و سرویس‌های گوگل را رد می‌کند؛ بقیه بی‌اینترنت. سوکت‌های هسته با
+     * protect و bindSocket از VPN بیرون‌اند، پس اینترنت خود گوشی (وای‌فای و دیتا) هیچ‌وقت بسته نمی‌شود.
+     */
+    private fun startKping(link: String, lines: List<String>, my: Int) {
+        fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
+        if (!AppGate.supported) error("kping: needs Android 10 or newer")
+        if (!KpingCfg.installed(this)) error(KPING_NO_GAME)
+        val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.contains(':') }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+        val bin = File(applicationInfo.nativeLibraryDir, "libkping.so")
+        if (!bin.exists()) error("kping: core is missing in this build")
+        val prefs = KpingCfg.prefs(this)
+        val sock = File(filesDir, "kping.sock")
+        HyEngine.kpStat = null
+        val ready = java.util.concurrent.LinkedBlockingQueue<String>()
+        val pb = ProcessBuilder(bin.path, "client", "--url", link.trim(), "--sock", sock.path).directory(filesDir).redirectErrorStream(true)
+        val p = synchronized(this) {
+            if (cancelled(my)) error("kping: cancelled")
+            killStaleCores()
+            pb.start().also { proc = it }
+        }
+        Thread({
+            runCatching {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    when {
+                        line.startsWith("READY ") -> ready.put(line.removePrefix("READY ").trim())
+                        line.startsWith("STAT ") -> KpStat.parse(line.removePrefix("STAT "))?.let {
+                            HyEngine.kpStat = it
+                            HyEngine.mtunRx = it.rx
+                            HyEngine.mtunTx = it.tx
+                        }
+                        else -> synchronized(log) {
+                            log.append(line).append('\n')
+                            if (log.length > 6000) log.delete(0, log.length - 4000)
+                        }
+                    }
+                }
+            }
+        }, "kanki-kping-log").start()
+        Thread({
+            runCatching { p.waitFor() }
+            ready.put("")
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = "kping core exited. " + lastLog()
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
+        }, "kanki-kping-mon").start()
+        val relay = ready.poll(10, java.util.concurrent.TimeUnit.SECONDS)
+        if (relay.isNullOrEmpty()) error("kping: " + (lastLog().ifBlank { "the core did not start" }))
+        val rip = InetAddress.getByName(relay)
+
+        val b = Builder()
+            .setSession("Kanki · KPING")
+            .setMtu(KpingCfg.mtu(link))
+            .addAddress(KpingCfg.ip(link), 32)
+        if (rip is Inet4Address) routesExcluding(rip.address).forEach { (net, len) -> b.addRoute(net, len) }
+        else b.addRoute("0.0.0.0", 0)
+        // IPv6 بی آدرس: هیچ برنامه‌ای از IPv6 بیرون نمی‌رود و فوری به IPv4 برمی‌گردد
+        runCatching { b.addRoute("::", 0) }
+        dns.forEach { d -> runCatching { b.addDnsServer(d) } }
+        if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        val fd = synchronized(this) {
+            if (cancelled(my)) error("kping: cancelled")
+            (b.establish() ?: error("VPN permission is missing")).also { tun = it }
+        }
+        // دروازه: فقط پابجی گلوبال + سرویس‌های گوگل (و خود اپ برای سنجش)؛ بقیه فوراً «اینترنت نیست»
+        val coreFd = synchronized(this) {
+            if (cancelled(my)) error("kping: cancelled")
+            gameGate(fd, listOf(KpingCfg.GAME) + GAME_NEEDS).also { gate = it; it.start() }.inner
+        }
+        kpSend(sock, "TUN", coreFd, my)
+        kpSend(sock, "SET " + prefs.json(), null, my)
+        kpSock = sock
+        // هر شبکه‌ی گوشی یک مسیر: سوکت UDP خودش، بیرون از VPN و بسته به همان شبکه
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val want = when (prefs.paths) {
+            KpingCfg.Paths.BOTH -> listOf("wifi" to android.net.NetworkCapabilities.TRANSPORT_WIFI, "cell" to android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+            KpingCfg.Paths.WIFI -> listOf("wifi" to android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            KpingCfg.Paths.CELL -> listOf("cell" to android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+        }
+        for ((name, transport) in want) {
+            val req = android.net.NetworkRequest.Builder()
+                .addTransportType(transport)
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build()
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                @Volatile var cur: android.net.Network? = null
+                override fun onAvailable(network: android.net.Network) {
+                    if (cancelled(my) || cur == network) return
+                    cur = network
+                    Thread({ runCatching { kpPath(sock, name, network, my) } }, "kanki-kping-$name").start()
+                }
+                override fun onLost(network: android.net.Network) {
+                    if (cur != network) return
+                    cur = null
+                    Thread({ runCatching { kpSend(sock, "DROP $name", null, my) } }, "kanki-kping-$name").start()
+                }
+            }
+            // requestNetwork: دیتای موبایل حتی وقتی وای‌فای وصل است بالا می‌ماند (دو مسیر با هم)
+            runCatching { cm.requestNetwork(req, cb); kpNets.add(cb) }
+        }
+        // دست‌کم یک مسیر تا ۸ ثانیه
+        val end = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < end) {
+            if (cancelled(my)) error("kping: cancelled")
+            if (HyEngine.kpStat?.paths?.isNotEmpty() == true) break
+            Thread.sleep(150)
+        }
+        synchronized(this) {
+            if (cancelled(my)) error("kping: cancelled")
+            HyEngine.kping = true
+            HyEngine.state = HyEngine.UP
+        }
+    }
+
+    /** سوکت UDP یک شبکه: بیرون از VPN (protect) و بسته به همان شبکه، به هسته داده می‌شود */
+    private fun kpPath(sock: File, name: String, network: android.net.Network, my: Int) {
+        val ds = java.net.DatagramSocket(null as java.net.SocketAddress?)
+        try {
+            ds.bind(InetSocketAddress(0))
+            protect(ds)
+            network.bindSocket(ds)
+            ParcelFileDescriptor.fromDatagramSocket(ds).use { pfd -> kpSend(sock, "PATH $name", pfd, my) }
+        } finally {
+            ds.close()
+        }
+    }
+
+    /** یک پیام به هسته‌ی KPING (با fd اگر هست) */
+    private fun kpSend(sock: File, msg: String, fd: ParcelFileDescriptor?, my: Int) {
+        val end = System.currentTimeMillis() + 5_000
+        var last: Exception? = null
+        while (System.currentTimeMillis() < end && !cancelled(my)) {
+            try {
+                android.net.LocalSocket().use { s ->
+                    s.connect(android.net.LocalSocketAddress(sock.path, android.net.LocalSocketAddress.Namespace.FILESYSTEM))
+                    if (fd != null) s.setFileDescriptorsForSend(arrayOf(fd.fileDescriptor))
+                    s.outputStream.write(msg.toByteArray())
+                    s.outputStream.flush()
+                }
+                return
+            } catch (e: Exception) {
+                last = e
+                Thread.sleep(100)
+            }
+        }
+        if (!cancelled(my)) error("kping: core did not take $msg (${last?.message})")
+    }
+
+    /** تنظیم تازه‌ی صفحه‌ی KPING وقتی وصل است */
+    fun kpingSet(v: KpingCfg.Prefs) {
+        val sock = kpSock ?: return
+        val my = gen
+        Thread({ runCatching { kpSend(sock, "SET " + v.json(), null, my) } }, "kanki-kping-set").start()
+    }
+
     /** «فقط بازی»: دروازه‌ی تازه روی کارت fd و سر دیگرش برای هسته؛ وگرنه خود کارت */
     private fun gated(fd: ParcelFileDescriptor, games: List<String>?, my: Int): ParcelFileDescriptor {
         if (games == null) return fd
@@ -677,7 +848,7 @@ class KankiHyService : VpnService() {
             if (pid == me) return@forEach
             runCatching {
                 val cmd = File(d, "cmdline").readText()
-                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libmtun.so")) android.os.Process.killProcess(pid)
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libmtun.so") || cmd.contains("libkping.so")) android.os.Process.killProcess(pid)
             }
         }
     }
@@ -768,6 +939,11 @@ class KankiHyService : VpnService() {
         else KmixCore.stop()
         HyEngine.kmix = false
         HyEngine.mtun = false
+        HyEngine.kping = false
+        HyEngine.kpStat = null
+        kpNets.forEach { cb -> runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(cb) } }
+        kpNets.clear()
+        kpSock = null
         dnsFwd?.stop()
         dnsFwd = null
         HyEngine.dnsMode = false

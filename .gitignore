@@ -23,6 +23,8 @@ app/src/main/assets/countries.geojson
 
 # ساخته‌شده در build.yml (هسته‌ی KANKI MIX)
 app/src/main/jniLibs/*/libkmix.so
+app/src/main/jniLibs/*/libmtun.so
+app/src/main/jniLibs/*/libkping.so
 # --- نسخه‌ی ویندوز
 windows/ui/**/bin/
 windows/ui/**/obj/

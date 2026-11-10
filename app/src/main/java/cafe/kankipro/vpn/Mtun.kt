@@ -70,35 +70,109 @@ object MtunCfg {
 }
 
 /*
- * KPING: هسته‌ی مخفی بازی (پنل ۳.۳۷ به بعد)
+ * KPING: هسته‌ی بازی خود کانکی (پنل ۳.۳۹ به بعد؛ نه microtun)
  * ----------------------------------------------
- * فقط برای چند تستر که ادمین در پنل انتخاب می‌کند و فقط داخل جواب رمزشده‌ی اشتراک (فیلد kping). همان هسته‌ی microtun
- * است (لینک mtun://) ولی به سرور ایران وصل می‌شود که با تانل جدای خودش (Game-FEC) به سرور خارج می‌رسد.
- * انتخاب برنامه ندارد: فقط پابجی (هر نسخه) و سرویس‌های گوگل که ورود بازی با آن‌هاست وارد VPN می‌شوند؛ بقیه‌ی گوشی
- * اینترنت معمولی خودش را دارد (addAllowedApplication).
+ * فقط برای چند تستر که ادمین در پنل انتخاب می‌کند و فقط داخل جواب رمزشده‌ی اشتراک (فیلد kping، لینک kping://).
+ * هسته‌ی جدای libkping.so (پوشه‌ی kping-core): UDP خام بی فرستادن دوباره؛ هر بسته روی هر مسیر (وای‌فای و دیتا با هم)
+ * یک نسخه، یا روی یک مسیر دو نسخه با چند میلی‌ثانیه فاصله؛ اولین نسخه‌ای که رسید برنده؛ پریتی سبک. سرور ایران (رله) از
+ * هر بسته یک نسخه را با تانل Game-FEC به سرور خارج می‌برد.
+ * فقط PUBG Global (com.tencent.ig) و سرویس‌های گوگل که ورود بازی با آن‌هاست اینترنت دارند؛ بقیه‌ی برنامه‌ها کاملاً بسته‌اند
+ * (دروازه‌ی AppGate، اندروید ۱۰ به بالا). شبکه‌های خود گوشی بسته نمی‌شوند: سوکت‌های هسته روی هر شبکه جدا ساخته می‌شوند.
  */
 object KpingCfg {
     const val PROTO = "kping"
     const val TITLE = "KPING"
 
-    /** همه‌ی نسخه‌های پابجی موبایل: جهانی، کره، هند، ویتنام، تایوان */
-    val GAMES = setOf("com.tencent.ig", "com.pubg.krmobile", "com.pubg.imobile", "com.vng.pubgmobile", "com.rekoo.pubgm")
+    /** فقط پابجی گلوبال (خواسته‌ی صاحب اپ؛ نسخه‌های کره، هند، ویتنام و تایوان نه) */
+    const val GAME = "com.tencent.ig"
 
-    /** کدام نسخه‌های پابجی روی این گوشی نصب‌اند */
-    fun installed(ctx: Context): List<String> =
-        GAMES.filter { p -> runCatching { ctx.packageManager.getApplicationInfo(p, 0); true }.getOrDefault(false) }
+    fun supported(link: String) = link.trim().startsWith("kping://")
 
-    /**
-     * فقط همین برنامه‌ها وارد VPN شوند (پابجی + GAME_NEEDS)؛ هر دروازه یا استثنای دیگری که روی کانفیگ بود برداشته می‌شود.
-     */
-    fun onlyApps(cfg: String, games: Collection<String>): String {
-        val keep = cfg.lines().filterNot { l ->
-            val k = l.trim().substringBefore("=").trim()
-            k.equals("IncludedApplications", true) || k.equals("ExcludedApplications", true) || k.equals("GameOnly", true) || k.equals("BlockOthers", true)
-        }.toMutableList()
-        val i = keep.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
-        val line = "IncludedApplications = " + (games + GAME_NEEDS).sorted().joinToString(", ")
-        if (i >= 0) keep.add(i + 1, line) else keep.add(0, line)
-        return keep.joinToString("\n")
+    fun installed(ctx: Context): Boolean = runCatching { ctx.packageManager.getApplicationInfo(GAME, 0); true }.getOrDefault(false)
+
+    /** متنی که برنامه نگه می‌دارد (مثل microtun) */
+    fun wrap(link: String): String {
+        val (h, p) = MtunCfg.endpoint(link)
+        return "[Interface]\n[Kping]\nEndpoint = $h:$p\nURI = ${link.trim()}\n"
+    }
+
+    fun isKping(text: String) = text.lines().any { it.trim().equals("[Kping]", ignoreCase = true) }
+
+    /** آدرس گوشی داخل KPING (از لینک پنل) */
+    fun ip(link: String): String = MtunCfg.query(link)["ip"] ?: "10.81.0.2"
+
+    fun mtu(link: String): Int = MtunCfg.query(link)["mtu"]?.toIntOrNull()?.coerceIn(1280, 1500) ?: 1332
+
+    // ---------------------------------------------------------------- تنظیمات (صفحه‌ی تنظیمات KPING)
+
+    /** کدام شبکه‌ها: هر دو (پیش‌فرض)، فقط وای‌فای، فقط دیتا */
+    enum class Paths { BOTH, WIFI, CELL }
+
+    data class Prefs(
+        val auto: Boolean = true,
+        val paths: Paths = Paths.BOTH,
+        /** یک مسیر: فاصله‌ی نسخه‌ی دوم (میلی‌ثانیه، ۰ = بی نسخه‌ی دوم) */
+        val dupMs: Int = 10,
+        /** یک بسته‌ی ترمیم برای هر چند بسته (۰ = خاموش) */
+        val fec: Int = 2,
+        /** نسخه‌ی دیرتر روی هر مسیر حتی وقتی دو مسیر هست */
+        val every: Boolean = false,
+    ) {
+        fun json(): String = org.json.JSONObject().put("auto", auto).put("dup", dupMs).put("fec", fec).put("every", every).toString()
+    }
+
+    fun prefs(ctx: Context): Prefs {
+        val p = ctx.getSharedPreferences("kanki_kping", Context.MODE_PRIVATE)
+        return Prefs(
+            auto = p.getBoolean("auto", true),
+            paths = runCatching { Paths.valueOf(p.getString("paths", "BOTH")!!) }.getOrDefault(Paths.BOTH),
+            dupMs = p.getInt("dup", 10).coerceIn(0, 50),
+            fec = p.getInt("fec", 2).let { if (it == 1) 2 else it.coerceIn(0, 8) },
+            every = p.getBoolean("every", false),
+        )
+    }
+
+    fun save(ctx: Context, v: Prefs) {
+        ctx.getSharedPreferences("kanki_kping", Context.MODE_PRIVATE).edit()
+            .putBoolean("auto", v.auto).putString("paths", v.paths.name).putInt("dup", v.dupMs).putInt("fec", v.fec).putBoolean("every", v.every).apply()
+        // وصل است: هسته همین حالا تنظیم تازه را می‌گیرد؛ شبکه‌ها با اتصال بعدی
+        HyEngine.service?.kpingSet(v)
+    }
+}
+
+/** آمار زنده‌ی KPING از گزارش هر ثانیه‌ی هسته (STAT) */
+data class KpPath(val name: String, val alive: Boolean, val rtt: Double, val jit: Double, val loss: Double, val upFirst: Long, val upTotal: Long, val rescued: Long)
+
+data class KpStat(
+    val up: Boolean = false,
+    val ping: Double = 0.0,
+    val jit: Double = 0.0,
+    val paths: List<KpPath> = emptyList(),
+    val got: Long = 0,
+    val fixed: Long = 0,
+    val rescued: Long = 0,
+    val dupMs: Int = 0,
+    val fec: Int = 0,
+    val every: Boolean = false,
+    val auto: Boolean = true,
+    val rx: Long = 0,
+    val tx: Long = 0,
+) {
+    companion object {
+        fun parse(s: String): KpStat? = runCatching {
+            val o = org.json.JSONObject(s)
+            val ps = o.optJSONArray("paths")
+            val st = o.optJSONObject("settings") ?: org.json.JSONObject()
+            KpStat(
+                up = o.optBoolean("up"), ping = o.optDouble("ping", 0.0), jit = o.optDouble("jit", 0.0),
+                paths = if (ps == null) emptyList() else (0 until ps.length()).mapNotNull { i -> ps.optJSONObject(i) }.map {
+                    KpPath(it.optString("name"), it.optBoolean("alive"), it.optDouble("rtt", 0.0), it.optDouble("jit", 0.0), it.optDouble("loss", 0.0),
+                        it.optLong("up_first"), it.optLong("up_total"), it.optLong("rescued"))
+                },
+                got = o.optLong("got"), fixed = o.optLong("fixed"), rescued = o.optLong("rescued"),
+                dupMs = st.optInt("dup"), fec = st.optInt("fec"), every = st.optBoolean("every"), auto = st.optBoolean("auto", true),
+                rx = o.optLong("rx"), tx = o.optLong("tx"),
+            )
+        }.getOrNull()
     }
 }

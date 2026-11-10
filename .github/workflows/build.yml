@@ -168,6 +168,27 @@ jobs:
           build arm64-v8a arm64 aarch64-linux-android26-clang
           build armeabi-v7a arm armv7a-linux-androideabi26-clang
 
+      # هسته‌ی KPING (پوشه‌ی kping-core) هم برنامه‌ی جدای libkping.so است. قالب بسته‌اش همان src/vpn/kpingd.rs پنل است
+      # (بردار تست مشترک در kping/wire_test.go).
+      - name: ساخت هسته‌ی KPING (libkping.so)
+        working-directory: kping-core
+        run: |
+          set -e
+          NDK="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK}}"
+          if [ ! -d "$NDK" ]; then NDK=$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1); fi
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          go vet ./...
+          go test ./...
+          build() { # $1=ABI  $2=GOARCH  $3=clang
+            d=../app/src/main/jniLibs/$1; mkdir -p "$d"
+            CGO_ENABLED=1 GOOS=android GOARCH=$2 GOARM=7 CC="$TC/$3" \
+              go build -trimpath -ldflags "-s -w" -o "$d/libkping.so" .
+            chmod +x "$d/libkping.so"
+            file "$d/libkping.so"
+          }
+          build arm64-v8a arm64 aarch64-linux-android26-clang
+          build armeabi-v7a arm armv7a-linux-androideabi26-clang
+
       - name: آماده‌سازی کلید امضا (از GitHub Secrets)
         env:
           KANKI_KEYSTORE: ${{ secrets.KANKI_KEYSTORE }}
@@ -223,7 +244,7 @@ jobs:
           # فقط وقتی خود اپ اندروید عوض شده باشد APK فرستاده می‌شود (تغییر فقط-ویندوز APK تکراری نفرستد)
           before="${{ github.event.before }}"
           if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$before^{commit}" 2>/dev/null; then
-            if ! git diff --name-only "$before" "$GITHUB_SHA" | grep -qE '^(app/|CHANGES\.md|README\.md|kmix-core/|mtun-core/|\.github/workflows/build\.yml)'; then
+            if ! git diff --name-only "$before" "$GITHUB_SHA" | grep -qE '^(app/|CHANGES\.md|README\.md|kmix-core/|mtun-core/|kping-core/|\.github/workflows/build\.yml)'; then
               echo "no Android changes in this push: skip Telegram"; exit 0
             fi
           fi
