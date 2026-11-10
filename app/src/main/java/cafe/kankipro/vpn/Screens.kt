@@ -67,7 +67,8 @@ fun LoginScreen(state: AppState) {
     }
     LaunchedEffect(Unit) { Sfx.preload(ctx, R.raw.kanki_switch) }
 
-    // صفحه‌ی ورود (۱.۳۲، طرح شیشه‌ای): لوگو با حلقه‌ی نور، کارت «ورود به کانکی»، کادر کد، «ورود» و «گرفتن کد از ربات تلگرام»
+    // صفحه‌ی ورود (۱.۳۲.۶): ظاهر شیشه‌ای ۱.۳۲ با همان متن‌ها و دکمه‌های ۱.۳۱. متن‌هایی مثل «کد را از ربات تلگرام بگیر و این‌جا بگذار»
+    // و آیکون کلید احتمالاً Play Protect را به یاد صفحه‌های دزدیدن کد تلگرام می‌انداخت (۱.۳۲.۰ تا ۱.۳۲.۵ «مضر»)؛ برنگردند.
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -77,9 +78,9 @@ fun LoginScreen(state: AppState) {
         Spacer(Modifier.height(26.dp))
 
         KCard(Modifier.fillMaxWidth(), padding = 18.dp, radius = D.RX) {
-            T("ورود به کانکی", size = 21.sp, weight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
+            T("ورود به حساب", size = 21.sp, weight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(6.dp))
-            T("کد اشتراکی که ربات فرستاده را این‌جا بگذار.", size = 13.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.align(Alignment.CenterHorizontally))
+            T("لذت اینترنتی ایمن، سریع و آزاد", size = 13.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(16.dp))
 
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -89,14 +90,6 @@ fun LoginScreen(state: AppState) {
                     modifier = Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(16.dp)),
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = K.Text),
-                    // جای‌گذاری از کلیپ‌بورد: آیکون سمت چپ کادر
-                    leadingIcon = {
-                        Box(Modifier.size(36.dp).clip(CircleShape).clickable { clip.getText()?.text?.let { accept(it) } }, contentAlignment = Alignment.Center) {
-                            Canvas(Modifier.size(18.dp)) { iconPath("M9 4h6v3H9zM8 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H16M9 12h6M9 16h4", K.Sub, 1.8f) }
-                        }
-                    },
-                    // آیکون کلید سمت راست کادر، خودش وسطِ ارتفاع کادر می‌نشیند
-                    trailingIcon = { Canvas(Modifier.size(20.dp)) { iconPath("M8 15a4 4 0 1 0 0 .01M11 12l9-9M17 6l3 3M15 8l2 2", K.Sub, 2f) } },
                     // خط‌چین کل عرض کادر (نه چند خط تیره‌ی کوتاه وسط)
                     placeholder = {
                         Canvas(Modifier.fillMaxWidth().height(2.dp)) {
@@ -125,23 +118,18 @@ fun LoginScreen(state: AppState) {
             }
 
             Spacer(Modifier.height(14.dp))
-            GoldButton("ورود", Modifier.fillMaxWidth(), loading = state.loading) {
-                scope.launch { state.login(text, baseHint) }
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth().height(D.BtnH).goldGlass(RoundedCornerShape(D.RL)).pressable { openBot(ctx) },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Canvas(Modifier.size(20.dp)) { robotHeadIcon(K.Text) }
-                Spacer(Modifier.width(D.S2))
-                T("گرفتن کد از ربات تلگرام", size = 14.sp, color = K.Text, weight = FontWeight.Black)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                GoldButton("ورود", Modifier.weight(1f), loading = state.loading) {
+                    scope.launch { state.login(text, baseHint) }
+                }
+                LineButton("جای‌گذاری", Modifier.weight(1f)) {
+                    clip.getText()?.text?.let { accept(it) }
+                }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        T("لینک کامل اشتراک را هم می‌توانی بگذاری؛ فقط کدش برداشته می‌شود.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+        Spacer(Modifier.height(22.dp))
+        SmallLine("اشتراک نداری؟ از ربات بگیر") { openBot(ctx) }
         Spacer(Modifier.height(12.dp))
     }
 }

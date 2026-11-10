@@ -323,11 +323,10 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 }
                 // دکمه‌ی اتصال دقیقاً وسط و چهار حالت روی یک مدار دورش (دو تا هر طرف، قرینه). قطر دکمه با فضای مانده.
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(.63f).padding(horizontal = D.PagePad, vertical = D.S1), contentAlignment = Alignment.Center) {
-                    val side = if (ui.hasAccount) 30.dp else 0.dp
                     // ارتفاع لازم: دکمه + حالت‌های بالا و پایین مدار با اسمشان (حدود ۱.۰۴ قطر + ۳۶dp)
                     // ارتفاع لازم: دکمه + حالت‌های بالا و پایین با اسمشان؛ پهنا: حالت‌ها با نیم‌دایره‌شان داخل صفحه
-                    val byH = if (ui.hasAccount) (maxHeight - 52.dp) / 1.0f else maxHeight - D.S2
-                    val byW = if (ui.hasAccount) (maxWidth / 2 - 10.dp) / (ORBIT_DX + 47f / 212f / 2f) else maxWidth
+                    val byH = if (ui.hasAccount) (maxHeight - 62.dp) / 1.06f else maxHeight - D.S2
+                    val byW = if (ui.hasAccount) (maxWidth / 2 - 14.dp - ORBIT_PUSH) / (ORBIT_DX + 54f / 212f / 2f) else maxWidth
                     val d = minOf(byH, byW).coerceIn(112.dp, 240.dp)
                     Box(Modifier.guideTarget("connect")) {
                         OrbButton(ui, mc, enabled = ui.hasAccount && !ui.sheetOpen, diameter = d, onClick = act.toggle)
@@ -369,6 +368,10 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
 const val ORBIT_R = 146f / 212f
 const val ORBIT_DX = 121f / 212f
 const val ORBIT_DY = 82f / 212f
+
+/** قطر دکمه‌ی هر حالت روی دکمه‌ی پایه و فاصله‌ی اضافه‌ی آن‌ها رو به بیرون (۱.۳۲.۳) */
+val ORBIT_MODE = 54.dp
+val ORBIT_PUSH = 14.dp
 
 /** «موقعیت شما : ایران» بالای نقشه؛ وقتی وصل است «IP شما : آلمان» (کشور IP خروجی) */
 @Composable
@@ -464,7 +467,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             val sw = r * .078f
             val step = 360f / SEGS
             val gap = 2.6f
-            val litN = if (on) SEGS else if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
+            val litN = if (connecting) (((t - conStart) / 2.2f % 1f) * SEGS).toInt() + 1 else 0
             val tl = Offset(c.x - sr, c.y - sr)
             val sz = Size(sr * 2, sr * 2)
             for (i in 0 until SEGS) {
@@ -481,24 +484,12 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- وصل: سه کمان باریک با ۱۲۰ درجه فاصله که آرام و یکنواخت دور دکمه می‌چرخند
+            // ---- وصل: سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر) روی همان حلقه، شارپ و بی‌هاله، خیلی آرام می‌چرخند
             if (onA > .01f) {
-                val ar = r * .955f
-                val atl = Offset(c.x - ar, c.y - ar)
-                val asz = Size(ar * 2, ar * 2)
                 for (k in 0 until 3) {
-                    val st = t * 14f + k * 120f
-                    drawArc(lerp(ac, Color.White, .35f).copy(alpha = onA), st, 46f, false, atl, asz, style = Stroke(1.6f * u, cap = StrokeCap.Round))
+                    val st = t * 9f + k * 120f - 90f
+                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
                 }
-            }
-            // ---- سه نقطه‌ی نور شارپ روی یک مدار، ۱۲۰ درجه از هم
-            val orbitR = r + 5f * u
-            for ((k, d) in listOf(0 to 2.6f, 1 to 2f, 2 to 2.3f)) {
-                val ang = Math.toRadians((t * 40f + k * 120f).toDouble())
-                val o = Offset(c.x + orbitR * cos(ang).toFloat(), c.y + orbitR * sin(ang).toFloat())
-                drawCircle(ac.copy(alpha = .22f), d * u * 1.7f, o)
-                drawCircle(ac, d * u, o)
-                drawCircle(Color.White, d * u * .5f, o)
             }
             // ---- گنبد شیشه‌ای تیره وسط
             val dr = r * .59f
