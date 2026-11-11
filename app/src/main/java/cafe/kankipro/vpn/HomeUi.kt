@@ -476,11 +476,31 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- وصل: سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر) روی همان حلقه، شارپ و بی‌هاله، خیلی آرام می‌چرخند
-            if (onA > .01f) {
+            val gameOn = ui.mode == KMode.GAME
+            // ---- وصل (عادی): سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر)، نئونی روشن مثل نور حالت هوشمند، خیلی آرام می‌چرخند
+            if (onA > .01f && !gameOn) {
                 for (k in 0 until 3) {
                     val st = t * 9f + k * 120f - 90f
-                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
+                    drawArc(ac.copy(alpha = .28f * onA), st, 65f, false, tl, sz, style = Stroke(sw * 1.3f, cap = StrokeCap.Round))
+                    drawArc(lerp(ac, Color.White, .22f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
+                }
+            }
+            // ---- وصل (گیمینگ): سه نقطه‌ی نور با دنباله، مثل نور دور حالت هوشمند، روی همان حلقه می‌چرخند
+            if (onA > .01f && gameOn) {
+                val rot = t * 70f % 360f
+                val tw = sw * .62f
+                for (k in 0 until 3) {
+                    val headDeg = rot + k * 120f - 90f
+                    val n = 10
+                    for (i in 0 until n) {
+                        val f = (i + 1f) / n
+                        drawArc(lerp(ac, Color.White, .1f).copy(alpha = onA * (.35f + .65f * f)), headDeg - 55f + 55f * i / n, 55f / n + .5f, false, tl, sz, style = Stroke(tw * (.5f + .5f * f), cap = StrokeCap.Round))
+                    }
+                    val rad = Math.toRadians(headDeg.toDouble())
+                    val hp = Offset(c.x + sr * cos(rad).toFloat(), c.y + sr * sin(rad).toFloat())
+                    drawCircle(Color.Black.copy(alpha = .55f * onA), tw * 1.25f, hp)
+                    drawCircle(lerp(ac, Color.White, .15f).copy(alpha = onA), tw * 1.08f, hp)
+                    drawCircle(Color.White.copy(alpha = onA), tw * .54f, hp)
                 }
             }
             // ---- گنبد شیشه‌ای تیره وسط
@@ -492,11 +512,9 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 dr, c,
             )
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset(c.x - dr * .32f, c.y - dr * .56f), dr * .9f), dr, c)
-            drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f + .15f * onA), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
+            drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
+            // وصل: گنبد مشکی می‌ماند (بی سایه‌ی رنگی روی آن)؛ فقط لبه‌ی گنبد نئونی می‌شود
             if (onA > .01f) {
-                // وصل: وسط گنبد با رنگ تم روشن می‌شود
-                drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .34f * onA), ac.copy(alpha = .10f * onA), Color.Transparent), c, dr), dr, c)
-                drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .26f * onA)), c, dr), dr, c)
                 drawCircle(ac.copy(alpha = .14f * onA), dr + 3f * u, c, style = Stroke(6f * u))
                 drawCircle(ac.copy(alpha = .65f * onA), dr, c, style = Stroke(1.5f * u))
             }
@@ -542,19 +560,24 @@ private fun PowerEmblem(state: VState, ac: Color, d: Dp, game: Boolean = false) 
         val u = 1.dp.toPx()
         drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent), c + Offset(0f, r * .25f), r * 1.3f), r * 1.3f, c + Offset(0f, r * .25f))
         if (onA > .01f) drawCircle(ac.copy(alpha = .3f * onA), r + 4f * u, c, style = Stroke(5f * u))
-        val top = lerp(lerp(K.BgMid, Color.White, .16f), lerp(ac, Color.White, .45f), onA)
-        val bot = lerp(lerp(K.BgMid, Color.Black, .5f), lerp(ac, Color.Black, .4f), onA)
-        drawCircle(Brush.verticalGradient(listOf(top, bot)), r, c)
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f + .35f * onA), Color.Transparent), Offset(c.x - r * .3f, c.y - r * .5f), r * .9f), r, c)
-        drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .35f + .45f * onA), Color.White.copy(alpha = .05f))), r - .5f * u, c, style = Stroke(u))
+        // عدسی همیشه شیشه‌ی تیره می‌ماند (وصل: بی رنگ پر و بی سایه روی نشان)؛ فقط خود نشان روشن و نئونی می‌شود
+        drawCircle(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.White, .16f), lerp(K.BgMid, Color.Black, .5f))), r, c)
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent), Offset(c.x - r * .3f, c.y - r * .5f), r * .9f), r, c)
+        drawCircle(Brush.verticalGradient(listOf(lerp(Color.White.copy(alpha = .35f), ac, .6f * onA), Color.White.copy(alpha = .05f))), r - .5f * u, c, style = Stroke(u))
         if (conA > .01f) {
             val rr = r + 3f * u
             drawArc(ac.copy(alpha = conA), clock.value * 400f % 360f, 110f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(2f * u, cap = StrokeCap.Round))
         }
-        val ic = lerp(lerp(K.Sub, ac, conA), K.OnGold, onA)
-        // وصل در گیمینگ: دسته‌ی بازی به‌جای نشان پاور
-        if (game && state == VState.ON) inset(size.width * .17f) { modeLogo(KMode.GAME, ic) }
-        else inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
+        val ic = lerp(lerp(K.Sub, ac, conA), lerp(ac, Color.White, .18f), onA)
+        val glowC = ac.copy(alpha = .35f * onA)
+        // وصل در گیمینگ: دسته‌ی بازی به‌جای نشان پاور؛ وصل: نشان نئونی روشن با هاله‌ی نرم
+        if (game && state == VState.ON) inset(size.width * .17f) {
+            if (onA > .01f) modeLogo(KMode.GAME, glowC)
+            modeLogo(KMode.GAME, ic)
+        } else inset(size.width * .2f) {
+            if (onA > .01f) iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", glowC, 4.4f)
+            iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f)
+        }
     }
 }
 
