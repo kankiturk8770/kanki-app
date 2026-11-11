@@ -176,7 +176,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     // بیرون رفتن از تب سرورها کشور باز را می‌بندد (برگشتن: همه بسته، مرتب)
     LaunchedEffect(tab) { if (tab != KTab.SERVERS) state.openNode = null }
-    MainFrame(tab, onTab = { state.tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }, onEmergency = { state.emergencyOpen = true }) {
+    MainFrame(tab, onTab = { state.tab = it }, onRobot = { startGuide() }, onAccount = { state.accountOpen = true }) {
         when (tab) {
             KTab.HOME -> HomeTab(state, countries, onToggle)
             KTab.SERVERS -> ServersTab(state)

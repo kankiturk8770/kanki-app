@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 96
-        versionName = "1.33.5"
+        versionCode = 97
+        versionName = "1.33.6"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -106,8 +106,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    // بررسی پیام‌های چت اضطراری در پس‌زمینه (اعلان بدون سرویس پوش گوگل)
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     // فقط برای عکس صفحه‌ها (Shots.kt)؛ داخل فایل نصبی نمی‌رود
     testImplementation(composeBom)

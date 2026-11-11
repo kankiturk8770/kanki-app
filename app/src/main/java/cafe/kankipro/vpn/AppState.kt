@@ -42,8 +42,6 @@ class AppState private constructor(context: Context) {
     var base by mutableStateOf(prefs.getString("base", null))
     var code by mutableStateOf(prefs.getString("code", null))
     var account by mutableStateOf<Account?>(null)
-    /** صفحه‌ی چت اضطراری باز است */
-    var emergencyOpen by mutableStateOf(false)
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     /** جزئیات فنی آخرین خطا (با زدن «جزئیات» دیده می‌شود) */
@@ -1104,7 +1102,7 @@ class AppState private constructor(context: Context) {
         // هر لینک Xray یک «سرور» جدا با پروتکل xray؛ مکانش (اگر پنل داده) کنار خروجی‌های بقیه‌ی سرورها
         val xrayExits = mutableMapOf<String, ExitInfo>()
         val xray = a.xray.mapIndexed { i, x ->
-            val id = "xray-" + Emergency.sha256Hex(x.link.toByteArray()).take(8)
+            val id = "xray-" + java.security.MessageDigest.getInstance("SHA-256").digest(x.link.toByteArray()).joinToString("") { "%02x".format(it) }.take(8)
             x.exit?.let { xrayExits[id] = it }
             ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
@@ -1821,8 +1819,6 @@ class AppState private constructor(context: Context) {
         e.apply()
         LastConfig.clear(ctx)
         runCatching { java.io.File(ctx.filesDir, "hy2.yaml").delete() }
-        // چت اضطراری این حساب (پیام‌ها، عکس‌ها، صف ارسال) از گوشی پاک می‌شود؛ روی سرور می‌ماند
-        EmergencyStore.clearAll(ctx)
         dismissed.clear()
         speed = SpeedUi()
         base = null; code = null; account = null; node = null

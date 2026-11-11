@@ -12,15 +12,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="application/x-openvpn-profile" />
-        </intent>
-        <!-- گره‌زدن به نام بسته‌های گوگل (gms، پلی‌استور، …) برداشته شد: اسکنرها (Play Protect) این الگو را
-             مشکوک می‌شمارند. «فقط بازی» به آن‌ها نیاز ندارد؛ خود بازی از راه پرس‌وجوی لانچر بالا پیدا و باز می‌شود.
-             باز کردن لینک (ربات/پشتیبانی) هم با startActivity است و به پرس‌وجو نیاز ندارد. -->
-        <package android:name="net.openvpn.openvpn" />
-        <package android:name="de.blinkt.openvpn" />
+        <!-- فقط پرس‌وجوی لانچر (پیدا کردن بازی‌ها برای «فقط بازی» و تونل انتخابی). نام بسته‌ی هیچ برنامه‌ی دیگری (گوگل، OpenVPN)
+             این‌جا نیست: اسکنرها (Play Protect) این الگو را مشکوک می‌شمارند. -->
     </queries>
 
     <application
