@@ -11,10 +11,10 @@
 | خواندن اشتراک از پنل (سرورها، لینک‌ها، `@tunnel`) | `SubscriptionApi.kt` |
 | شناسه‌ی گوشی و کانفیگ رمزشده‌ی `kseal1` (هدرهای `X-Kanki-Device`/`X-Kanki-Seal`) | `Seal.kt` (تست: `SealTest.kt`) |
 | اتصال صفحه‌ها به `AppState` | `Screens.kt` |
-| صفحه‌ی اتصال (خانه): نقشه، دکمه‌ی اتصال شیشه‌ای (`OrbButton`: حلقه‌ی ۴۴ تکه، سه کمان و گنبد روشن وقتی وصلی، هاله‌ی تند در گیمینگ؛ `PowerEmblem` با دسته‌ی بازی در گیمینگ)، حالت‌ها روی مدار دورش (`ModeOrbit`/`ModeOrb` در `ModesUi.kt`، جای آن‌ها `ORBIT_*`)، کارت سرور (`StripCard`)، کارت حجم و آمار (`StatsCard`، `NeonBar`)، سربرگ (`HeaderIcon`)، نوار پایین (`BottomBar`) | `HomeUi.kt` |
+| صفحه‌ی اتصال (خانه): نقشه، دکمه‌ی اتصال شیشه‌ای (`OrbButton`: حلقه‌ی ۴۴ تکه؛ وصل: سه کمان دورنگ، گیمینگ: سه نقطه‌ی نور و ضربان تند، با گذار نرم `gameA`؛ لمس: لرزش، تکان و موج شیشه‌ای؛ گنبد مشکی بی سایه؛ `PowerEmblem` پاور یا دسته‌ی بازی)، حالت‌ها روی مدار دورش (`ModeOrbit`/`ModeOrb` در `ModesUi.kt`، جای آن‌ها `ORBIT_*`)، کارت سرور (`StripCard`)، کارت حجم و آمار (`StatsCard`، `NeonBar`)، سربرگ (`HeaderIcon`)، نوار پایین (`BottomBar`) | `HomeUi.kt` |
 | حالت‌ها (هوشمند، گیمینگ، ضد فیلتر، DNS) | `Modes.kt` (منطق، امتیاز گیمینگ `gameScore`/`gameQ`/`stability`)، `ModesUi.kt` (ظاهر، `StabilityLine`)؛ سنجش هر پروتکل `AppState.measureFamily` |
 | تب سرورها | `ServersUi.kt` |
-| تنظیمات و تم‌ها | `SettingsUi.kt` (`ThemePicker`)، رنگ‌ها و تم در `Ui.kt` (`Themes` از ۱.۳۲: kanki، cyber، tiffany، vulcan، malt، cyprus؛ هر تم با `glassTheme(id, زمینه, رنگ نئونی)` ساخته می‌شود، اسم‌ها در `ThemeNames`)، اجزای مشترک در `Kit.kt` |
+| تنظیمات و تم‌ها | `SettingsUi.kt` (`ThemePicker`)، رنگ‌ها و تم در `Ui.kt` (`Themes` از ۱.۳۲: kanki، cyber، tiffany، vulcan، malt، cyprus؛ هر تم با `glassTheme(id, زمینه, رنگ نئونی, رنگ دوم)` ساخته می‌شود (رنگ دوم `K.Gold2` از ۱.۳۴ برای گرادیان نورها و لبه‌ها)، اسم‌ها در `ThemeNames`)، اجزای مشترک در `Kit.kt` |
 | موتور WireGuard/AmneziaWG | `VpnEngine.kt`، `Tunnel.kt` |
 | Hysteria2 / Xray / KANKI MIX / microtun | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` / `Mtun.kt` |
 | KPING (فقط تسترها؛ فیلد `kping` اشتراک رمزشده، لینک `kping://`، پنل ۳.۳۹+): هسته‌ی خودش `libkping.so`، وای‌فای و دیتا با هم (`requestNetwork` + `bindSocket`)، فقط پابجی گلوبال + `GAME_NEEDS` با دروازه (بقیه بسته)، تنظیم خودکار، آمار زنده و تنظیمات | `KpingCfg`/`KpStat` در `Mtun.kt`، `startKping`/`kpPath`/`kpSend` در `Hysteria.kt`، `KpingUi.kt`، `parseKping` در `SubscriptionApi.kt`، `Probe.kping` |

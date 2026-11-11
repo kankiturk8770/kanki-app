@@ -254,7 +254,8 @@ fun WorldMap(
             }
             val sw = w / 240f
             val c = K.Gold
-            fun beam(al: Float) = Brush.linearGradient(listOf(c.copy(alpha = al * .12f), c.copy(alpha = al * .6f), c.copy(alpha = al)), start = a, end = b)
+            // پرتو از رنگ دوم تم (سمت شما) به رنگ اصلی (سمت سرور)
+            fun beam(al: Float) = Brush.linearGradient(listOf(K.Gold2.copy(alpha = al * .12f), lerp(K.Gold2, c, .5f).copy(alpha = al * .6f), c.copy(alpha = al)), start = a, end = b)
             for ((m, al) in listOf(5f to .08f, 3f to .18f, 1.6f to .9f)) drawPath(path, beam(al), style = Stroke(sw * m, cap = StrokeCap.Round))
             drawPath(path, Color.White.copy(alpha = .45f), style = Stroke(sw * .4f, cap = StrokeCap.Round))
             if (draw >= 1f) {

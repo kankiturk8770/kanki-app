@@ -81,6 +81,8 @@ class Palette(
     val runner: Color = Color.Unspecified,
     /** رنگ «وصل» وسط دکمه‌ی اتصال (نشان پاور و نوشته‌ی حالت) */
     val power: Color = Color(0xFF3DDC84),
+    /** رنگ دوم هر تم (۱.۳۴): گرادیان نورها، لبه‌های شیشه و نوارها از رنگ اصلی به این رنگ می‌رود تا ظاهر یکنواخت نباشد */
+    val gold2: Color = gold,
 ) {
     /** نام قدیمی رنگ «وصل» */
     val ok: Color get() = connected
@@ -91,7 +93,7 @@ class Palette(
  * (وصل، چهار حالت، KANKI MIX، نوار پایین، …) از همین دو ساخته می‌شوند، تا کل برنامه یکدست بماند.
  * خطا و هشدار در همه‌ی تم‌ها یکی‌اند.
  */
-private fun glassTheme(id: String, bg: Long, accent: Long, ink: Long = 0xFF0A0D0B, text: Long = 0xFFF2F5F1, sub: Long = 0xFFA9B3AB): Palette {
+private fun glassTheme(id: String, bg: Long, accent: Long, accent2: Long, ink: Long = 0xFF0A0D0B, text: Long = 0xFFF2F5F1, sub: Long = 0xFFA9B3AB): Palette {
     val b = Color(bg)
     val a = Color(accent)
     val hi = lerp(a, Color.White, .40f)
@@ -112,16 +114,18 @@ private fun glassTheme(id: String, bg: Long, accent: Long, ink: Long = 0xFF0A0D0
         gameAlt = hi, tracer = Color.White,
         navTop = hi, navBottom = a, onNav = on,
         power = a,
+        gold2 = Color(accent2),
     )
 }
 
 val Themes: List<Palette> = listOf(
-    glassTheme("kanki", 0xFF141414, 0xFF2BEE34),
-    glassTheme("cyber", 0xFF3C1A47, 0xFFB6FF00),
-    glassTheme("tiffany", 0xFF171717, 0xFF21F1A8),
-    glassTheme("vulcan", 0xFF001621, 0xFFFF4103),
-    glassTheme("malt", 0xFF2A2312, 0xFFFFBE0B),
-    glassTheme("cyprus", 0xFF004741, 0xFFF0EDE4, ink = 0xFF062A27, sub = 0xFFA6C2BD),
+    // رنگ اصلی همان قبلی؛ رنگ دوم: Kanki سبزآبی، Cyber بنفش، Tiffany آبی یخی، Vulcanico قرمز صورتی آتشی، Malt کهربایی، Cyprus نقره‌ای
+    glassTheme("kanki", 0xFF141414, 0xFF2BEE34, 0xFF19E6C1),
+    glassTheme("cyber", 0xFF3C1A47, 0xFFB6FF00, 0xFFB44CFF),
+    glassTheme("tiffany", 0xFF171717, 0xFF21F1A8, 0xFF4FACFE),
+    glassTheme("vulcan", 0xFF001621, 0xFFFF4103, 0xFFFF2A6D),
+    glassTheme("malt", 0xFF2A2312, 0xFFFFBE0B, 0xFFFF8C00),
+    glassTheme("cyprus", 0xFF004741, 0xFFF0EDE4, 0xFFB8C4C2, ink = 0xFF062A27, sub = 0xFFA6C2BD),
 )
 
 /** نام هر تم در تنظیمات (همان نام‌های طرح) */
@@ -147,6 +151,7 @@ fun lerpPalette(a: Palette, b: Palette, f: Float) = Palette(
     navTop = lerp(a.navTop, b.navTop, f), navBottom = lerp(a.navBottom, b.navBottom, f), onNav = lerp(a.onNav, b.onNav, f),
     runner = if (a.runner.isSpecified && b.runner.isSpecified) lerp(a.runner, b.runner, f) else b.runner,
     power = lerp(a.power, b.power, f),
+    gold2 = lerp(a.gold2, b.gold2, f),
 )
 
 object ThemeState {
@@ -183,6 +188,8 @@ object K {
     val Gold: Color get() = ThemeState.current.gold
     val GoldLight: Color get() = ThemeState.current.goldLight
     val GoldDeep: Color get() = ThemeState.current.goldDeep
+    /** رنگ دوم تم (گرادیان نورها و لبه‌ها) */
+    val Gold2: Color get() = ThemeState.current.gold2
     val Shine: Color get() = ThemeState.current.shine
     val Ink: Color get() = ThemeState.current.ink
     val Text: Color get() = ThemeState.current.text
@@ -368,7 +375,7 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
         val rimW = maxOf(1.3.dp.toPx(), w * .045f)
         drawCircle(a.copy(alpha = .22f), r - rimW / 2, c, style = Stroke(rimW * 2.2f))
         drawCircle(
-            Brush.linearGradient(listOf(lerp(a, Color.White, .55f), a, lerp(a, Color.Black, .35f)), Offset(w * .1f, w * .05f), Offset(w * .9f, w)),
+            Brush.linearGradient(listOf(lerp(a, Color.White, .55f), a, K.Gold2), Offset(w * .1f, w * .05f), Offset(w * .9f, w)),
             r - rimW / 2, c, style = Stroke(rimW),
         )
         drawCircle(a.copy(alpha = .25f), r * .86f, c, style = Stroke(maxOf(.6.dp.toPx(), w * .012f)))
@@ -527,8 +534,8 @@ fun Modifier.goldGlass(shape: androidx.compose.ui.graphics.Shape, selected: Bool
     .border(
         if (selected) 1.4.dp else 1.dp,
         Brush.linearGradient(
-            if (selected) listOf(lerp(tint, Color.White, .5f), tint, tint.copy(alpha = .35f), tint)
-            else listOf(Color.White.copy(alpha = .50f), Color.White.copy(alpha = .08f), Color.Black.copy(alpha = .35f), tint.copy(alpha = .45f)),
+            if (selected) listOf(lerp(tint, Color.White, .5f), tint, tint.copy(alpha = .35f), if (tint == K.Gold) K.Gold2 else tint)
+            else listOf(Color.White.copy(alpha = .50f), Color.White.copy(alpha = .08f), Color.Black.copy(alpha = .35f), (if (tint == K.Gold) K.Gold2 else tint).copy(alpha = .5f)),
         ),
         shape,
     )
@@ -543,13 +550,13 @@ fun Modifier.goldFill(shape: androidx.compose.ui.graphics.Shape, enabled: Boolea
         liftShadow(o, 5.dp.toPx(), if (enabled) .5f else .25f, if (enabled) K.Gold else Color.Unspecified)
     }
     .clip(shape)
-    .drawBehind { drawRect(Brush.verticalGradient(listOf(K.GoldLight, K.Gold, lerp(K.Gold, K.GoldDeep, .55f)))) }
+    .drawBehind { drawRect(Brush.linearGradient(listOf(K.GoldLight, K.Gold, lerp(K.Gold2, K.GoldDeep, .35f)), Offset(0f, 0f), Offset(size.width * .6f, size.height * 1.2f))) }
     .drawWithContent {
         drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .04f), Color.Transparent), endY = size.height * .5f))
         drawRect(Brush.verticalGradient(listOf(Color.Transparent, K.GoldDeep.copy(alpha = .45f)), startY = size.height * .55f, endY = size.height))
         drawContent()
     }
-    .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .9f), K.Gold, K.GoldDeep, K.GoldLight)), shape)
+    .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .9f), K.Gold, K.Gold2, K.GoldLight)), shape)
 
 @Composable
 fun GoldButton(text: String, modifier: Modifier = Modifier, loading: Boolean = false, onClick: () -> Unit) {
