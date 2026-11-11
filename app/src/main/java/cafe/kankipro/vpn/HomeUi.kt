@@ -1,5 +1,8 @@
 package cafe.kankipro.vpn
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -112,7 +115,7 @@ class HomeActions(
 
 /** قاب همه‌ی تب‌ها: سربرگ بالا، محتوا، نوار تب‌ها پایین */
 @Composable
-fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}, content: @Composable BoxScope.() -> Unit) {
+fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     ThemeState.animate() // گذر نرم بین تم‌ها
     // ورود محو + لغزش ملایم محتوا هنگام تعویض تب (سبک و ۶۰فریمی)
     val enter = remember { Animatable(1f) }
@@ -121,7 +124,7 @@ fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: 
         enter.animateTo(1f, tween(260, easing = FastOutSlowInEasing))
     }
     Column(Modifier.fillMaxSize()) {
-        AppHeader(onRobot, onAccount, onEmergency)
+        AppHeader(onRobot, onAccount)
         Box(
             Modifier.weight(1f).graphicsLayer {
                 alpha = enter.value
@@ -135,36 +138,18 @@ fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: 
 
 /** سربرگ: لوگوی گرد K و KANKI VPN در یک طرف، سه دکمه‌ی گرد برجسته (لینک، ربات، گفتگو) در طرف دیگر */
 @Composable
-fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit, onEmergency: () -> Unit = {}) {
+fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = D.PagePad, end = D.PagePad, top = D.S2, bottom = D.S2), verticalAlignment = Alignment.CenterVertically) {
         Logo3D(34.dp)
         Spacer(Modifier.width(D.S2))
         BrandTitle(15.sp)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.guideTarget("emergency")) {
-            HeaderIcon(K.Accent, onEmergency) { emergencyChatIcon(it) }
-            UnreadBadge(EmergencyStore.unread, Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp))
-        }
-        Spacer(Modifier.width(D.S3))
         Box(Modifier.guideTarget("robot")) { HeaderIcon(K.Gold, onRobot) { robotHeadIcon(it) } }
         Spacer(Modifier.width(D.S3))
         Box(Modifier.guideTarget("account")) { HeaderIcon(K.Gold, onAccount) { linkIcon(it) } }
     }
 }
 
-/** عدد پیام‌های خوانده‌نشده روی گوشه‌ی دکمه (۰ = هیچ؛ بیش از ۹: «+۹») */
-@Composable
-fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { EmergencyStore.refreshUnread(ctx) } } }
-    if (count <= 0) return
-    val txt = if (count > 9) "9+" else count.toString()
-    Box(
-        modifier.defaultMinSize(minWidth = 18.dp, minHeight = 18.dp).clip(CircleShape).background(K.Red)
-            .border(1.5.dp, K.BgTop, CircleShape).padding(horizontal = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) { T(if (LangState.en) txt else faDigits(txt), size = 10.sp, color = Color.White, font = Poppins, weight = FontWeight.Bold, ltr = true) }
-}
 
 /** دکمه‌ی گرد برجسته‌ی سربرگ (۱.۲۹: دایره به‌جای مربع، با سایه و لبه‌ی نورانی) */
 @Composable
@@ -175,17 +160,6 @@ fun HeaderIcon(tint: Color, onClick: () -> Unit, draw: DrawScope.(Color) -> Unit
     ) { Canvas(Modifier.size(22.dp)) { draw(tint) } }
 }
 
-/** چت اضطراری: حباب گفتگوی گرد دوتُن با علامت تعجب و دو موج کوچک سیگنال */
-fun DrawScope.emergencyChatIcon(c: Color) {
-    val bubble = "M3.5 6A2.5 2.5 0 0 1 6 3.5h10A2.5 2.5 0 0 1 18.5 6v7.5A2.5 2.5 0 0 1 16 16h-5.5L6 19.8V16A2.5 2.5 0 0 1 3.5 13.5z"
-    iconPath(bubble, c, 1.9f, fill = Brush.verticalGradient(listOf(c.copy(alpha = .42f), c.copy(alpha = .10f)), endY = size.height))
-    val u = size.width / 24f
-    drawLine(lerp(c, Color.White, .4f), Offset(11f * u, 6.6f * u), Offset(11f * u, 10.6f * u), 2.2f * u, StrokeCap.Round)
-    drawCircle(lerp(c, Color.White, .4f), 1.25f * u, Offset(11f * u, 13.2f * u))
-    // موج‌های سیگنال گوشه‌ی بالا (اضطراری: حتی وقتی اینترنت محدود است)
-    drawArc(c, -80f, 70f, false, Offset(16.5f * u, 1.2f * u), Size(5.6f * u, 5.6f * u), style = Stroke(1.6f * u, cap = StrokeCap.Round))
-    drawArc(c.copy(alpha = .6f), -80f, 70f, false, Offset(15.2f * u, -.2f * u), Size(8.4f * u, 8.4f * u), style = Stroke(1.4f * u, cap = StrokeCap.Round))
-}
 
 /** دو حلقه‌ی زنجیر در هم (لینک اشتراک)، دوتُن */
 fun DrawScope.linkIcon(c: Color) {
@@ -413,11 +387,28 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
     LaunchedEffect(connecting) { if (connecting) conStart = clock.value }
     val ac = color
     val s = diameter / OrbBase
+    val haptic = LocalHapticFeedback.current
+    val shake = remember { Animatable(0f) }
+    val shakeScope = rememberCoroutineScope()
     Box(
-        Modifier.size(diameter).alpha(if (enabled) 1f else .55f).clickable(
-            enabled = enabled,
-            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
-        ),
+        Modifier.size(diameter).alpha(if (enabled) 1f else .55f)
+            .graphicsLayer { translationX = shake.value * density }
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = {
+                    // لمس دکمه: لرزش کوتاه خود گوشی (بازخورد لمسی کامپوز، بی مجوز VIBRATE) و یک تکان نرم چپ و راست دکمه
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    shakeScope.launch {
+                        shake.snapTo(0f)
+                        shake.animateTo(0f, keyframes {
+                            durationMillis = 320
+                            6f at 40; -5f at 100; 3.5f at 160; -2f at 220; 1f at 270
+                        })
+                    }
+                    onClick()
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -485,11 +476,31 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- وصل: سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر) روی همان حلقه، شارپ و بی‌هاله، خیلی آرام می‌چرخند
-            if (onA > .01f) {
+            val gameOn = ui.mode == KMode.GAME
+            // ---- وصل (عادی): سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر)، نئونی روشن مثل نور حالت هوشمند، خیلی آرام می‌چرخند
+            if (onA > .01f && !gameOn) {
                 for (k in 0 until 3) {
                     val st = t * 9f + k * 120f - 90f
-                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
+                    drawArc(ac.copy(alpha = .28f * onA), st, 65f, false, tl, sz, style = Stroke(sw * 1.3f, cap = StrokeCap.Round))
+                    drawArc(lerp(ac, Color.White, .22f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
+                }
+            }
+            // ---- وصل (گیمینگ): سه نقطه‌ی نور با دنباله، مثل نور دور حالت هوشمند، روی همان حلقه می‌چرخند
+            if (onA > .01f && gameOn) {
+                val rot = t * 70f % 360f
+                val tw = sw * .62f
+                for (k in 0 until 3) {
+                    val headDeg = rot + k * 120f - 90f
+                    val n = 10
+                    for (i in 0 until n) {
+                        val f = (i + 1f) / n
+                        drawArc(lerp(ac, Color.White, .1f).copy(alpha = onA * (.35f + .65f * f)), headDeg - 55f + 55f * i / n, 55f / n + .5f, false, tl, sz, style = Stroke(tw * (.5f + .5f * f), cap = StrokeCap.Round))
+                    }
+                    val rad = Math.toRadians(headDeg.toDouble())
+                    val hp = Offset(c.x + sr * cos(rad).toFloat(), c.y + sr * sin(rad).toFloat())
+                    drawCircle(Color.Black.copy(alpha = .55f * onA), tw * 1.25f, hp)
+                    drawCircle(lerp(ac, Color.White, .15f).copy(alpha = onA), tw * 1.08f, hp)
+                    drawCircle(Color.White.copy(alpha = onA), tw * .54f, hp)
                 }
             }
             // ---- گنبد شیشه‌ای تیره وسط
@@ -501,11 +512,9 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 dr, c,
             )
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset(c.x - dr * .32f, c.y - dr * .56f), dr * .9f), dr, c)
-            drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f + .15f * onA), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
+            drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
+            // وصل: گنبد مشکی می‌ماند (بی سایه‌ی رنگی روی آن)؛ فقط لبه‌ی گنبد نئونی می‌شود
             if (onA > .01f) {
-                // وصل: وسط گنبد با رنگ تم روشن می‌شود
-                drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .34f * onA), ac.copy(alpha = .10f * onA), Color.Transparent), c, dr), dr, c)
-                drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .26f * onA)), c, dr), dr, c)
                 drawCircle(ac.copy(alpha = .14f * onA), dr + 3f * u, c, style = Stroke(6f * u))
                 drawCircle(ac.copy(alpha = .65f * onA), dr, c, style = Stroke(1.5f * u))
             }
@@ -551,19 +560,24 @@ private fun PowerEmblem(state: VState, ac: Color, d: Dp, game: Boolean = false) 
         val u = 1.dp.toPx()
         drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent), c + Offset(0f, r * .25f), r * 1.3f), r * 1.3f, c + Offset(0f, r * .25f))
         if (onA > .01f) drawCircle(ac.copy(alpha = .3f * onA), r + 4f * u, c, style = Stroke(5f * u))
-        val top = lerp(lerp(K.BgMid, Color.White, .16f), lerp(ac, Color.White, .45f), onA)
-        val bot = lerp(lerp(K.BgMid, Color.Black, .5f), lerp(ac, Color.Black, .4f), onA)
-        drawCircle(Brush.verticalGradient(listOf(top, bot)), r, c)
-        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f + .35f * onA), Color.Transparent), Offset(c.x - r * .3f, c.y - r * .5f), r * .9f), r, c)
-        drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .35f + .45f * onA), Color.White.copy(alpha = .05f))), r - .5f * u, c, style = Stroke(u))
+        // عدسی همیشه شیشه‌ی تیره می‌ماند (وصل: بی رنگ پر و بی سایه روی نشان)؛ فقط خود نشان روشن و نئونی می‌شود
+        drawCircle(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.White, .16f), lerp(K.BgMid, Color.Black, .5f))), r, c)
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent), Offset(c.x - r * .3f, c.y - r * .5f), r * .9f), r, c)
+        drawCircle(Brush.verticalGradient(listOf(lerp(Color.White.copy(alpha = .35f), ac, .6f * onA), Color.White.copy(alpha = .05f))), r - .5f * u, c, style = Stroke(u))
         if (conA > .01f) {
             val rr = r + 3f * u
             drawArc(ac.copy(alpha = conA), clock.value * 400f % 360f, 110f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(2f * u, cap = StrokeCap.Round))
         }
-        val ic = lerp(lerp(K.Sub, ac, conA), K.OnGold, onA)
-        // وصل در گیمینگ: دسته‌ی بازی به‌جای نشان پاور
-        if (game && state == VState.ON) inset(size.width * .17f) { modeLogo(KMode.GAME, ic) }
-        else inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
+        val ic = lerp(lerp(K.Sub, ac, conA), lerp(ac, Color.White, .18f), onA)
+        val glowC = ac.copy(alpha = .35f * onA)
+        // وصل در گیمینگ: دسته‌ی بازی به‌جای نشان پاور؛ وصل: نشان نئونی روشن با هاله‌ی نرم
+        if (game && state == VState.ON) inset(size.width * .17f) {
+            if (onA > .01f) modeLogo(KMode.GAME, glowC)
+            modeLogo(KMode.GAME, ic)
+        } else inset(size.width * .2f) {
+            if (onA > .01f) iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", glowC, 4.4f)
+            iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f)
+        }
     }
 }
 

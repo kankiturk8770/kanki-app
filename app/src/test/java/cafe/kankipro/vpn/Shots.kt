@@ -236,9 +236,6 @@ abstract class ShotsBase {
         try { shot(name, theme, pgGuide(page)) } finally { Guide.step = -1 }
     }
     protected fun pgIntro(): @Composable () -> Unit = { KankiBackground { SplashVisual(.68f) } }
-    protected fun pgEmergency(): @Composable () -> Unit = {
-        KankiBackground { EmergencyScreen(AppState.from(ctx).apply { code = "kanki-4-demo" }, {}) }
-    }
 
     /** همه‌ی صفحه‌ها، به ترتیب نمایش */
     protected fun pages(): List<Pair<String, @Composable () -> Unit>> = listOf(
@@ -251,7 +248,6 @@ abstract class ShotsBase {
         "07-account" to pgAccount(),
         "08-gaming" to pgGame(),
         "09-intro" to pgIntro(),
-        "10-emergency" to pgEmergency(),
     )
 
     // ------------------------------------------------------------------ تم زرد کانکی
@@ -422,7 +418,6 @@ class Shots : ShotsBase() {
     @Test fun g07() = shot("malt-07-account", "malt", pgAccount())
     @Test fun g08() = shot("malt-08-gaming", "malt", pgGame())
     @Test fun g09() = shot("malt-09-intro", "malt", pgIntro())
-    @Test fun g10() = shot("malt-10-emergency", "malt", pgEmergency())
 
     // ------------------------------------------------------------------ تم زرشکی (AMOLED)
     @Test fun m01() = shot("kanki-01-home-off", "kanki", pgHomeOff())
@@ -435,7 +430,6 @@ class Shots : ShotsBase() {
     @Test fun m08() = shot("kanki-08-gaming", "kanki", pgGame())
     @Test fun m08k() = shot("kanki-08-gaming-kping", "kanki", pgGame("kping"))
     @Test fun m09() = shot("kanki-09-intro", "kanki", pgIntro())
-    @Test fun m10() = shot("kanki-10-emergency", "kanki", pgEmergency())
 
     // ------------------------------------------------------------------ تم زرد کانکی
     @Test fun y01() = shot("vulcan-01-home-off", "vulcan", pgHomeOff())
@@ -447,7 +441,6 @@ class Shots : ShotsBase() {
     @Test fun y07() = shot("vulcan-07-account", "vulcan", pgAccount())
     @Test fun y08() = shot("vulcan-08-gaming", "vulcan", pgGame())
     @Test fun y09() = shot("vulcan-09-intro", "vulcan", pgIntro())
-    @Test fun y10() = shot("vulcan-10-emergency", "vulcan", pgEmergency())
 
     // ------------------------------------------------------------------ تم‌های تک‌رنگ ۱.۲۸ (سیاه و لیمویی، یاقوت کبود، فیروزه، آمتیست)
     @Test fun t01() = shot("tiffany-01-home-off", "tiffany", pgHomeOff())
@@ -498,6 +491,5 @@ class Shots : ShotsBase() {
     @Test fun n07() = shot("cyber-07-account", "cyber", pgAccount())
     @Test fun n08() = shot("cyber-08-gaming", "cyber", pgGame())
     @Test fun n09() = shot("cyber-09-intro", "cyber", pgIntro())
-    @Test fun n10() = shot("cyber-10-emergency", "cyber", pgEmergency())
 
 }

@@ -31,7 +31,6 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         // فقط بار اول (نه با چرخیدن صفحه، که اندروید همان intent قدیمی را دوباره می‌دهد)
-        if (savedInstanceState == null) openFromNotification(intent)
         setContent {
             CompositionLocalProvider(
                 LocalLayoutDirection provides if (LangState.en) LayoutDirection.Ltr else LayoutDirection.Rtl,
@@ -41,25 +40,6 @@ class MainActivity : ComponentActivity() {
                     App()
                 }
             }
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // آیکون برنامه به رنگ تم، وقتی کاربر از برنامه بیرون رفت (نه وسط کار)
-        LauncherIcon.apply(applicationContext, ThemeState.targetId)
-    }
-
-    override fun onNewIntent(intent: android.content.Intent) {
-        super.onNewIntent(intent)
-        openFromNotification(intent)
-    }
-
-    /** لمس اعلان «پیام تازه از پشتیبانی»: چت اضطراری باز می‌شود */
-    private fun openFromNotification(i: android.content.Intent?) {
-        if (i?.getBooleanExtra(EmergencyStore.EXTRA_OPEN, false) == true) {
-            AppState.from(this).emergencyOpen = true
-            i.removeExtra(EmergencyStore.EXTRA_OPEN)
         }
     }
 
@@ -98,9 +78,6 @@ fun App() {
 
     var splash by rememberSaveable { mutableStateOf(true) }
 
-    // آدرس اضطراری را نگه می‌داریم تا وقتی اینترنت قطع است هم باز شود
-    LaunchedEffect(state.account) { Emergency.remember(ctx, state.account?.emergency, state.account?.emergencyKey) }
-
     // بارگذاری اطلاعات و اتصال خودکار
     LaunchedEffect(state.loggedIn) {
         if (state.loggedIn) {
@@ -112,9 +89,6 @@ fun App() {
     when {
         splash -> SplashScreen { splash = false }
         state.unlocking -> UnlockScreen { state.unlocking = false }
-        state.emergencyOpen -> KankiBackground(accent = K.Red) {
-            Box(Modifier.systemBarsPadding()) { EmergencyScreen(state) { state.emergencyOpen = false } }
-        }
         else -> KankiBackground(accent = if (state.vstate == VState.ON) modeColor(state.mode) else K.Gold, calm = !state.loggedIn) {
             Box(Modifier.systemBarsPadding()) {
                 if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }

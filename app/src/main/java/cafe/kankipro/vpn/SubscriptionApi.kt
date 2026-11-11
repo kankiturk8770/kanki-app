@@ -271,7 +271,9 @@ object SubscriptionApi {
             dataRemaining = if (limitGb != null && usedGb != null && limitGb > 0)
                 String.format(java.util.Locale.US, "%.2f GB", (limitGb - usedGb).coerceAtLeast(0.0)) else after("Data remaining"),
             used = if (usedGb != null) String.format(java.util.Locale.US, "%.2f GB", usedGb) else after("Used traffic"),
-            connections = after("Connections"),
+            // پنل عدد اتصال را با جاوااسکریپت صفحه می‌نویسد (در متن ثابت فقط «—» است)؛ از داده‌ی صفحه: وصل الان / سقف حساب (۰ = بی‌سقف)
+            connections = d0?.takeIf { it.has("max_conn") }?.let { "${it.optInt("online", 0)} / ${it.optInt("max_conn", 0).let { m -> if (m > 0) "$m" else "∞" }}" }
+                ?: after("Connections"),
             timeRemaining = if (expiresAt != null) PanelTime.remaining(expiresAt) else "نامحدود",
             expiry = if (expiresAt != null) PanelTime.jalali(expiresAt) else "—",
             configs = configs,

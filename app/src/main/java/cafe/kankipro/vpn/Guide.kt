@@ -132,8 +132,6 @@ val guideSteps = listOf(
         "Settings", "DNS, auto connect, kill switch, split tunneling (for your bank, say), theme, language and app sounds.", tab = KTab.SETTINGS),
     GuideStep("account", "لینک اشتراک", "اطلاعات اشتراک، کپی لینک و تمدید.",
         "Subscription link", "Your subscription details, copying your link and renewing."),
-    GuideStep("emergency", "چت اضطراری", "فقط برای وقتی که اینترنت بین‌الملل کامل قطع شد: از اینجا مستقیم با پشتیبانی حرف می‌زنی و کانفیگی که وصل می‌شه رو می‌گیری.",
-        "Emergency chat", "Only for when the internet is fully cut off: talk to support right here and get a config that connects."),
     GuideStep("robot", "من همین‌جام", "هر وقت سؤال داشتی روی من بزن تا این راهنما دوباره باز بشه.",
         "I'm right here", "Tap me whenever you have a question and this guide opens again."),
 )

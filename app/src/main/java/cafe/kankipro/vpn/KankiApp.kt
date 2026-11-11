@@ -17,9 +17,6 @@ class KankiApp : Application() {
         Motion.init(this)
         Seal.init(this)
         AbstractBackend.setAlwaysOnCallback { AlwaysOn.start(this) }
-        // پیام تازه‌ی پشتیبانی در چت اضطراری: بررسی دوره‌ای و اعلان
-        EmergencyStore.schedule(this)
-        EmergencyStore.watch(this)
     }
 }
 
