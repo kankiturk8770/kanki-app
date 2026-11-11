@@ -45,6 +45,28 @@ class SubParseTest {
         assertEquals(a.configs.size, a.configs.map { it.node to it.protocol }.toSet().size)
     }
 
+    /**
+     * لینک‌های Xray همان‌طور که پنل می‌فرستد: via و group پنل (طرح تازه) خوانده می‌شود؛ پنل قدیمی بی via: کپی تانل از اسم
+     * («🇮🇷→…» یا «… (تانل)»). برنامه هیچ لینک تانلی خودش نمی‌سازد.
+     */
+    @Test
+    fun xray_links_keep_the_panels_via_and_group() {
+        val vless = "vless://11111111-2222-3333-4444-555555555555@de.example.com:443?security=tls&type=tcp#x"
+        val xray = """[
+            {"name":"🇩🇪 Germany · VLESS","link":"$vless","via":"direct","group":"de-vless"},
+            {"name":"anything","link":"${vless.replace("de.example.com", "ir.example.com")}","via":"tunnel","group":"de-vless"},
+            {"name":"🇮🇷→🇩🇪 Germany · VLESS","link":"${vless.replace("de.example.com", "ir2.example.com")}"}
+        ]"""
+        val page = html.replace("\"xray\":null", "\"xray\":$xray")
+        val a = SubscriptionApi.parse(page, base)
+        assertEquals(3, a.xray.size)
+        assertEquals(listOf("direct", "tunnel", ""), a.xray.map { it.via })
+        assertEquals(listOf("de-vless", "de-vless", ""), a.xray.map { it.group })
+        assertTrue(xrayTunnelName("🇮🇷→🇩🇪 Germany · VLESS"))
+        assertTrue(xrayTunnelName("Germany (تانل)"))
+        assertTrue(!xrayTunnelName("🇩🇪 Germany · VLESS"))
+    }
+
     @Test
     fun hysteria_and_kmix_links_point_at_the_text_not_the_qr() {
         val a = SubscriptionApi.parse(html, base)

@@ -134,8 +134,16 @@ class AppState private constructor(context: Context) {
         private set
     var filterNode by mutableStateOf(prefs.getString("filterNode", null))
         private set
-    /** ضد فیلتر خودکار: فقط Xray (پیش‌فرض)، یا همه‌ی راه‌ها (Xray، AmneziaWG مستقیم و تانل) به ترتیب پینگ */
-    var filterXray by mutableStateOf(prefs.getBoolean("filterXray", true))
+    /**
+     * ضد فیلتر خودکار: true = فقط Xray، false = Amnezia هم (AmneziaWG مستقیم و تانل)، به ترتیب پینگ.
+     * از ۱.۳۴.۳ پیش‌فرض هر دو تیک روشن است؛ یک بار برای همه هم روشن می‌شود (کلید filterTicks1343).
+     */
+    var filterXray by mutableStateOf(
+        if (!prefs.getBoolean("filterTicks1343", false)) {
+            prefs.edit().putBoolean("filterTicks1343", true).putBoolean("filterXray", false).putBoolean("filterUseX", true).apply()
+            false
+        } else prefs.getBoolean("filterXray", false)
+    )
         private set
     fun changeFilterXray(v: Boolean) { filterXray = v; prefs.edit().putBoolean("filterXray", v).apply() }
     /** تیک Xray در پنل ضد فیلتر (تیک Amnezia همان !filterXray است)؛ همیشه دست‌کم یکی روشن است */
@@ -345,7 +353,24 @@ class AppState private constructor(context: Context) {
         p == "amneziawg" -> "tunnel"
         // KPING همیشه از سرور ایران و تانل خودش
         p == KpingCfg.PROTO -> "tunnel"
+        // Xray: همان چیزی که پنل گفته (via)؛ پنل قدیمی: کپی تانل اسمش «🇮🇷→…» (۳.۳۹) یا «… (تانل)» (قدیمی‌تر) است
+        p == "xray" -> account?.xrayById?.get(id)?.let { x ->
+            x.via.ifBlank { if (xrayTunnelName(x.name)) "tunnel" else "direct" }
+        } ?: "direct"
         else -> account?.viaProto?.get(id)?.get(p) ?: if (p == "wireguard") "tunnel" else "direct"
+    }
+
+    /**
+     * ردیف یک لینک Xray: «group» پنل؛ اگر پنل نداد، اسم لینک بی نشانه‌ی تانل («🇮🇷→» اول یا «(تانل)» آخر)، پس کپی تانل و
+     * مستقیم همان لینک یک ردیف می‌شوند.
+     */
+    fun xrayGroup(id: String): String {
+        val x = account?.xrayById?.get(id) ?: return id
+        return x.group.ifBlank {
+            x.name.trim().removeSuffix("(تانل)").trim()
+                .let { n -> if (n.startsWith(IR_FLAG)) n.removePrefix(IR_FLAG).trimStart('→', ' ') else n }
+                .ifBlank { id }
+        }
     }
 
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
@@ -1101,16 +1126,18 @@ class AppState private constructor(context: Context) {
         }
         // هر لینک Xray یک «سرور» جدا با پروتکل xray؛ مکانش (اگر پنل داده) کنار خروجی‌های بقیه‌ی سرورها
         val xrayExits = mutableMapOf<String, ExitInfo>()
+        val xrayById = mutableMapOf<String, XrayLink>()
         val xray = a.xray.mapIndexed { i, x ->
             val id = "xray-" + java.security.MessageDigest.getInstance("SHA-256").digest(x.link.toByteArray()).joinToString("") { "%02x".format(it) }.take(8)
             x.exit?.let { xrayExits[id] = it }
+            xrayById[id] = x
             ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
         // microtun: پروتکل جدای همان سرور (لینک mtun://)
         val mtun = a.mtun.map { ConfigLink(protocol = MtunCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "mtun:" + it.url) }
         // KPING (فقط تسترها): هسته‌ی خودش (kping://)، به سرور ایران؛ زیر همان سرور خارج دیده می‌شود
         val kping = a.kping.map { ConfigLink(protocol = KpingCfg.PROTO, node = it.node, nodeName = it.nodeName, url = "kping:" + it.url) }
-        return a.copy(configs = base + direct + xray + mtun + kping, exits = a.exits + xrayExits)
+        return a.copy(configs = base + direct + xray + mtun + kping, exits = a.exits + xrayExits, xrayById = xrayById)
     }
 
     /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
@@ -1844,3 +1871,12 @@ val FAMILY_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amnezia", "
 
 /** خطای اتصال KPING وقتی هیچ نسخه‌ی پابجی نصب نیست */
 const val KPING_NO_GAME = "kping: PUBG Global is not installed"
+
+/** پرچم ایران (اول اسم کپی تانل لینک‌های Xray پنل ۳.۳۹: «🇮🇷→🇩🇪 Germany · Trojan») */
+const val IR_FLAG = "\uD83C\uDDEE\uD83C\uDDF7"
+
+/** اسم لینک Xray می‌گوید کپی تانل است؟ (فقط وقتی پنل via نداده) */
+fun xrayTunnelName(name: String): Boolean {
+    val n = name.trim()
+    return n.startsWith(IR_FLAG) || n.contains("→") || n.endsWith("(تانل)")
+}

@@ -506,12 +506,12 @@ private fun ModeSheets(state: AppState) {
     )
 
     // ضد فیلتر: فقط Xray و Amnezia
-    // هر لینک Xray یک خانه: کپی تانل (اسمش «🇮🇷→…» است) در ستون تانل و مستقیم در ستون مستقیم؛ ردیف = کشور خروج + نوع پروتکل
+    // هر لینک Xray درست همان‌جایی که پنل گفته: تانل در خانه‌ی تانل، مستقیم در خانه‌ی مستقیم (state.cfgSide)؛
+    // ردیف = «group» پنل، یا اگر پنل نداد کشور خروج + نوع پروتکل. برنامه هیچ کپی تانلی خودش نمی‌سازد: نبود = «—»
     val xrayRows = a.configs.filter { it.protocol == "xray" && state.hasCfg(it.node, "xray") }
         .map { c ->
             val pn = XrayCfg.protoName(c.url.removePrefix("xray:"))
-            val tunnel = c.nodeName.contains("→") || c.nodeName.trimStart().startsWith("\uD83C\uDDEE\uD83C\uDDF7")
-            server(c.node, "xray", pn).let { sv -> sv.copy(name = sv.name + " · " + pn, side = if (tunnel) "tunnel" else "direct") }
+            server(c.node, "xray", pn).let { sv -> sv.copy(name = sv.name + " · " + pn, group = state.xrayGroup(c.node)) }
         }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
     val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, state.cfgTag(n.node, p)) } }
@@ -586,10 +586,10 @@ private fun ServersTab(state: AppState) {
         val famOrder = FAMILY_ORDER
         val lines = links.groupBy { l ->
             val fam = when (l.protocol) { "amneziawg", "amneziawg-direct" -> "amnezia"; else -> l.protocol }
-            val who = if (l.protocol == "xray") l.nodeName.removeSuffix(" (تانل)").trim() else state.parentOf(l.node)
+            val who = if (l.protocol == "xray") state.xrayGroup(l.node) else state.parentOf(l.node)
             Triple(if (multi) (state.placeCity(l.node) ?: state.parentOf(l.node)) else "", fam, who)
         }.entries.sortedWith(compareBy({ it.key.first }, { famOrder.indexOf(it.key.second) })).flatMap { (key, g) ->
-            val side = { l: ConfigLink -> if (l.protocol == "xray") (if (l.nodeName.trim().endsWith("(تانل)")) "tunnel" else "direct") else state.cfgSide(l.node, l.protocol) }
+            val side = { l: ConfigLink -> state.cfgSide(l.node, l.protocol) }
             val t = g.filter { side(it) == "tunnel" }
             val d = g.filter { side(it) != "tunnel" }
             (0 until maxOf(t.size, d.size)).map { i -> CfgLineUi(key.first.ifBlank { null }, t.getOrNull(i)?.let { row(it) }, d.getOrNull(i)?.let { row(it) }) }

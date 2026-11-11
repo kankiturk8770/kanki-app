@@ -43,6 +43,8 @@ data class Account(
     val awg: Map<String, AwgRoute> = emptyMap(),
     /** راه هر پروتکل هر سرور (شناسه‌ی نود ← پروتکل ← «tunnel» یا «direct»)؛ پنل ۳.۹.۵ به بعد، خالی یعنی پنل قدیمی */
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
+    /** لینک‌های Xray با شناسه‌ی «سرور» برنامه (xray-…)؛ راه (via) و ردیف (group) هر لینک از همین‌جا خوانده می‌شود */
+    val xrayById: Map<String, XrayLink> = emptyMap(),
     /** microtun هر سرور (فیلد mtun؛ پنل ۳.۱۸ به بعد). ورودی تانل هر سرور هم لینک خودش را دارد. */
     val mtun: List<MtunLink> = emptyList(),
     /** KPING (پنل ۳.۳۹ به بعد): فقط برای تسترها و فقط در جواب رمزشده؛ هر مسیر یک لینک kping:// به سرور ایران */
@@ -84,7 +86,11 @@ data class DnsServer(
 data class DnsInfo(val token: String, val servers: List<DnsServer>)
 
 /** exit: جایی که ترافیک این لینک از آن به اینترنت می‌رود (پنل ۳.۶.۳ به بعد) */
-data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = null)
+/**
+ * یک لینک Xray از داده‌ی صفحه‌ی اشتراک. پنل (طرح بعدی) می‌تواند خودش بگوید این لینک تانل است یا مستقیم (`via`) و با کدام
+ * لینک دیگر یک ردیف است (`group`)؛ اگر نگفت، برنامه از روی اسم حدس می‌زند (اسم کپی تانل با «🇮🇷→» شروع می‌شود).
+ */
+data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = null, val via: String = "", val group: String = "")
 
 /** پیام ادمین. until: زمان پایان به میلی‌ثانیه (۰ یعنی تا وقتی ادمین پاکش کند) */
 data class AppNotice(val id: String, val text: String, val until: Long)
@@ -286,7 +292,13 @@ object SubscriptionApi {
             dns = dataJson(html)?.optJSONObject("dns")?.let { parseDns(it) },
             xray = dataJson(html)?.optJSONArray("xray")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }
-                    .map { XrayLink(it.optString("name"), it.optString("link").trim(), exitOf(it)) }
+                    .map {
+                        XrayLink(
+                            it.optString("name"), it.optString("link").trim(), exitOf(it),
+                            via = it.optString("via").trim().takeIf { v -> v == "tunnel" || v == "direct" }.orEmpty(),
+                            group = it.optString("group").trim().take(80),
+                        )
+                    }
                     .filter { XrayCfg.supported(it.link) }
             } ?: emptyList(),
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),

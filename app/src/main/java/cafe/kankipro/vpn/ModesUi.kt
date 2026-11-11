@@ -504,7 +504,7 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
 }
 
 /** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …)، پینگ و راهش (tunnel / direct) */
-data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct", val q: Modes.GameQ? = null)
+data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct", val q: Modes.GameQ? = null, val group: String = "")
 
 /** یک سرور با دو راهش کنار هم: کانفیگ تانل (راست) و کانفیگ مستقیم (چپ)؛ هر کدام ممکن است نباشد */
 data class SheetPair(val flag: String, val name: String, val tunnel: SheetServer?, val direct: SheetServer?) {
@@ -525,12 +525,13 @@ fun pairsOf(list: List<SheetServer>): List<SheetPair> =
         (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
     }.sortedBy { it.best ?: 99_999L }
 
-/** لینک‌های Xray، جفت‌شده با اسم ردیف (کشور خروج · نوع پروتکل): هر ردیف یک خانه‌ی تانل و یک خانه‌ی مستقیم */
+/** لینک‌های Xray، جفت‌شده با «group» پنل (یا اسم ردیف: کشور خروج · نوع پروتکل): هر ردیف یک خانه‌ی تانل و یک خانه‌ی مستقیم */
 fun xrayPairs(list: List<SheetServer>): List<SheetPair> =
-    list.groupBy { it.name }.values.flatMap { g ->
+    list.groupBy { it.group.ifBlank { it.name } }.values.flatMap { g ->
         val t = g.filter { it.side == "tunnel" }
         val d = g.filter { it.side != "tunnel" }
-        val head = g.first()
+        // پرچم و اسم ردیف از لینک مستقیم (مکان خروج خود سرور)، نه از کپی تانل
+        val head = d.firstOrNull() ?: g.first()
         (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
     }.sortedBy { it.best ?: 99_999L }
 
@@ -568,18 +569,6 @@ private fun FamilyCard(f: GameFamilyUi, selected: Boolean, modifier: Modifier, o
         contentAlignment = Alignment.Center,
     ) {
         AutoText(f.title, size = 12.sp, color = if (selected) Color.White else K.Text)
-    }
-}
-
-/** سرتیتر دو ستون: «تانل» راست، «مستقیم» چپ */
-@Composable
-private fun PairHeader(c: Color) {
-    Row(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
-        for (k in listOf("تانل", "مستقیم")) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                T(k, size = 11.sp, color = Color.White, weight = FontWeight.Black)
-            }
-        }
     }
 }
 
@@ -705,7 +694,12 @@ private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled:
  * پینگ؛ خودش پایدارترین سرور همین پروتکل را انتخاب و وصل می‌کند.
  */
 @Composable
-private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Boolean, onClick: () -> Unit) {
+private fun FastestRow(
+    selected: Boolean, color: Color, best: Long?, enabled: Boolean,
+    title: String = "بهترین سرور برای بازی", sub: String = "پایدارترین را با پینگ، لرزش و افت پیدا و وصل می‌کند",
+    steady: Boolean = true,
+    onClick: () -> Unit,
+) {
     val shape = RoundedCornerShape(D.RL)
     Row(
         Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH + 4.dp)
@@ -725,12 +719,13 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
         Box(Modifier.size(34.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { MiniIcon("bolt", K.OnGold, 15.dp) }
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
-            T("بهترین سرور برای بازی", size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
-            T("پایدارترین را با پینگ، لرزش و افت پیدا و وصل می‌کند", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            T(title, size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         Spacer(Modifier.width(D.S2))
         val sh = RoundedCornerShape(50)
-        Row(
+        // برچسب «پایدار» فقط برای گیمینگ (که با لرزش و افت انتخاب می‌کند)؛ ضد فیلتر با پینگ و وصل شدن انتخاب می‌کند
+        if (steady) Row(
             Modifier.clip(sh).background(K.Good.copy(alpha = .15f)).border(1.dp, K.Good.copy(alpha = .4f), sh).padding(horizontal = D.S2, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -864,23 +859,24 @@ fun FilterSheet(
     ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای محدودیت شدید شبکه", onClose) {
         SheetLabel("پروتکل‌ها")
         Row(Modifier.fillMaxWidth().guideTarget("filter_list"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            TickChip("Xray", trf("%d سرور", xray.size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
-            TickChip("Amnezia", trf("%d سرور", amnezia.size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
+            TickChip("Xray", trf("%d سرور", xrayPairs(xray).size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
+            TickChip("Amnezia", trf("%d سرور", pairsOf(amnezia).size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
         }
         val list = (if (useX) xray else emptyList()) + (if (useAwg) amnezia else emptyList())
         Spacer(Modifier.height(D.S3))
-        FastestRow(auto, mc, list.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && list.isNotEmpty(), onAuto)
+        FastestRow(
+            auto, mc, list.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && list.isNotEmpty(),
+            title = "اتصال خودکار ضد فیلتر", sub = "کم‌پینگ‌ترینِ تیک‌خورده‌ها را پیدا و وصل می‌کند", steady = false, onClick = onAuto,
+        )
         if (useX) {
             SheetLabel("Xray")
             if (xray.isEmpty()) T("اشتراک شما Xray ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            // مثل Amnezia و گیمینگ: هر کشور و نوع پروتکل یک ردیف با دو خانه‌ی تانل و مستقیم و پینگ زنده
-            if (xray.isNotEmpty()) PairHeader(protoColor("xray"))
+            // مثل Amnezia و گیمینگ: هر کشور و نوع پروتکل یک ردیف با دو خانه‌ی تانل و مستقیم و پینگ زنده (اسم راه داخل خود خانه است)
             xrayPairs(xray).forEach { p -> PairRow(p, current, auto, protoColor("xray"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         if (useAwg) {
             SheetLabel("Amnezia")
             if (amnezia.isEmpty()) T("اشتراک شما Amnezia ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            if (amnezia.isNotEmpty()) PairHeader(protoColor("amneziawg"))
             pairsOf(amnezia).forEach { p -> PairRow(p, current, auto, protoColor("amneziawg"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         Spacer(Modifier.height(8.dp))

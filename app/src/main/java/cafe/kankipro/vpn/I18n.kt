@@ -382,6 +382,8 @@ private val EN = mapOf(
     "سنجش پینگ…" to "Measuring ping…",
     "سنجش لرزش و افت…" to "Measuring jitter and loss…",
     "بهترین سرور برای بازی" to "Best server for gaming",
+    "اتصال خودکار ضد فیلتر" to "Automatic anti-filter",
+    "کم‌پینگ‌ترینِ تیک‌خورده‌ها را پیدا و وصل می‌کند" to "Finds the lowest-ping ticked server and connects",
     "پایدارترین را با پینگ، لرزش و افت پیدا و وصل می‌کند" to "Finds the steadiest by ping, jitter and loss and connects",
     "در حال سنجش…" to "Measuring…",
     "بدون جواب" to "No answer",
