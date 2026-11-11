@@ -1,8 +1,5 @@
 package cafe.kankipro.vpn
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Animatable
-import kotlin.math.exp
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -416,19 +413,6 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
     LaunchedEffect(connecting) { if (connecting) conStart = clock.value }
     val ac = color
     val s = diameter / OrbBase
-    // حالت گیمینگ (۱.۳۳): وسط دسته‌ی بازی، حلقه با دو نور تعقیبی تند و ضربان دوتایی؛ بقیه‌ی حالت‌ها نفس آرام و سه کمان
-    val gaming = ui.mode == KMode.GAME
-    val gameA by animateFloatAsState(if (gaming) 1f else 0f, tween(500), label = "game")
-    // لحظه‌ی وصل شدن: یک موج نور از دکمه بیرون می‌رود (بی لرزش گوشی؛ ۱.۳۳.۱)
-    val wave = remember { Animatable(1f) }
-    var wasOn by remember { mutableStateOf(on) }
-    LaunchedEffect(on) {
-        if (on && !wasOn) {
-            wave.snapTo(0f)
-            wave.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
-        }
-        wasOn = on
-    }
     Box(
         Modifier.size(diameter).alpha(if (enabled) 1f else .55f).clickable(
             enabled = enabled,
@@ -441,16 +425,12 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             val r = size.minDimension / 2
             val c = center
             val u = 1.dp.toPx()
-            // ---- هاله‌ی پشت دکمه. وصل: نفس آرام (۳.۲ ثانیه)؛ گیمینگ: ضربان دوتایی تند مثل قلب
-            val calm = .5f + .5f * sin(t * 2f * PI.toFloat() / 3.2f)
-            val ph = t / 1.1f % 1f
-            val beat = maxOf(exp(-((ph - .08f) * 22f).let { it * it }), .7f * exp(-((ph - .3f) * 22f).let { it * it }))
-            val breathe = calm + (beat - calm) * gameA
-            val haloA = .3f + .7f * onA * (.7f + .3f * breathe)
-            val hr = r * (1.22f + .10f * onA * breathe)
+            // ---- هاله‌ی پشت دکمه (وصل: پررنگ و نفس‌کشان)
+            val breathe = .5f + .5f * sin(t * 1.85f)
+            val haloA = .3f + .7f * onA * (.85f + .15f * breathe)
             drawCircle(
-                Brush.radialGradient(0f to ac.copy(alpha = .32f * haloA), .45f to ac.copy(alpha = .09f * haloA), 1f to Color.Transparent, center = c, radius = hr),
-                hr, c,
+                Brush.radialGradient(0f to ac.copy(alpha = .30f * haloA), .45f to ac.copy(alpha = .08f * haloA), 1f to Color.Transparent, center = c, radius = r * 1.3f),
+                r * 1.3f, c,
             )
             // ---- سایه‌ی عمیق زیر دکمه
             val sc = c + Offset(0f, r * .1f)
@@ -504,29 +484,11 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 }
                 drawArc(col, start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
             }
-            // ---- وصل (عادی): سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر)، شارپ، خیلی آرام می‌چرخند
-            val arcA = onA * (1f - gameA)
-            if (arcA > .01f) {
+            // ---- وصل: سه کمان جدا (هر کدام ۶۵ درجه، فاصله‌ی برابر) روی همان حلقه، شارپ و بی‌هاله، خیلی آرام می‌چرخند
+            if (onA > .01f) {
                 for (k in 0 until 3) {
                     val st = t * 9f + k * 120f - 90f
-                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = arcA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
-                }
-            }
-            // ---- وصل (گیمینگ): دو نور تعقیبی روبه‌رو که تند روی تکه‌ها می‌دوند، با دنباله‌ی کوتاه (حس مسابقه)
-            val chaseA = onA * gameA
-            if (chaseA > .01f) {
-                val headF = (t * .62f % 1f) * SEGS
-                for (i in 0 until SEGS) {
-                    var lv = 0f
-                    for (h in 0 until 2) {
-                        val head = (headF + h * SEGS / 2f) % SEGS
-                        val d = (head - i + SEGS) % SEGS
-                        if (d < 7f) lv = maxOf(lv, 1f - d / 7f)
-                    }
-                    if (lv <= .02f) continue
-                    val start = i * step - 90f + gap / 2
-                    drawArc(ac.copy(alpha = .18f * lv * chaseA), start, step - gap, false, tl, sz, style = Stroke(sw * 1.45f, cap = StrokeCap.Round))
-                    drawArc(lerp(ac, Color.White, .45f * lv * lv).copy(alpha = lv * chaseA), start, step - gap, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
+                    drawArc(lerp(ac, Color.White, .10f).copy(alpha = onA), st, 65f, false, tl, sz, style = Stroke(sw * .62f, cap = StrokeCap.Round))
                 }
             }
             // ---- گنبد شیشه‌ای تیره وسط
@@ -540,12 +502,9 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset(c.x - dr * .32f, c.y - dr * .56f), dr * .9f), dr, c)
             drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f + .15f * onA), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
             if (onA > .01f) {
-                // وصل: گنبد از وسط با رنگ تم روشن می‌شود و با نفس/ضربان کمی کم و زیاد می‌شود
-                val core = onA * (.75f + .25f * breathe)
-                drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .38f * core), ac.copy(alpha = .14f * core), Color.Transparent), Offset(c.x, c.y - dr * .1f), dr * 1.05f), dr, c)
-                drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .30f * onA)), c, dr), dr, c)
-                drawCircle(ac.copy(alpha = .16f * onA), dr + 3f * u, c, style = Stroke(6f * u))
-                drawCircle(lerp(ac, Color.White, .2f).copy(alpha = .75f * onA), dr, c, style = Stroke(1.6f * u))
+                drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .26f * onA)), c, dr), dr, c)
+                drawCircle(ac.copy(alpha = .14f * onA), dr + 3f * u, c, style = Stroke(6f * u))
+                drawCircle(ac.copy(alpha = .65f * onA), dr, c, style = Stroke(1.5f * u))
             }
             drawCircle(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .45f)), startY = c.y, endY = c.y + dr), dr, c)
             drawOval(
@@ -553,18 +512,10 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
                 Offset(c.x - dr * .6f, c.y - dr * .94f), Size(dr * 1.2f, dr * .62f),
             )
             drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = .3f), Color.Transparent), startY = c.y - dr, endY = c.y), dr, c, style = Stroke(1.2f * u))
-            // ---- موج نور لحظه‌ی وصل شدن: از لبه‌ی گنبد تا بیرون دکمه باز و محو می‌شود
-            val wv = wave.value
-            if (wv < 1f) {
-                val wr = dr + (r * 1.42f - dr) * wv
-                val wa = (1f - wv)
-                drawCircle(ac.copy(alpha = .22f * wa), wr, c, style = Stroke((10f * wa + 2f) * u))
-                drawCircle(lerp(ac, Color.White, .5f).copy(alpha = .9f * wa), wr, c, style = Stroke((2.4f * wa + .6f) * u))
-            }
         }
         // ---- وسط گنبد: نشان پاور، اسم حالت و زمان اتصال
         Column(Modifier.width(diameter * .5f), horizontalAlignment = Alignment.CenterHorizontally) {
-            PowerEmblem(ui.vstate, ac, 34.dp * s, gaming)
+            PowerEmblem(ui.vstate, ac, 34.dp * s)
             Spacer(Modifier.height(5.dp * s))
             val dnsOn = ui.mode == KMode.DNS
             val (title, sub) = when (ui.vstate) {
@@ -587,10 +538,8 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
  * می‌چرخد و آیکون به رنگ اتصال در می‌آید؛ وصل: عدسی پر از رنگ اتصال، با برق و درخشش.
  */
 @Composable
-private fun PowerEmblem(state: VState, ac: Color, d: Dp, gaming: Boolean = false) {
+private fun PowerEmblem(state: VState, ac: Color, d: Dp) {
     val clock = motionTime()
-    // وصل در گیمینگ: به‌جای نشان پاور، دسته‌ی بازی
-    val padA by animateFloatAsState(if (gaming && state == VState.ON) 1f else 0f, tween(450), label = "pwPad")
     val onA by animateFloatAsState(if (state == VState.ON) 1f else 0f, tween(450), label = "pwOn")
     val conA by animateFloatAsState(if (state == VState.CONNECTING) 1f else 0f, tween(250), label = "pwCon")
     Canvas(Modifier.size(d)) {
@@ -609,8 +558,7 @@ private fun PowerEmblem(state: VState, ac: Color, d: Dp, gaming: Boolean = false
             drawArc(ac.copy(alpha = conA), clock.value * 400f % 360f, 110f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(2f * u, cap = StrokeCap.Round))
         }
         val ic = lerp(lerp(K.Sub, ac, conA), K.OnGold, onA)
-        if (padA < .99f) inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic.copy(alpha = ic.alpha * (1f - padA)), 2.4f) }
-        if (padA > .01f) inset(size.width * .17f) { modeLogo(KMode.GAME, ic.copy(alpha = ic.alpha * padA)) }
+        inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
     }
 }
 
@@ -809,8 +757,7 @@ private val ecgBeat: List<Pair<Float, Float>> = buildList {
 @Composable
 private fun PingPulse(values: List<Long>, ping: Long?, modifier: Modifier) {
     val live = values.size >= 2
-    // خود ضربان به رنگ تم؛ فقط عدد پینگ کنارش سبز/زرد/قرمز است
-    val col = K.Gold
+    val col by animateColorAsState(if (ping != null) pingColor(ping) else K.Gold, tween(600), label = "pp")
     val period by rememberUpdatedState(beatPeriod(ping))
     var beat by remember { mutableFloatStateOf(0f) }
     var time by remember { mutableFloatStateOf(0f) }
