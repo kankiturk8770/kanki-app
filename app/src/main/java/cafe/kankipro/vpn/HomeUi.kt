@@ -426,7 +426,8 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             val c = center
             val u = 1.dp.toPx()
             // ---- هاله‌ی پشت دکمه (وصل: پررنگ و نفس‌کشان)
-            val breathe = .5f + .5f * sin(t * 1.85f)
+            // گیمینگ: هاله تندتر می‌زند (حال‌وهوای بازی)؛ بقیه آرام
+            val breathe = .5f + .5f * sin(t * (if (ui.mode == KMode.GAME) 4.6f else 1.85f))
             val haloA = .3f + .7f * onA * (.85f + .15f * breathe)
             drawCircle(
                 Brush.radialGradient(0f to ac.copy(alpha = .30f * haloA), .45f to ac.copy(alpha = .08f * haloA), 1f to Color.Transparent, center = c, radius = r * 1.3f),
@@ -502,6 +503,8 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset(c.x - dr * .32f, c.y - dr * .56f), dr * .9f), dr, c)
             drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .15f + .15f * onA), Color.Transparent), Offset(c.x, c.y + dr * 1.15f), dr * 1.2f), dr, c)
             if (onA > .01f) {
+                // وصل: وسط گنبد با رنگ تم روشن می‌شود
+                drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .34f * onA), ac.copy(alpha = .10f * onA), Color.Transparent), c, dr), dr, c)
                 drawCircle(Brush.radialGradient(listOf(Color.Transparent, ac.copy(alpha = .26f * onA)), c, dr), dr, c)
                 drawCircle(ac.copy(alpha = .14f * onA), dr + 3f * u, c, style = Stroke(6f * u))
                 drawCircle(ac.copy(alpha = .65f * onA), dr, c, style = Stroke(1.5f * u))
@@ -515,7 +518,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
         }
         // ---- وسط گنبد: نشان پاور، اسم حالت و زمان اتصال
         Column(Modifier.width(diameter * .5f), horizontalAlignment = Alignment.CenterHorizontally) {
-            PowerEmblem(ui.vstate, ac, 34.dp * s)
+            PowerEmblem(ui.vstate, ac, 34.dp * s, ui.mode == KMode.GAME)
             Spacer(Modifier.height(5.dp * s))
             val dnsOn = ui.mode == KMode.DNS
             val (title, sub) = when (ui.vstate) {
@@ -538,7 +541,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
  * می‌چرخد و آیکون به رنگ اتصال در می‌آید؛ وصل: عدسی پر از رنگ اتصال، با برق و درخشش.
  */
 @Composable
-private fun PowerEmblem(state: VState, ac: Color, d: Dp) {
+private fun PowerEmblem(state: VState, ac: Color, d: Dp, game: Boolean = false) {
     val clock = motionTime()
     val onA by animateFloatAsState(if (state == VState.ON) 1f else 0f, tween(450), label = "pwOn")
     val conA by animateFloatAsState(if (state == VState.CONNECTING) 1f else 0f, tween(250), label = "pwCon")
@@ -558,7 +561,9 @@ private fun PowerEmblem(state: VState, ac: Color, d: Dp) {
             drawArc(ac.copy(alpha = conA), clock.value * 400f % 360f, 110f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(2f * u, cap = StrokeCap.Round))
         }
         val ic = lerp(lerp(K.Sub, ac, conA), K.OnGold, onA)
-        inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
+        // وصل در گیمینگ: دسته‌ی بازی به‌جای نشان پاور
+        if (game && state == VState.ON) inset(size.width * .17f) { modeLogo(KMode.GAME, ic) }
+        else inset(size.width * .2f) { iconPath("M12 3v9M17.7 6.3a8 8 0 1 1-11.4 0", ic, 2.4f) }
     }
 }
 
