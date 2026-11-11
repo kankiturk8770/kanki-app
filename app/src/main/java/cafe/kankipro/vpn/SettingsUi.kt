@@ -283,7 +283,7 @@ fun AccountSheet(visible: Boolean, a: Account?, act: AccountActions) {
                             AutoText(a?.username?.ifBlank { "—" } ?: "—", size = 17.sp)
                             T("اطلاعات حساب", size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
                         }
-                        if (a != null) Pill(faStatus(a.status), color = if (isActive(a.status)) K.Good else K.Red)
+                        if (a != null) Pill(faStatus(a.status), color = if (isActive(a.status)) K.Green else K.Red)
                     }
                     if (a != null) {
                         Spacer(Modifier.height(D.S4))
@@ -295,7 +295,7 @@ fun AccountSheet(visible: Boolean, a: Account?, act: AccountActions) {
                                 AutoText(a.dataRemaining, size = 13.sp)
                             }
                             Spacer(Modifier.height(D.S2))
-                            ProgressLine(f, if (f < .1f) K.Red else if (f < .25f) K.Warn else K.Good)
+                            ProgressLine(f, if (f < .1f) K.Red else if (f < .25f) K.Warn else K.Green)
                             Spacer(Modifier.height(D.S2))
                         }
                         InfoRow("مصرف‌شده", a.used)

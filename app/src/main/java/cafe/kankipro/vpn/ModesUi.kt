@@ -705,13 +705,12 @@ private fun FastestRow(selected: Boolean, color: Color, best: Long?, enabled: Bo
         Spacer(Modifier.width(D.S2))
         val sh = RoundedCornerShape(50)
         Row(
-            Modifier.clip(sh).background(K.Good.copy(alpha = .15f)).border(1.dp, K.Good.copy(alpha = .4f), sh).padding(horizontal = D.S2, vertical = 2.dp),
+            Modifier.clip(sh).background(color.copy(alpha = .15f)).border(1.dp, color.copy(alpha = .4f), sh).padding(horizontal = D.S2, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // رنگ وضعیت ثابت (سبز «خوب») در هر تم
-            Dot(K.Good, 5.dp)
+            Dot(color, 5.dp)
             Spacer(Modifier.width(4.dp))
-            T("پایدار", size = 10.sp, color = K.Good, weight = FontWeight.Black, maxLines = 1)
+            T("پایدار", size = 10.sp, color = color, weight = FontWeight.Black, maxLines = 1)
         }
         // جای عدد همیشه هست (خالی تا اولین پینگ): متن کنارش با رسیدن عدد جابه‌جا نمی‌شود
         Box(Modifier.width(48.dp), contentAlignment = Alignment.CenterEnd) {
