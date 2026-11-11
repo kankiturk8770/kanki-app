@@ -197,7 +197,9 @@ object K {
     val Panel: Color get() = ThemeState.current.panel
     val OnGold: Color get() = ThemeState.current.onGold
     val Accent: Color get() = ThemeState.current.accent
-    val Ok: Color get() = ThemeState.current.connected
+    val Ok: Color get() = Good
+    /** سبز «خوب» ثابت در همه‌ی تم‌ها (پینگ، پایداری، وضعیت فعال)؛ رنگ‌های وضعیت با تم عوض نمی‌شوند: سبز خوب، زرد متوسط، قرمز بد */
+    val Good = Color(0xFF3BE36B)
     /** رنگ «وصل / فعال» (اسمش از قدیم مانده)؛ هر تم رنگ خودش را دارد: زمرد، نعنایی یخی یا آبی‌آسمانی نئونی */
     val Green: Color get() = ThemeState.current.connected
     /** خطا، با تُن همان تم */
@@ -345,53 +347,62 @@ fun KankiBackground(accent: Color = K.Gold, calm: Boolean = false, content: @Com
 // ------------------------------------------------------------------ لوگو
 
 /**
- * لوگوی کانکی (۱.۳۲): دایره‌ی شیشه‌ای با حرف K نئونی به رنگ تم (همان نشان طرح «Kanki Glass»؛ لوگوی نهایی بعداً).
- * animate: حلقه‌ی نور دور لبه آرام می‌چرخد. sweep: جای نوار نور روی شیشه (۰ تا ۱؛ منفی = بدون نوار). glow: هاله‌ی پشت (۰ تا ۱).
+ * لوگوی کانکی (۱.۳۳، همان طرح آیکون برنامه): حلقه‌ی شیشه‌ای تیره با لبه‌ی نئونی و حرف K بولد هندسی (مسیر، نه فونت) با گرادیان
+ * رنگ تم. animate: حلقه‌ی نور دور لبه آرام می‌چرخد. sweep: جای نوار نور روی شیشه (۰ تا ۱؛ منفی = بدون نوار). glow: هاله‌ی پشت (۰ تا ۱).
  */
 @Composable
 fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float = 0f) {
     val clock = if (animate) motionTime() else null
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = this.size.width
-            val r = w / 2
-            val c = center
-            val a = K.Gold
-            if (glow > 0f) drawCircle(Brush.radialGradient(listOf(a.copy(alpha = .38f * glow), Color.Transparent), c, r * 1.7f), r * 1.7f, c)
-            // سایه‌ی نرم زیر نشان
-            drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent), c + Offset(0f, r * .12f), r * 1.15f), r * 1.15f, c + Offset(0f, r * .12f))
-            // رویه‌ی شیشه: روشن بالا-چپ، تیره پایین
-            drawCircle(Brush.linearGradient(listOf(lerp(K.BgMid, Color.White, .12f), lerp(K.BgMid, Color.Black, .45f)), Offset(0f, 0f), Offset(w * .4f, w)), r, c)
-            drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent), Offset(w * .32f, w * .22f), r * .9f), r, c)
-            drawCircle(Brush.radialGradient(listOf(a.copy(alpha = .16f), Color.Transparent), Offset(c.x, w * 1.05f), r), r, c)
-            // لبه‌ی گرادیانی: سفید بالا، رنگ تم پایین
-            drawCircle(Brush.linearGradient(listOf(Color.White.copy(alpha = .65f), Color.White.copy(alpha = .08f), Color.Black.copy(alpha = .4f), a.copy(alpha = .8f)), Offset(0f, 0f), Offset(w, w)),
-                r - .6.dp.toPx(), c, style = Stroke(1.3.dp.toPx()))
-            // برق بالای شیشه
-            drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = .30f), Color.Transparent), startY = c.y - r * .92f, endY = c.y - r * .1f),
-                Offset(c.x - r * .62f, c.y - r * .92f), Size(r * 1.24f, r * .8f))
-            if (clock != null) {
-                val rot = clock.value * 110f % 360f
-                rotate(rot, c) {
-                    drawCircle(Brush.sweepGradient(listOf(Color.Transparent, Color.Transparent, a.copy(alpha = .9f), lerp(a, Color.White, .6f), Color.Transparent), c),
-                        r + 2.5.dp.toPx(), c, style = Stroke(1.6.dp.toPx()))
-                }
-            }
-            if (sweep in -.4f..1.4f) {
-                val face = Path().apply { addOval(Rect(c, r)) }
-                clipPath(face) {
-                    val x = sweep * w
-                    drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .28f), Color.Transparent), Offset(x - w * .22f, 0f), Offset(x + w * .22f, w * .5f)), size = Size(w, w))
-                }
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val r = w / 2
+        val c = center
+        val a = K.Gold
+        if (glow > 0f) drawCircle(Brush.radialGradient(listOf(a.copy(alpha = .38f * glow), Color.Transparent), c, r * 1.7f), r * 1.7f, c)
+        // سایه‌ی نرم زیر نشان
+        drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent), c + Offset(0f, r * .12f), r * 1.15f), r * 1.15f, c + Offset(0f, r * .12f))
+        // بدنه‌ی شیشه‌ی تیره
+        drawCircle(Brush.linearGradient(listOf(lerp(K.BgMid, Color.White, .10f), lerp(K.BgMid, Color.Black, .55f)), Offset(w * .2f, 0f), Offset(w * .7f, w)), r, c)
+        drawCircle(Brush.radialGradient(listOf(a.copy(alpha = .14f), Color.Transparent), Offset(c.x, w * 1.02f), r), r, c)
+        // لبه‌ی نئونی: روشن بالا-چپ، رنگ تم، تیره‌تر پایین-راست
+        val rimW = maxOf(1.3.dp.toPx(), w * .045f)
+        drawCircle(a.copy(alpha = .22f), r - rimW / 2, c, style = Stroke(rimW * 2.2f))
+        drawCircle(
+            Brush.linearGradient(listOf(lerp(a, Color.White, .55f), a, lerp(a, Color.Black, .35f)), Offset(w * .1f, w * .05f), Offset(w * .9f, w)),
+            r - rimW / 2, c, style = Stroke(rimW),
+        )
+        drawCircle(a.copy(alpha = .25f), r * .86f, c, style = Stroke(maxOf(.6.dp.toPx(), w * .012f)))
+        // برق شیشه بالا
+        drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.Transparent), startY = c.y - r * .78f, endY = c.y - r * .2f),
+            Offset(c.x - r * .6f, c.y - r * .8f), Size(r * 1.2f, r * .62f))
+        // حرف K: مسیر هندسی در کادر ۳۱×۳۲ (همان آیکون برنامه)، وسط دایره
+        val k = r * 1.08f / 32f
+        val ox = c.x - 15.5f * k
+        val oy = c.y - 16f * k
+        val pts = floatArrayOf(0f, 0f, 7.5f, 0f, 7.5f, 12.2f, 20f, 0f, 30.2f, 0f, 15.6f, 14.2f, 31f, 32f, 21f, 32f, 10.6f, 19.6f, 7.5f, 22.6f, 7.5f, 32f, 0f, 32f)
+        val kp = Path().apply {
+            moveTo(ox + pts[0] * k, oy + pts[1] * k)
+            var i = 2
+            while (i < pts.size) { lineTo(ox + pts[i] * k, oy + pts[i + 1] * k); i += 2 }
+            close()
+        }
+        drawPath(kp, a.copy(alpha = .30f), style = Stroke(w * .05f, join = StrokeJoin.Round))
+        drawPath(kp, Brush.linearGradient(listOf(lerp(a, Color.White, .6f), a, lerp(a, Color.Black, .25f)), Offset(ox, oy), Offset(ox + 22f * k, oy + 32f * k)))
+        drawPath(kp, Color.White.copy(alpha = .35f), style = Stroke(maxOf(.5.dp.toPx(), w * .008f), join = StrokeJoin.Round))
+        if (clock != null) {
+            val rot = clock.value * 110f % 360f
+            rotate(rot, c) {
+                drawCircle(Brush.sweepGradient(listOf(Color.Transparent, Color.Transparent, a.copy(alpha = .9f), lerp(a, Color.White, .6f), Color.Transparent), c),
+                    r + 2.5.dp.toPx(), c, style = Stroke(1.6.dp.toPx()))
             }
         }
-        Text(
-            "K",
-            style = TextStyle(
-                fontFamily = Orbitron, fontWeight = FontWeight.Black, fontSize = (size.value * .46f).sp, color = K.Gold,
-                textDirection = TextDirection.Ltr, shadow = Shadow(K.Gold.copy(alpha = .8f), Offset.Zero, size.value * .45f),
-            ),
-        )
+        if (sweep in -.4f..1.4f) {
+            val face = Path().apply { addOval(Rect(c, r)) }
+            clipPath(face) {
+                val x = sweep * w
+                drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .28f), Color.Transparent), Offset(x - w * .22f, 0f), Offset(x + w * .22f, w * .5f)), size = Size(w, w))
+            }
+        }
     }
 }
 

@@ -125,7 +125,7 @@ fun protoTitle(p: String) = when (p) {
 
 fun pingColor(ms: Long) = when {
     ms < 0 -> K.Red
-    ms < 90 -> K.Green
+    ms < 90 -> K.Good
     ms < 200 -> K.Warn
     else -> K.Red
 }

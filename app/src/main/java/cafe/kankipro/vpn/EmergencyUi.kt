@@ -448,7 +448,7 @@ private fun Bubble(m: EMsg, img: ImageBitmap?, okOrNull: Boolean?, read: Boolean
     val r = D.RM
     val shape = if (mine) RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 4.dp, bottomEnd = r)
         else RoundedCornerShape(topStart = r, topEnd = r, bottomStart = r, bottomEnd = 4.dp)
-    val edge = when { mine -> K.Gold.copy(alpha = .25f); checking -> K.Sub.copy(alpha = .25f); ok -> K.Green.copy(alpha = .45f); else -> K.Red.copy(alpha = .6f) }
+    val edge = when { mine -> K.Gold.copy(alpha = .25f); checking -> K.Sub.copy(alpha = .25f); ok -> K.Good.copy(alpha = .45f); else -> K.Red.copy(alpha = .6f) }
     val bg = if (mine) K.Gold.copy(alpha = .12f) else K.Surface
     val sticker = m.img && img != null && img.width == img.height && img.width <= 512
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterStart else Alignment.CenterEnd) {
@@ -458,7 +458,7 @@ private fun Bubble(m: EMsg, img: ImageBitmap?, okOrNull: Boolean?, read: Boolean
         ) {
             if (m.admin) {
                 T(when { checking -> "پشتیبانی · در حال دریافت…"; ok -> "✓ از طرف ادمین"; else -> "⚠ امضا تأیید نشد؛ به این پیام اعتماد نکنید" },
-                    size = 11.sp, color = if (checking) K.Sub else if (ok) K.Green else K.Red, weight = FontWeight.Black)
+                    size = 11.sp, color = if (checking) K.Sub else if (ok) K.Good else K.Red, weight = FontWeight.Black)
                 Spacer(Modifier.height(D.S1))
             }
             when {
