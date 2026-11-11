@@ -102,7 +102,7 @@ fun SpeedContent(ui: SpeedUi, tip: RobotAlert?, onStart: () -> Unit, onCloseTip:
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     ui.udpTarget?.let { tg ->
-                        val lc = ui.loss?.let { l -> if (l == 0) K.Green else if (l < 5) K.Warn else K.Red } ?: K.Sub
+                        val lc = ui.loss?.let { l -> if (l == 0) K.Good else if (l < 5) K.Warn else K.Red } ?: K.Sub
                         FactRow("پکت‌لاس UDP", ltr("${ui.loss ?: 0}%"), lc)
                         FactRow("مقصد UDP", tg, K.Text)
                     }

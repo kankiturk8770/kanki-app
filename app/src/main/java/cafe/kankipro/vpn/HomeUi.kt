@@ -632,7 +632,7 @@ private fun StatsCard(ui: HomeUi, onAccount: () -> Unit) {
                     Spacer(Modifier.width(D.S3))
                     UsageCell(s.daysLeft, "روز")
                     Spacer(Modifier.weight(1f))
-                    val c = if (active) K.Green else K.Red
+                    val c = if (active) K.Good else K.Red
                     Dot(c, 7.dp)
                     Spacer(Modifier.width(6.dp))
                     T(faStatus(s.status), size = 12.sp, color = c, weight = FontWeight.Black, maxLines = 1)

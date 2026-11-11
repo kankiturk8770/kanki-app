@@ -197,7 +197,9 @@ object K {
     val Panel: Color get() = ThemeState.current.panel
     val OnGold: Color get() = ThemeState.current.onGold
     val Accent: Color get() = ThemeState.current.accent
-    val Ok: Color get() = ThemeState.current.connected
+    val Ok: Color get() = Good
+    /** سبز «خوب» ثابت در همه‌ی تم‌ها (پینگ، پایداری، وضعیت فعال)؛ رنگ‌های وضعیت با تم عوض نمی‌شوند: سبز خوب، زرد متوسط، قرمز بد */
+    val Good = Color(0xFF3BE36B)
     /** رنگ «وصل / فعال» (اسمش از قدیم مانده)؛ هر تم رنگ خودش را دارد: زمرد، نعنایی یخی یا آبی‌آسمانی نئونی */
     val Green: Color get() = ThemeState.current.connected
     /** خطا، با تُن همان تم */
