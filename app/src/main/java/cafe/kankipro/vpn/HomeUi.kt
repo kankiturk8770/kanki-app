@@ -1,5 +1,8 @@
 package cafe.kankipro.vpn
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -384,11 +387,28 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
     LaunchedEffect(connecting) { if (connecting) conStart = clock.value }
     val ac = color
     val s = diameter / OrbBase
+    val haptic = LocalHapticFeedback.current
+    val shake = remember { Animatable(0f) }
+    val shakeScope = rememberCoroutineScope()
     Box(
-        Modifier.size(diameter).alpha(if (enabled) 1f else .55f).clickable(
-            enabled = enabled,
-            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
-        ),
+        Modifier.size(diameter).alpha(if (enabled) 1f else .55f)
+            .graphicsLayer { translationX = shake.value * density }
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = {
+                    // لمس دکمه: لرزش کوتاه خود گوشی (بازخورد لمسی کامپوز، بی مجوز VIBRATE) و یک تکان نرم چپ و راست دکمه
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    shakeScope.launch {
+                        shake.snapTo(0f)
+                        shake.animateTo(0f, keyframes {
+                            durationMillis = 320
+                            6f at 40; -5f at 100; 3.5f at 160; -2f at 220; 1f at 270
+                        })
+                    }
+                    onClick()
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
