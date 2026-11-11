@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- زمینه‌ی آیکون (۱.۳۴.۱): تیره‌ی دودی متالیک «Kanki Glass»، با نور سبز نرم از وسط و برق مورب ملایم -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108"
+                android:startColor="#FF1C2420" android:centerColor="#FF0C110E" android:endColor="#FF050706" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="56" android:gradientRadius="52"
+                android:startColor="#3326E33A" android:centerColor="#0A19E6C1" android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,0 H108 V40 Q54,30 0,52 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="54" android:startY="0" android:endX="54" android:endY="52"
+                android:startColor="#14FFFFFF" android:endColor="#00FFFFFF" />
+        </aapt:attr>
+    </path>
+</vector>
