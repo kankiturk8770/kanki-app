@@ -1024,33 +1024,13 @@ fun DrawScope.settingIcon(kind: String, c: Color) {
  */
 @Composable
 fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, small: Boolean = false) {
-    val k = if (small) .85f else 1f
-    val f by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = .7f, stiffness = 500f), label = "gsw")
-    val shape = RoundedCornerShape(50)
-    Box(
-        modifier.size(width = 48.dp * k, height = 28.dp * k).alpha(if (enabled) 1f else .45f)
-            .drawBehind {
-                if (f > .01f) drawRoundRect(K.Gold.copy(alpha = .25f * f), Offset(-3.dp.toPx(), -3.dp.toPx()), Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(size.height))
-            }
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .55f), Color.White.copy(alpha = .06f))))
-            .drawBehind {
-                if (f > .01f) drawRect(Brush.verticalGradient(listOf(lerp(K.Gold, Color.Black, .35f), K.Gold)), alpha = f)
-                // سایه‌ی داخلی بالای شیار
-                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .45f), Color.Transparent), endY = size.height * .45f))
-            }
-            .border(1.dp, lerp(Color.White.copy(alpha = .16f), K.Gold.copy(alpha = .7f), f), shape)
-            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null) { onCheckedChange(!checked) },
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Box(
-            Modifier.offset(x = 3.dp * k + 20.dp * k * f).size(22.dp * k)
-                .drawBehind {
-                    drawCircle(Color.Black.copy(alpha = .5f), size.minDimension / 2, center + Offset(0f, 1.5.dp.toPx()))
-                    drawCircle(Brush.verticalGradient(listOf(Color.White, Color(0xFFBFC6C1))), size.minDimension / 2)
-                    drawOval(Brush.verticalGradient(listOf(Color.White, Color.White.copy(alpha = 0f))), Offset(size.width * .22f, size.height * .08f), Size(size.width * .56f, size.height * .4f))
-                    if (f > .5f) drawCircle(Color.White.copy(alpha = .35f * f), size.minDimension / 2 + 2.dp.toPx(), style = Stroke(2.dp.toPx()))
-                },
-        )
-    }
+    // ۱.۳۲.۷: همان Switch استاندارد اندروید (مثل ۱.۳۱) با رنگ‌های تم؛ کلید دست‌ساز ۱.۳۲.۰ (کلیک بی‌نقش و بی‌بازخورد) کنار گذاشته شد
+    androidx.compose.material3.Switch(
+        checked = checked, onCheckedChange = onCheckedChange, enabled = enabled,
+        modifier = if (small) modifier.graphicsLayer { scaleX = .85f; scaleY = .85f } else modifier,
+        colors = androidx.compose.material3.SwitchDefaults.colors(
+            checkedThumbColor = K.OnGold, checkedTrackColor = K.Gold, checkedBorderColor = K.Gold,
+            uncheckedThumbColor = K.Sub, uncheckedTrackColor = Color(0x33FFFFFF), uncheckedBorderColor = Color(0x33FFFFFF),
+        ),
+    )
 }

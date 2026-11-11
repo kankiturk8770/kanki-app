@@ -44,6 +44,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // آیکون برنامه به رنگ تم، وقتی کاربر از برنامه بیرون رفت (نه وسط کار)
+        LauncherIcon.apply(applicationContext, ThemeState.targetId)
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         openFromNotification(intent)

@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 77
-        versionName = "1.32.4"
+        versionCode = 86
+        versionName = "1.32.7"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -44,10 +44,6 @@ android {
                 storePassword = releaseKeyPass
                 keyAlias = "kanki"
                 keyPassword = releaseKeyPass
-                // همه‌ی طرح‌های امضا روشن: V1 (JAR) برای ابزارها و اسکنرهای قدیمی، V2/V3 برای اندروید ۷ به بالا
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
             }
         }
     }

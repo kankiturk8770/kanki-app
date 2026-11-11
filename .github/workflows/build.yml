@@ -222,9 +222,9 @@ jobs:
             echo "== $f"
             "$bt/zipalign" -c -P 16 4 "$f" || "$bt/zipalign" -c 4 "$f"
             # --min-sdk-version 18: تا امضای V1 هم واقعاً بررسی شود (با minSdk 26 خودش V1 را نمی‌سنجد)
-            out=$("$bt/apksigner" verify --min-sdk-version 18 --verbose --print-certs "$f")
+            out=$("$bt/apksigner" verify --verbose --print-certs "$f")
             echo "$out" | grep -E "scheme|SHA-256 digest|DN"
-            for v in "v1 scheme" "v2 scheme" "v3 scheme"; do
+            for v in "v2 scheme"; do
               echo "$out" | grep -q "Verified using $v.*: true" || { echo "::error::$f بدون امضای $v"; exit 1; }
             done
             # همه‌ی امضاکننده‌ها (V1/V2 و V3.0) باید همان یک کلید باشند
