@@ -1,5 +1,6 @@
 package cafe.kankipro.vpn
 
+import androidx.compose.foundation.selection.selectable
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -189,43 +190,98 @@ fun DrawScope.robotHeadIcon(c: Color) {
 }
 
 /**
- * نوار تب‌های پایین (۱.۲۹): قرص رنگی تب انتخاب‌شده با فنر از تبی به تب دیگر می‌لغزد، آیکون تب تازه کمی بالا
- * می‌پرد و پر می‌شود. نوار و قرص هر دو برجسته (سایه و لبه‌ی نورانی).
+ * نوار تب‌های پایین (۱.۳۴.۴، گلس‌مورفیسم): خود نوار شیشه‌ی مات تیره با لبه‌ی باریک نورانی (بالا روشن، پایین رنگ تم) و یک خط
+ * نور نازک بالا، بی کلاهک بزرگ. تب انتخاب‌شده یک «لنز» شیشه‌ای است، نه قرص پر: ته‌رنگ کم‌رنگ تم، لبه‌ی دورنگ (رنگ اصلی تا رنگ
+ * دوم تم)، هاله‌ی نرم زیرش و یک خط نئونی کوتاه پایینش؛ با فنر بین تب‌ها می‌لغزد. آیکون و اسم تب انتخاب‌شده رنگ تم، بقیه خاکستری.
+ * فاصله‌ها یکسان: ۸dp دور هر لنز تا لبه‌ی نوار، ۶dp بین تب‌ها. لمس با `selectable` و نقش Tab استاندارد (موج لمس خود سیستم).
  */
 @Composable
 fun BottomBar(current: KTab, onSelect: (KTab) -> Unit) {
-    val shape = RoundedCornerShape(D.RX)
+    val barShape = RoundedCornerShape(26.dp)
+    val lensShape = RoundedCornerShape(19.dp)
     val idx by animateFloatAsState(current.ordinal.toFloat(), spring(dampingRatio = .72f, stiffness = 420f), label = "nav")
-    val p = ThemeState.current
+    val ac = K.Gold
+    val ac2 = K.Gold2
+    val pad = 7.dp
+    val gap = 6.dp
+    val barH = 62.dp
     BoxWithConstraints(
-        Modifier.fillMaxWidth().padding(horizontal = D.S3, vertical = D.S2).goldGlass(shape).padding(D.S1),
+        Modifier.fillMaxWidth().padding(horizontal = D.S3).padding(top = D.S1, bottom = D.S2).height(barH)
+            .drawBehind {
+                // سایه‌ی نرم زیر نوار (شناور روی زمینه)
+                liftShadow(barShape.createOutline(size, layoutDirection, this), 8.dp.toPx(), .55f)
+            }
+            .clip(barShape)
+            .drawBehind {
+                // شیشه‌ی مات: تیره و نیمه‌شفاف، کمی روشن‌تر بالا؛ رگه‌ی رنگ تم خیلی کم پایین
+                drawRect(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.White, .07f).copy(alpha = .92f), lerp(K.BgMid, Color.Black, .5f).copy(alpha = .94f))))
+                drawRect(Brush.verticalGradient(listOf(Color.Transparent, ac.copy(alpha = .05f)), startY = size.height * .5f))
+                // خط نور نازک لبه‌ی بالا (شیشه)
+                drawLine(
+                    Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = .28f), Color.White.copy(alpha = .28f), Color.Transparent)),
+                    Offset(size.width * .08f, 1.dp.toPx()), Offset(size.width * .92f, 1.dp.toPx()), 1.dp.toPx(),
+                )
+            }
+            .border(
+                1.dp,
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = .22f), Color.White.copy(alpha = .06f), ac.copy(alpha = .28f))),
+                barShape,
+            )
+            .padding(pad),
     ) {
         val n = KTab.entries.size
-        val gap = D.S1
         val tabW = (maxWidth - gap * (n - 1)) / n
-        // قرص لغزان زیر تب انتخاب‌شده (offset با جهت صفحه برمی‌گردد، مثل خود ردیف)
-        val ts = RoundedCornerShape(D.RL)
+        // لنز شیشه‌ای زیر تب انتخاب‌شده (offset با جهت صفحه برمی‌گردد، مثل خود ردیف)
         Box(
-            Modifier.offset(x = (tabW + gap) * idx).width(tabW).height(54.dp)
-                .goldFill(ts),
+            Modifier.offset(x = (tabW + gap) * idx).width(tabW).fillMaxHeight()
+                .drawBehind {
+                    // هاله‌ی نرم رنگ تم زیر لنز
+                    drawRoundRect(
+                        Brush.radialGradient(listOf(ac.copy(alpha = .22f), Color.Transparent), Offset(size.width / 2, size.height * .9f), size.width * .7f),
+                        Offset(-size.width * .2f, 0f), Size(size.width * 1.4f, size.height * 1.2f),
+                    )
+                }
+                .clip(lensShape)
+                .drawBehind {
+                    drawRect(Brush.verticalGradient(listOf(ac.copy(alpha = .20f), ac.copy(alpha = .07f), ac2.copy(alpha = .12f))))
+                    // برق مورب ملایم بالای لنز
+                    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .10f), Color.Transparent), endY = size.height * .45f))
+                    // خط نئونی کوتاه پایین لنز
+                    val w = size.width * .34f
+                    drawRoundRect(
+                        Brush.horizontalGradient(listOf(ac, ac2), startX = (size.width - w) / 2, endX = (size.width + w) / 2),
+                        Offset((size.width - w) / 2, size.height - 6.dp.toPx()), Size(w, 2.5.dp.toPx()), CornerRadius(1.25.dp.toPx()),
+                    )
+                }
+                .border(1.dp, Brush.linearGradient(listOf(lerp(ac, Color.White, .45f).copy(alpha = .75f), ac.copy(alpha = .25f), ac2.copy(alpha = .6f))), lensShape),
         )
-        Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(gap)) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
             KTab.entries.forEachIndexed { i, t ->
                 val sel = t == current
-                val c = if (sel) p.onNav else K.Sub
+                val c by animateColorAsState(if (sel) lerp(ac, Color.White, .12f) else K.Sub.copy(alpha = .85f), tween(260), label = "navC")
                 val ids = listOf("nav_home", "nav_servers", "nav_test", "nav_settings")
                 val lift by animateFloatAsState(if (sel) 1f else 0f, spring(dampingRatio = .45f, stiffness = 380f), label = "lift")
                 Column(
-                    Modifier.weight(1f).fillMaxHeight().clip(ts)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(t) }
-                        .guideTarget(ids[i]),
+                    Modifier.weight(1f).fillMaxHeight().clip(lensShape)
+                        .selectable(
+                            selected = sel,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = androidx.compose.foundation.LocalIndication.current,
+                            role = androidx.compose.ui.semantics.Role.Tab,
+                        ) { onSelect(t) }
+                        .guideTarget(ids[i])
+                        .padding(bottom = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Canvas(Modifier.size(22.dp).graphicsLayer {
-                        translationY = -2.dp.toPx() * lift
-                        scaleX = 1f + .12f * lift; scaleY = 1f + .12f * lift
-                    }) { navIcon(i, c, lift) }
+                        translationY = -1.5.dp.toPx() * lift
+                        scaleX = 1f + .08f * lift; scaleY = 1f + .08f * lift
+                    }) {
+                        // درخشش نرم پشت آیکون انتخاب‌شده
+                        if (lift > .01f) drawCircle(Brush.radialGradient(listOf(ac.copy(alpha = .30f * lift), Color.Transparent)), size.minDimension * .95f)
+                        navIcon(i, c, lift)
+                    }
                     Spacer(Modifier.height(3.dp))
                     T(t.title, size = 11.sp, color = c, weight = if (sel) FontWeight.Black else FontWeight.Bold, maxLines = 1)
                 }
