@@ -3,9 +3,6 @@ package cafe.kankipro.vpn
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import kotlin.math.exp
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -422,13 +419,11 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
     // حالت گیمینگ (۱.۳۳): وسط دسته‌ی بازی، حلقه با دو نور تعقیبی تند و ضربان دوتایی؛ بقیه‌ی حالت‌ها نفس آرام و سه کمان
     val gaming = ui.mode == KMode.GAME
     val gameA by animateFloatAsState(if (gaming) 1f else 0f, tween(500), label = "game")
-    // لحظه‌ی وصل شدن: یک موج نور از دکمه بیرون می‌رود و گوشی کوتاه می‌لرزد
+    // لحظه‌ی وصل شدن: یک موج نور از دکمه بیرون می‌رود (بی لرزش گوشی؛ ۱.۳۳.۱)
     val wave = remember { Animatable(1f) }
-    val haptic = LocalHapticFeedback.current
     var wasOn by remember { mutableStateOf(on) }
     LaunchedEffect(on) {
         if (on && !wasOn) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             wave.snapTo(0f)
             wave.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
         }
@@ -436,7 +431,7 @@ fun OrbButton(ui: HomeUi, color: Color, enabled: Boolean, diameter: Dp = OrbBase
     }
     Box(
         Modifier.size(diameter).alpha(if (enabled) 1f else .55f).clickable(
-            enabled = enabled, role = Role.Button, onClickLabel = "اتصال",
+            enabled = enabled,
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
         ),
         contentAlignment = Alignment.Center,
