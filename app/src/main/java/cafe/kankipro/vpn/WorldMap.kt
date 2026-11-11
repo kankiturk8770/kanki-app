@@ -122,6 +122,8 @@ fun WorldMap(
     val zoom by animateFloatAsState(if (connected) 1f else 0f, tween(1300, easing = FastOutSlowInEasing), label = "z")
     val draw by animateFloatAsState(if (connected) 1f else 0f, tween(if (connected) 1400 else 150, delayMillis = if (connected) 700 else 0), label = "d")
     val clock by motionTime()
+    // خشکی‌ها وقتی داده‌ی کشورها رسید نرم ظاهر می‌شوند (نه یک‌دفعه وسط ورود به صفحه)
+    val landA by animateFloatAsState(if (countries != null) 1f else 0f, tween(700, easing = FastOutSlowInEasing), label = "land")
 
     // لایه‌ی ثابت (پس‌زمینه‌ی تیره، کشورها و نور شهرها) یک بار در یک عکس کشیده می‌شود و فقط وقتی نما یا رنگ‌ها
     // عوض شوند دوباره ساخته می‌شود؛ هر فریم فقط سنجاق‌ها و کمان متحرک کشیده می‌شوند (وگرنه ده‌ها هزار نقطه
@@ -212,13 +214,13 @@ fun WorldMap(
         }
         }
 
-        if (still) drawImage(bmp) else {
+        if (still) drawImage(bmp, alpha = landA) else {
             // عکس نمای دور، جابه‌جا و بزرگ‌شده تا نمای این لحظه؛ لبه‌ها دوباره محو می‌شوند
             drawIntoCanvas { it.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), Paint()) }
             withTransform({
                 translate(((bv.lon0 - v.lon0) * sx).toFloat(), ((v.lat0 - bv.lat0) * sy).toFloat())
                 scale(sx / bsx, sy / bsy, pivot = Offset.Zero)
-            }) { drawImage(bmp) }
+            }) { drawImage(bmp, alpha = landA) }
             drawRect(edgeMaskV, blendMode = BlendMode.DstIn)
             drawRect(edgeMaskH, blendMode = BlendMode.DstIn)
             drawIntoCanvas { it.restore() }

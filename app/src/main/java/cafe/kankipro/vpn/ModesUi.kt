@@ -1,5 +1,6 @@
 package cafe.kankipro.vpn
 
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -524,6 +525,15 @@ fun pairsOf(list: List<SheetServer>): List<SheetPair> =
         (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
     }.sortedBy { it.best ?: 99_999L }
 
+/** لینک‌های Xray، جفت‌شده با اسم ردیف (کشور خروج · نوع پروتکل): هر ردیف یک خانه‌ی تانل و یک خانه‌ی مستقیم */
+fun xrayPairs(list: List<SheetServer>): List<SheetPair> =
+    list.groupBy { it.name }.values.flatMap { g ->
+        val t = g.filter { it.side == "tunnel" }
+        val d = g.filter { it.side != "tunnel" }
+        val head = g.first()
+        (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
+    }.sortedBy { it.best ?: 99_999L }
+
 /** یک خانواده‌ی پروتکل در پنل گیمینگ (KANKI MIX، Amnezia، WireGuard) با سرورهای خودش */
 data class GameFamilyUi(val key: String, val title: String, val sub: String, val servers: List<SheetServer>) {
     val best: Long? get() = servers.mapNotNull { it.ping }.filter { it > 0 }.minOrNull()
@@ -534,10 +544,26 @@ data class GameFamilyUi(val key: String, val title: String, val sub: String, val
 private fun FamilyCard(f: GameFamilyUi, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = familyColor(f.key)
     val has = f.servers.isNotEmpty()
+    // ۱.۳۴.۲: شیشه‌ی تم با فشردگی نرم هنگام لمس و پالس نئونی دورنگ (رنگ اصلی تا رنگ دوم تم) دور کپسول انتخاب‌شده
+    val press = remember { MutableInteractionSource() }
+    val down by press.collectIsPressedAsState()
+    val k by animateFloatAsState(if (down) .95f else 1f, spring(dampingRatio = .55f, stiffness = 700f), label = "famPress")
+    val selA by animateFloatAsState(if (selected) 1f else 0f, tween(300), label = "famSel")
+    val clock = motionTime()
     Box(
-        modifier.height(36.dp).goldGlass(CircleShape, selected = selected, tint = c)
+        modifier.height(36.dp)
+            .graphicsLayer { scaleX = k; scaleY = k }
+            .drawBehind {
+                if (selA > .01f) {
+                    val pulse = .5f + .5f * kotlin.math.sin(clock.value * 3.2f)
+                    val o = CircleShape.createOutline(size, layoutDirection, this)
+                    val br = Brush.linearGradient(listOf(c, K.Gold2, c), Offset.Zero, Offset(size.width, size.height))
+                    drawOutline(o, br, alpha = selA * (.10f + .14f * pulse), style = Stroke((5f + 3f * pulse).dp.toPx()))
+                }
+            }
+            .goldGlass(CircleShape, selected = selected, tint = c)
             .alpha(if (has) 1f else .4f)
-            .clickable(enabled = has, onClick = onClick)
+            .clickable(enabled = has, interactionSource = press, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
             .padding(horizontal = D.S2),
         contentAlignment = Alignment.Center,
     ) {
@@ -847,7 +873,9 @@ fun FilterSheet(
         if (useX) {
             SheetLabel("Xray")
             if (xray.isEmpty()) T("اشتراک شما Xray ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            xray.forEach { sv -> ServerRow(sv, !auto && current == sv.node + "|" + sv.proto, protoColor("xray"), !busy) { onConnect(sv.node, sv.proto) } }
+            // مثل Amnezia و گیمینگ: هر کشور و نوع پروتکل یک ردیف با دو خانه‌ی تانل و مستقیم و پینگ زنده
+            if (xray.isNotEmpty()) PairHeader(protoColor("xray"))
+            xrayPairs(xray).forEach { p -> PairRow(p, current, auto, protoColor("xray"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
         }
         if (useAwg) {
             SheetLabel("Amnezia")
@@ -864,9 +892,7 @@ fun FilterSheet(
 private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     Row(
-        modifier.height(D.RowH).clip(shape)
-            .background(if (on) c.copy(alpha = .16f) else Color(0x08FFFFFF))
-            .border(if (on) 1.5.dp else 1.dp, if (on) c else K.Gold.copy(alpha = .18f), shape)
+        modifier.height(D.RowH).goldGlass(shape, selected = on, tint = c)
             .clickable(onClick = onClick)
             .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,

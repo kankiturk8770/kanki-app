@@ -225,6 +225,20 @@ abstract class ShotsBase {
             onConnect = { _, _ -> }, onFastest = {}, onClose = {},
         )
     }
+    protected fun pgFilter(): @Composable () -> Unit = {
+        Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.FILTER), HomeActions()) }
+        val x = listOf(
+            SheetServer("x1", "xray", "🇩🇪", "آلمان · فرانکفورت · Trojan", "Trojan", 84, "direct"),
+            SheetServer("x2", "xray", "🇩🇪", "آلمان · فرانکفورت · Trojan", "Trojan", 131, "tunnel"),
+            SheetServer("x3", "xray", "🇹🇷", "ترکیه · استانبول · VLESS", "VLESS", 66, "direct"),
+            SheetServer("x4", "xray", "🇹🇷", "ترکیه · استانبول · VLESS", "VLESS", 118, "tunnel"),
+        )
+        val awg = listOf(
+            SheetServer("tr", "amneziawg-direct", "🇹🇷", "ترکیه · استانبول", "مستقیم", 61, "direct"),
+            SheetServer("tr", "amneziawg", "🇹🇷", "ترکیه · استانبول", "تانل", 92, "tunnel"),
+        )
+        FilterSheet(true, x, awg, true, true, false, "x3|xray", false, { _, _ -> }, {}, {}, { _, _ -> }, {})
+    }
     /** یک قدم آموزش ربات روی صفحه‌ی خودش (قدم با guideShot تنظیم می‌شود) */
     protected fun pgGuide(page: @Composable () -> Unit): @Composable () -> Unit = {
         page()
@@ -428,6 +442,7 @@ class Shots : ShotsBase() {
     @Test fun m06() = shot("kanki-06-settings", "kanki", pgSettings())
     @Test fun m07() = shot("kanki-07-account", "kanki", pgAccount())
     @Test fun m08() = shot("kanki-08-gaming", "kanki", pgGame())
+    @Test fun m08f() = shot("kanki-08-filter", "kanki", pgFilter())
     @Test fun m08k() = shot("kanki-08-gaming-kping", "kanki", pgGame("kping"))
     @Test fun m09() = shot("kanki-09-intro", "kanki", pgIntro())
 

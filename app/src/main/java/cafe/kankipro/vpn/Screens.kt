@@ -506,8 +506,13 @@ private fun ModeSheets(state: AppState) {
     )
 
     // ضد فیلتر: فقط Xray و Amnezia
+    // هر لینک Xray یک خانه: کپی تانل (اسمش «🇮🇷→…» است) در ستون تانل و مستقیم در ستون مستقیم؛ ردیف = کشور خروج + نوع پروتکل
     val xrayRows = a.configs.filter { it.protocol == "xray" && state.hasCfg(it.node, "xray") }
-        .map { server(it.node, "xray", XrayCfg.protoName(it.url.removePrefix("xray:"))) }
+        .map { c ->
+            val pn = XrayCfg.protoName(c.url.removePrefix("xray:"))
+            val tunnel = c.nodeName.contains("→") || c.nodeName.trimStart().startsWith("\uD83C\uDDEE\uD83C\uDDF7")
+            server(c.node, "xray", pn).let { sv -> sv.copy(name = sv.name + " · " + pn, side = if (tunnel) "tunnel" else "direct") }
+        }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
     val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, state.cfgTag(n.node, p)) } }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
