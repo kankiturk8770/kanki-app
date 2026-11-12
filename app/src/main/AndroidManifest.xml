@@ -6,6 +6,8 @@
     <!-- KPING: دیتای موبایل کنار وای‌فای روشن بماند (requestNetwork) -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- KPING: پنل کوچک پینگ روی صفحه‌ی بازی؛ فقط وقتی کاربر خودش در تنظیمات KPING روشنش کند (پیش‌فرض خاموش) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
         <intent>

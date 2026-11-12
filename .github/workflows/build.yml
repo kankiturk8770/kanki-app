@@ -256,8 +256,9 @@ jobs:
 
       # فایل‌های نصبی main در پیوی تلگرام ادمین (ربات Kanki_github_bot)؛ از ایران دانلود از گیت‌هاب کامل نمی‌شود.
       # توکن ربات و آیدی عددی فقط در GitHub Secrets: TG_BOT_TOKEN و TG_CHAT_ID (اگر نباشند، این مرحله رد می‌شود)
+      # موقت (۱.۳۵.۰): فایل تست برنچ کار هم به تلگرام خود صاحب اپ می‌رود (Play Protect)؛ قبل از مرج برگردد به فقط main
       - name: فرستادن فایل نصبی به تلگرام
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' || github.ref_name == 'ccr-792bc8a9-mgi5zi'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

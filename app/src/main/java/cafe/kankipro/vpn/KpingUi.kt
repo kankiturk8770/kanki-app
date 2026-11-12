@@ -84,7 +84,7 @@ fun KpingPanel(c: Color) {
             }
             // چهار شاخص زنده، هر کدام کارت کوچک با آیکون و نمودار ۲۴ ثانیه‌ی آخر
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                Metric("پینگ", if (s.ping > 0) "${s.ping.toInt()}" else "—", "ms", ICON_PING, hist[0], c, false, Modifier.weight(1f))
+                Metric("تا ایران", if (s.ping > 0) "${s.ping.toInt()}" else "—", "ms", ICON_PING, hist[0], c, false, Modifier.weight(1f))
                 Metric("لرزش", if (s.ping > 0) "${s.jit.toInt()}" else "—", "ms", ICON_JIT, hist[1], c, false, Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
@@ -99,14 +99,17 @@ fun KpingPanel(c: Color) {
                     T(if (p.name == "wifi") "وای‌فای" else "دیتا", size = 11.sp, color = K.Text, modifier = Modifier.width(56.dp))
                     T(
                         if (!p.alive) tr("قطع")
-                        else trf("%d ms · افت %d٪ · %d نجات", p.rtt.toInt(), p.loss.toInt(), p.rescued),
-                        size = 11.sp, color = if (p.alive) K.Sub else K.Warn, weight = FontWeight.Normal,
+                        else if (p.dark) tr("الان خاموش؛ همه‌چیز از مسیر دیگر")
+                        else trf("تا ایران %s · افت %d٪ · %d نجات", ms(p.rtt), p.loss.toInt(), p.rescued),
+                        size = 11.sp, color = if (p.alive && !p.dark) K.Sub else K.Warn, weight = FontWeight.Normal,
                     )
                 }
             }
-            T(
+            if (s.v3) KpV3(s, c)
+            // سرور قدیمی (v2): کپی و پریتی ساده، همان خط قبلی
+            else T(
                 trf("ترمیم‌شده: %d · نسخه‌ی دوم: %s · بسته‌ی ترمیم: %s%s", s.fixed,
-                    if (s.dupMs > 0) "${s.dupMs} ms" else tr("خاموش"),
+                    if (s.dupMs > 0) ms(s.dupMs.toDouble()) else tr("خاموش"),
                     if (s.fec >= 2) trf("هر %d بسته", s.fec) else tr("خاموش"),
                     if (s.auto) " · " + tr("خودکار") else ""),
                 size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
@@ -116,10 +119,38 @@ fun KpingPanel(c: Color) {
     }
 }
 
+/** KPING v3: پینگ کل تا سرور خارج، افت بالا و پایین پیش از ترمیم، درگیری، و این‌که هسته هر نوع بسته را چطور فرستاد */
+@Composable
+private fun KpV3(s: KpStat, c: Color) {
+    val f = java.util.Locale.US
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("KPING v3", size = 11.sp, color = c, font = Poppins, weight = FontWeight.Bold, ltr = true)
+            if (s.fight) {
+                Spacer(Modifier.width(D.S1))
+                T("درگیری: محافظت بیشتر", size = 11.sp, color = K.Warn)
+            }
+        }
+        // سه تکه‌ی پینگ جدا و درست‌چین (عدد و ms با هم، چپ‌به‌راست): گوشی تا ایران، ایران تا خارج، و جمع
+        if (s.total > 0) T(trf("تا ایران %s + ایران تا خارج %s = کل %s", ms(s.ping), ms(s.tunRtt), ms(s.total)), size = 11.sp, color = K.Text, weight = FontWeight.Normal)
+        T(trf("افت خود خط پیش از ترمیم: بالا %s٪ · پایین %s٪", String.format(f, "%.1f", s.upLoss.coerceAtLeast(0.0)), String.format(f, "%.1f", s.downLoss)), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        val cl = s.classes
+        T(trf("بسته‌ها: بازی %d · صدا %d · کنترل %d · دانلود %d", cl["game"] ?: 0, cl["voice"] ?: 0, cl["ctl"] ?: 0, cl["bulk"] ?: 0), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        // فقط آن‌قدر که خط لازم دارد: روی خط تمیز نسخه‌ی دوم خاموش است و ترمیم کم
+        T(trf("ترمیم پنجره‌ای: %s برای هر بسته · نسخه‌ی دوم: %s · ترمیم‌شده: %d · دیرتر از موقع (دور ریخته): %d",
+            String.format(f, "%.2f", s.repair),
+            if (s.copyMs > 0) trf("بعد از %s", ms(s.copyMs.toDouble())) else tr("خاموش (خط تمیز است)"),
+            s.fixed, s.stale), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+    }
+}
+
 private const val ICON_PING = "M3 12h4l2-6 4 12 2-6h6"
 private const val ICON_JIT = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2"
 private const val ICON_LOSS = "M12 4v13m0 0 5-5m-5 5-5-5M5 21h14"
 private const val ICON_SAVE = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10ZM9 12l2 2 4-4"
+
+/** عدد میلی‌ثانیه، جدا از متن فارسی (FSI…PDI): «۱۴۰ms» همیشه همین‌طور خوانده می‌شود نه «ms 140» */
+private fun ms(v: Double): String = "\u2066${v.toInt()}ms\u2069"
 
 /** افت مؤثر: وقتی هر دو مسیر زنده‌اند کمترینِ دو مسیر (هر بسته از هر دو می‌رود)، وگرنه افت همان مسیر */
 private fun kpLoss(s: KpStat): Double = s.paths.filter { it.alive }.minOfOrNull { it.loss } ?: 0.0
@@ -182,6 +213,23 @@ private fun KpingSettings(c: Color) {
                 T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و بسته‌ی ترمیم را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
             GlassSwitch(v.auto, { set(v.copy(auto = it)) })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("بیدار نگه داشتن اینترنت موبایل", size = 13.sp, color = K.Text)
+                T("وسط مسابقه، وقتی بازی یک لحظه ساکت است، یک بسته‌ی خیلی کوچک می‌رود تا رادیوی گوشی به خواب کوتاه نرود و بسته‌ی بعدی منتظر بیدار شدنش نماند (کمی باتری).", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            GlassSwitch(v.radio, { set(v.copy(radio = it)) })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("پنل پینگ روی بازی", size = 13.sp, color = K.Text)
+                T("یک خط کوچک گوشه‌ی صفحه‌ی بازی: پینگ تا سرور خارج، لرزش، افت بالا و پایین و بسته‌های نجات‌یافته. لمسی را از بازی نمی‌گیرد.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            GlassSwitch(v.hud, { on ->
+                if (on && !KpHud.allowed(ctx)) KpHud.askPermission(ctx)
+                set(v.copy(hud = on))
+            })
         }
         if (!v.auto) {
             T("نسخه‌ی دوم وقتی یک مسیر داری", size = 12.sp, color = K.Text)

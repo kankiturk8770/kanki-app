@@ -117,8 +117,12 @@ object KpingCfg {
         val fec: Int = 2,
         /** نسخه‌ی دیرتر روی هر مسیر حتی وقتی دو مسیر هست */
         val every: Boolean = false,
+        /** وقتی مسابقه در جریان است و بازی لحظه‌ای ساکت است، رادیوی اینترنت موبایل بیدار بماند (یک بسته‌ی خیلی کوچک) */
+        val radio: Boolean = true,
+        /** پنل کوچک پینگ و افت روی صفحه‌ی بازی (اجازه‌ی «نمایش روی برنامه‌های دیگر» لازم است) */
+        val hud: Boolean = false,
     ) {
-        fun json(): String = org.json.JSONObject().put("auto", auto).put("dup", dupMs).put("fec", fec).put("every", every).toString()
+        fun json(): String = org.json.JSONObject().put("auto", auto).put("dup", dupMs).put("fec", fec).put("every", every).put("radio", radio).toString()
     }
 
     fun prefs(ctx: Context): Prefs {
@@ -129,19 +133,27 @@ object KpingCfg {
             dupMs = p.getInt("dup", 10).coerceIn(0, 50),
             fec = p.getInt("fec", 2).let { if (it == 1) 2 else it.coerceIn(0, 8) },
             every = p.getBoolean("every", false),
+            radio = p.getBoolean("radio", true),
+            hud = p.getBoolean("hud", false),
         )
     }
 
     fun save(ctx: Context, v: Prefs) {
         ctx.getSharedPreferences("kanki_kping", Context.MODE_PRIVATE).edit()
-            .putBoolean("auto", v.auto).putString("paths", v.paths.name).putInt("dup", v.dupMs).putInt("fec", v.fec).putBoolean("every", v.every).apply()
+            .putBoolean("auto", v.auto).putString("paths", v.paths.name).putInt("dup", v.dupMs).putInt("fec", v.fec).putBoolean("every", v.every)
+            .putBoolean("radio", v.radio).putBoolean("hud", v.hud).apply()
         // وصل است: هسته همین حالا تنظیم تازه را می‌گیرد؛ شبکه‌ها با اتصال بعدی
         HyEngine.service?.kpingSet(v)
+        KpHud.sync(ctx)
     }
 }
 
 /** آمار زنده‌ی KPING از گزارش هر ثانیه‌ی هسته (STAT) */
-data class KpPath(val name: String, val alive: Boolean, val rtt: Double, val jit: Double, val loss: Double, val upFirst: Long, val upTotal: Long, val rescued: Long)
+data class KpPath(
+    val name: String, val alive: Boolean, val rtt: Double, val jit: Double, val loss: Double, val upFirst: Long, val upTotal: Long, val rescued: Long,
+    /** v3: افت بالا (پیش از نسخه‌ی دوم و ترمیم)، مسیر الان خاموش است، چند قطعی کوتاه دیده */
+    val upLoss: Double = 0.0, val dark: Boolean = false, val outages: Long = 0,
+)
 
 data class KpStat(
     val up: Boolean = false,
@@ -157,6 +169,19 @@ data class KpStat(
     val auto: Boolean = true,
     val rx: Long = 0,
     val tx: Long = 0,
+    /** v3 (پنل و هسته‌ی تازه): ترمیم پنجره‌ای، تشخیص نوع بسته، درگیری، افت بالا/پایین، پینگ تا سرور خارج */
+    val v3: Boolean = false,
+    val fight: Boolean = false,
+    val mainPps: Double = 0.0,
+    val classes: Map<String, Long> = emptyMap(),
+    val upLoss: Double = 0.0,
+    val downLoss: Double = 0.0,
+    val repair: Double = 0.0,
+    val copyMs: Int = 0,
+    val stale: Long = 0,
+    val tunRtt: Double = 0.0,
+    val tunLoss: Double = 0.0,
+    val total: Double = 0.0,
 ) {
     companion object {
         fun parse(s: String): KpStat? = runCatching {
@@ -167,11 +192,17 @@ data class KpStat(
                 up = o.optBoolean("up"), ping = o.optDouble("ping", 0.0), jit = o.optDouble("jit", 0.0),
                 paths = if (ps == null) emptyList() else (0 until ps.length()).mapNotNull { i -> ps.optJSONObject(i) }.map {
                     KpPath(it.optString("name"), it.optBoolean("alive"), it.optDouble("rtt", 0.0), it.optDouble("jit", 0.0), it.optDouble("loss", 0.0),
-                        it.optLong("up_first"), it.optLong("up_total"), it.optLong("rescued"))
+                        it.optLong("up_first"), it.optLong("up_total"), it.optLong("rescued"),
+                        it.optDouble("up_loss", 0.0), it.optBoolean("dark"), it.optLong("outages"))
                 },
                 got = o.optLong("got"), fixed = o.optLong("fixed"), rescued = o.optLong("rescued"),
                 dupMs = st.optInt("dup"), fec = st.optInt("fec"), every = st.optBoolean("every"), auto = st.optBoolean("auto", true),
                 rx = o.optLong("rx"), tx = o.optLong("tx"),
+                v3 = o.optBoolean("v3"), fight = o.optBoolean("fight"), mainPps = o.optDouble("main_pps", 0.0),
+                classes = o.optJSONObject("classes")?.let { c -> c.keys().asSequence().associateWith { k -> c.optLong(k) } } ?: emptyMap(),
+                upLoss = o.optDouble("up_loss", 0.0), downLoss = o.optDouble("down_loss", 0.0), repair = o.optDouble("repair", 0.0),
+                copyMs = o.optInt("copy_ms"), stale = o.optLong("stale"),
+                tunRtt = o.optDouble("tun_rtt", 0.0), tunLoss = o.optDouble("tun_loss", 0.0), total = o.optDouble("total", 0.0),
             )
         }.getOrNull()
     }
