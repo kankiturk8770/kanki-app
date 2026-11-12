@@ -1256,6 +1256,19 @@ func (c *Client) tuneV3() {
 			r = 0.75
 		}
 	}
+	// the line between the servers loses too (the relay's probes of its best tunnel, in the PONG): the
+	// repairs go all the way to the exit, so they cover that part as well — enough for half its loss (the
+	// relay's delayed copy into the other tunnel takes the rest)
+	if t := c.tunLoss / 2; t > 0 {
+		switch {
+		case t < 1:
+			r = max(r, 0.3)
+		case t < 3:
+			r = max(r, 0.5)
+		default:
+			r = max(r, 0.75)
+		}
+	}
 	if fight && r >= 0.3 {
 		r += 0.15 // a fight on a line that loses: a little more
 	}
