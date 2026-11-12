@@ -84,7 +84,7 @@ fun KpingPanel(c: Color) {
             }
             // چهار شاخص زنده، هر کدام کارت کوچک با آیکون و نمودار ۲۴ ثانیه‌ی آخر
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-                Metric("پینگ", if (s.ping > 0) "${s.ping.toInt()}" else "—", "ms", ICON_PING, hist[0], c, false, Modifier.weight(1f))
+                Metric("تا ایران", if (s.ping > 0) "${s.ping.toInt()}" else "—", "ms", ICON_PING, hist[0], c, false, Modifier.weight(1f))
                 Metric("لرزش", if (s.ping > 0) "${s.jit.toInt()}" else "—", "ms", ICON_JIT, hist[1], c, false, Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
@@ -100,15 +100,16 @@ fun KpingPanel(c: Color) {
                     T(
                         if (!p.alive) tr("قطع")
                         else if (p.dark) tr("الان خاموش؛ همه‌چیز از مسیر دیگر")
-                        else trf("%d ms · افت %d٪ · %d نجات", p.rtt.toInt(), p.loss.toInt(), p.rescued),
+                        else trf("تا ایران %s · افت %d٪ · %d نجات", ms(p.rtt), p.loss.toInt(), p.rescued),
                         size = 11.sp, color = if (p.alive && !p.dark) K.Sub else K.Warn, weight = FontWeight.Normal,
                     )
                 }
             }
             if (s.v3) KpV3(s, c)
-            T(
+            // سرور قدیمی (v2): کپی و پریتی ساده، همان خط قبلی
+            else T(
                 trf("ترمیم‌شده: %d · نسخه‌ی دوم: %s · بسته‌ی ترمیم: %s%s", s.fixed,
-                    if (s.dupMs > 0) "${s.dupMs} ms" else tr("خاموش"),
+                    if (s.dupMs > 0) ms(s.dupMs.toDouble()) else tr("خاموش"),
                     if (s.fec >= 2) trf("هر %d بسته", s.fec) else tr("خاموش"),
                     if (s.auto) " · " + tr("خودکار") else ""),
                 size = 10.sp, color = K.Sub, weight = FontWeight.Normal,
@@ -130,11 +131,16 @@ private fun KpV3(s: KpStat, c: Color) {
                 T("درگیری: محافظت بیشتر", size = 11.sp, color = K.Warn)
             }
         }
-        if (s.total > 0) T(trf("تا سرور خارج: %d ms (ایران ← خارج %d ms)", s.total.toInt(), s.tunRtt.toInt()), size = 11.sp, color = K.Text, weight = FontWeight.Normal)
-        T(trf("افت خود خط پیش از ترمیم: بالا %s٪ · پایین %s٪", String.format(f, "%.1f", s.upLoss), String.format(f, "%.1f", s.downLoss)), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        // سه تکه‌ی پینگ جدا و درست‌چین (عدد و ms با هم، چپ‌به‌راست): گوشی تا ایران، ایران تا خارج، و جمع
+        if (s.total > 0) T(trf("تا ایران %s + ایران تا خارج %s = کل %s", ms(s.ping), ms(s.tunRtt), ms(s.total)), size = 11.sp, color = K.Text, weight = FontWeight.Normal)
+        T(trf("افت خود خط پیش از ترمیم: بالا %s٪ · پایین %s٪", String.format(f, "%.1f", s.upLoss.coerceAtLeast(0.0)), String.format(f, "%.1f", s.downLoss)), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
         val cl = s.classes
         T(trf("بسته‌ها: بازی %d · صدا %d · کنترل %d · دانلود %d", cl["game"] ?: 0, cl["voice"] ?: 0, cl["ctl"] ?: 0, cl["bulk"] ?: 0), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
-        T(trf("ترمیم پنجره‌ای: %s برای هر بسته · نسخه‌ی دوم بعد از %d ms · دیرتر از موقع (دور ریخته): %d", String.format(f, "%.2f", s.repair), s.copyMs, s.stale), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        // فقط آن‌قدر که خط لازم دارد: روی خط تمیز نسخه‌ی دوم خاموش است و ترمیم کم
+        T(trf("ترمیم پنجره‌ای: %s برای هر بسته · نسخه‌ی دوم: %s · ترمیم‌شده: %d · دیرتر از موقع (دور ریخته): %d",
+            String.format(f, "%.2f", s.repair),
+            if (s.copyMs > 0) trf("بعد از %s", ms(s.copyMs.toDouble())) else tr("خاموش (خط تمیز است)"),
+            s.fixed, s.stale), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
     }
 }
 
@@ -142,6 +148,9 @@ private const val ICON_PING = "M3 12h4l2-6 4 12 2-6h6"
 private const val ICON_JIT = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2"
 private const val ICON_LOSS = "M12 4v13m0 0 5-5m-5 5-5-5M5 21h14"
 private const val ICON_SAVE = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10ZM9 12l2 2 4-4"
+
+/** عدد میلی‌ثانیه، جدا از متن فارسی (FSI…PDI): «۱۴۰ms» همیشه همین‌طور خوانده می‌شود نه «ms 140» */
+private fun ms(v: Double): String = "\u2066${v.toInt()}ms\u2069"
 
 /** افت مؤثر: وقتی هر دو مسیر زنده‌اند کمترینِ دو مسیر (هر بسته از هر دو می‌رود)، وگرنه افت همان مسیر */
 private fun kpLoss(s: KpStat): Double = s.paths.filter { it.alive }.minOfOrNull { it.loss } ?: 0.0

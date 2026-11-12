@@ -168,6 +168,9 @@ func TestClassifier(t *testing.T) {
 	if got := c.classify(ipv4(6, 443, 60, 0x02), now); got != clsCtl {
 		t.Fatalf("syn: %v", got)
 	}
+	if got := c.classify(ipv4(6, 443, 40, 0x10), now); got != clsBulk {
+		t.Fatalf("bare ack: %v", got)
+	}
 	if got := c.classify(ipv4(6, 443, 1400, 0x18), now); got != clsBulk {
 		t.Fatalf("tcp data: %v", got)
 	}

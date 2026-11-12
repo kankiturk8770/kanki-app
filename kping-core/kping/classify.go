@@ -7,10 +7,11 @@
 //     packets — movement, aim, shots and their acks. Its rate against its own baseline tells a fight
 //     (more packets: shooting, running, driving) from quiet moments.
 //   - voice: another UDP flow that ticks like a clock (20-60 ms, small spread) with steady sizes
-//   - DNS, and TCP control packets (SYN, FIN, RST, bare ACKs): tiny, and a lost one costs a whole
-//     retransmission timeout (a second at login)
-//   - bulk: TCP data, big UDP datagrams, fast UDP flows (downloads, updates, QUIC): TCP resends on its own
-//     and copies would only crowd the line
+//   - DNS, and TCP control packets (SYN, FIN, RST): tiny, and a lost one costs a whole retransmission
+//     timeout (a second at login)
+//   - bulk: TCP data and its bare ACKs (the next ACK says the same, so a lost one costs nothing), big UDP
+//     datagrams, fast UDP flows (downloads, updates, QUIC): TCP resends on its own and copies would only
+//     crowd the line
 package kping
 
 import (
@@ -25,7 +26,7 @@ const (
 	clsGame  class = iota // the main game flow: copies on every path, repairs, the shortest deadline
 	clsState              // game flows' bigger packets and other game flows: repairs
 	clsVoice              // voice chat: repairs, fewer
-	clsCtl                // DNS and TCP control: copies (cheap, and a loss costs seconds)
+	clsCtl                // DNS, ICMP and TCP SYN/FIN/RST: copies on a lossy line (cheap, a loss costs seconds)
 	clsBulk               // TCP data, big or fast UDP: as it is
 	nClass
 )
@@ -157,8 +158,8 @@ func (c *classifier) note(f *flow, size int, now time.Time) {
 func (c *classifier) decide(k flowKey, f *flow, size, payload int, tcpFlags byte, now time.Time) class {
 	switch k.proto {
 	case 6:
-		// SYN, FIN, RST, or no data: control
-		if tcpFlags&0x07 != 0 || payload <= 0 {
+		// SYN, FIN, RST: control. A bare ACK is not: the next one acknowledges the same and more
+		if tcpFlags&0x07 != 0 {
 			return clsCtl
 		}
 		return clsBulk

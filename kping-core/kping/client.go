@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -59,16 +60,21 @@ func (s Settings) radio() bool { return s.Radio == nil || *s.Radio }
 var Default = Settings{Auto: true, DupMs: 10, Fec: 2}
 
 const (
-	capRLC      = 1 // this end speaks KPING v3 (sliding-window repairs, kind 5)
-	darkMin     = 80 * time.Millisecond
-	darkMax     = 400 * time.Millisecond
-	fillGap     = 45 * time.Millisecond
-	fastPing    = 60 * time.Millisecond
-	outageKeep  = 32
-	maxCopyMs   = 40
-	minCopyMs   = 6
-	maxRatio    = 2.0
-	bloatMargin = 80.0 // ms over the path's best round trip: its queue is filling, add nothing
+	capRLC     = 1 // this end speaks KPING v3 (sliding-window repairs, kind 5)
+	darkMin    = 80 * time.Millisecond
+	darkMax    = 400 * time.Millisecond
+	fillGap    = 45 * time.Millisecond
+	fastPing   = 60 * time.Millisecond
+	outageKeep = 32
+	maxCopyMs  = 40
+	busyTick   = 2 * time.Millisecond
+	idleTick   = 50 * time.Millisecond
+	busyFor    = time.Second // the clock runs fast this long after the last packet up
+	// an outage counts for a minute: a line that had one then and none since is clean again
+	outageMemory = time.Minute
+	minCopyMs    = 6
+	maxRatio     = 2.0
+	bloatMargin  = 80.0 // ms over the path's best round trip: its queue is filling, add nothing
 )
 
 // one way out of the phone (Wi-Fi or mobile data): its own socket, bound to that network by the app
@@ -78,8 +84,8 @@ type path struct {
 	conn net.PacketConn
 	to   net.Addr
 
-	// measured by PINGs
-	pings   map[uint32]time.Time
+	// measured by PINGs (and how many DATA copies had left on this path when each PING left)
+	pings   map[uint32]pingRec
 	sent    []bool // recent pings: answered or not (last 20)
 	rtt     float64
 	minRTT  float64
@@ -89,11 +95,12 @@ type path struct {
 	added   time.Time
 	// the relay's word (PONG): its uplink copies that came first / all of them
 	upFirst, upTotal uint32
-	// uplink loss: DATA copies sent on this path against those the relay counted (between PONGs)
+	// uplink loss: DATA copies sent on this path before a PING against those the relay had counted when that
+	// PING came (the same moment on both ends: the packets still on their way are not counted as lost)
 	sentData           uint32
 	pongSent, pongSeen uint32
 	pongAny            bool
-	upLoss             float64 // %
+	upLoss             float64 // %, may dip a little below 0 (noise); shown and used as 0 or more
 	// downlink: copies that came first on this path / all of them / the ones only this path brought
 	downFirst, downTotal, rescued uint64
 	lastDown                      time.Time
@@ -103,6 +110,11 @@ type path struct {
 	lastFast                      time.Time
 	lastUp                        time.Time
 	outages                       uint64
+}
+
+type pingRec struct {
+	at   time.Time
+	sent uint32
 }
 
 func (p *path) alive() bool {
@@ -125,7 +137,7 @@ func (p *path) loss() float64 {
 // the loss to plan with: what the relay counted, or the PINGs when there is no count yet
 func (p *path) lossNow() float64 {
 	if p.pongAny {
-		return max(p.upLoss, p.loss()/2)
+		return max(p.upLoss, p.loss()/2, 0)
 	}
 	return p.loss()
 }
@@ -174,6 +186,7 @@ type Client struct {
 	gap      float64 // ms between protected packets
 	rot      int
 	outage   [outageKeep]float64
+	outAt    [outageKeep]time.Time
 	outN     int
 	tunRTT   float64
 	tunLoss  float64
@@ -188,8 +201,14 @@ type Client struct {
 	allDarkAt         time.Time
 	allDark           bool
 	repairsUp, copies uint64
-	// downlink delivery per sequence: which paths brought it (for «rescued by»), when it came
-	marks map[uint32]downMark
+	copyAt            time.Time
+	later             []out // delayed copies, drained by the clock
+	kick              chan struct{}
+	lastSend          time.Time
+	txPkts            atomic.Uint64 // every packet written to a path (copies, repairs and PINGs too)
+	// downlink delivery per sequence: which paths brought it (for «rescued by»), when it came — a ring,
+	// no map entry made and dropped for every packet
+	marks [markRing]downMark
 	top   uint32
 	any   bool
 
@@ -200,8 +219,24 @@ type Client struct {
 }
 
 type downMark struct {
+	seq   uint32
 	paths byte
+	used  bool
 	at    time.Time
+}
+
+const markRing = 1024
+
+// settle: a packet's delivery is final: brought by one path only while two ran = rescued by that path
+func (c *Client) settle(m *downMark) {
+	if len(c.paths) >= 2 && m.paths != 0 && m.paths&(m.paths-1) == 0 {
+		for _, p := range c.paths {
+			if m.paths == 1<<(p.id%8) {
+				p.rescued++
+			}
+		}
+	}
+	*m = downMark{}
 }
 
 func New(l Link) (*Client, error) {
@@ -221,7 +256,7 @@ func New(l Link) (*Client, error) {
 		}
 	}
 	c := &Client{l: l, w: w, sess: uint16(rand.Intn(65534) + 1), to: &net.UDPAddr{IP: ip, Port: l.Port}, nextID: 1, tunWait: make(chan struct{}),
-		want: Default, cur: Default, marks: map[uint32]downMark{}, closed: make(chan struct{}), cls: newClassifier(), ratio: 0.5}
+		want: Default, cur: Default, closed: make(chan struct{}), cls: newClassifier(), ratio: 0.5, kick: make(chan struct{}, 1)}
 	if l.Fec >= 2 {
 		c.cur.Fec = l.Fec
 	}
@@ -276,7 +311,7 @@ func (c *Client) AddPathTo(name string, conn net.PacketConn, to net.Addr) {
 			break
 		}
 	}
-	p := &path{name: name, id: c.nextID, conn: conn, to: to, pings: map[uint32]time.Time{}, added: time.Now()}
+	p := &path{name: name, id: c.nextID, conn: conn, to: to, pings: map[uint32]pingRec{}, added: time.Now()}
 	c.nextID = c.nextID%15 + 1
 	c.paths = append(c.paths, p)
 	c.mu.Unlock()
@@ -383,6 +418,8 @@ type out struct {
 	pkt   []byte
 	delay time.Duration
 	until time.Time
+	due   time.Time
+	data  bool // a DATA copy: counted for the uplink loss when it leaves
 }
 
 // Send: one IP packet out. Its class chooses the paths, a delayed copy and its share of the repairs.
@@ -390,6 +427,8 @@ func (c *Client) Send(p []byte) {
 	now := time.Now()
 	c.mu.Lock()
 	cl := c.cls.classify(p, now)
+	idle := now.Sub(c.lastSend) > busyFor
+	c.lastSend = now
 	seq := c.seq
 	c.seq++
 	c.upBytes += uint64(len(p))
@@ -426,11 +465,11 @@ func (c *Client) Send(p []byte) {
 		default:
 			targets = ps[:1]
 		}
-		// a delayed copy: when one path carries it, or every path is bad at once
+		// a delayed copy: when one path carries it and this line shows it needs one, or every path is bad at
+		// once. A clean line gets none: the repairs rebuild a stray loss, a copy would only double the packets.
 		if cl != clsBulk && cur.DupMs > 0 && !c.allDark {
-			lossy := best.lossNow() >= 0.5 || fight || c.outN > 0
 			switch {
-			case len(targets) == 1 && (cl == clsGame || cl == clsCtl || lossy):
+			case len(targets) == 1 && c.needCopy(best, cl, fight, now, v3):
 				copyOn = best
 			case len(targets) >= 2 && cur.Every:
 				copyOn = best
@@ -473,60 +512,134 @@ func (c *Client) Send(p []byte) {
 				pkt = o.pkt
 			}
 		}
-		outs = append(outs, out{p: copyOn, pkt: pkt, delay: time.Duration(copyMs) * time.Millisecond, until: deadline})
+		outs = append(outs, out{p: copyOn, pkt: pkt, delay: time.Duration(copyMs) * time.Millisecond, until: deadline, data: true})
 		c.copies++
+		c.copyAt = now
 	}
 	paths := ps
 	c.mu.Unlock()
+	if idle {
+		c.wake()
+	}
 	c.emit(outs)
 	if par != nil {
 		c.sendParity(paths, pseq, n, par, cur)
 	}
 }
 
-// emit: now, or later — and a later copy only while it is still worth something and its path is not dark
+// emit: now, or later — a later copy waits in the queue the clock drains (no timer per packet)
 func (c *Client) emit(outs []out) {
+	var later bool
 	for _, o := range outs {
 		if o.delay == 0 {
-			o.p.conn.WriteTo(o.pkt, o.p.to)
+			c.write(o.p, o.pkt)
 			continue
 		}
-		o := o
-		time.AfterFunc(o.delay, func() {
-			c.mu.Lock()
-			ok := time.Now().Before(o.until) && !o.p.dark
-			if ok {
+		c.mu.Lock()
+		c.later = append(c.later, o)
+		c.later[len(c.later)-1].due = time.Now().Add(o.delay)
+		c.mu.Unlock()
+		later = true
+	}
+	if later {
+		c.wake()
+	}
+}
+
+func (c *Client) write(p *path, pkt []byte) {
+	p.conn.WriteTo(pkt, p.to)
+	c.txPkts.Add(1)
+}
+
+// dueLater: the queued copies whose time came — only while still worth something and their path is not dark
+func (c *Client) dueLater(now time.Time) []out {
+	var go_ []out
+	k := 0
+	for _, o := range c.later {
+		if now.Before(o.due) {
+			c.later[k] = o
+			k++
+			continue
+		}
+		if now.Before(o.until) && !o.p.dark {
+			if o.data {
 				o.p.sentData++
 			}
-			c.mu.Unlock()
-			if ok {
-				o.p.conn.WriteTo(o.pkt, o.p.to)
-			}
-		})
+			o.delay = 0
+			go_ = append(go_, o)
+		}
+	}
+	clear(c.later[k:])
+	c.later = c.later[:k]
+	return go_
+}
+
+// wake: the clock sleeps long while nothing runs; a packet to send later wakes it
+func (c *Client) wake() {
+	select {
+	case c.kick <- struct{}{}:
+	default:
 	}
 }
 
 func (c *Client) sendParity(paths []*path, pseq uint32, n byte, par []byte, cur Settings) {
 	pkt := c.w.seal(hdr{c.l.UID, c.sess, pseq, kParity, n}, par)
+	var outs []out
 	for _, x := range paths {
-		x.conn.WriteTo(pkt, x.to)
+		outs = append(outs, out{p: x, pkt: pkt})
 		if cur.DupMs > 0 && (len(paths) == 1 || cur.Every) {
-			x := x
-			time.AfterFunc(time.Duration(cur.DupMs)*time.Millisecond, func() { x.conn.WriteTo(pkt, x.to) })
+			outs = append(outs, out{p: x, pkt: pkt, delay: time.Duration(cur.DupMs) * time.Millisecond, until: time.Now().Add(time.Second)})
 		}
+	}
+	c.emit(outs)
+}
+
+// needCopy: does a packet of this class on this one path get a delayed copy? Only on a line that loses
+// packets now (counted by the relay), or whose game packets stopped coming for a moment lately (outages a
+// repair cannot fill in time); in a fight a little sooner. Fixed settings (not automatic) and v2 relays
+// keep the old rule: a copy for every game packet.
+func (c *Client) needCopy(best *path, cl class, fight bool, now time.Time, v3 bool) bool {
+	l, ro := best.lossNow(), c.recentOutages(now)
+	if !c.want.Auto || !v3 {
+		return cl == clsGame || cl == clsCtl || l >= 0.5 || fight || ro > 0
+	}
+	switch cl {
+	case clsGame, clsCtl:
+		return l >= 1 || ro >= 2 || (fight && (l >= 0.3 || ro >= 1))
+	default:
+		return l >= 3 || ro >= 3
 	}
 }
 
 // copyDelay: the second copy goes after the outages this line usually has, so one outage cannot take both
 func (c *Client) copyDelay(cur Settings) int {
-	if !c.want.Auto || c.outN < 4 {
+	if !c.want.Auto {
 		return cur.DupMs
 	}
-	n := min(c.outN, outageKeep)
-	v := append([]float64(nil), c.outage[:n]...)
+	var v []float64
+	now := time.Now()
+	for i := 0; i < min(c.outN, outageKeep); i++ {
+		if now.Sub(c.outAt[i]) < outageMemory {
+			v = append(v, c.outage[i])
+		}
+	}
+	if len(v) < 4 {
+		return cur.DupMs
+	}
 	sort.Float64s(v)
-	p75 := v[(n*3)/4]
+	p75 := v[(len(v)*3)/4]
 	return int(min(max(p75+4, minCopyMs), maxCopyMs))
+}
+
+// recentOutages: how many times the game's packets stopped coming down in the last minute
+func (c *Client) recentOutages(now time.Time) int {
+	n := 0
+	for i := 0; i < min(c.outN, outageKeep); i++ {
+		if now.Sub(c.outAt[i]) < outageMemory {
+			n++
+		}
+	}
+	return n
 }
 
 // wantDown: what the phone asks the exit for, in the high bits of DATA's aux. v2: a parity group
@@ -588,7 +701,7 @@ func (c *Client) reader(p *path) {
 		if !ok || h.kind&down == 0 || h.sess != c.sess || h.uid != c.l.UID {
 			continue
 		}
-		c.heard(p)
+		c.heard(p, h.kind&^down == kData)
 		switch h.kind &^ down {
 		case kPong:
 			c.pong(p, h, pl)
@@ -623,16 +736,20 @@ func (c *Client) reader(p *path) {
 	}
 }
 
-// heard: a packet came down this path — it is not dark, and a silence it ends was an outage
-func (c *Client) heard(p *path) {
+// heard: a packet came down this path — it is not dark, and a silence it ends was an outage. Only a game
+// packet ends one, and only while the phone kept sending: a pause of the game itself (a round ends, a
+// loading screen) is quiet both ways and is no fault of the line.
+func (c *Client) heard(p *path, data bool) {
 	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !p.lastDown.IsZero() {
+	if !p.lastDown.IsZero() && data {
 		gap := float64(now.Sub(p.lastDown)) / 1e6
+		sending := now.Sub(c.lastSend) < 100*time.Millisecond && c.cls.gaming(now)
 		// the outage itself: the silence minus the usual spacing of the game's packets
-		if lost := gap - p.downIAT; p.dark || (lost > 15 && p.downIAT > 0 && gap > 3*p.downIAT && c.cls.gaming(now)) {
+		if lost := gap - p.downIAT; sending && (p.dark || (lost > 15 && p.downIAT > 0 && gap > 3*p.downIAT)) {
 			c.outage[c.outN%outageKeep] = max(lost, 0)
+			c.outAt[c.outN%outageKeep] = now
 			c.outN++
 			p.outages++
 		}
@@ -640,8 +757,11 @@ func (c *Client) heard(p *path) {
 			p.downIAT += (gap - p.downIAT) / 16
 		}
 	}
-	p.lastDown = now
-	p.dark = false
+	// a PONG does not end a silence of the game's packets: dark means the game's packets stopped
+	if data || p.lastDown.IsZero() {
+		p.lastDown = now
+		p.dark = false
+	}
 }
 
 // takeRebuilt: the packets the repairs gave back that are new to the window
@@ -669,7 +789,15 @@ func (c *Client) data(p *path, seq uint32, pl []byte) {
 	now := time.Now()
 	c.mu.Lock()
 	p.downTotal++
-	m := c.marks[seq]
+	m := &c.marks[seq%markRing]
+	if m.used && m.seq != seq {
+		if int32(seq-m.seq) < 0 {
+			m = &downMark{} // older than the ring: only the window matters for it
+		} else {
+			c.settle(m)
+		}
+	}
+	m.seq, m.used = seq, true
 	m.paths |= 1 << (p.id % 8)
 	first := c.win.take(seq)
 	if first {
@@ -683,7 +811,6 @@ func (c *Client) data(p *path, seq uint32, pl []byte) {
 			c.dWinGot++
 		}
 	}
-	c.marks[seq] = m
 	var rs uint32
 	var rp []byte
 	ok := false
@@ -726,9 +853,9 @@ func (c *Client) ping(p *path, size int) {
 	c.mu.Lock()
 	s := c.pingSeq
 	c.pingSeq++
-	p.pings[s] = time.Now()
+	p.pings[s] = pingRec{time.Now(), p.sentData}
 	cur := c.cur
-	copyMs := c.copyDelay(cur)
+	copyMs := c.downCopy(c.copyDelay(cur), time.Now())
 	c.mu.Unlock()
 	pl := make([]byte, 11, max(size, 11))
 	binary.BigEndian.PutUint64(pl, uint64(time.Now().UnixMilli()))
@@ -740,16 +867,17 @@ func (c *Client) ping(p *path, size int) {
 	for len(pl) < size {
 		pl = append(pl, byte(rand.Intn(256)))
 	}
-	p.conn.WriteTo(c.w.seal(hdr{c.l.UID, c.sess, s, kPing, p.id}, pl), p.to)
+	c.write(p, c.w.seal(hdr{c.l.UID, c.sess, s, kPing, p.id}, pl))
 }
 
 func (c *Client) pong(p *path, h hdr, pl []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	at, ok := p.pings[h.seq]
+	rec, ok := p.pings[h.seq]
 	if !ok {
 		return
 	}
+	at := rec.at
 	delete(p.pings, h.seq)
 	now := time.Now()
 	rtt := float64(now.Sub(at)) / 1e6
@@ -776,17 +904,18 @@ func (c *Client) pong(p *path, h hdr, pl []byte) {
 			if e[0] == p.id {
 				first, total := binary.BigEndian.Uint32(e[1:]), binary.BigEndian.Uint32(e[5:])
 				p.upFirst, p.upTotal = first, total
-				// uplink loss: what was sent on this path since the last count against what the relay saw
-				if p.pongAny && p.sentData > p.pongSent && total >= p.pongSeen {
-					sent := float64(p.sentData - p.pongSent)
+				// uplink loss: what left this path before the PING against what the relay had when the PING came,
+				// over at least 40 packets; a small negative is noise and stays in the average (cutting it at 0
+				// would turn the noise into a loss that is not there)
+				switch {
+				case !p.pongAny || total < p.pongSeen || rec.sent < p.pongSent:
+					p.pongSent, p.pongSeen, p.pongAny = rec.sent, total, true
+				case rec.sent-p.pongSent >= 40:
+					sent := float64(rec.sent - p.pongSent)
 					seen := float64(total - p.pongSeen)
-					if sent >= 10 {
-						l := max(0, 100*(1-seen/sent))
-						p.upLoss += (l - p.upLoss) / 3
-						p.pongSent, p.pongSeen = p.sentData, total
-					}
-				} else if !p.pongAny || total < p.pongSeen {
-					p.pongSent, p.pongSeen, p.pongAny = p.sentData, total, true
+					l := min(100, 100*(1-seen/sent))
+					p.upLoss += (l - p.upLoss) / 3
+					p.pongSent, p.pongSeen = rec.sent, total
 				}
 			}
 		}
@@ -821,8 +950,8 @@ func (c *Client) pinger() {
 		c.mu.Lock()
 		ps := append([]*path(nil), c.paths...)
 		for _, p := range ps {
-			for s, at := range p.pings {
-				if time.Since(at) > 1500*time.Millisecond {
+			for s, r := range p.pings {
+				if time.Since(r.at) > 1500*time.Millisecond {
 					delete(p.pings, s)
 					p.mark(false)
 				}
@@ -838,7 +967,7 @@ func (c *Client) pinger() {
 // ------------------------------------------------------------------ the clock: repairs, dark paths, radio, books
 
 func (c *Client) ticker() {
-	t := time.NewTicker(2 * time.Millisecond)
+	t := time.NewTimer(idleTick)
 	defer t.Stop()
 	lastBook := time.Now()
 	for {
@@ -846,6 +975,13 @@ func (c *Client) ticker() {
 		case <-c.closed:
 			return
 		case <-t.C:
+		case <-c.kick:
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
 		}
 		now := time.Now()
 		c.mu.Lock()
@@ -857,12 +993,15 @@ func (c *Client) ticker() {
 		}
 		paths, cur := c.live(), c.cur
 		c.watch(now)
+		due := c.dueLater(now)
 		reps := c.repairs(now)
 		fills, fast := c.radio(now)
+		next := c.tick(now)
 		c.mu.Unlock()
 		if par != nil {
 			c.sendParity(paths, pseq, n, par, cur)
 		}
+		c.emit(due)
 		c.emit(reps)
 		c.emit(fills)
 		for _, p := range fast {
@@ -873,14 +1012,29 @@ func (c *Client) ticker() {
 			c.book()
 			c.tune()
 		}
+		t.Reset(next)
 	}
+}
+
+// tick: how soon the clock runs again — every 2 ms while packets flow (repairs, copies and dark paths
+// need it), and only 20 times a second when the game is quiet, so an idle phone is not kept awake
+func (c *Client) tick(now time.Time) time.Duration {
+	if now.Sub(c.lastSend) < busyFor || len(c.later) > 0 || c.tx.waiting() {
+		return busyTick
+	}
+	for _, p := range c.paths {
+		if p.dark {
+			return busyTick
+		}
+	}
+	return idleTick
 }
 
 // watch: a path the game's packets stopped coming down is dark: nothing more is put on it but quick
 // PINGs until it speaks again. All dark at once: only the newest packets go, no copies and no repairs,
 // so the phone does not stack up old packets that would all leave at once when the line comes back.
 func (c *Client) watch(now time.Time) {
-	if !c.cls.gaming(now) {
+	if !c.cls.gaming(now) || now.Sub(c.lastSend) > 100*time.Millisecond {
 		for _, p := range c.paths {
 			p.dark = false
 		}
@@ -969,19 +1123,12 @@ func (c *Client) book() {
 	if !c.any {
 		return
 	}
-	n := len(c.paths)
-	for s, m := range c.marks {
-		if c.top-s < 64 && now.Sub(m.at) < 500*time.Millisecond {
+	for i := range c.marks {
+		m := &c.marks[i]
+		if !m.used || (c.top-m.seq < 64 && now.Sub(m.at) < 500*time.Millisecond) {
 			continue
 		}
-		if n >= 2 && m.paths != 0 && m.paths&(m.paths-1) == 0 {
-			for _, p := range c.paths {
-				if m.paths == 1<<(p.id%8) {
-					p.rescued++
-				}
-			}
-		}
-		delete(c.marks, s)
+		c.settle(m)
 	}
 	// the line's own downlink loss this second (before repairs), and what to ask the exit for
 	switch {
@@ -1059,9 +1206,11 @@ func (c *Client) tune() {
 	}
 }
 
-// tuneV3: the repair rate up, from the loss of the paths that carry the game (two paths: the chance both
-// lose the same packet), up at once and down slowly; nothing extra while a path's queue is swelling
-// (bufferbloat: more packets would only make it worse). And the rate the exit should use down.
+// tuneV3: the repair rate up, from the loss the relay counts on the paths that carry the game (two paths:
+// the chance both lose the same packet) — up at once, down slowly. A clean line keeps only enough for one
+// repair about every 100 ms of play, so a stray loss is still rebuilt in time; nothing more is sent for
+// nothing. Nothing extra while a path's queue is swelling (bufferbloat: more packets would make it worse).
+// And the rate the exit should use down.
 func (c *Client) tuneV3() {
 	now := time.Now()
 	ps := c.usable()
@@ -1069,40 +1218,49 @@ func (c *Client) tuneV3() {
 		return
 	}
 	fight := c.cls.fight(now)
+	ro := c.recentOutages(now)
+	floor := 0.2
+	if pps := c.cls.mainPPS(); pps > 0 {
+		floor = min(max(10/pps, 0.12), 0.34)
+	}
 	var r float64
 	if len(ps) == 1 {
 		l := ps[0].lossNow()
 		switch {
-		case l < 0.5:
-			r = 0.34
-		case l < 2:
+		case l < 0.3:
+			r = floor
+		case l < 1:
+			r = max(floor, 0.3)
+		case l < 3:
 			r = 0.5
-		case l < 5:
-			r = 1
+		case l < 6:
+			r = 0.75
 		case l < 10:
-			r = 1.5
+			r = 1.25
 		default:
-			r = 2
+			r = 1.75
+		}
+		if ro > 0 {
+			r = max(r, 0.4) // this line had outages lately: enough to fill one
 		}
 	} else {
 		j := ps[0].lossNow() * ps[1].lossNow() / 100
 		switch {
-		case j < 0.1:
-			r = 0.2
-		case j < 1:
-			r = 0.34
+		case j < 0.05:
+			r = floor / 2
+		case j < 0.5:
+			r = floor
+		case j < 2:
+			r = 0.4
 		default:
 			r = 0.75
 		}
 	}
-	if fight {
-		r += 0.25
-	}
-	if c.outN > 0 && len(ps) == 1 {
-		r = max(r, 0.75) // this line has outages: keep enough to fill one
+	if fight && r >= 0.3 {
+		r += 0.15 // a fight on a line that loses: a little more
 	}
 	if b := ps[0]; b.minRTT > 0 && b.rtt > b.minRTT+bloatMargin {
-		r = min(r, 0.25)
+		r = min(r, floor)
 	}
 	r = min(r, maxRatio)
 	if r > c.ratio {
@@ -1111,7 +1269,19 @@ func (c *Client) tuneV3() {
 		c.ratio += (r - c.ratio) / 5
 	}
 	// down: the line's loss before repairs
-	c.downLevel = levelFor(c.downLoss, fight)
+	c.downLevel = levelFor(c.downLoss, fight && c.downLoss >= 0.3)
+}
+
+// downCopy: the relay's delayed copy of what comes down a single path, only when the downlink loses packets
+// or had outages lately (0 = none; v2 relays and fixed settings keep the copy)
+func (c *Client) downCopy(copyMs int, now time.Time) int {
+	if !c.caps || !c.want.Auto {
+		return copyMs
+	}
+	if c.downLoss >= 1 || c.recentOutages(now) >= 2 {
+		return copyMs
+	}
+	return 0
 }
 
 // ------------------------------------------------------------------ for the app's screen
@@ -1150,7 +1320,9 @@ type Stat struct {
 	UpLoss   float64           `json:"up_loss"`   // % on the best path, before copies and repairs
 	DownLoss float64           `json:"down_loss"` // %, before copies and repairs
 	Repair   float64           `json:"repair"`    // repairs per protected packet, up
-	CopyMs   int               `json:"copy_ms"`
+	CopyMs   int               `json:"copy_ms"`   // the delayed copy, 0 = none now (the line does not need it)
+	TxPkts   uint64            `json:"tx_pkts"`   // every packet sent up (copies, repairs and PINGs too)
+	DownCopy bool              `json:"down_copy"`
 	Stale    uint64            `json:"stale"` // rebuilt too late to be any use (not delivered)
 	Fills    uint64            `json:"fills"`
 	TunRTT   float64           `json:"tun_rtt"` // Iran ↔ abroad
@@ -1163,13 +1335,18 @@ func (c *Client) Stat() Stat {
 	defer c.mu.Unlock()
 	s := Stat{Rx: c.downBytes, Tx: c.upBytes, Got: c.got, Fixed: c.fixed, Settings: c.cur,
 		V3: c.caps && c.exitV3, Fight: c.cls.fight(time.Now()), MainPPS: c.cls.mainPPS(), Classes: map[string]uint64{},
-		DownLoss: c.downLoss, Repair: c.ratio, CopyMs: c.copyDelay(c.cur), Stale: c.rrx.stale, Fills: c.fills, TunRTT: c.tunRTT, TunLoss: c.tunLoss}
+		DownLoss: c.downLoss, Repair: c.ratio, Stale: c.rrx.stale, Fills: c.fills, TunRTT: c.tunRTT, TunLoss: c.tunLoss, TxPkts: c.txPkts.Load()}
+	now := time.Now()
+	if now.Sub(c.copyAt) < 2*time.Second {
+		s.CopyMs = c.copyDelay(c.cur)
+	}
+	s.DownCopy = c.downCopy(1, now) > 0
 	for i, n := range c.sentCls {
 		s.Classes[classNames[i]] = n
 	}
 	best := 0.0
 	for _, p := range c.paths {
-		ps := PathStat{Name: p.name, Alive: p.alive() && !p.lastAns.IsZero(), RTT: p.rtt, Jitter: p.jit, Loss: p.loss(), UpLoss: p.upLoss, UpFirst: p.upFirst, UpTotal: p.upTotal,
+		ps := PathStat{Name: p.name, Alive: p.alive() && !p.lastAns.IsZero(), RTT: p.rtt, Jitter: p.jit, Loss: p.loss(), UpLoss: max(p.upLoss, 0), UpFirst: p.upFirst, UpTotal: p.upTotal,
 			DownFirst: p.downFirst, Rescued: p.rescued, Dark: p.dark, Outages: p.outages}
 		s.Paths = append(s.Paths, ps)
 		s.Rescued += p.rescued

@@ -92,14 +92,15 @@ object KpHud {
         main.postDelayed({ tick() }, 1000)
     }
 
-    /** یک خط کوتاه: پینگ کل (تا سرور خارج)، لرزش، افت بالا/پایین و نجات‌یافته‌ها */
+    /** یک خط کوتاه: پینگ کل (تا سرور خارج) و تکه‌ی گوشی تا ایران، لرزش، افت بالا/پایین و نجات‌یافته‌ها */
     fun line(s: KpStat): String {
         val ping = if (s.total > 0) s.total else s.ping
+        val ir = if (s.total > 0 && s.ping > 0) " (IR ${s.ping.toInt()})" else ""
         val f = java.util.Locale.US
-        val up = String.format(f, "%.1f", s.upLoss)
+        val up = String.format(f, "%.1f", s.upLoss.coerceAtLeast(0.0))
         val dn = String.format(f, "%.1f", s.downLoss)
         val fight = if (s.fight) " ⚔" else ""
         val paths = s.paths.filter { it.alive && !it.dark }.joinToString("+") { if (it.name == "wifi") "W" else "D" }.ifEmpty { "—" }
-        return "${ping.toInt()}ms ±${s.jit.toInt()} · ↑$up% ↓$dn% · ✚${s.rescued + s.fixed} · $paths$fight"
+        return "${ping.toInt()}ms$ir ±${s.jit.toInt()} · ↑$up% ↓$dn% · ✚${s.rescued + s.fixed} · $paths$fight"
     }
 }
