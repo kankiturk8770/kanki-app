@@ -7,7 +7,8 @@
 //	    bound to one network (Wi-Fi, mobile data), "DROP <name>" (that network went away), "SET {json}"
 //	    (the settings: auto, dup, fec, every). Every second: "STAT {json}" (paths, ping, rescued, …).
 //	libkping.so ping --url 'kping://…'
-//	    three PINGs straight to the relay; prints the best round trip in ms (exit 1 and the reason when none)
+//	    three PINGs straight to the relay; the last line is the best round trip in ms, with a v3 relay plus its own
+//	    round trip to the exit abroad (exit 1 and the reason when none)
 package main
 
 import (
@@ -113,12 +114,17 @@ func main() {
 		os.Exit(1)
 	}
 	if os.Args[1] == "ping" {
-		ms, err := kping.Ping(l)
+		// the last line is what the app ranks servers by: the phone's round trip to the relay plus (v3) the
+		// relay's round trip to the exit abroad, the whole way to where the game's packets leave
+		ms, tun, err := kping.PingFull(l)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		fmt.Println(ms)
+		if tun > 0 {
+			fmt.Println("relay", ms, "tunnel", tun)
+		}
+		fmt.Println(ms + tun)
 		return
 	}
 	c, err := kping.New(l)

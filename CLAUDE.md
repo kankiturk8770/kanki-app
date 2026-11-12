@@ -18,7 +18,7 @@
 | تنظیمات و تم‌ها | `SettingsUi.kt` (`ThemePicker`)، رنگ‌ها و تم در `Ui.kt` (`Themes` از ۱.۳۲: kanki، cyber، tiffany، vulcan، malt، cyprus؛ هر تم با `glassTheme(id, زمینه, رنگ نئونی, رنگ دوم)` ساخته می‌شود (رنگ دوم `K.Gold2` از ۱.۳۴ برای گرادیان نورها و لبه‌ها)، اسم‌ها در `ThemeNames`)، اجزای مشترک در `Kit.kt` |
 | موتور WireGuard/AmneziaWG | `VpnEngine.kt`، `Tunnel.kt` |
 | Hysteria2 / Xray / KANKI MIX / microtun | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` / `Mtun.kt` |
-| KPING (فقط تسترها؛ فیلد `kping` اشتراک رمزشده، لینک `kping://`، پنل ۳.۳۹+): هسته‌ی خودش `libkping.so`، وای‌فای و دیتا با هم (`requestNetwork` + `bindSocket`)، فقط پابجی گلوبال + `GAME_NEEDS` با دروازه (بقیه بسته)، تنظیم خودکار، آمار زنده و تنظیمات | `KpingCfg`/`KpStat` در `Mtun.kt`، `startKping`/`kpPath`/`kpSend` در `Hysteria.kt`، `KpingUi.kt`، `parseKping` در `SubscriptionApi.kt`، `Probe.kping` |
+| KPING (فقط تسترها؛ فیلد `kping` اشتراک رمزشده، لینک `kping://`، پنل ۳.۳۹+): هسته‌ی خودش `libkping.so`، وای‌فای و دیتا با هم (`requestNetwork` + `bindSocket`)، فقط پابجی گلوبال + `GAME_NEEDS` با دروازه (بقیه بسته)، تنظیم خودکار، آمار زنده و تنظیمات (۱.۳۵: v3، بیدار نگه داشتن دیتا، پنل پینگ روی بازی) | `KpingCfg`/`KpStat` در `Mtun.kt`، `startKping`/`kpPath`/`kpSend` در `Hysteria.kt`، `KpingUi.kt` (`KpV3`)، پنل روی بازی `KpHud.kt`، `parseKping` در `SubscriptionApi.kt`، `Probe.kping` (خط آخر = پینگ تا رله + رله تا خارج) |
 | پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
 | پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG/microtun `RealPing.l3`) | `AppState.livePing` |
 | چت اضطراری | `Emergency.kt`، `EmergencyUi.kt`، `EmergencyNotify.kt` |
@@ -42,7 +42,8 @@
 - `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`. خود کلاینت در پکیج `mtun-core/mtun` است
   (`main.go` فقط برنامه‌ی اندروید است)؛ نسخه‌ی ویندوز همان پکیج را استفاده می‌کند. KANKI MIX هم `StartDevice` دارد (ویندوز).
 - `kping-core/` هسته‌ی KPING (`libkping.so`)، تست: `cd kping-core && go test ./...`. قالب بسته همان `src/vpn/kpingd.rs` پنل (بردار تست مشترک در
-  `kping/wire_test.go`)؛ پیام‌های سوکت یونیکس: `TUN`، `PATH <اسم>` + سوکت هر شبکه، `DROP <اسم>`، `SET {json}`؛ گزارش `STAT {json}` هر ثانیه.
+  `kping/wire_test.go`؛ v3: ترمیم پنجره‌ای `kping/rlc.go` = `src/vpn/kprlc.rs` پنل، بردار مشترک `TestRLCVector`، تشخیص نوع بسته `kping/classify.go`،
+  DSCP سوکت `kping/sock_unix.go`)؛ پیام‌های سوکت یونیکس: `TUN`، `PATH <اسم>` + سوکت هر شبکه، `DROP <اسم>`، `SET {json}`؛ گزارش `STAT {json}` هر ثانیه.
   آزمایشگاه پنل (`scripts/kping_lab.sh`) با همین پکیج کار می‌کند.
 - هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
 

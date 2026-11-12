@@ -732,6 +732,7 @@ class KankiHyService : VpnService() {
             HyEngine.kping = true
             HyEngine.state = HyEngine.UP
         }
+        KpHud.sync(this)
     }
 
     /** سوکت UDP یک شبکه: بیرون از VPN (protect) و بسته به همان شبکه، به هسته داده می‌شود */
@@ -941,6 +942,7 @@ class KankiHyService : VpnService() {
         HyEngine.mtun = false
         HyEngine.kping = false
         HyEngine.kpStat = null
+        KpHud.stop()
         kpNets.forEach { cb -> runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(cb) } }
         kpNets.clear()
         kpSock = null

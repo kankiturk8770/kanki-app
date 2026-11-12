@@ -99,11 +99,13 @@ fun KpingPanel(c: Color) {
                     T(if (p.name == "wifi") "وای‌فای" else "دیتا", size = 11.sp, color = K.Text, modifier = Modifier.width(56.dp))
                     T(
                         if (!p.alive) tr("قطع")
+                        else if (p.dark) tr("الان خاموش؛ همه‌چیز از مسیر دیگر")
                         else trf("%d ms · افت %d٪ · %d نجات", p.rtt.toInt(), p.loss.toInt(), p.rescued),
-                        size = 11.sp, color = if (p.alive) K.Sub else K.Warn, weight = FontWeight.Normal,
+                        size = 11.sp, color = if (p.alive && !p.dark) K.Sub else K.Warn, weight = FontWeight.Normal,
                     )
                 }
             }
+            if (s.v3) KpV3(s, c)
             T(
                 trf("ترمیم‌شده: %d · نسخه‌ی دوم: %s · بسته‌ی ترمیم: %s%s", s.fixed,
                     if (s.dupMs > 0) "${s.dupMs} ms" else tr("خاموش"),
@@ -113,6 +115,26 @@ fun KpingPanel(c: Color) {
             )
         }
         KpingSettings(c)
+    }
+}
+
+/** KPING v3: پینگ کل تا سرور خارج، افت بالا و پایین پیش از ترمیم، درگیری، و این‌که هسته هر نوع بسته را چطور فرستاد */
+@Composable
+private fun KpV3(s: KpStat, c: Color) {
+    val f = java.util.Locale.US
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("KPING v3", size = 11.sp, color = c, font = Poppins, weight = FontWeight.Bold, ltr = true)
+            if (s.fight) {
+                Spacer(Modifier.width(D.S1))
+                T("درگیری: محافظت بیشتر", size = 11.sp, color = K.Warn)
+            }
+        }
+        if (s.total > 0) T(trf("تا سرور خارج: %d ms (ایران ← خارج %d ms)", s.total.toInt(), s.tunRtt.toInt()), size = 11.sp, color = K.Text, weight = FontWeight.Normal)
+        T(trf("افت خود خط پیش از ترمیم: بالا %s٪ · پایین %s٪", String.format(f, "%.1f", s.upLoss), String.format(f, "%.1f", s.downLoss)), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+        val cl = s.classes
+        T(trf("بسته‌ها: بازی %d · صدا %d · کنترل %d · دانلود %d", cl["game"] ?: 0, cl["voice"] ?: 0, cl["ctl"] ?: 0, cl["bulk"] ?: 0), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        T(trf("ترمیم پنجره‌ای: %s برای هر بسته · نسخه‌ی دوم بعد از %d ms · دیرتر از موقع (دور ریخته): %d", String.format(f, "%.2f", s.repair), s.copyMs, s.stale), size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
     }
 }
 
@@ -182,6 +204,23 @@ private fun KpingSettings(c: Color) {
                 T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و بسته‌ی ترمیم را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
             GlassSwitch(v.auto, { set(v.copy(auto = it)) })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("بیدار نگه داشتن اینترنت موبایل", size = 13.sp, color = K.Text)
+                T("وسط مسابقه، وقتی بازی یک لحظه ساکت است، یک بسته‌ی خیلی کوچک می‌رود تا رادیوی گوشی به خواب کوتاه نرود و بسته‌ی بعدی منتظر بیدار شدنش نماند (کمی باتری).", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            GlassSwitch(v.radio, { set(v.copy(radio = it)) })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("پنل پینگ روی بازی", size = 13.sp, color = K.Text)
+                T("یک خط کوچک گوشه‌ی صفحه‌ی بازی: پینگ تا سرور خارج، لرزش، افت بالا و پایین و بسته‌های نجات‌یافته. لمسی را از بازی نمی‌گیرد.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+            }
+            GlassSwitch(v.hud, { on ->
+                if (on && !KpHud.allowed(ctx)) KpHud.askPermission(ctx)
+                set(v.copy(hud = on))
+            })
         }
         if (!v.auto) {
             T("نسخه‌ی دوم وقتی یک مسیر داری", size = 12.sp, color = K.Text)
