@@ -1,0 +1,4 @@
+---
+- ignore-rules:
+    # StrandHogg 1.0 (taskAffinity): تغییر مانیفست فقط بعد از تست روی گوشی (Play Protect، CLAUDE.md)؛ در «کارهای باز»
+    - android_task_hijacking2

@@ -247,6 +247,7 @@ class KankiHyService : VpnService() {
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
         val server = if (ip is Inet4Address) "${ip.hostAddress}:${uri.port}" else "[${ip.hostAddress}]:${uri.port}"
         val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        val auth = SocksAuth.random()
 
         fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         val hyCfg = buildString {
@@ -255,7 +256,9 @@ class KankiHyService : VpnService() {
             append("tls:\n  sni: ").append(q(uri.sni)).append("\n  insecure: ").append(uri.insecure).append('\n')
             uri.obfsPassword?.let { append("obfs:\n  type: salamander\n  salamander:\n    password: ").append(q(it)).append('\n') }
             append("fastOpen: true\n")
-            append("socks5:\n  listen: ").append(q("127.0.0.1:$socksPort")).append("\n  disableUDP: false\n")
+            append("socks5:\n  listen: ").append(q("127.0.0.1:$socksPort"))
+                .append("\n  username: ").append(q(auth.user)).append("\n  password: ").append(q(auth.pass))
+                .append("\n  disableUDP: false\n")
         }
         val hyFile = File(filesDir, "hy2.yaml").apply { writeText(hyCfg) }
 
@@ -302,7 +305,7 @@ class KankiHyService : VpnService() {
             Thread.sleep(250)
         }
         if (!ready) error("hysteria2: server did not answer. " + lastLog())
-        tunUp("Kanki · Hysteria2", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+        tunUp("Kanki · Hysteria2", ip, socksPort, auth, mtu, dns, excluded, included(lines), blockOthers(lines), my)
     }
 
     /** «بقیه‌ی برنامه‌ها اینترنت نداشته باشند» (فقط با IncludedApplications معنا دارد) */
@@ -327,7 +330,7 @@ class KankiHyService : VpnService() {
      * کارت شبکه‌ی VPN و tun2socks به پراکسی SOCKS محلی هسته (مشترک بین Hysteria2 و Xray).
      * block: فقط برنامه‌های included اینترنت دارند و بقیه هیچ (با AppGate، اندروید ۱۰ به بالا).
      */
-    private fun tunUp(session: String, ip: InetAddress, socksPort: Int, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, block: Boolean, my: Int) {
+    private fun tunUp(session: String, ip: InetAddress, socksPort: Int, auth: SocksAuth, mtu: Int, dns: List<String>, excluded: List<String>, included: List<String>, block: Boolean, my: Int) {
         val gateMode = block && included.isNotEmpty() && AppGate.supported
         val b = Builder()
             .setSession(session)
@@ -346,7 +349,7 @@ class KankiHyService : VpnService() {
         }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
 
-        val hevFile = writeHev(mtu, "198.18.0.1", socksPort)
+        val hevFile = writeHev(mtu, "198.18.0.1", socksPort, auth)
 
         // بررسی لغو و بالا آوردن VPN با هم (زیر یک قفل با shutdown) انجام می‌شود؛
         // پس اگر زمان تمام شده یا کاربر قطع کرده، VPN دیگر بی‌صدا وصل نمی‌شود
@@ -368,8 +371,9 @@ class KankiHyService : VpnService() {
     }
 
     /** تنظیمات hev-socks5-tunnel: MTU بزرگ کارت داخلی (سربار کمتر، سرعت بیشتر) */
-    private fun writeHev(mtu: Int, ipv4: String, socksPort: Int): File {
+    private fun writeHev(mtu: Int, ipv4: String, socksPort: Int, auth: SocksAuth): File {
         val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: $ipv4\nsocks5:\n  port: $socksPort\n  address: 127.0.0.1\n  udp: 'udp'\n" +
+            "  username: '${auth.user}'\n  password: '${auth.pass}'\n" +
             "misc:\n  task-stack-size: 81920\n"
         return File(filesDir, "hev.yaml").apply { writeText(hevCfg) }
     }
@@ -402,7 +406,8 @@ class KankiHyService : VpnService() {
         if (gateMode) {
             // هسته‌ی Xray فقط به‌عنوان خروجی مستقیم (بدون سرور): SOCKS محلی ← اینترنت خود گوشی
             val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-            val cfgFile = File(filesDir, "xray-direct.json").apply { writeText(XrayCfg.directConfig(socksPort)) }
+            val auth = SocksAuth.random()
+            val cfgFile = File(filesDir, "xray-direct.json").apply { writeText(XrayCfg.directConfig(socksPort, auth)) }
             launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", socksPort, my, 10_000)
             val fd = synchronized(this) {
                 if (cancelled(my)) error("dns: cancelled")
@@ -411,7 +416,7 @@ class KankiHyService : VpnService() {
             val f = KankiDns.Forwarder(this, fd, targets)
             dnsFwd = f
             f.reregister()
-            val hevFile = writeHev(TUN_MTU, KankiDns.GATE_IP, socksPort)
+            val hevFile = writeHev(TUN_MTU, KankiDns.GATE_IP, socksPort, auth)
             synchronized(this) {
                 if (cancelled(my)) error("dns: cancelled")
                 val g = AppGate(this, fd, AppGate.uidsOf(this, included), f)
@@ -512,9 +517,10 @@ class KankiHyService : VpnService() {
         val addrs = InetAddress.getAllByName(host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
         val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-        val cfgFile = File(filesDir, "xray.json").apply { writeText(XrayCfg.config(link, ip.hostAddress ?: host, socksPort)) }
+        val auth = SocksAuth.random()
+        val cfgFile = File(filesDir, "xray.json").apply { writeText(XrayCfg.config(link, ip.hostAddress ?: host, socksPort, auth)) }
         launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", socksPort, my, 10_000)
-        tunUp("Kanki · Xray", ip, socksPort, mtu, dns, excluded, included(lines), blockOthers(lines), my)
+        tunUp("Kanki · Xray", ip, socksPort, auth, mtu, dns, excluded, included(lines), blockOthers(lines), my)
     }
 
     /**
