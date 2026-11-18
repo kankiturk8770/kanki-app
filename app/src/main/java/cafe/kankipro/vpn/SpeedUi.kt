@@ -438,12 +438,13 @@ private fun ScoresCard(sc: Map<String, Int>) {
 /** پنج ستاره؛ n تای اول رنگی */
 @Composable
 fun Stars(n: Int, c: Color, size: Dp = 14.dp) {
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     Canvas(Modifier.width(size * 5 + 8.dp).height(size)) {
         val s = size.toPx()
         val gap = (this.size.width - s * 5) / 4
         for (i in 0 until 5) {
             // ستاره‌ها از راست (راست‌به‌چپ) پر می‌شوند تا با جهت فارسی بخواند
-            val cx = this.size.width - (s / 2 + i * (s + gap))
+            val cx = if (rtl) this.size.width - (s / 2 + i * (s + gap)) else s / 2 + i * (s + gap)
             val p = Path()
             for (k in 0 until 10) {
                 val r = if (k % 2 == 0) s / 2 else s / 4.6f
@@ -648,7 +649,7 @@ private fun NetSection(n: NetUi, act: SpeedActions) {
             Spacer(Modifier.height(D.S2))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 n.info?.let { i ->
-                    FactRow("نوع شبکه", when (i.transport) { "wifi" -> "وای‌فای"; "cell" -> "دیتای موبایل"; "eth" -> "کابل (اترنت)"; else -> "دیگر" } + (i.operator?.let { " · $it" } ?: ""), K.Text)
+                    FactRow("نوع شبکه", tr(when (i.transport) { "wifi" -> "وای‌فای"; "cell" -> "دیتای موبایل"; "eth" -> "کابل (اترنت)"; else -> "دیگر" }) + (i.operator?.let { " · $it" } ?: ""), K.Text)
                     FactRow("اینترنت تأییدشده", if (i.validated) "بله" else "نه", if (i.validated) K.Good else K.Red)
                     FactRow("حجمی (پولی)", if (i.metered) "بله" else "نه", K.Text)
                     i.signal?.let { FactRow("قدرت سیگنال", ltr("$it dBm"), if (it > -67) K.Good else if (it > -80) K.Warn else K.Red) }
@@ -661,7 +662,7 @@ private fun NetSection(n: NetUi, act: SpeedActions) {
                 n.meta?.let { m ->
                     FactRow("IP بیرونی", ltr(m.ip), K.Text)
                     if (m.isp.isNotBlank()) FactRow("شرکت اینترنت", m.isp + (m.asn?.let { " · AS$it" } ?: ""), K.Text)
-                    val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString("، ")
+                    val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString(if (LangState.en) ", " else "، ")
                     if (place.isNotBlank()) FactRow("محل", place, K.Text)
                 }
                 if (n.bypass) FactRow("مسیر", "بیرون از VPN کانکی", K.Green)
@@ -741,7 +742,7 @@ private fun NetSection(n: NetUi, act: SpeedActions) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 n.sites.forEach { s ->
                     val (txt, c) = when (s.status) {
-                        "ok" -> (s.ms?.let { "باز است · $it ms" } ?: "باز است") to K.Good
+                        "ok" -> (s.ms?.let { trf("باز است · %s", ltr("$it ms")) } ?: "باز است") to K.Good
                         "dns" -> "DNS آدرس درست نداد" to K.Warn
                         "tcp" -> "وصل نشد" to K.Red
                         "cert" -> "گواهی نادرست" to K.Red

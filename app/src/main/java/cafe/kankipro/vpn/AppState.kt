@@ -1645,7 +1645,7 @@ class AppState private constructor(context: Context) {
             set(get().copy(loss = UdpSeries.lossPct(r), udpTarget = name))
         }
         metaJob.await()?.let { m ->
-            val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString("، ")
+            val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString(if (LangState.en) ", " else "، ")
             set(get().copy(ip = m.ip, isp = m.isp.takeIf { it.isNotBlank() }, colo = m.colo.takeIf { it.isNotBlank() && srv.kind == "cf" }, where = place.takeIf { it.isNotBlank() }))
         }
         set(get().copy(phase = "down"))
