@@ -185,11 +185,30 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 state.speed.copy(
                     live = state.speedLive,
                     viaVpn = if (state.speed.running) state.speed.viaVpn else state.vstate == VState.ON,
-                    vpnPlace = if (state.vstate == VState.ON) state.node?.let { n -> countryName(state.isoOfNode(n)) ?: state.placeName(n) } else null,
+                    vpnPlace = if (state.speed.running) state.speed.vpnPlace else if (state.vstate == VState.ON) state.node?.let { n -> countryName(state.isoOfNode(n)) ?: state.placeName(n) } else null,
                 ),
-                tip = if (state.tipsSeen["test"] == true) null else RobotAlert("tip_test", 0, "برای دیدن سرعت واقعی اینترنتت از داخل VPN، اول وصل شو. تست حجم مصرف می‌کنه، پس زیاد تکرارش نکن 😉"),
-                onStart = { state.runSpeedTest() },
-                onCloseTip = { state.markTip("test") },
+                net = state.netCheck.let { n -> n.speed?.let { s -> n.copy(speed = if (s.running) s.copy(live = state.speedLive) else s) } ?: n },
+                section = state.speedSection,
+                history = state.speedHistory,
+                tip = if (state.tipsSeen["test"] == true) null else RobotAlert("tip_test", 0, "«تست سرعت» از همان مسیری که وصلی می‌سنجد؛ «اینترنت من» اینترنت خود گوشی را بیرون از VPN بررسی می‌کند. تست حجم مصرف می‌کنه، پس زیاد تکرارش نکن 😉"),
+                act = SpeedActions(
+                    start = { state.runSpeedTest() },
+                    section = { state.speedSection = it },
+                    mode = { state.setSpeedMode(it) },
+                    pick = { state.setSpeedPick(it) },
+                    netStart = { state.runNetCheck() },
+                    netSpeed = { state.setNetSpeed(it) },
+                    share = { text ->
+                        runCatching {
+                            ctx.startActivity(
+                                Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), tr("اشتراک‌گذاری نتیجه"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    },
+                    clearHistory = { state.clearSpeedHistory() },
+                    closeTip = { state.markTip("test") },
+                ),
             )
             KTab.SETTINGS -> SettingsContent(
                 SettingsUi(state.dns, state.autoConnect, state.sounds, LangState.lang, state.excluded.size, appVersion(ctx)),

@@ -43,13 +43,17 @@ abstract class ShotsBase {
 
     protected val out = File(System.getProperty("user.dir") ?: ".", "build/shots").apply { mkdirs() }
 
-    protected fun shot(name: String, theme: String = "kanki", content: @Composable () -> Unit) {
+    protected fun shotEn(name: String, theme: String, content: @Composable () -> Unit) = shot(name, theme, content, "en")
+
+    protected fun shot(name: String, theme: String = "kanki", content: @Composable () -> Unit) = shot(name, theme, content, "fa")
+
+    private fun shot(name: String, theme: String, content: @Composable () -> Unit, lang: String) {
         ThemeState.set(theme)
-        LangState.lang = "fa"
+        LangState.lang = lang
         rule.mainClock.autoAdvance = false
         rule.setContent {
             CompositionLocalProvider(
-                LocalLayoutDirection provides LayoutDirection.Rtl,
+                LocalLayoutDirection provides if (lang == "en") LayoutDirection.Ltr else LayoutDirection.Rtl,
                 LocalTextStyle provides TextStyle(fontFamily = Vazir, fontWeight = FontWeight.Bold, color = K.Text),
             ) {
                 ThemeState.animate() // در عکس‌ها تم بلافاصله و بدون درنگ کامل می‌شود
@@ -188,9 +192,32 @@ abstract class ShotsBase {
     }
     protected fun pgSpeed(): @Composable () -> Unit = {
         Frame(KTab.TEST) {
-            SpeedContent(SpeedUi(phase = "done", down = 48.6, up = 12.3, ping = 74, jitter = 6, loss = 0, udpTarget = "Cloudflare DNS", server = "Cloudflare", viaVpn = true, usedBytes = 96_000_000), null, {}, {})
+            SpeedContent(sampleSpeed(), section = "speed", history = sampleHistory())
         }
     }
+    protected fun sampleSpeed() = SpeedUi(
+        phase = "done", down = 20.5, up = 5.24, downPeak = 23.1, upPeak = 5.9, ping = 258.0, jitter = 10.4, loss = 0.0,
+        loadedDown = 271.0, loadedUp = 261.0, udpTarget = "Cloudflare DNS", server = "Cloudflare", colo = "LHR", ip = "185.12.34.56",
+        isp = "Example Hosting Ltd", where = "London، بریتانیا", viaVpn = true, vpnPlace = "بریتانیا", usedBytes = 46_000_000,
+        pingPts = listOf(255f, 262f, 249f, 271f, 258f, 252f, 266f, 259f, 254f, 263f),
+        downPts = listOf(0f, 1f, 3f, 6f, 12f, 15f, 17f, 18f, 18.5f, 19f, 19.4f, 20f, 21f, 22.5f, 21f, 20.6f, 23f),
+        upPts = listOf(0f, .8f, 1.6f, 2f, 1.2f, 2.1f, 2.2f, 2.5f, 3f, 4.6f, 5.2f, 5.3f, 5.1f, 5.4f),
+    )
+    protected fun sampleHistory() = listOf(
+        SpeedRecord(1_763_500_000_000, "vpn", "بریتانیا", 20.5, 5.24, 258.0, 10.4, 0.0, 271.0, 261.0, "Cloudflare"),
+        SpeedRecord(1_763_490_000_000, "direct", null, 38.2, 9.1, 41.0, 6.0, 0.0, 120.0, 90.0, "Irancell · Tehran"),
+    )
+    protected fun sampleNet() = NetUi(
+        done = true, step = 7, bypass = true,
+        info = NetCheck.Info("cell", "Irancell", true, true, false, listOf("10.0.0.1"), 1500, false, 30000, 8000, null),
+        meta = SpeedEngine.Meta("5.120.10.20", "Iran Cell Service and Communication Company", 44244, "Tehran", "IR", ""),
+        timing = NetCheck.Timing(42, 38, 81, 47, "104.16.1.1", "TLSv1.3"),
+        targets = NetCheck.TARGETS.mapIndexed { i, t -> NetCheck.TargetResult(t, if (i == 2) null else listOf(48L, 92L, 0L, 12L, 15L)[i], 3) },
+        udp = listOf(UdpRow("Cloudflare DNS · 1.1.1.1", 52, 4, 0.0), UdpRow("Google DNS · 8.8.8.8", 61, 9, 4.0), UdpRow("Germany · KANKI MIX", 88, 5, 0.0)),
+        sites = NetCheck.SITES.mapIndexed { i, s -> NetCheck.SiteResult(s, listOf("ok", "dns", "tls", "tls", "tcp", "dns", "ok", "cert", "ok", "ok")[i], if (i in listOf(0, 6, 8, 9)) 180L else null) },
+        speed = SpeedUi(phase = "done", down = 38.2, up = 9.1, downPeak = 44.0, upPeak = 10.2, ping = 41.0, jitter = 6.0, loss = 0.0, loadedDown = 120.0, loadedUp = 90.0, server = "Irancell · Tehran",
+            downPts = listOf(0f, 8f, 20f, 31f, 36f, 39f, 40f, 38f, 41f, 42f), upPts = listOf(0f, 3f, 6f, 8f, 9f, 9.4f, 9.1f)),
+    )
     protected fun pgSettings(): @Composable () -> Unit = {
         Frame(KTab.SETTINGS) { SettingsContent(SettingsUi("", true, true, "fa", 2, "1.18.1"), null, SettingsActions(), {}) }
     }
@@ -508,3 +535,25 @@ class Shots : ShotsBase() {
     @Test fun n09() = shot("cyber-09-intro", "cyber", pgIntro())
 
 }
+
+/** تب تست سرعت روی صفحه‌ی بلند (تا همه‌ی کارت‌ها در یک عکس دیده شوند) */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w393dp-h2400dp-xxhdpi")
+class ShotsSpeedLong : ShotsBase() {
+    @Test fun s01() = shot("speed-long-kanki-1-speed", "kanki", pgSpeed())
+    @Test fun s02() = shot("speed-long-kanki-2-net", "kanki") { Frame(KTab.TEST) { SpeedContent(SpeedUi(), net = sampleNet(), section = "net") } }
+    @Test fun s03() = shot("speed-long-malt-2-net", "malt") { Frame(KTab.TEST) { SpeedContent(SpeedUi(), net = sampleNet(), section = "net") } }
+    @Test fun s04() = shot("speed-long-kanki-3-running", "kanki") {
+        Frame(KTab.TEST) { SpeedContent(sampleSpeed().copy(running = true, phase = "up", up = null, upPeak = null, loadedUp = null, live = 3.4), section = "speed") }
+    }
+    @Test fun s05() = shot("speed-long-kanki-4-net-running", "kanki") {
+        Frame(KTab.TEST) { SpeedContent(SpeedUi(), net = NetUi(running = true, step = 3, info = sampleNet().info, meta = sampleNet().meta, timing = sampleNet().timing), section = "net") }
+    }
+    @Test fun s06() = shot("speed-long-kanki-5-empty", "kanki") { Frame(KTab.TEST) { SpeedContent(SpeedUi(), section = "speed") } }
+    @Test fun s07() {
+        LangState.lang = "en"
+        try { shotEn("speed-long-cyber-6-net-en", "cyber") { Frame(KTab.TEST) { SpeedContent(SpeedUi(), net = sampleNet(), section = "net") } } } finally { LangState.lang = "fa" }
+    }
+}
+
