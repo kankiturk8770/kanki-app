@@ -68,11 +68,17 @@ object SpeedEngine {
         else -> "${s.base}/upload?nocache=${nocache()}"
     }
 
-    /** «cfRequestDuration;dur=1.23» → ۱.۲۳ (زمان کار خود سرور، از پینگ کم می‌شود) */
+    /**
+     * زمان کار خود سرور Cloudflare از هدر server-timing (مثل کتابخانه‌ی خود Cloudflare): اول cfRequestDuration،
+     * وگرنه جمع cfSpeedEdge و cfSpeedWorker. هدرهای دیگر (cfL4) حساب نمی‌شوند.
+     */
     fun serverTime(header: String?): Double {
         if (header.isNullOrBlank()) return 0.0
-        val m = Regex("""dur=([0-9.]+)""").find(header) ?: return 0.0
-        return m.groupValues[1].toDoubleOrNull()?.takeIf { it in 0.0..5000.0 } ?: 0.0
+        Regex("""(?:^|,\s*)cfReq(?:uest)?Dur(?:ation)?;\s*dur=([0-9.]+)""", RegexOption.IGNORE_CASE).find(header)
+            ?.groupValues?.get(1)?.toDoubleOrNull()?.takeIf { it > .01 && it < 5000 }?.let { return it }
+        val sum = Regex("""(?:^|,\s*)cfSpeed[a-zA-Z]*;\s*dur=([0-9.]+)""", RegexOption.IGNORE_CASE).findAll(header)
+            .sumOf { it.groupValues[1].toDoubleOrNull() ?: 0.0 }
+        return if (sum > .01 && sum < 5000) sum else 0.0
     }
 
     /** یک رفت‌وبرگشت HTTP به میلی‌ثانیه (اتصال بعد از بار اول دوباره استفاده می‌شود) */
@@ -81,22 +87,30 @@ object SpeedEngine {
         val c = open(url, timeout, net)
         val code = c.responseCode
         c.inputStream.use { it.readBytes() }
-        val ms = (System.nanoTime() - t0) / 1e6 - serverTime(c.getHeaderField("server-timing"))
-        if (code !in 200..299) null else ms.coerceAtLeast(.5)
+        val raw = (System.nanoTime() - t0) / 1e6
+        val st = serverTime(c.headerFields.entries.filter { it.key.equals("server-timing", true) }.flatMap { it.value }.joinToString(", "))
+        // زمان سرور فقط وقتی کم می‌شود که از کل کمتر باشد (ساعت‌ها دقیق نیستند)
+        if (code !in 200..299) null else (if (st < raw * .9) raw - st else raw).coerceAtLeast(.5)
     }.getOrNull()
 
     /** IP، شرکت اینترنت و شهر (کوچک: چند صد بایت) */
     fun meta(net: Network? = null): Meta? = runCatching {
         val c = open("https://speed.cloudflare.com/meta", 6000, net)
+        // بی Referer جواب ۴۰۳ است (همان کاری که صفحه‌ی خود speed.cloudflare.com می‌کند)
+        c.setRequestProperty("Referer", "https://speed.cloudflare.com/")
         if (c.responseCode !in 200..299) return null
         val o = JSONObject(c.inputStream.bufferedReader().use { it.readText().take(8192) })
+        // colo یا یک شیء است ({iata, city, cca2}) یا (قدیمی) فقط کد
+        val colo = o.optJSONObject("colo")?.let { co ->
+            listOf(co.optString("iata").take(8), co.optString("city").take(40)).filter { it.isNotBlank() }.joinToString(" · ")
+        } ?: o.optString("colo").take(8)
         Meta(
             ip = o.optString("clientIp").take(64),
             isp = o.optString("asOrganization").take(80),
             asn = o.optInt("asn").takeIf { it > 0 },
             city = o.optString("city").take(60),
             country = o.optString("country").take(4).uppercase(),
-            colo = o.optString("colo").take(8).uppercase(),
+            colo = colo,
         ).takeIf { it.ip.isNotBlank() }
     }.getOrNull()
 

@@ -43,6 +43,8 @@ class SpeedTest {
         assertEquals(1.25, SpeedEngine.serverTime("cfRequestDuration;dur=1.25"), 1e-9)
         assertEquals(0.0, SpeedEngine.serverTime(null), 1e-9)
         assertEquals(0.0, SpeedEngine.serverTime("dur=abc"), 1e-9)
+        assertEquals(29.0, SpeedEngine.serverTime("cfSpeedEdge;dur=3, cfSpeedWorker;dur=26"), 1e-9)
+        assertEquals(0.0, SpeedEngine.serverTime("cfL4;desc=\"?proto=TCP&rtt=9600\""), 1e-9)
         assertEquals(48, SpeedEngine.downsample((1..500).map { it.toDouble() }).size)
         assertEquals(1.0, SpeedEngine.jitter(listOf(10.0, 11.0, 10.0)), 1e-9)
     }
@@ -78,5 +80,28 @@ class SpeedTest {
         assertTrue(netVerdict(udpBlocked).any { it.second.contains("UDP") })
         val fine = NetUi(done = true, targets = t.map { NetCheck.TargetResult(it, 20, 1) })
         assertEquals(listOf(0 to "اینترنت گوشی سالم است"), netVerdict(fine))
+    }
+}
+
+/** با شبکه‌ی واقعی (فقط KANKI_LIVE=1): meta، پینگ و یک دانلود/آپلود کوتاه با Cloudflare */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [34])
+class SpeedLiveTest {
+    @Test fun live() {
+        if (System.getenv("KANKI_LIVE") != "1") return
+        val m = SpeedEngine.meta()
+        println("META ip=${m?.ip} isp=${m?.isp} asn=${m?.asn} city=${m?.city} cc=${m?.country} colo=${m?.colo}")
+        val s = SpeedEngine.CLOUDFLARE
+        val l = SpeedEngine.latency(s, 8)
+        println("LAT ping=${l?.ping} jitter=${l?.jitter} n=${l?.samples?.size}")
+        val d = SpeedEngine.download(s, 4.0, 4) {}
+        println("DOWN ${d.mbps} peak=${d.peak} bytes=${d.bytes} pts=${d.points.size} loaded=${d.loaded}")
+        val u = SpeedEngine.upload(s, 4.0, 3) {}
+        println("UP ${u.mbps} peak=${u.peak} bytes=${u.bytes} loaded=${u.loaded}")
+        val ok = SpeedEngine.ooklaServers(5)
+        println("OOKLA ${ok.map { it.base }}")
+        println("TIMING ${NetCheck.timing(null)}")
+        println("SITE ${NetCheck.site(null, NetCheck.Site("Google", "www.google.com"))}")
+        println("PING ${NetCheck.tcpPing(null, NetCheck.TARGETS[1], 3)}")
     }
 }
