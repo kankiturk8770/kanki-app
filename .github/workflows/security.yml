@@ -71,5 +71,5 @@ jobs:
           curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v$v/gitleaks_${v}_linux_x64.tar.gz"
           echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  gl.tgz" | sha256sum -c -
           tar xzf gl.tgz gitleaks
-          # فقط تاریخچه‌ی همین برنچ (HEAD)؛ یافته‌ی برنچ‌های قدیمی در CLAUDE.md › کارهای باز
-          ./gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="HEAD" .
+          # کل تاریخچه؛ فقط یافته‌ی شناخته‌شده‌ی قدیمی در .gitleaksignore کنار است (CLAUDE.md › کارهای باز)
+          ./gitleaks git --no-banner --redact --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
