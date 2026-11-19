@@ -27,6 +27,8 @@ object Pinger {
 
     /** زمان‌های پاسخ ICMP (میلی‌ثانیه) */
     private fun icmpTimes(host: String, count: Int): List<Double> = runCatching {
+        // آدرس از پنل می‌آید؛ چیزی که با «-» شروع شود را ping گزینه می‌خواند
+        if (host.isEmpty() || host.startsWith("-") || host.any { it.isWhitespace() }) return@runCatching emptyList<Double>()
         val args = mutableListOf(pingBin(), "-c", count.toString(), "-W", "2")
         if (count > 1) { args.add("-i"); args.add("0.3") }
         args.add(host)

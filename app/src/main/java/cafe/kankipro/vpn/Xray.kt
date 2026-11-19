@@ -203,7 +203,7 @@ object XrayCfg {
     /** کل کانفیگ Xray: یک ورودی SOCKS محلی و یک خروجی به سرور */
     fun config(link: String, serverIp: String, socksPort: Int, auth: SocksAuth): String {
         val out = outbound(link, serverIp).put("tag", "proxy")
-        val socks = JSONObject().put("tag", "socks").put("listen", "127.0.0.1").put("port", socksPort).put("protocol", "socks")
+        val socks = JSONObject().put("tag", "socks").put("listen", auth.host).put("port", socksPort).put("protocol", "socks")
             .put("settings", auth.xraySettings())
             .put("sniffing", JSONObject().put("enabled", false))
         return JSONObject()
@@ -218,7 +218,7 @@ object XrayCfg {
      * هسته بیرون از VPN است (خود برنامه از VPN مستثناست)، پس اتصال‌هایش دور خودش نمی‌چرخد.
      */
     fun directConfig(socksPort: Int, auth: SocksAuth): String {
-        val socks = JSONObject().put("tag", "socks").put("listen", "127.0.0.1").put("port", socksPort).put("protocol", "socks")
+        val socks = JSONObject().put("tag", "socks").put("listen", auth.host).put("port", socksPort).put("protocol", "socks")
             .put("settings", auth.xraySettings())
             .put("sniffing", JSONObject().put("enabled", false))
         val direct = JSONObject().put("tag", "direct").put("protocol", "freedom").put("settings", JSONObject().put("domainStrategy", "AsIs"))
@@ -236,7 +236,10 @@ object XrayCfg {
  * گذاشته شده یا در حالت «فقط برنامه‌های انتخابی» نباید از VPN رد شود) و آدرس واقعی سرور VPN را بفهمد. حالا فقط هسته‌ی
  * tun2socks خود برنامه رمز را دارد. رمز فقط در فایل‌های خصوصی برنامه (filesDir) نوشته می‌شود و هر اتصال تازه است.
  */
-class SocksAuth(val user: String, val pass: String) {
+class SocksAuth(val user: String, val pass: String, val host: String = "127.0.0.1") {
+    /** یک پورت آزاد روی همین آدرس (هسته کمی بعد همان را می‌گیرد) */
+    fun freePort(): Int = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName(host)).use { it.localPort }
+
     fun xraySettings(): JSONObject = JSONObject()
         .put("auth", "password")
         .put("accounts", JSONArray().put(JSONObject().put("user", user).put("pass", pass)))
@@ -245,7 +248,15 @@ class SocksAuth(val user: String, val pass: String) {
     companion object {
         private val rnd = java.security.SecureRandom()
         private fun hex(n: Int) = ByteArray(n).also { rnd.nextBytes(it) }.joinToString("") { "%02x".format(it) }
-        fun random() = SocksAuth("k" + hex(8), hex(24))
+        /**
+         * ۱.۳۷ (بررسی امنیتی): رمز SOCKS فقط TCP را می‌بندد؛ Xray اجازه‌ی UDP را با IP فرستنده می‌دهد و همه‌ی برنامه‌های گوشی از
+         * 127.0.0.1 می‌آیند. پس پراکسی روی یک آدرس تصادفی 127.x.y.z (حدود ۱۶ میلیون حالت × پورت تصادفی) گوش می‌دهد که برنامه‌ی
+         * دیگری نه آن را می‌داند و نه با اسکن 127.0.0.1 پیدایش می‌کند (هم جلوی رد شدن UDP، هم جلوی گرفتن زودتر پورت).
+         */
+        fun random(): SocksAuth {
+            fun b() = 1 + rnd.nextInt(254)
+            return SocksAuth("k" + hex(8), hex(24), "127.${b()}.${b()}.${b()}")
+        }
     }
 }
 

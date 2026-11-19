@@ -65,7 +65,7 @@ type Account struct {
 }
 
 var (
-	fullRe = regexp.MustCompile(`(https://[^/\s]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})`)
+	fullRe = regexp.MustCompile(`(https://[^/\s@]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})`)
 	codeRe = regexp.MustCompile(`\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}`)
 )
 
@@ -343,12 +343,30 @@ func (c *Client) Load(ctx context.Context, base, code string) (*Account, error) 
 		return nil, err
 	}
 	a.Base, a.Code = base, code
-	if a.SubBase != "" {
-		c.mu.Lock()
-		c.subBase = a.SubBase
-		c.mu.Unlock()
-	}
+	c.learn(a, host)
 	return a, nil
+}
+
+// learn keeps a page's sub_base only when the page came from a Kanki host (1.3.2 security review):
+// a page from any other panel could otherwise add a host that later receives a Kanki account's code.
+func (c *Client) learn(a *Account, host string) {
+	if a.SubBase == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if host == FallbackHost || host == IranHost || (c.subBase != "" && host == c.subBase) {
+		c.subBase = a.SubBase
+		return
+	}
+	a.SubBase = ""
+}
+
+// Reset forgets the hosts learned from an earlier account (a new subscription or a logout).
+func (c *Client) Reset() {
+	c.mu.Lock()
+	c.subBase, c.preferred = "", ""
+	c.mu.Unlock()
 }
 
 // Config downloads the config text of one server, trying every host.

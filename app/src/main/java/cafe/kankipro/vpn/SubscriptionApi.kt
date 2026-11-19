@@ -96,11 +96,20 @@ data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = nu
 data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
-    /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود (سرور ایران) */
-    const val DEFAULT_HOST = "https://sub.kanki.pro:2053"
-
     /** آدرس اصلی پنل (خارج) */
     const val FALLBACK_HOST = "https://fi.kankipro.cafe:2053"
+
+    /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
+    const val DEFAULT_HOST = FALLBACK_HOST
+
+    /**
+     * آدرس قدیمی (sub.kanki.pro، در ایران فیلتر و دیگر استفاده نمی‌شود؛ مثل نسخه‌ی ویندوز). ۱.۳۷ (بررسی امنیتی): کد اشتراک دیگر به آن
+     * فرستاده نمی‌شود؛ حساب‌هایی که با آن ذخیره شده‌اند همان آدرس اصلی را می‌گیرند.
+     */
+    const val OLD_HOST = "https://sub.kanki.pro:2053"
+
+    /** آدرس قدیمی ← آدرس اصلی؛ بقیه همان */
+    fun canon(base: String): String = base.trimEnd('/').let { if (it == OLD_HOST) FALLBACK_HOST else it }
 
     /** لینک ساب روی سرور ایران (پنل › تنظیمات › لینک ساب روی سرور ایران): وقتی دامنه‌های خارج فیلترند */
     const val IRAN_HOST = "https://s1s.polimax.shop:2053"
@@ -109,7 +118,7 @@ object SubscriptionApi {
     @Volatile var panelSubBase: String? = null
 
     /** همه‌ی آدرس‌های اشتراک کانکی؛ هر کدام همان صفحه‌ی اشتراک و همان لینک کانفیگ‌ها را می‌دهد */
-    val KANKI_HOSTS: List<String> get() = (listOf(FALLBACK_HOST, IRAN_HOST) + listOfNotNull(panelSubBase) + DEFAULT_HOST).distinct()
+    val KANKI_HOSTS: List<String> get() = (listOf(FALLBACK_HOST, IRAN_HOST) + listOfNotNull(panelSubBase)).distinct()
 
     /** آدرسی که آخرین بار زودتر از همه جواب داد (اول همان امتحان می‌شود) */
     @Volatile var preferred: String? = null
@@ -119,14 +128,15 @@ object SubscriptionApi {
      * پنل‌های دیگر فقط خودشان.
      */
     fun hosts(base: String): List<String> {
-        val b = base.trimEnd('/')
+        val b = canon(base)
         if (b !in KANKI_HOSTS) return listOf(b)
         val p = preferred?.takeIf { it in KANKI_HOSTS }
         return (listOfNotNull(p) + KANKI_HOSTS).distinct()
     }
 
     /** همان آدرس روی میزبان‌های جایگزین (برای لینک کانفیگ‌ها وقتی میزبان اصلی در دسترس نیست) */
-    fun alternates(url: String): List<String> {
+    fun alternates(url0: String): List<String> {
+        val url = if (url0.startsWith("$OLD_HOST/")) FALLBACK_HOST + url0.removePrefix(OLD_HOST) else url0
         val h = KANKI_HOSTS.firstOrNull { url.startsWith("$it/") } ?: return listOf(url)
         val path = url.removePrefix(h)
         return (listOf(url) + hosts(h).map { it + path }).distinct()
@@ -143,6 +153,8 @@ object SubscriptionApi {
     fun race(urls: List<String>): Pair<String, String> {
         if (urls.size == 1) return urls[0] to fetch(urls[0])
         val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
+        // ۱.۳۷: وقتی یکی جواب داد، آدرس‌هایی که هنوز شروع نکرده‌اند دیگر کد اشتراک را نمی‌گیرند
+        val over = java.util.concurrent.atomic.AtomicBoolean(false)
         val threads = urls.mapIndexed { i, u ->
             Thread {
                 // آدرس‌هایی که دیر رسیدند بعد از برنده interrupt می‌شوند: put در رشته‌ی interrupt‌شده
@@ -150,7 +162,8 @@ object SubscriptionApi {
                 // offer هیچ‌وقت منتظر نمی‌ماند و خطا نمی‌دهد؛ هر خطای دیگری هم همین‌جا تمام می‌شود.
                 runCatching {
                     if (i > 0) runCatching { Thread.sleep(300) }
-                    done.offer(runCatching { u to fetch(u) })
+                    // interrupt داخل sleep بالا گرفته می‌شود، پس پرچم over را همین‌جا دوباره ببین
+                    if (!over.get() && !Thread.currentThread().isInterrupted) done.offer(runCatching { u to fetch(u) })
                 }
             }.apply { isDaemon = true; start() }
         }
@@ -158,6 +171,7 @@ object SubscriptionApi {
         repeat(urls.size) {
             val r = done.poll(40, java.util.concurrent.TimeUnit.SECONDS) ?: return@repeat
             r.onSuccess { ok ->
+                over.set(true)
                 threads.forEach { it.interrupt() }
                 KANKI_HOSTS.firstOrNull { ok.first.startsWith("$it/") }?.let { preferred = it }
                 return ok
@@ -172,7 +186,8 @@ object SubscriptionApi {
     /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند */
     fun normalize(input: String): Pair<String, String>? {
         val s = input.trim()
-        val full = Regex("""(https://[^/\s]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
+        // ۱.۳۷: «@» جزو اسم میزبان نیست؛ لینکی مثل https://fi.kankipro.cafe:2053@دیگری/... کد را به همان آدرس کانکیِ دیده‌شده می‌برد
+        val full = Regex("""(https://[^/\s@]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
         if (full != null) return full.groupValues[1] to full.groupValues[2]
         val code = codeRegex.find(s) ?: return null
         return DEFAULT_HOST to code.value
@@ -307,8 +322,10 @@ object SubscriptionApi {
             mtun = dataJson(html)?.optJSONArray("nodes")?.let { parseMtun(it) } ?: emptyList(),
             kping = dataJson(html)?.optJSONArray("kping")?.let { parseKping(it) } ?: emptyList(),
         ).also {
-            dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
-                ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') }
+            // ۱.۳۷ (بررسی امنیتی): فقط صفحه‌ای که از خود آدرس‌های کانکی آمده می‌تواند آدرس تازه‌ی کانکی اضافه کند؛ پنل دیگری
+            // (کاربر می‌تواند با لینک هر پنلی وارد شود) نباید آدرسی بگذارد که بعداً کد اشتراک کانکی به آن برود
+            if (canon(base) in KANKI_HOSTS) dataJson(html)?.optString("sub_base")?.trim()?.trimEnd('/')
+                ?.takeIf { it.startsWith("https://") && it.length < 120 && !it.contains(' ') && !it.contains('@') && it.count { c -> c == '/' } == 2 }
                 ?.let { b -> panelSubBase = b }
         }
     }

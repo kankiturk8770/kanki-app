@@ -246,8 +246,8 @@ class KankiHyService : VpnService() {
         val addrs = InetAddress.getAllByName(uri.host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
         val server = if (ip is Inet4Address) "${ip.hostAddress}:${uri.port}" else "[${ip.hostAddress}]:${uri.port}"
-        val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         val auth = SocksAuth.random()
+        val socksPort = auth.freePort()
 
         fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         val hyCfg = buildString {
@@ -256,7 +256,7 @@ class KankiHyService : VpnService() {
             append("tls:\n  sni: ").append(q(uri.sni)).append("\n  insecure: ").append(uri.insecure).append('\n')
             uri.obfsPassword?.let { append("obfs:\n  type: salamander\n  salamander:\n    password: ").append(q(it)).append('\n') }
             append("fastOpen: true\n")
-            append("socks5:\n  listen: ").append(q("127.0.0.1:$socksPort"))
+            append("socks5:\n  listen: ").append(q("${auth.host}:$socksPort"))
                 .append("\n  username: ").append(q(auth.user)).append("\n  password: ").append(q(auth.pass))
                 .append("\n  disableUDP: false\n")
         }
@@ -300,7 +300,7 @@ class KankiHyService : VpnService() {
         while (System.currentTimeMillis() < end) {
             if (cancelled(my)) error("hysteria2: cancelled")
             if (!p.isAlive) error("hysteria2: " + lastLog())
-            ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress("127.0.0.1", socksPort), 300) }; true }.getOrDefault(false)
+            ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress(auth.host, socksPort), 300) }; true }.getOrDefault(false)
             if (ready) break
             Thread.sleep(250)
         }
@@ -319,7 +319,7 @@ class KankiHyService : VpnService() {
 
     /** دروازه‌ی «فقط بازی» روی کارت شبکه‌ی fd: بقیه‌ی برنامه‌ها بسته، با جواب فوری «اینترنت نیست» */
     private fun gameGate(fd: ParcelFileDescriptor, apps: List<String>): AppGate =
-        AppGate(this, fd, AppGate.uidsOf(this, apps) + android.os.Process.myUid(), reject = true)
+        AppGate(this, fd, AppGate.uidsOf(this, apps) + android.os.Process.myUid(), reject = true, dnsServers = tunDns)
 
     /** برنامه‌هایی که فقط آن‌ها از VPN رد می‌شوند (حالت «فقط بازی‌ها»)؛ خالی = همه */
     private fun included(lines: List<String>): List<String> =
@@ -340,6 +340,7 @@ class KankiHyService : VpnService() {
         else b.addRoute("0.0.0.0", 0)
         // IPv6 بدون آدرس: هیچ برنامه‌ای از راه IPv6 بیرون از تونل نمی‌رود و فوری به IPv4 برمی‌گردد
         if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
+        tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         // اندروید اجازه نمی‌دهد هر دو فهرست با هم باشند: «فقط این برنامه‌ها» بر «به‌جز این‌ها» مقدم است.
         // در حالت دروازه همه‌ی برنامه‌ها داخل VPN می‌مانند تا AppGate بقیه را ببندد.
@@ -359,7 +360,7 @@ class KankiHyService : VpnService() {
             tun = fd
             if (gateMode) {
                 // خود برنامه (پینگ و بررسی سلامت تونل) هم مجاز است
-                val g = AppGate(this, fd, AppGate.uidsOf(this, included) + android.os.Process.myUid())
+                val g = AppGate(this, fd, AppGate.uidsOf(this, included) + android.os.Process.myUid(), dnsServers = dns)
                 gate = g
                 if (!TProxyService.TProxyStartService(hevFile.path, g.innerFd)) error("tun2socks did not start")
                 g.start()
@@ -372,13 +373,16 @@ class KankiHyService : VpnService() {
 
     /** تنظیمات hev-socks5-tunnel: MTU بزرگ کارت داخلی (سربار کمتر، سرعت بیشتر) */
     private fun writeHev(mtu: Int, ipv4: String, socksPort: Int, auth: SocksAuth): File {
-        val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: $ipv4\nsocks5:\n  port: $socksPort\n  address: 127.0.0.1\n  udp: 'udp'\n" +
+        val hevCfg = "tunnel:\n  mtu: $mtu\n  ipv4: $ipv4\nsocks5:\n  port: $socksPort\n  address: ${auth.host}\n  udp: 'udp'\n" +
             "  username: '${auth.user}'\n  password: '${auth.pass}'\n" +
             "misc:\n  task-stack-size: 81920\n"
         return File(filesDir, "hev.yaml").apply { writeText(hevCfg) }
     }
 
     @Volatile private var gate: AppGate? = null
+
+    /** سرورهای DNS آخرین کارت شبکه‌ی ساخته‌شده (دروازه فقط DNS به همین‌ها را بی‌پرسش رد می‌کند) */
+    @Volatile private var tunDns: List<String> = emptyList()
 
     @Volatile private var dnsFwd: KankiDns.Forwarder? = null
 
@@ -405,10 +409,10 @@ class KankiHyService : VpnService() {
         HyEngine.dnsBase = HyEngine.deviceStats()
         if (gateMode) {
             // هسته‌ی Xray فقط به‌عنوان خروجی مستقیم (بدون سرور): SOCKS محلی ← اینترنت خود گوشی
-            val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
             val auth = SocksAuth.random()
+            val socksPort = auth.freePort()
             val cfgFile = File(filesDir, "xray-direct.json").apply { writeText(XrayCfg.directConfig(socksPort, auth)) }
-            launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", socksPort, my, 10_000)
+            launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", auth.host, socksPort, my, 10_000)
             val fd = synchronized(this) {
                 if (cancelled(my)) error("dns: cancelled")
                 KankiDns.buildGateTun(this, TUN_MTU).also { tun = it }
@@ -419,7 +423,7 @@ class KankiHyService : VpnService() {
             val hevFile = writeHev(TUN_MTU, KankiDns.GATE_IP, socksPort, auth)
             synchronized(this) {
                 if (cancelled(my)) error("dns: cancelled")
-                val g = AppGate(this, fd, AppGate.uidsOf(this, included), f)
+                val g = AppGate(this, fd, AppGate.uidsOf(this, included), f, dnsServers = listOf(KankiDns.FAKE))
                 gate = g
                 if (!TProxyService.TProxyStartService(hevFile.path, g.innerFd)) error("tun2socks did not start")
                 g.start()
@@ -464,7 +468,7 @@ class KankiHyService : VpnService() {
      * یک هسته (Xray) را اجرا می‌کند، خروجی‌اش را برای گزارش خطا نگه می‌دارد، اگر بعداً مرد تونل را می‌بندد
      * و صبر می‌کند تا پراکسی SOCKS محلی‌اش باز شود.
      */
-    private fun launchCore(cmd: List<String>, tag: String, socksPort: Int, my: Int, waitMs: Long): Process {
+    private fun launchCore(cmd: List<String>, tag: String, socksHost: String, socksPort: Int, my: Int, waitMs: Long): Process {
         val pb = ProcessBuilder(cmd).directory(filesDir).redirectErrorStream(true)
         pb.environment()["HOME"] = filesDir.path
         pb.environment()["XRAY_LOCATION_ASSET"] = filesDir.path
@@ -496,7 +500,7 @@ class KankiHyService : VpnService() {
         while (System.currentTimeMillis() < end) {
             if (cancelled(my)) error("$tag: cancelled")
             if (!p.isAlive) error("$tag: " + lastLog())
-            val ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress("127.0.0.1", socksPort), 300) }; true }.getOrDefault(false)
+            val ready = runCatching { Socket().use { s -> s.connect(InetSocketAddress(socksHost, socksPort), 300) }; true }.getOrDefault(false)
             if (ready) return p
             Thread.sleep(200)
         }
@@ -516,10 +520,10 @@ class KankiHyService : VpnService() {
         val (host, _) = XrayCfg.endpoint(link)
         val addrs = InetAddress.getAllByName(host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
-        val socksPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         val auth = SocksAuth.random()
+        val socksPort = auth.freePort()
         val cfgFile = File(filesDir, "xray.json").apply { writeText(XrayCfg.config(link, ip.hostAddress ?: host, socksPort, auth)) }
-        launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", socksPort, my, 10_000)
+        launchCore(listOf(bin.path, "run", "-c", cfgFile.path), "xray", auth.host, socksPort, my, 10_000)
         tunUp("Kanki · Xray", ip, socksPort, auth, mtu, dns, excluded, included(lines), blockOthers(lines), my)
     }
 
@@ -683,6 +687,7 @@ class KankiHyService : VpnService() {
         else b.addRoute("0.0.0.0", 0)
         // IPv6 بی آدرس: هیچ برنامه‌ای از IPv6 بیرون نمی‌رود و فوری به IPv4 برمی‌گردد
         runCatching { b.addRoute("::", 0) }
+        tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
         val fd = synchronized(this) {
@@ -814,6 +819,7 @@ class KankiHyService : VpnService() {
             // IPv6 بدون آدرس: هیچ برنامه‌ای از راه IPv6 بیرون از تونل نمی‌رود و فوری به IPv4 برمی‌گردد
             runCatching { b.addRoute("::", 0) }
         }
+        tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         if (!gateMode) {
             if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
@@ -900,6 +906,7 @@ class KankiHyService : VpnService() {
         if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
         else b.addRoute("0.0.0.0", 0)
         if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
+        tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         // «فقط بازی»: همه‌ی برنامه‌ها (حتی مستثنی‌ها) داخل VPN می‌مانند تا دروازه بقیه را ببندد
         if (games == null) {

@@ -1,6 +1,8 @@
 name: ساخت اپ کانکی
 on:
   push:
+    # فقط برنچ‌ها؛ برچسبی به اسم main نباید مثل main منتشر کند
+    branches: ["**"]
   workflow_dispatch:
 
 # نوشتن مخزن فقط برای گذاشتن فایل نصبی در Releases؛ کلید امضا فقط از Secrets می‌آید
@@ -13,6 +15,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5
         with:
@@ -104,6 +108,8 @@ jobs:
           echo "NDK: $NDK"
           rm -rf /tmp/hev && mkdir -p /tmp/hev && cd /tmp/hev
           git clone --recursive --depth 1 --branch 2.17.1 https://github.com/heiher/hev-socks5-tunnel jni
+          # ۱.۳۷: برچسب گیت عوض‌شدنی است؛ فقط همان کامیت بررسی‌شده‌ی 2.17.1 ساخته شود (زیرماژول‌ها هم با همین کامیت قفل‌اند)
+          [ "$(git -C jni rev-parse HEAD)" = "9a06bc6e7989da54e3d32ff701ef7a7ce4995d3a" ] || { echo "::error::hev-socks5-tunnel 2.17.1 commit changed"; exit 1; }
           printf '%s\n' \
             'APP_OPTIM := release' \
             'APP_PLATFORM := android-26' \
@@ -236,7 +242,7 @@ jobs:
       # فضای Releases جدا از سهمیه‌ی Artifacts حساب است و پر نمی‌شود.
       - name: انتشار فایل نصبی در Releases
         # روی برنچ کار گیت‌هاب گاهی ساختن Release را با 403 رد می‌کند (مثل ویندوز، ۲۰۲۶-۱۱-۰۹)؛ آن‌جا ساخت سبز بماند، روی main نه
-        continue-on-error: ${{ github.ref_name != 'main' }}
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -259,7 +265,7 @@ jobs:
       # فایل‌های نصبی main در پیوی تلگرام ادمین (ربات Kanki_github_bot)؛ از ایران دانلود از گیت‌هاب کامل نمی‌شود.
       # توکن ربات و آیدی عددی فقط در GitHub Secrets: TG_BOT_TOKEN و TG_CHAT_ID (اگر نباشند، این مرحله رد می‌شود)
       - name: فرستادن فایل نصبی به تلگرام
-        if: github.ref_name == 'main'
+        if: github.ref == 'refs/heads/main'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

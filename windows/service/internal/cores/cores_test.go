@@ -42,7 +42,7 @@ func TestParseHy2(t *testing.T) {
 		t.Fatalf("%+v", h)
 	}
 	var c map[string]any
-	if err := json.Unmarshal([]byte(h.Config("1.2.3.4:8443", 1080)), &c); err != nil || c["server"] != "1.2.3.4:8443" {
+	if err := json.Unmarshal([]byte(h.Config("1.2.3.4:8443", NewSocksAuth(), 1080)), &c); err != nil || c["server"] != "1.2.3.4:8443" {
 		t.Fatal(c, err)
 	}
 }
@@ -52,14 +52,14 @@ func TestVlessRealityConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := v.XrayConfig("203.0.113.9", 10808)
+	s := v.XrayConfig("203.0.113.9", NewSocksAuth(), 10808)
 	for _, want := range []string{`"address":"203.0.113.9"`, `"publicKey":"PUB"`, `"serverName":"www.google.com"`, `"flow":"xtls-rprx-vision"`, `"port":10808`, `"udp":true`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %s in %s", want, s)
 		}
 	}
 	v, _ = ParseVless("vless://id@cdn.example.com:443?type=ws&security=tls&path=%2Fws&host=h.example.com")
-	s = v.XrayConfig("1.1.1.1", 1)
+	s = v.XrayConfig("1.1.1.1", NewSocksAuth(), 1)
 	if !strings.Contains(s, `"wsSettings":{"host":"h.example.com","path":"/ws"}`) || !strings.Contains(s, `"serverName":"h.example.com"`) {
 		t.Fatal(s)
 	}
@@ -123,5 +123,26 @@ func TestWgPingAgainstRealServer(t *testing.T) {
 		if ms < 1 {
 			t.Fatal(ms)
 		}
+	}
+}
+
+// The local SOCKS proxy is never open: a password and a random loopback address (1.3.2 security review).
+func TestLocalSocksHasAuth(t *testing.T) {
+	sa := NewSocksAuth()
+	if !strings.HasPrefix(sa.Host, "127.") || sa.Host == "127.0.0.1" || len(sa.User) < 9 || len(sa.Pass) < 32 {
+		t.Fatalf("weak local socks auth: %+v", sa)
+	}
+	v, err := ParseVless("vless://11111111-2222-3333-4444-555555555555@example.com:443?security=tls#x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := v.XrayConfig("203.0.113.9", sa, 10808)
+	if strings.Contains(x, "noauth") || !strings.Contains(x, sa.Pass) || !strings.Contains(x, sa.Host) {
+		t.Fatalf("xray inbound not protected: %s", x)
+	}
+	h := &Hy2{Host: "example.com", Port: 443, Auth: "a"}
+	y := h.Config("1.2.3.4:443", sa, 1080)
+	if !strings.Contains(y, sa.Pass) || !strings.Contains(y, sa.Host+":1080") {
+		t.Fatalf("hysteria socks not protected: %s", y)
 	}
 }

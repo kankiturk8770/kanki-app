@@ -1970,7 +1970,9 @@ class AppState private constructor(context: Context) {
     /** خروج کامل: اشتراک و همه‌ی چیزهایی که از آن ذخیره شده (کانفیگ‌ها و کلیدها) از گوشی پاک می‌شود */
     suspend fun logout() {
         disconnect()
-        val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("last_usage").remove("ugeo").remove("uiso")
+        val e = prefs.edit().remove("base").remove("code").remove("node").remove("last_sync").remove("last_usage").remove("ugeo").remove("uiso").remove("sub_base")
+        // ۱.۳۷: آدرس‌هایی که از پنل این حساب آمده‌اند با خروج پاک می‌شوند (به حساب بعدی نمی‌رسند)
+        SubscriptionApi.panelSubBase = null; SubscriptionApi.preferred = null
         prefs.all.keys
             .filter { it.startsWith("cfg_") || it.startsWith("subhtml_") || it.startsWith("subhost_") || it.startsWith("ngeo_") || it.startsWith("niso_") || it.startsWith("ncity_") }
             .forEach { e.remove(it) }

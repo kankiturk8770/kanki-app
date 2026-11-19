@@ -214,6 +214,7 @@ func (m *Manager) SetSubscription(input string) (*sub.Account, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
+	m.sub.Reset() // hosts learned from an earlier account never receive this code
 	a, err := m.sub.Load(ctx, base, code)
 	if err != nil {
 		m.log.Printf("subscription: %v", err)
@@ -286,6 +287,7 @@ func (m *Manager) Logout() {
 	m.saved.LastServer = ""
 	m.save()
 	m.mu.Unlock()
+	m.sub.Reset()
 }
 
 func (m *Manager) Settings() state.Settings {

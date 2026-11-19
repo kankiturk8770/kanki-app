@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/amnezia-vpn/amneziawg-go/tun"
+
 	t2score "github.com/xjasonlyu/tun2socks/v2/core"
 	t2sdev "github.com/xjasonlyu/tun2socks/v2/core/device"
 	t2stun "github.com/xjasonlyu/tun2socks/v2/core/device/tun"
@@ -28,6 +29,7 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"kankivpn/internal/state"
 
 	"kanki-tunnel/mobile"
 	"mtuncore/mtun"
@@ -160,8 +162,8 @@ type programRun struct {
 	luid  winipcfg.LUID
 }
 
-func freePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+func freePort(host string) (int, error) {
+	l, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		return 0, err
 	}
@@ -170,7 +172,8 @@ func freePort() (int, error) {
 }
 
 func (e *Engine) upProgram(t core.Tunnel) (running, winipcfg.LUID, error) {
-	port, err := freePort()
+	sa := cores.NewSocksAuth()
+	port, err := freePort(sa.Host)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -182,7 +185,7 @@ func (e *Engine) upProgram(t core.Tunnel) (running, winipcfg.LUID, error) {
 			return nil, 0, err
 		}
 		// Xray reads its config from stdin: the user's keys never touch the disk
-		p, err = e.start("xray.exe", []string{"run", "-config", "stdin:"}, v.XrayConfig(t.Endpoint.Addr().String(), port), "")
+		p, err = e.start("xray.exe", []string{"run", "-config", "stdin:"}, v.XrayConfig(t.Endpoint.Addr().String(), sa, port), "")
 		if err != nil {
 			return nil, 0, err
 		}
@@ -191,13 +194,13 @@ func (e *Engine) upProgram(t core.Tunnel) (running, winipcfg.LUID, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		p, err = e.start("hysteria.exe", []string{"client", "-c"}, "", h.Config(t.Endpoint.String(), port))
+		p, err = e.start("hysteria.exe", []string{"client", "-c"}, "", h.Config(t.Endpoint.String(), sa, port))
 		if err != nil {
 			return nil, 0, err
 		}
 	}
 	// the program listens once it is up (Hysteria: once its server answered)
-	socks := fmt.Sprintf("127.0.0.1:%d", port)
+	socks := net.JoinHostPort(sa.Host, strconv.Itoa(port))
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		c, err := net.DialTimeout("tcp", socks, 300*time.Millisecond)
@@ -211,7 +214,7 @@ func (e *Engine) upProgram(t core.Tunnel) (running, winipcfg.LUID, error) {
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	px, err := socks5.New(socks, "", "")
+	px, err := socks5.New(socks, sa.User, sa.Pass)
 	if err != nil {
 		p.kill()
 		return nil, 0, err
@@ -259,11 +262,12 @@ func (e *Engine) PingProgram(ctx context.Context, proto, text string, ep netip.A
 	if err != nil {
 		return 0, err
 	}
-	port, err := freePort()
+	sa := cores.NewSocksAuth()
+	port, err := freePort(sa.Host)
 	if err != nil {
 		return 0, err
 	}
-	p, err := e.start("hysteria.exe", []string{"ping", "127.0.0.1:1", "-c"}, "", h.Config(ep.String(), port))
+	p, err := e.start("hysteria.exe", []string{"ping", "127.0.0.1:1", "-c"}, "", h.Config(ep.String(), sa, port))
 	if err != nil {
 		return 0, err
 	}
@@ -306,7 +310,7 @@ func (e *Engine) start(name string, args []string, stdin, file string) (*program
 	}
 	var cfgPath string
 	if file != "" {
-		dir := filepath.Join(os.Getenv("ProgramData"), "KankiVPN") // SYSTEM and Administrators only
+		dir := state.Dir() // SYSTEM and Administrators only (owner checked in state.makeDir)
 		f, err := os.CreateTemp(dir, "core-*.json")
 		if err != nil {
 			return nil, err

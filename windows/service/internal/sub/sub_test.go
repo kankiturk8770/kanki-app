@@ -113,6 +113,11 @@ func TestNormalize(t *testing.T) {
 	if _, _, err = Normalize("hello"); err == nil {
 		t.Fatal("accepted junk")
 	}
+	// a user part is never taken as the host: the code goes to the host the user sees
+	b, _, _ = Normalize("https://fi.kankipro.cafe:2053@evil.example/sub/kanki-12-abcd1234")
+	if b != "https://fi.kankipro.cafe:2053" {
+		t.Fatal("host with @:", b)
+	}
 }
 
 func TestLoadAndConfig(t *testing.T) {
@@ -221,5 +226,30 @@ func TestParseRealPanelPage(t *testing.T) {
 	}
 	if a.Status != "Active" || a.LimitGB != 10 || a.UsedGB != 2.5 || a.Expires != 1796550432 {
 		t.Errorf("status %q limit %v used %v expires %v", a.Status, a.LimitGB, a.UsedGB, a.Expires)
+	}
+}
+
+// A sub_base from a page that did not come from a Kanki host must never join the Kanki hosts
+// (it would receive the next account's code); Reset forgets learned hosts (1.3.2 security review).
+func TestSubBaseOnlyFromKankiHosts(t *testing.T) {
+	c := NewClient()
+	a := &Account{SubBase: "https://collector.example:8443"}
+	c.learn(a, "https://other-panel.example")
+	if a.SubBase != "" {
+		t.Fatalf("sub_base from another panel kept: %q", a.SubBase)
+	}
+	for _, h := range c.kankiHosts() {
+		if h == "https://collector.example:8443" {
+			t.Fatal("foreign sub_base became a Kanki host")
+		}
+	}
+	b := &Account{SubBase: "https://s9.example.com:2053"}
+	c.learn(b, FallbackHost)
+	if hs := c.kankiHosts(); len(hs) != 3 || hs[2] != "https://s9.example.com:2053" {
+		t.Fatalf("sub_base from the Kanki panel not learned: %v", hs)
+	}
+	c.Reset()
+	if hs := c.kankiHosts(); len(hs) != 2 {
+		t.Fatalf("Reset kept learned hosts: %v", hs)
 	}
 }
