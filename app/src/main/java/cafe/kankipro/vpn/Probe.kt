@@ -204,7 +204,8 @@ object Probe {
         if (!bin.exists()) return null
         val ip = resolve(net, u.host) ?: return null
         val server = if (ip is Inet4Address) "${ip.hostAddress}:${u.port}" else "[${ip.hostAddress}]:${u.port}"
-        val tag = "kanki-hyfd-" + java.lang.Long.toHexString(System.nanoTime())
+        // اسم تصادفی (حدس‌نزدنی) برای سوکت یونیکس؛ FdGate هم فقط سوکت پروسه‌های خود برنامه را می‌پذیرد
+        val tag = "kanki-hyfd-" + java.util.UUID.randomUUID().toString().replace("-", "")
         val fd = if (net != null) FdGate(tag, net).also { it.start() } else null
         val cfgFile = File(ctx.cacheDir, "$tag.yaml")
         fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -254,6 +255,8 @@ object Probe {
                     val c = runCatching { srv.accept() }.getOrNull() ?: break
                     runCatching {
                         c.use { sock ->
+                            // برنامه‌ی دیگری که به این سوکت وصل شود نباید بتواند سوکت خودش را به شبکه‌ی واقعی (بیرون از VPN) ببندد
+                            if (sock.peerCredentials.uid != android.os.Process.myUid()) return@use
                             sock.inputStream.read()
                             sock.ancillaryFileDescriptors?.forEach { f ->
                                 runCatching { net.bindSocket(f) }

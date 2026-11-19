@@ -1,0 +1,75 @@
+name: بررسی امنیتی
+# اسکنرهای رایگان روی هر push و هر هفته (۱.۳۵): مثل یک نفوذگر، بی اجرای چیزی روی سرور یا گوشی واقعی.
+#  - govulncheck: آسیب‌پذیری‌های شناخته‌شده‌ی Go در هسته‌های KANKI MIX، microtun، KPING و سرویس ویندوز (فقط آن‌هایی که کد واقعاً صدا می‌زند)
+#  - OSV: آسیب‌پذیری‌های شناخته‌شده‌ی کتابخانه‌های اندروید (درخت وابستگی Gradle، tools/osv_gradle.py)
+#  - mobsfscan: قاعده‌های امنیتی اندروید روی سورس کاتلین و مانیفست (پیکربندی .mobsf)
+#  - gitleaks: رمز یا کلید جاافتاده در کل تاریخچه‌ی git (پیکربندی .gitleaks.toml)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  push:
+    branches-ignore: [shots, shots-windows]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: kmix-core/go.mod
+          cache: false
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          fail=0
+          for d in kmix-core mtun-core kping-core; do
+            echo "== $d"; (cd "$d" && "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1
+          done
+          echo "== windows/service"; (cd windows/service && GOOS=windows "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1
+          exit $fail
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: mobsfscan
+        run: |
+          pip install -q mobsfscan==1.2.0
+          mobsfscan --config .mobsf app/src/main
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "8.13"
+      - name: کتابخانه‌های اندروید (OSV)
+        run: |
+          gradle :app:dependencies --configuration releaseRuntimeClasspath -q > deps.txt
+          python3 tools/osv_gradle.py < deps.txt
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          v=8.28.0
+          curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v$v/gitleaks_${v}_linux_x64.tar.gz"
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  gl.tgz" | sha256sum -c -
+          tar xzf gl.tgz gitleaks
+          # کل تاریخچه؛ فقط یافته‌ی شناخته‌شده‌ی قدیمی در .gitleaksignore کنار است (CLAUDE.md › کارهای باز)
+          ./gitleaks git --no-banner --redact --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .

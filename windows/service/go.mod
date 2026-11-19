@@ -2,6 +2,8 @@ module kankivpn
 
 go 1.26.3
 
+toolchain go1.26.11
+
 require (
 	github.com/Microsoft/go-winio v0.6.4
 	github.com/amnezia-vpn/amneziawg-go v0.2.20-0.20260724121833-457d920a1a7d

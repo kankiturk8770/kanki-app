@@ -1587,72 +1587,203 @@ class AppState private constructor(context: Context) {
     }
 
     // ---------------- تست سرعت (در محدوده‌ی خود برنامه، تا با عوض کردن تب قطع نشود)
-    var speed by mutableStateOf(SpeedUi())
+    var speed by mutableStateOf(SpeedUi(mode = prefs.getString("speed_mode", "quick") ?: "quick", pick = prefs.getString("speed_pick", "auto") ?: "auto"))
     /** سرعت لحظه‌ای جدا نگه داشته می‌شود چون از رشته‌ی پس‌زمینه بروز می‌شود */
     var speedLive by mutableStateOf(0.0)
+    /** بخش باز تب تست: speed یا net («اینترنت من») */
+    var speedSection by mutableStateOf("speed")
+    var netCheck by mutableStateOf(NetUi(withSpeed = prefs.getBoolean("net_speed", true)))
+    /** تاریخچه‌ی تست‌ها (تازه‌ترین اول، حداکثر ۲۰) */
+    var speedHistory by mutableStateOf(loadSpeedHistory())
+
+    private fun loadSpeedHistory(): List<SpeedRecord> = runCatching {
+        val a = org.json.JSONArray(prefs.getString("speed_hist", "[]") ?: "[]")
+        (0 until minOf(a.length(), 20)).mapNotNull { a.optJSONObject(it)?.let { o -> SpeedRecord.fromJson(o) } }
+    }.getOrDefault(emptyList())
+
+    private fun addSpeedRecord(r: SpeedRecord) {
+        if (r.down == null && r.up == null) return
+        speedHistory = (listOf(r) + speedHistory).take(20)
+        val a = org.json.JSONArray()
+        speedHistory.forEach { a.put(it.toJson()) }
+        prefs.edit().putString("speed_hist", a.toString()).apply()
+    }
+
+    fun clearSpeedHistory() { speedHistory = emptyList(); prefs.edit().remove("speed_hist").apply() }
+    fun setSpeedMode(m: String) { if (m in setOf("quick", "full")) { speed = speed.copy(mode = m); prefs.edit().putString("speed_mode", m).apply() } }
+    fun setSpeedPick(m: String) { if (m in setOf("auto", "cf")) { speed = speed.copy(pick = m); prefs.edit().putString("speed_pick", m).apply() } }
+    fun setNetSpeed(on: Boolean) { netCheck = netCheck.copy(withSpeed = on); prefs.edit().putBoolean("net_speed", on).apply() }
+
+    /** اسم جای VPN برای تاریخچه */
+    private fun vpnPlaceNow(): String? = if (vstate == VState.ON) node?.let { n -> countryName(isoOfNode(n)) ?: placeName(n) } else null
+
+    /**
+     * یک دور کامل تست سرعت روی net (null = مسیر عادی؛ وقتی VPN وصل است از داخل تونل). get/set حالت را می‌خواند و می‌نویسد
+     * تا هم «تست سرعت» و هم «اینترنت من» از همین استفاده کنند. udp: پینگ و پکت‌لاس UDP (اگر از قبل سنجیده شده).
+     */
+    private suspend fun speedRound(
+        net: android.net.Network?, quick: Boolean, pick: String,
+        get: () -> SpeedUi, set: (SpeedUi) -> Unit,
+        udp: (suspend () -> Pair<String, List<Long?>>?)?,
+    ) {
+        val downS = if (quick) 7.0 else 14.0
+        val upS = if (quick) 6.0 else 12.0
+        set(get().copy(phase = "ping"))
+        // IP و شرکت اینترنت مسیر تست (کوچک)، همزمان با پیدا کردن سرور
+        val metaJob = bg.async(Dispatchers.IO) { SpeedEngine.meta(net) }
+        var srv = if (pick == "cf") SpeedEngine.CLOUDFLARE else withContext(Dispatchers.IO) { SpeedEngine.pickServer(net) } ?: SpeedEngine.CLOUDFLARE
+        set(get().copy(server = srv.title))
+        val pts = ArrayList<Float>()
+        var lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv, if (quick) 16 else 24, net) { synchronized(pts) { pts.add(it.toFloat()) } } }
+        if (lat == null && srv.kind != "cf") {
+            srv = SpeedEngine.CLOUDFLARE
+            set(get().copy(server = srv.title))
+            lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv, if (quick) 16 else 24, net) }
+        }
+        lat?.let { l -> set(get().copy(ping = l.ping, jitter = l.jitter, pingPts = l.samples.map { it.toFloat() })) }
+        udp?.invoke()?.let { (name, r) ->
+            set(get().copy(loss = UdpSeries.lossPct(r), udpTarget = name))
+        }
+        metaJob.await()?.let { m ->
+            val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString(if (LangState.en) ", " else "، ")
+            set(get().copy(ip = m.ip, isp = m.isp.takeIf { it.isNotBlank() }, colo = m.colo.takeIf { it.isNotBlank() && srv.kind == "cf" }, where = place.takeIf { it.isNotBlank() }))
+        }
+        set(get().copy(phase = "down"))
+        // اگر سرور Ookla جواب نداد: یک بار با آدرس‌های قدیمی Ookla، بعد با Cloudflare
+        suspend fun withFallback(block: (SpeedEngine.Server) -> SpeedEngine.Bw): SpeedEngine.Bw = withContext(Dispatchers.IO) {
+            try { block(srv) } catch (e: java.io.IOException) {
+                if (srv.kind == "ookla" && !srv.legacy) {
+                    srv.legacy = true
+                    try { block(srv) } catch (e2: java.io.IOException) { srv = SpeedEngine.CLOUDFLARE; block(srv) }
+                } else if (srv.kind == "ookla") { srv = SpeedEngine.CLOUDFLARE; block(srv) } else throw e
+            }
+        }
+        val curve = ArrayList<Float>()
+        fun live(v: Double) {
+            speedLive = v
+            curve.add(v.toFloat())
+            if (curve.size % 3 == 0) {
+                val c = SpeedEngine.downsample(curve.map { it.toDouble() })
+                val g = get()
+                set(if (g.phase == "up") g.copy(live = v, upPts = c) else g.copy(live = v, downPts = c))
+            }
+        }
+        val d = withFallback { s -> SpeedEngine.download(s, downS, if (quick) 6 else 8, net) { live(it) } }
+        speedLive = 0.0; curve.clear()
+        set(get().copy(phase = "up", down = d.mbps, downPeak = d.peak, downPts = d.points, server = srv.title,
+            loadedDown = d.loaded.takeIf { it.size >= 2 }?.let { SpeedEngine.percentile(it, .5) }))
+        val u = withFallback { s -> SpeedEngine.upload(s, upS, if (quick) 4 else 6, net) { live(it) } }
+        speedLive = 0.0
+        set(get().copy(running = false, phase = "done", up = u.mbps, upPeak = u.peak, upPts = u.points,
+            loadedUp = u.loaded.takeIf { it.size >= 2 }?.let { SpeedEngine.percentile(it, .5) },
+            usedBytes = d.bytes + u.bytes, live = 0.0))
+    }
 
     fun runSpeedTest() {
-        if (speed.running) return
-        speed = SpeedUi(running = true, phase = "server", viaVpn = vstate == VState.ON)
+        if (speed.running || netCheck.running) return
+        val keep = speed
+        val via = vstate == VState.ON
+        speed = SpeedUi(running = true, phase = "server", viaVpn = via, mode = keep.mode, pick = keep.pick, vpnPlace = vpnPlaceNow())
         speedLive = 0.0
         bg.launch {
             try {
-                // ۱) پینگ، جیتر و پکت‌لاس روی UDP (مثل بازی و پروتکل‌های کانکی)
-                speed = speed.copy(phase = "ping")
-                val udp = withContext(Dispatchers.IO) { udpLatency() }
-                if (udp != null) speed = speed.copy(ping = udp.second.first, jitter = udp.second.second, loss = udp.second.third, udpTarget = udp.first)
-                // ۲) سرور دانلود و آپلود (Speedtest؛ وقتی وصلی همین هم از داخل تونل UDP کانکی می‌رود)
-                var srv = withContext(Dispatchers.IO) { SpeedEngine.pickServer() } ?: SpeedEngine.CLOUDFLARE
-                speed = speed.copy(server = srv.title)
-                if (udp == null) {
-                    // UDP جواب نداد (مثلاً شبکه UDP را بسته): همان پینگ HTTP
-                    var lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
-                    if (lat == null && srv.kind != "cf") {
-                        srv = SpeedEngine.CLOUDFLARE
-                        speed = speed.copy(server = srv.title)
-                        lat = withContext(Dispatchers.IO) { SpeedEngine.latency(srv) }
-                    }
-                    speed = speed.copy(ping = lat?.first, jitter = lat?.second)
+                speedRound(null, speed.mode == "quick", speed.pick, { speed }, { speed = it }) {
+                    withContext(Dispatchers.IO) { udpSeries(null, via) }
                 }
-                speed = speed.copy(phase = "down")
-                // اگر سرور Ookla جواب نداد: یک بار با آدرس‌های قدیمی Ookla، بعد با Cloudflare
-                suspend fun <T> withFallback(block: (SpeedEngine.Server) -> T): T = withContext(Dispatchers.IO) {
-                    try { block(srv) } catch (e: java.io.IOException) {
-                        if (srv.kind == "ookla" && !srv.legacy) {
-                            srv.legacy = true
-                            try { block(srv) } catch (e2: java.io.IOException) { srv = SpeedEngine.CLOUDFLARE; block(srv) }
-                        } else if (srv.kind == "ookla") { srv = SpeedEngine.CLOUDFLARE; block(srv) } else throw e
-                    }
-                }
-                val (down, db) = withFallback { s -> SpeedEngine.download(s) { speedLive = it } }
-                speedLive = 0.0
-                speed = speed.copy(phase = "up", down = down, server = srv.title)
-                val (up, ub) = withFallback { s -> SpeedEngine.upload(s) { speedLive = it } }
-                speedLive = 0.0
-                speed = speed.copy(running = false, phase = "done", up = up, usedBytes = db + ub)
+                addSpeedRecord(SpeedRecord.of(speed, "vpn".takeIf { via } ?: "direct", speed.vpnPlace, System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 speedLive = 0.0
-                speed = speed.copy(running = false, phase = "", error = "تست ناموفق بود. اینترنت را بررسی کنید.")
+                speed = speed.copy(running = false, phase = "", live = 0.0, error = "تست ناموفق بود. اینترنت را بررسی کنید.")
             }
         }
     }
 
     /**
-     * پینگ UDP تست سرعت (مقصد، (پینگ، جیتر، پکت‌لاس)):
-     * VPN خاموش: ۲۰ بسته‌ی پینگ KANKI MIX به کم‌پینگ‌ترین سرور KANKI MIX این اشتراک (همان مسیر UDP که بازی می‌رود)؛
-     * VPN روشن یا بدون KANKI MIX: ۲۰ سؤال DNS روی UDP به 1.1.1.1 (وقتی وصلی از داخل تونل).
+     * سری UDP برای پکت‌لاس (مقصد، نتیجه‌ی هر بسته):
+     * بی VPN: ۵۰ بسته‌ی پینگ KANKI MIX به کم‌پینگ‌ترین سرور KANKI MIX این اشتراک (همان مسیر UDP که بازی می‌رود)؛
+     * با VPN یا بدون KANKI MIX: ۵۰ سؤال DNS روی UDP به 1.1.1.1 (وقتی وصلی از داخل تونل).
      */
-    private suspend fun udpLatency(): Pair<String, Triple<Long, Long, Int>>? {
-        if (vstate == VState.OFF) {
+    private fun udpSeries(net: android.net.Network?, viaVpn: Boolean): Pair<String, List<Long?>>? {
+        if (!viaVpn) {
             val l = account?.configs?.filter { it.protocol == "kankimix" }?.minByOrNull { protoPing(it.node, it.protocol)?.takeIf { p -> p > 0 } ?: 99_999L }
             if (l != null) runCatching {
-                val r = Probe.kmixSeries(Probe.underlying(ctx), fetchConfig(l), 20, 60)
-                r?.let { UdpSeries.summary(it) }?.let { return (l.nodeName + " · KANKI MIX") to it }
+                val r = Probe.kmixSeries(net ?: Probe.underlying(ctx), fetchConfig(l), 50, 40)
+                if (r != null && r.any { it != null }) return (l.nodeName + " · KANKI MIX") to r
             }
         }
-        return UdpSeries.dns(20, 60)?.let { UdpSeries.summary(it) }?.let { "Cloudflare DNS" to it }
+        return UdpSeries.dns(50, 40, net)?.let { "Cloudflare DNS" to it }
+    }
+
+    /** «اینترنت من»: بررسی کامل اینترنت خود گوشی، بیرون از VPN */
+    fun runNetCheck() {
+        if (speed.running || netCheck.running) return
+        val withSpeed = netCheck.withSpeed
+        val vpnUp = vstate == VState.ON
+        netCheck = NetUi(running = true, step = 0, withSpeed = withSpeed)
+        bg.launch {
+            try {
+                val net = withContext(Dispatchers.IO) { NetCheck.network(ctx) }
+                if (vpnUp && net == null) {
+                    netCheck = netCheck.copy(running = false, step = -1, error = "شبکه‌ی واقعی گوشی پیدا نشد؛ یک بار VPN را قطع کن و دوباره بررسی کن.")
+                    return@launch
+                }
+                netCheck = netCheck.copy(bypass = net != null, info = withContext(Dispatchers.IO) { NetCheck.info(ctx, net) })
+                netCheck = netCheck.copy(step = 1)
+                netCheck = netCheck.copy(meta = withContext(Dispatchers.IO) { SpeedEngine.meta(net) })
+                netCheck = netCheck.copy(step = 2)
+                netCheck = netCheck.copy(timing = withContext(Dispatchers.IO) { NetCheck.timing(net) })
+                netCheck = netCheck.copy(step = 3)
+                netCheck = netCheck.copy(targets = withContext(Dispatchers.IO) {
+                    NetCheck.parallel(NetCheck.TARGETS, 16_000, { NetCheck.tcpPing(net, it) }, { NetCheck.TargetResult(it, null, null) })
+                })
+                netCheck = netCheck.copy(step = 4)
+                val udp = withContext(Dispatchers.IO) {
+                    val rows = ArrayList<UdpRow>()
+                    fun row(name: String, r: List<Long?>?) {
+                        if (r == null) { rows.add(UdpRow(name, null, null, null)); return }
+                        val s = UdpSeries.summary(r)
+                        rows.add(UdpRow(name, s?.first, s?.second, UdpSeries.lossPct(r)))
+                    }
+                    val kmix = account?.configs?.filter { it.protocol == "kankimix" }?.minByOrNull { protoPing(it.node, it.protocol)?.takeIf { p -> p > 0 } ?: 99_999L }
+                    val jobs = listOf(
+                        "Cloudflare DNS · 1.1.1.1" to { UdpSeries.dns(50, 40, net, "1.1.1.1") },
+                        "Google DNS · 8.8.8.8" to { UdpSeries.dns(50, 40, net, "8.8.8.8") },
+                    ) + listOfNotNull(kmix?.let { l -> "${l.nodeName} · KANKI MIX" to { runCatching { Probe.kmixSeries(net ?: Probe.underlying(ctx), fetchConfig(l), 50, 40) }.getOrNull() } })
+                    val res = NetCheck.parallel(jobs, 20_000, { it.second() }, { null })
+                    jobs.forEachIndexed { i, j -> row(j.first, res[i]) }
+                    rows
+                }
+                netCheck = netCheck.copy(udp = udp, step = 5)
+                netCheck = netCheck.copy(sites = withContext(Dispatchers.IO) {
+                    NetCheck.parallel(NetCheck.SITES, 15_000, { NetCheck.site(net, it) }, { NetCheck.SiteResult(it, "tcp", null) })
+                })
+                if (withSpeed) {
+                    netCheck = netCheck.copy(step = 6, speed = SpeedUi(running = true, phase = "server", viaVpn = false))
+                    val best = udp.filter { it.ping != null }.minByOrNull { it.loss ?: 100.0 }
+                    try {
+                        speedRound(net, true, "auto", { netCheck.speed ?: SpeedUi() }, { s -> netCheck = netCheck.copy(speed = s) }) {
+                            null
+                        }
+                        // پکت‌لاس همان UDP سنجیده‌شده (دوباره فرستاده نمی‌شود)
+                        best?.let { b -> netCheck.speed?.let { s -> netCheck = netCheck.copy(speed = s.copy(loss = b.loss, udpTarget = b.name)) } }
+                        netCheck.speed?.let { addSpeedRecord(SpeedRecord.of(it, "direct", null, System.currentTimeMillis())) }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        speedLive = 0.0
+                        netCheck = netCheck.copy(speed = netCheck.speed?.copy(running = false, phase = "", live = 0.0, error = "تست سرعت ناموفق بود."))
+                    }
+                }
+                netCheck = netCheck.copy(running = false, done = true, step = NET_STEPS.size)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                speedLive = 0.0
+                netCheck = netCheck.copy(running = false, error = "بررسی ناموفق بود. اینترنت را بررسی کنید.")
+            }
+        }
     }
 
     /** بروزرسانی اطلاعات کانفیگ‌های یک سرور */
@@ -1847,7 +1978,7 @@ class AppState private constructor(context: Context) {
         LastConfig.clear(ctx)
         runCatching { java.io.File(ctx.filesDir, "hy2.yaml").delete() }
         dismissed.clear()
-        speed = SpeedUi()
+        speed = SpeedUi(); netCheck = NetUi(); speedHistory = emptyList(); prefs.edit().remove("speed_hist").apply()
         base = null; code = null; account = null; node = null
         infos.clear(); badCfg.clear()
         pings.clear(); pinging.clear(); udpPings.clear(); tcpPings.clear(); busyTests.clear()

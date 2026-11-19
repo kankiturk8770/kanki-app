@@ -2,6 +2,8 @@ module kanki-tunnel
 
 go 1.26.0
 
+toolchain go1.26.11
+
 require (
 	github.com/xtaci/kcp-go/v5 v5.6.21
 	github.com/xtaci/smux v1.5.24

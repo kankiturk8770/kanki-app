@@ -1,0 +1,14 @@
+# gitleaks (اسکن رمز و کلید در کد): کلیدها و صفحه‌های اشتراک داخل تست‌ها ساختگی‌اند (example.com، کلیدهای تست).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "test fixtures with fake keys"
+paths = [
+  '''app/src/test/''',
+  '''windows/service/internal/.*_test\.go''',
+  '''windows/service/internal/sub/testdata/''',
+  '''kmix-core/.*_test\.go''',
+  '''mtun-core/.*_test\.go''',
+  '''kping-core/.*_test\.go''',
+]

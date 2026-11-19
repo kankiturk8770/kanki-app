@@ -201,10 +201,10 @@ object XrayCfg {
     }
 
     /** کل کانفیگ Xray: یک ورودی SOCKS محلی و یک خروجی به سرور */
-    fun config(link: String, serverIp: String, socksPort: Int): String {
+    fun config(link: String, serverIp: String, socksPort: Int, auth: SocksAuth): String {
         val out = outbound(link, serverIp).put("tag", "proxy")
         val socks = JSONObject().put("tag", "socks").put("listen", "127.0.0.1").put("port", socksPort).put("protocol", "socks")
-            .put("settings", JSONObject().put("auth", "noauth").put("udp", true))
+            .put("settings", auth.xraySettings())
             .put("sniffing", JSONObject().put("enabled", false))
         return JSONObject()
             .put("log", JSONObject().put("loglevel", "warning"))
@@ -217,9 +217,9 @@ object XrayCfg {
      * کانفیگ «خروجی مستقیم» برای حالت DNS با برنامه‌های انتخابی: بدون سرور، فقط SOCKS محلی ← اینترنت خود گوشی.
      * هسته بیرون از VPN است (خود برنامه از VPN مستثناست)، پس اتصال‌هایش دور خودش نمی‌چرخد.
      */
-    fun directConfig(socksPort: Int): String {
+    fun directConfig(socksPort: Int, auth: SocksAuth): String {
         val socks = JSONObject().put("tag", "socks").put("listen", "127.0.0.1").put("port", socksPort).put("protocol", "socks")
-            .put("settings", JSONObject().put("auth", "noauth").put("udp", true))
+            .put("settings", auth.xraySettings())
             .put("sniffing", JSONObject().put("enabled", false))
         val direct = JSONObject().put("tag", "direct").put("protocol", "freedom").put("settings", JSONObject().put("domainStrategy", "AsIs"))
         return JSONObject()
@@ -229,3 +229,23 @@ object XrayCfg {
             .toString()
     }
 }
+
+/**
+ * نام و رمز تصادفی پراکسی SOCKS محلی هر اتصال (۱.۳۵، بررسی امنیتی). پراکسی روی 127.0.0.1 است ولی هر برنامه‌ی دیگر گوشی
+ * هم به 127.0.0.1 دسترسی دارد: بی رمز، یک برنامه‌ی دیگر می‌توانست از همین پراکسی رد شود (حتی برنامه‌ای که از VPN بیرون
+ * گذاشته شده یا در حالت «فقط برنامه‌های انتخابی» نباید از VPN رد شود) و آدرس واقعی سرور VPN را بفهمد. حالا فقط هسته‌ی
+ * tun2socks خود برنامه رمز را دارد. رمز فقط در فایل‌های خصوصی برنامه (filesDir) نوشته می‌شود و هر اتصال تازه است.
+ */
+class SocksAuth(val user: String, val pass: String) {
+    fun xraySettings(): JSONObject = JSONObject()
+        .put("auth", "password")
+        .put("accounts", JSONArray().put(JSONObject().put("user", user).put("pass", pass)))
+        .put("udp", true)
+
+    companion object {
+        private val rnd = java.security.SecureRandom()
+        private fun hex(n: Int) = ByteArray(n).also { rnd.nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        fun random() = SocksAuth("k" + hex(8), hex(24))
+    }
+}
+
