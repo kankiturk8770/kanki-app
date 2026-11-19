@@ -195,6 +195,13 @@ func (f *fecTx) flush() (byte, []byte) {
 	return 0, nil
 }
 
+// waiting: a group is open (its parity goes out within 8 ms)
+func (f *fecTx) waiting() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.n > 0
+}
+
 func (f *fecTx) take() (byte, []byte) {
 	n := f.n
 	f.n = 0
