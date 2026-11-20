@@ -46,8 +46,19 @@ Write-Host "ping: $($pings | ConvertTo-Json -Compress -Depth 4)"
 # Hysteria2 by hand: the same config the service writes, once with 127.0.0.1 and once with a 127.x address
 $hy = $servers | Where-Object { $_.proto -eq 'hysteria2' -and -not $_.tunnel } | Select-Object -First 1
 if ($hy) { Write-Host "hysteria server: $($hy.id)" }
+$seen = @{}
+$pick = @($servers | Where-Object { $k = "$($_.proto)/$($_.tunnel)"; if ($seen[$k]) { $false } else { $seen[$k] = 1; $true } })
+Write-Host "testing $($pick.Count) servers (one per protocol and route)"
+# the service in console mode, so a crash prints its reason here
+if ($env:DEBUG_SVC -eq '1') {
+  Stop-Service KankiVPN -Force
+  Start-Sleep 2
+  $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
+  Start-Sleep 4
+  $acc = Ask 'set_sub' @{ input = $sub }
+}
 $rows = @()
-foreach ($s in $servers) {
+foreach ($s in $pick) {
   $res = [ordered]@{ server = $s.id; proto = $s.proto; tunnel = $s.tunnel; state = ''; ip = ''; leak = ''; dns = ''; ms = ''; error = '' }
   try {
     $c = Ask 'connect' @{ server = $s.id }
@@ -75,6 +86,13 @@ foreach ($s in $servers) {
   Start-Sleep 2
   $rows += [pscustomobject]$res
   Write-Host ($res | ConvertTo-Json -Compress)
+  if ($env:DEBUG_SVC -eq '1' -and $dbg.HasExited) {
+    Write-Host "!! service (console) exited with $($dbg.ExitCode) after $($s.id):"
+    Get-Content "$env:TEMP\svc-err.txt", "$env:TEMP\svc-out.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60 | Write-Host
+    $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
+    Start-Sleep 4
+    Ask 'set_sub' @{ input = $sub } | Out-Null
+  }
 }
 $rows | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
 
