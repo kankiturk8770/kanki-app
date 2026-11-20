@@ -29,12 +29,14 @@ myip() {
 code=${LIVE_SUB##*/}
 
 adb shell getprop ro.product.cpu.abilist
-real=$(myip); echo "emulator IP without VPN: $real"
 adb install -r app.apk && echo "install ok" || { echo "install FAILED"; exit 1; }
 adb shell appops set $P ACTIVATE_VPN allow
 adb shell pm grant $P android.permission.POST_NOTIFICATIONS 2>/dev/null
 adb shell am start -W -n $P/.MainActivity; sleep 12; shot 01-start
 # login: the only text field, type the code, then the login button
+adb shell am start -n $P/.MainActivity >/dev/null; sleep 3
+echo "screen before login:"; dump | grep -o 'text="[^"]*"' | sed 's/text=//' | grep -v '^""$' | head -20 | tr '\n' ' '; echo
+front=$(adb shell dumpsys activity activities | grep -m1 "mResumedActivity\|topResumedActivity"); echo "front: $front"
 tapon 'EditText' || tapon 'class="android.widget.EditText"' || adb shell input tap 540 1200
 sleep 1; adb shell input text "$code"; sleep 1; adb shell input keyevent 66; sleep 2
 tapon 'ورود' ; sleep 25; shot 02-after-login
@@ -45,10 +47,12 @@ adb shell am start -n $P/.MainActivity >/dev/null; sleep 3
 tapon 'اتصال' || tapon 'Connect' || true
 sleep 35; shot 03-connect
 adb shell dumpsys connectivity | grep -i -m3 "VPN" 
-adb shell am start -n $P/.MainActivity >/dev/null; sleep 2; vip=$(myip); echo "IP with VPN: $vip (without: $real) -> $([ -z "$vip" ] && echo "no answer" || { [ "$vip" = "$real" ] && echo LEAK || echo ok; })"
+vpn() { adb shell dumpsys connectivity | grep -c "Transports: VPN"; }
+echo "VPN networks up: $(vpn)"
 adb shell am start -n $P/.MainActivity >/dev/null; sleep 3; dump > $out/ui-connected.xml
 grep -o 'text="[^"]*"' $out/ui-connected.xml | sed 's/text=//' | grep -v '^""$' | head -60 | tr '\n' ' '; echo
 # network change: wifi/data off and on (emulator: svc data), then the app must come back by itself
 adb shell svc data disable; adb shell svc wifi disable; sleep 4; adb shell svc data enable; adb shell svc wifi enable; sleep 30
-v2=$(myip); echo "IP after the network came back: $v2 -> $([ -z "$v2" ] && echo "no answer" || { [ "$v2" = "$real" ] && echo LEAK || echo ok; })"; shot 04-after-network-change
+echo "VPN networks up after the network came back: $(vpn)"; shot 04-after-network-change
+adb shell am start -n $P/.MainActivity >/dev/null; sleep 3; dump | grep -o 'text="[^"]*"' | sed 's/text=//' | grep -v '^""$' | head -40 | tr '\n' ' '; echo
 adb logcat -d -t 400 | grep -i -E "kanki|hysteria|xray|kmix|AndroidRuntime" | grep -v -i "$code" | tail -80
