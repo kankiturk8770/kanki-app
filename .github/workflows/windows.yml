@@ -22,10 +22,10 @@ jobs:
       run:
         working-directory: windows/service
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # همان toolchain در go.mod؛ صریح، چون garble با Go دانلودشده در GOMODCACHE کار نمی‌کند
           go-version: "1.26.11"
@@ -40,7 +40,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      VERSION: "1.3.2"
+      VERSION: "1.3.3"
       # the same core versions as the Android app (build.yml)
       XRAY_VERSION: v26.3.27
       HY_VERSION: v2.12.3
@@ -48,15 +48,15 @@ jobs:
       # https://www.wintun.net/builds/wintun-0.14.1.zip
       WINTUN_SHA256: 07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # همان toolchain در go.mod؛ صریح، چون garble با Go دانلودشده در GOMODCACHE کار نمی‌کند
           go-version: "1.26.11"
           cache-dependency-path: windows/service/go.sum
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "8.0.x"
 
@@ -204,7 +204,7 @@ jobs:
           Write-Host "Windows release link sent to Telegram"
 
       # when the account's artifact storage is full the build itself still counts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         continue-on-error: true
         with:
           name: KankiVPN-Windows-${{ env.VERSION }}
@@ -216,7 +216,7 @@ jobs:
             dist/xray.exe
             dist/hysteria.exe
             dist/LICENSES.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         continue-on-error: true
         with:
           name: windows-shots

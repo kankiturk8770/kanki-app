@@ -14,6 +14,8 @@ AppName=Kanki VPN
 AppVersion={#AppVersion}
 AppPublisher=Kanki
 DefaultDirName={autopf}\Kanki VPN
+; programs that run as SYSTEM stay in Program Files (only administrators may write there)
+DisableDirPage=yes
 DefaultGroupName=Kanki VPN
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin

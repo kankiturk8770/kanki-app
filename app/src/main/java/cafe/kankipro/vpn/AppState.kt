@@ -892,14 +892,17 @@ class AppState private constructor(context: Context) {
     }
 
     @Volatile private var reviving = false
+    // اگر کار وصل شدن پیش از شروع لغو شد، finally اجرا نمی‌شود؛ بعد از ۲ دقیقه دوباره اجازه داده می‌شود
+    @Volatile private var revivedAt = 0L
 
     /**
      * قطع و وصل دوباره‌ی تونل (همان سرور و پروتکل)؛ همزمان فقط یک بار، و مثل بقیه‌ی اتصال‌ها از runExclusive،
      * پس اگر کاربر وسطش سرور یا حالت دیگری زد یا قطع کرد، فوراً کنار می‌رود.
      */
     private fun revive() {
-        if (reviving || vstate != VState.ON) return
+        if ((reviving && System.currentTimeMillis() - revivedAt < 120_000) || vstate != VState.ON) return
         reviving = true
+        revivedAt = System.currentTimeMillis()
         val wasDns = dnsActive != null
         runExclusive { my ->
             try {
