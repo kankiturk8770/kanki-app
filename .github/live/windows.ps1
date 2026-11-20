@@ -16,7 +16,7 @@ function Ask($cmd, $args2) {
   if ($args2) { $o.args = $args2 }
   if ($env:DEBUG_SVC -eq '1' -and $dbg -and $dbg.HasExited -and -not $script:told) {
     $script:told = $true
-    Write-Host "!! service (console) exited with $($dbg.ExitCode) during $cmd:"
+    Write-Host "!! service (console) exited with $($dbg.ExitCode) during ${cmd}:"
     Get-Content "$env:TEMP\svc-err.txt", "$env:TEMP\svc-out.txt" -ErrorAction SilentlyContinue | Select-Object -Last 80 | Write-Host
   }
   $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', 'KankiVPN', [System.IO.Pipes.PipeDirection]::InOut)
@@ -98,7 +98,7 @@ foreach ($s in $pick) {
   Write-Host ($res | ConvertTo-Json -Compress)
   if ($env:DEBUG_SVC -eq '1' -and $dbg.HasExited) {
     $script:told = $false
-    Write-Host "!! service (console) exited with $($dbg.ExitCode) after $($s.id):"
+    Write-Host "!! service (console) exited with $($dbg.ExitCode) after $($s.id) -"
     Get-Content "$env:TEMP\svc-err.txt", "$env:TEMP\svc-out.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60 | Write-Host
     $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
     Start-Sleep 4
