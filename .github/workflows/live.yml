@@ -29,7 +29,9 @@ jobs:
         run: |
           if (-not $env:LIVE_SUB) { throw "secret LIVE_SUB is not set" }
           .\.github\live\windows.ps1
+  # برنامه‌ی اندروید فقط برای ARM ساخته می‌شود و روی شبیه‌ساز x86 با ترجمه‌ی ARM همان اول می‌خوابد (SIGILL)؛ تست اندروید روی گوشی واقعی
   android:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
