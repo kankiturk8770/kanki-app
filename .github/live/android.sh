@@ -19,7 +19,7 @@ for m in re.finditer(r"<node [^>]*>",x):
     if not b: continue
     a=list(map(int,b.groups())); W,H=a[2]-a[0],a[3]-a[1]
     if w=="orb":
-        if "clickable=\"true\"" in n and W>0 and 0.8<H/W<1.25 and W>150 and (best is None or W*H>best[0]): best=(W*H,a)
+        if W>0 and 0.8<H/W<1.25 and W>80 and W<300 and ("clickable=\"true\"" in n or "android.view.View" in n) and (best is None or W*H>best[0]): best=(W*H,a)
     elif w=="edit":
         if "EditText" in n: best=(0,a); break
     elif ("text=\""+w+"\"") in n: best=(0,a); break
@@ -31,6 +31,11 @@ vpn() { adb shell dumpsys connectivity | grep -c "Transports: VPN"; }
 myip() {
   adb shell am start -a android.intent.action.VIEW -d "https://api.ipify.org/?format=text" >/dev/null 2>&1; sleep 15
   local t; t=$(dump | grep -o 'text="[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}"' | head -1 | sed 's/text=//; s/"//g')
+  if [ -z "$t" ]; then   # Chrome's first run screens
+    tap "Accept &amp; continue" >/dev/null || tap "Accept & continue" >/dev/null; sleep 3; tap "No thanks" >/dev/null; tap "No, thanks" >/dev/null; sleep 3
+    adb shell am start -a android.intent.action.VIEW -d "https://api.ipify.org/?format=text" >/dev/null 2>&1; sleep 12
+    t=$(dump | grep -o 'text="[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}"' | head -1 | sed 's/text=//; s/"//g')
+  fi
   [ -z "$t" ] && { echo "(browser shows: $(texts 8))" >&2; }
   echo "$t"
 }
@@ -45,7 +50,15 @@ echo "screen: $(texts 20)"
 tap edit; sleep 1; adb shell input text "$code"; sleep 1; adb shell input keyevent 4; sleep 1
 tap "ورود"; sleep 30; shot 02-login
 echo "after login: $(texts 40)"
-front; tap orb; sleep 40; shot 03-connect
+front; tap "بعداً"; sleep 2
+echo "clickable/views on home:"; dump | python3 -c '
+import sys,re
+for m in re.finditer(r"<node [^>]*>",sys.stdin.read()):
+    n=m.group(0)
+    if "clickable=\"true\"" in n:
+        b=re.search(r"bounds=\"([^\"]+)\"",n); t=re.search(r" text=\"([^\"]*)\"",n); c=re.search(r"class=\"([^\"]*)\"",n)
+        print(" ",b.group(1) if b else "", c.group(1) if c else "", (t.group(1) if t else "")[:30])' | head -30
+tap orb || tap "آماده"; sleep 40; shot 03-connect
 echo "after connect: $(texts 30)"
 echo "system VPN networks: $(vpn)"
 vip=$(myip); echo "IP with VPN: $vip (without: $real) -> $([ -z "$vip" ] && echo 'no answer' || { [ "$vip" = "$real" ] && echo LEAK || echo 'ok, different'; })"
