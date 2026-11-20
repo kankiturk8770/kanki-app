@@ -20,7 +20,8 @@ function Ask($cmd, $args2) {
     $w = New-Object System.IO.StreamWriter($pipe); $w.AutoFlush = $true
     $r = New-Object System.IO.StreamReader($pipe)
     $w.WriteLine(($o | ConvertTo-Json -Compress -Depth 6))
-    $a = $r.ReadLine()
+    $t = $r.ReadLineAsync()
+    $a = if ($t.Wait(60000)) { $t.Result } else { $null }
   } catch { $a = $null } finally { $pipe.Dispose() }
   if (-not $a) {
     $svc = Get-Service KankiVPN -ErrorAction SilentlyContinue
