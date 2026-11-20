@@ -1,0 +1,90 @@
+name: تست زنده با اشتراک تست
+# فقط روی برنچ کار؛ اشتراک تست فقط از GitHub Secret به اسم LIVE_SUB (هیچ‌وقت داخل ریپو نیست)
+on:
+  push:
+    branches: ["ccr-937940f0-81xwmp"]
+    paths: [".github/live/**", ".github/workflows/live.yml"]
+permissions:
+  contents: read
+env:
+  WIN_VERSION: "1.3.4"
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        ver: ["1.3.4"]
+        build: ["release"]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26.11"
+          cache-dependency-path: windows/service/go.sum
+      # the service from this branch, plain or with garble flags, to find which build breaks
+      - name: service build
+        shell: pwsh
+        working-directory: windows/service
+        run: |
+          $b = "${{ matrix.build }}"
+          if ($b -eq 'release') { exit 0 }   # the installed release itself
+          if ($b -eq 'plain') {
+            go build -tags tcp -trimpath -ldflags "-X main.Version=${{ matrix.ver }}" -o $env:RUNNER_TEMP\kanki-svc-plain.exe .\cmd\kanki-svc
+          } else {
+            go install mvdan.cc/garble@v0.17.0
+            # only our own code is obfuscated: gVisor (used by tun2socks, KANKI MIX, microtun) walks its structs with reflect
+            $env:GOGARBLE = "kankivpn"
+            $flags = $b.Substring(7).Split(' ')
+            & garble @flags build -tags tcp -trimpath -ldflags "-X main.Version=${{ matrix.ver }}" -o $env:RUNNER_TEMP\kanki-svc-plain.exe .\cmd\kanki-svc
+          }
+      - name: live
+        shell: pwsh
+        env:
+          LIVE_SUB: ${{ secrets.LIVE_SUB }}
+          WIN_VERSION: ${{ matrix.ver }}
+          DEBUG_SVC: "0"
+        run: |
+          if (-not $env:LIVE_SUB) { throw "secret LIVE_SUB is not set" }
+          .\.github\live\windows.ps1
+  # برنامه‌ی اندروید فقط برای ARM ساخته می‌شود و روی شبیه‌ساز x86 با ترجمه‌ی ARM همان اول می‌خوابد (SIGILL)؛ تست اندروید روی گوشی واقعی
+  android:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download build-main -R $GITHUB_REPOSITORY -p "*arm64.apk" -O app.apk
+          ls -la app.apk
+      - name: live
+        env:
+          LIVE_SUB: ${{ secrets.LIVE_SUB }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            bash .github/live/android.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: live-shots
+          path: live-out/*.png
+          retention-days: 1
