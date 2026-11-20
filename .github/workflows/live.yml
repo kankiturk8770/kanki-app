@@ -20,6 +20,15 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26.11"
+          cache-dependency-path: windows/service/go.sum
+      # the same service without garble -tiny (which hides the reason of a crash)
+      - name: plain service build
+        shell: pwsh
+        working-directory: windows/service
+        run: go build -tags tcp -trimpath -ldflags "-X main.Version=${{ matrix.ver }}" -o $env:RUNNER_TEMP\kanki-svc-plain.exe .\cmd\kanki-svc
       - name: live
         shell: pwsh
         env:
