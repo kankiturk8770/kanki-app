@@ -19,6 +19,7 @@ package firewall
 
 import (
 	"encoding/binary"
+	"errors"
 	"net/netip"
 	"runtime"
 	"unsafe"
@@ -223,6 +224,26 @@ func permitApp(session uintptr, baseObjects *baseObjects, weight uint8, path str
 			value: uintptr(unsafe.Pointer(appID)),
 		},
 	}
+	// 1.3.3 security review: only the core started by the service (it runs with the service's token and so
+	// carries the service SID) may pass, not the same program run by a normal user with its own config.
+	conds := [2]wtFwpmFilterCondition0{cond}
+	n := uint32(1)
+	var sdBlob wtFwpByteBlob
+	sd, err := getCurrentProcessSecurityDescriptor()
+	if err == nil {
+		sdBlob = wtFwpByteBlob{sd.Length(), (*byte)(unsafe.Pointer(sd))}
+		conds[1] = wtFwpmFilterCondition0{
+			fieldKey:  cFWPM_CONDITION_ALE_USER_ID,
+			matchType: cFWP_MATCH_EQUAL,
+			conditionValue: wtFwpConditionValue0{
+				_type: cFWP_SECURITY_DESCRIPTOR_TYPE,
+				value: uintptr(unsafe.Pointer(&sdBlob)),
+			},
+		}
+		n = 2
+	} else if !errors.Is(err, windows.ERROR_NO_SUCH_GROUP) {
+		return wrapErr(err)
+	}
 	displayData, err := createWtFwpmDisplayData0("Permit the tunnel core program", "")
 	if err != nil {
 		return wrapErr(err)
@@ -233,8 +254,8 @@ func permitApp(session uintptr, baseObjects *baseObjects, weight uint8, path str
 		subLayerKey:         baseObjects.filters,
 		weight:              filterWeight(weight),
 		flags:               cFWPM_FILTER_FLAG_CLEAR_ACTION_RIGHT,
-		numFilterConditions: 1,
-		filterCondition:     &cond,
+		numFilterConditions: n,
+		filterCondition:     &conds[0],
 		action:              wtFwpmAction0{_type: cFWP_ACTION_PERMIT},
 	}
 	filterID := uint64(0)
@@ -245,6 +266,8 @@ func permitApp(session uintptr, baseObjects *baseObjects, weight uint8, path str
 		}
 	}
 	runtime.KeepAlive(appID)
+	runtime.KeepAlive(sd)
+	runtime.KeepAlive(&sdBlob)
 	return nil
 }
 

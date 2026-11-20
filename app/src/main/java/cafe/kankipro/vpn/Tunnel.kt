@@ -48,7 +48,10 @@ fun stripIpv6(cfg: String): String {
         when (key.lowercase()) {
             "address" -> if (v.isEmpty()) line else "$key = $v"
             "dns" -> if (v.isEmpty()) null else "$key = $v"
-            "allowedips" -> "$key = " + v.ifEmpty { "0.0.0.0/0" }
+            // ۱.۳۸ (بررسی امنیتی): «::/0» می‌ماند تا IPv6 برنامه‌ها بیرون از تونل نرود؛ چون آدرس IPv6 نیست، برنامه‌ها فوری IPv4 می‌گیرند
+            "allowedips" -> v.ifEmpty { "0.0.0.0/0" }.let { a ->
+                "$key = " + a + if (t.contains("::/0") || a.contains("0.0.0.0/0")) ", ::/0" else ""
+            }
             else -> line
         }
     }.joinToString("\n")

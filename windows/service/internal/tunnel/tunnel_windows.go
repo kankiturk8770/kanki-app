@@ -288,7 +288,15 @@ func (e *Engine) Down(lockdown, allowLAN bool) {
 		}
 		var err error
 		if next, err = firewall.Enable(o); err != nil {
-			e.log.Printf("lockdown: %v", err)
+			// keep the rules that are already there rather than open everything (fail closed)
+			e.log.Printf("lockdown: %v (keeping the current rules)", err)
+			if e.run != nil {
+				e.run.close()
+				e.run = nil
+			}
+			if e.fw != nil {
+				return
+			}
 		}
 	}
 	if e.run != nil {

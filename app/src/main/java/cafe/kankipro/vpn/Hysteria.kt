@@ -336,10 +336,7 @@ class KankiHyService : VpnService() {
             .setSession(session)
             .setMtu(mtu)
             .addAddress("198.18.0.1", 32)
-        if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
-        else b.addRoute("0.0.0.0", 0)
-        // IPv6 بدون آدرس: هیچ برنامه‌ای از راه IPv6 بیرون از تونل نمی‌رود و فوری به IPv4 برمی‌گردد
-        if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
+        serverRoutes(b, ip)
         tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         // اندروید اجازه نمی‌دهد هر دو فهرست با هم باشند: «فقط این برنامه‌ها» بر «به‌جز این‌ها» مقدم است.
@@ -683,10 +680,8 @@ class KankiHyService : VpnService() {
             .setSession("Kanki · KPING")
             .setMtu(KpingCfg.mtu(link))
             .addAddress(KpingCfg.ip(link), 32)
-        if (rip is Inet4Address) routesExcluding(rip.address).forEach { (net, len) -> b.addRoute(net, len) }
-        else b.addRoute("0.0.0.0", 0)
         // IPv6 بی آدرس: هیچ برنامه‌ای از IPv6 بیرون نمی‌رود و فوری به IPv4 برمی‌گردد
-        runCatching { b.addRoute("::", 0) }
+        serverRoutes(b, rip)
         tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
@@ -809,16 +804,9 @@ class KankiHyService : VpnService() {
             .setSession("Kanki · microtun")
             .setMtu(mtu)
             .addAddress(v4, bits)
-        if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
-        else b.addRoute("0.0.0.0", 0)
-        if (v6 != null) {
-            // سرور IPv6 دارد: IPv6 هم از تونل می‌رود
-            runCatching { b.addAddress(v6.substringBefore("/"), 64) }
-            runCatching { b.addRoute("::", 0) }
-        } else if (ip is Inet4Address) {
-            // IPv6 بدون آدرس: هیچ برنامه‌ای از راه IPv6 بیرون از تونل نمی‌رود و فوری به IPv4 برمی‌گردد
-            runCatching { b.addRoute("::", 0) }
-        }
+        // سرور IPv6 دارد: IPv6 هم از تونل می‌رود (وگرنه بی آدرس، فقط بسته می‌شود)
+        if (v6 != null) runCatching { b.addAddress(v6.substringBefore("/"), 64) }
+        serverRoutes(b, ip)
         tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         if (!gateMode) {
@@ -870,14 +858,17 @@ class KankiHyService : VpnService() {
         log.lines().map { it.trim() }.filter { it.isNotEmpty() }.takeLast(3).joinToString(" | ").take(400)
     }
 
-    /** همه‌ی ترافیک IPv4 به‌جز آی‌پی خود سرور (۳۲ مسیر که روی‌هم همه‌چیز را می‌پوشانند) */
-    private fun routesExcluding(ip: ByteArray): List<Pair<String, Int>> {
-        val x = ((ip[0].toLong() and 0xff) shl 24) or ((ip[1].toLong() and 0xff) shl 16) or
-            ((ip[2].toLong() and 0xff) shl 8) or (ip[3].toLong() and 0xff)
-        return (1..32).map { len ->
-            val mask = (0xffffffffL shl (32 - len)) and 0xffffffffL
-            val net = (x xor (1L shl (32 - len))) and mask
-            "${(net shr 24) and 0xff}.${(net shr 16) and 0xff}.${(net shr 8) and 0xff}.${net and 0xff}" to len
+    /**
+     * همه‌ی IPv4 و IPv6 داخل تونل، به‌جز آی‌پی خود سرور (تا سوکت هسته دور خودش نچرخد).
+     * ۱.۳۸ (بررسی امنیتی): قبلاً اگر سرور فقط IPv6 داشت، هیچ مسیر IPv6 نبود و IPv6 برنامه‌ها بیرون از تونل می‌رفت.
+     */
+    private fun serverRoutes(b: Builder, ip: InetAddress) {
+        if (ip is Inet4Address) {
+            routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
+            runCatching { b.addRoute("::", 0) }
+        } else {
+            b.addRoute("0.0.0.0", 0)
+            routesExcluding(ip.address).forEach { (net, len) -> runCatching { b.addRoute(net, len) } }
         }
     }
 
@@ -903,9 +894,7 @@ class KankiHyService : VpnService() {
             .setSession("Kanki · KANKI MIX")
             .setMtu(KMIX_MTU)
             .addAddress("10.77.0.2", 32)
-        if (ip is Inet4Address) routesExcluding(ip.address).forEach { (net, len) -> b.addRoute(net, len) }
-        else b.addRoute("0.0.0.0", 0)
-        if (ip is Inet4Address) runCatching { b.addRoute("::", 0) }
+        serverRoutes(b, ip)
         tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         // «فقط بازی»: همه‌ی برنامه‌ها (حتی مستثنی‌ها) داخل VPN می‌مانند تا دروازه بقیه را ببندد
@@ -982,5 +971,18 @@ class KankiHyService : VpnService() {
     override fun onDestroy() {
         shutdown()
         super.onDestroy()
+    }
+}
+
+/** همه‌ی آدرس‌های یک خانواده به‌جز یکی (۳۲ مسیر برای IPv4، ۱۲۸ برای IPv6 که روی‌هم همه‌چیز را می‌پوشانند) */
+internal fun routesExcluding(ip: ByteArray): List<Pair<String, Int>> {
+    val bits = ip.size * 8
+    val x = java.math.BigInteger(1, ip)
+    val all = java.math.BigInteger.ONE.shiftLeft(bits).subtract(java.math.BigInteger.ONE)
+    return (1..bits).map { len ->
+        val mask = all.shiftRight(bits - len).shiftLeft(bits - len)
+        val net = x.xor(java.math.BigInteger.ONE.shiftLeft(bits - len)).and(mask)
+        val raw = net.toByteArray().let { a -> ByteArray(ip.size) { i -> a.getOrElse(a.size - ip.size + i) { 0 } } }
+        InetAddress.getByAddress(raw).hostAddress!! to len
     }
 }
