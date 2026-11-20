@@ -130,7 +130,9 @@ func upMtun(log *logx.Log, t core.Tunnel) (running, winipcfg.LUID, []netip.Prefi
 	var addrs []netip.Prefix
 	for _, f := range strings.Fields(c.Address()) {
 		if p, err := netip.ParsePrefix(f); err == nil && p.Addr().Is4() {
-			addrs = append(addrs, p)
+			// only the address itself: with the server's /16 Windows refused the plan's routes
+			// ("routes: Element not found", seen on a live run); everything goes by the plan anyway
+			addrs = append(addrs, netip.PrefixFrom(p.Addr(), 32))
 		}
 	}
 	if len(addrs) == 0 {
