@@ -64,7 +64,7 @@ if ($env:DEBUG_SVC -eq '1') {
   sc.exe config KankiVPN start= disabled | Out-Null
   Stop-Service KankiVPN -Force
   Start-Sleep 3
-  if (Test-Path "$env:RUNNER_TEMP\kanki-svc-plain.exe") { Copy-Item "$env:RUNNER_TEMP\kanki-svc-plain.exe" "$app\kanki-svc.exe" -Force; Write-Host "using the plain build of the service" }
+  if ($env:DEBUG_SVC -eq '1' -and (Test-Path "$env:RUNNER_TEMP\kanki-svc-plain.exe")) { Copy-Item "$env:RUNNER_TEMP\kanki-svc-plain.exe" "$app\kanki-svc.exe" -Force; Write-Host "using the plain build of the service" }
   Get-Service KankiVPN | Select-Object Status, StartType | Out-String | Write-Host
   $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
   Start-Sleep 4
