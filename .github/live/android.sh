@@ -1,4 +1,5 @@
 #!/bin/bash
+# (run after the LIVE_SUB secret was added)
 # Live test on an Android emulator: installs the released APK, logs in through the UI with a test
 # subscription, connects, and checks the exit IP and DNS from the phone itself.
 set -u
