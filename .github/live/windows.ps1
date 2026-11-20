@@ -59,8 +59,12 @@ $pick = @($pick | Sort-Object { @{ hysteria2 = 0; kankimix = 1; vless = 2; micro
 Write-Host "testing $($pick.Count) servers (one per protocol and route)"
 # the service in console mode, so a crash prints its reason here
 if ($env:DEBUG_SVC -eq '1') {
+  # the installed service must stay off (no auto start, no restart on failure) or it takes the pipe back
+  sc.exe failure KankiVPN reset= 0 actions= '""' | Out-Null
+  sc.exe config KankiVPN start= disabled | Out-Null
   Stop-Service KankiVPN -Force
-  Start-Sleep 2
+  Start-Sleep 3
+  Get-Service KankiVPN | Select-Object Status, StartType | Out-String | Write-Host
   $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
   Start-Sleep 4
   $acc = Ask 'set_sub' @{ input = $sub }
