@@ -14,14 +14,19 @@ function Ask($cmd, $args2) {
   $script:id++
   $o = @{ id = $script:id; cmd = $cmd }
   if ($args2) { $o.args = $args2 }
+  if ($env:DEBUG_SVC -eq '1' -and $dbg -and $dbg.HasExited -and -not $script:told) {
+    $script:told = $true
+    Write-Host "!! service (console) exited with $($dbg.ExitCode) during $cmd:"
+    Get-Content "$env:TEMP\svc-err.txt", "$env:TEMP\svc-out.txt" -ErrorAction SilentlyContinue | Select-Object -Last 80 | Write-Host
+  }
   $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', 'KankiVPN', [System.IO.Pipes.PipeDirection]::InOut)
   try {
-    $pipe.Connect(15000)
+    $pipe.Connect(5000)
     $w = New-Object System.IO.StreamWriter($pipe); $w.AutoFlush = $true
     $r = New-Object System.IO.StreamReader($pipe)
     $w.WriteLine(($o | ConvertTo-Json -Compress -Depth 6))
     $t = $r.ReadLineAsync()
-    $a = if ($t.Wait(60000)) { $t.Result } else { $null }
+    $a = if ($t.Wait(20000)) { $t.Result } else { $null }
   } catch { $a = $null } finally { $pipe.Dispose() }
   if (-not $a) {
     $svc = Get-Service KankiVPN -ErrorAction SilentlyContinue
@@ -48,7 +53,9 @@ Write-Host "ping: $($pings | ConvertTo-Json -Compress -Depth 4)"
 $hy = $servers | Where-Object { $_.proto -eq 'hysteria2' -and -not $_.tunnel } | Select-Object -First 1
 if ($hy) { Write-Host "hysteria server: $($hy.id)" }
 $seen = @{}
-$pick = @($servers | Where-Object { $k = "$($_.proto)/$($_.tunnel)"; if ($seen[$k]) { $false } else { $seen[$k] = 1; $true } })
+$pick = @($servers | Where-Object { -not $_.tunnel } | Where-Object { $k = "$($_.proto)"; if ($seen[$k]) { $false } else { $seen[$k] = 1; $true } })
+# the ones that misbehaved first, so their reason shows before anything else
+$pick = @($pick | Sort-Object { @{ hysteria2 = 0; kankimix = 1; vless = 2; microtun = 3 }[$_.proto] ?? 9 })
 Write-Host "testing $($pick.Count) servers (one per protocol and route)"
 # the service in console mode, so a crash prints its reason here
 if ($env:DEBUG_SVC -eq '1') {
@@ -67,8 +74,10 @@ foreach ($s in $pick) {
     $st = $null
     for ($i = 0; $i -lt 40; $i++) {
       Start-Sleep 1
-      $st = (Ask 'status').data
-      if ($st.state -eq 'connected' -or $st.state -eq 'failed') { break }
+      $q = Ask 'status'
+      if (-not $q.ok) { $st = [pscustomobject]@{ state = 'service gone'; error = $q.error }; break }
+      $st = $q.data
+      if ($st.state -eq 'connected' -or $st.state -eq 'failed' -or $st.state -eq 'error') { break }
     }
     $res.state = $st.state
     if ($st.error) { $res.error = $st.error }
@@ -88,6 +97,7 @@ foreach ($s in $pick) {
   $rows += [pscustomobject]$res
   Write-Host ($res | ConvertTo-Json -Compress)
   if ($env:DEBUG_SVC -eq '1' -and $dbg.HasExited) {
+    $script:told = $false
     Write-Host "!! service (console) exited with $($dbg.ExitCode) after $($s.id):"
     Get-Content "$env:TEMP\svc-err.txt", "$env:TEMP\svc-out.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60 | Write-Host
     $dbg = Start-Process -FilePath "$app\kanki-svc.exe" -ArgumentList 'debug' -RedirectStandardOutput "$env:TEMP\svc-out.txt" -RedirectStandardError "$env:TEMP\svc-err.txt" -PassThru -WindowStyle Hidden
