@@ -28,7 +28,7 @@ func makeDir(dir string) error {
 	// before the service first runs. MkdirAll accepts it and a new DACL alone leaves that user as owner
 	// (owners can always re-grant themselves access), so SYSTEM would then write state, logs and core
 	// configs into a folder the user controls. A folder that is a reparse point or not owned by SYSTEM
-	// or Administrators is moved aside and made again; the owner is then set to SYSTEM.
+	// or Administrators (or this process's own user) is moved aside and made again; the service then makes SYSTEM the owner.
 	if untrusted(dir) {
 		aside := dir + ".untrusted-" + strconv.FormatInt(time.Now().Unix(), 10)
 		if err := os.Rename(dir, aside); err != nil {
@@ -47,13 +47,23 @@ func makeDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
-	if err != nil {
-		return err
+	info := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION)
+	var owner *windows.SID
+	// only SYSTEM (the real service) may make SYSTEM the owner; tests run as an administrator keep their own
+	if me := self(); me != nil && me.IsWellKnown(windows.WinLocalSystemSid) {
+		owner = me
+		info |= windows.OWNER_SECURITY_INFORMATION
 	}
-	return windows.SetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT,
-		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
-		system, nil, dacl, nil)
+	return windows.SetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, info, owner, nil, dacl, nil)
+}
+
+// self is the user of this process (SYSTEM for the service).
+func self() *windows.SID {
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return nil
+	}
+	return u.User.Sid
 }
 
 // untrusted: the folder exists and is a reparse point (junction, symlink) or is owned by someone
@@ -77,6 +87,9 @@ func untrusted(dir string) bool {
 	owner, _, err := sd.Owner()
 	if err != nil || owner == nil {
 		return true
+	}
+	if me := self(); me != nil && owner.Equals(me) {
+		return false
 	}
 	return !owner.IsWellKnown(windows.WinLocalSystemSid) && !owner.IsWellKnown(windows.WinBuiltinAdministratorsSid)
 }
