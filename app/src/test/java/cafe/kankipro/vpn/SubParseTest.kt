@@ -89,4 +89,18 @@ class SubParseTest {
         val km = "[Interface]\n[KankiMix]\nEndpoint = a:1\nURI = kanki://k@a:1\n"
         assertEquals(km, applyMtu(km, "1280"))
     }
+
+    @Test
+    fun only_a_kanki_page_may_add_a_sub_host() {
+        val page = "<script id=\"data\">{\"sub_base\":\"https://evil.example:2053\"}</script>"
+        SubscriptionApi.panelSubBase = null
+        SubscriptionApi.parse(page, "https://other-panel.example")
+        assertEquals(null, SubscriptionApi.panelSubBase)
+        SubscriptionApi.parse(page, SubscriptionApi.FALLBACK_HOST)
+        assertEquals("https://evil.example:2053", SubscriptionApi.panelSubBase)
+        // a sub_base with a path or user part is never taken
+        SubscriptionApi.panelSubBase = null
+        SubscriptionApi.parse(page.replace("evil.example:2053", "a@evil.example"), SubscriptionApi.FALLBACK_HOST)
+        assertEquals(null, SubscriptionApi.panelSubBase)
+    }
 }

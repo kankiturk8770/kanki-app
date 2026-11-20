@@ -5,6 +5,7 @@
 package cores
 
 import (
+	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -127,13 +128,13 @@ func ParseHy2(text string) (*Hy2, error) {
 
 // Config is the client config of the hysteria program (YAML; JSON is valid YAML).
 // server is "ip:port" so the program never asks DNS (the kill switch would block it).
-func (h *Hy2) Config(server string, socksPort int) string {
+func (h *Hy2) Config(server string, sa SocksAuth, socksPort int) string {
 	c := map[string]any{
 		"server":   server,
 		"auth":     h.Auth,
 		"tls":      map[string]any{"sni": h.SNI, "insecure": h.Insecure},
 		"fastOpen": true,
-		"socks5":   map[string]any{"listen": fmt.Sprintf("127.0.0.1:%d", socksPort), "disableUDP": false},
+		"socks5":   map[string]any{"listen": fmt.Sprintf("%s:%d", sa.Host, socksPort), "username": sa.User, "password": sa.Pass, "disableUDP": false},
 	}
 	if h.ObfsPassword != "" {
 		c["obfs"] = map[string]any{"type": "salamander", "salamander": map[string]any{"password": h.ObfsPassword}}
@@ -287,7 +288,7 @@ func (v *Vless) stream() map[string]any {
 
 // XrayConfig is Xray.kt's config(): a SOCKS inbound on 127.0.0.1 and the link
 // as the outbound, aimed at serverIP so Xray never asks DNS for the server.
-func (v *Vless) XrayConfig(serverIP string, socksPort int) string {
+func (v *Vless) XrayConfig(serverIP string, sa SocksAuth, socksPort int) string {
 	user := map[string]any{"id": v.ID, "encryption": "none"}
 	if e := v.Q["encryption"]; e != "" {
 		user["encryption"] = e
@@ -303,11 +304,28 @@ func (v *Vless) XrayConfig(serverIP string, socksPort int) string {
 	cfg := map[string]any{
 		"log": map[string]any{"loglevel": "warning"},
 		"inbounds": []any{map[string]any{
-			"tag": "socks", "listen": "127.0.0.1", "port": socksPort, "protocol": "socks",
-			"settings": map[string]any{"auth": "noauth", "udp": true}, "sniffing": map[string]any{"enabled": false},
+			"tag": "socks", "listen": sa.Host, "port": socksPort, "protocol": "socks",
+			"settings": map[string]any{"auth": "password", "accounts": []any{map[string]any{"user": sa.User, "pass": sa.Pass}}, "udp": true},
+			"sniffing": map[string]any{"enabled": false},
 		}},
 		"outbounds": []any{out, map[string]any{"protocol": "blackhole", "tag": "block"}},
 	}
 	b, _ := json.Marshal(cfg)
 	return string(b)
+}
+
+// SocksAuth is the local SOCKS5 proxy's address and credentials, new for every start (1.3.2 security
+// review, same as Android's SocksAuth). Without them any process of any user on the PC could use
+// the tunnel; the password closes TCP, and a random 127.x.y.z address keeps others from finding the
+// UDP relay (Xray allows UDP by source IP, and every local process comes from loopback).
+type SocksAuth struct{ Host, User, Pass string }
+
+// NewSocksAuth returns a random loopback address and random credentials.
+func NewSocksAuth() SocksAuth {
+	b := make([]byte, 27)
+	if _, err := crand.Read(b); err != nil {
+		panic(err)
+	}
+	host := fmt.Sprintf("127.%d.%d.%d", 1+int(b[0])%254, 1+int(b[1])%254, 1+int(b[2])%254)
+	return SocksAuth{Host: host, User: "k" + hex.EncodeToString(b[3:11]), Pass: hex.EncodeToString(b[11:27])}
 }

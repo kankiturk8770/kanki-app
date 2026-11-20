@@ -38,7 +38,20 @@ class AppGate(
     private val dns: KankiDns.Forwarder? = null,
     /** به بسته‌های برنامه‌های بسته‌شده جواب «اینترنت نیست» داده شود (RST / ICMP) */
     private val reject: Boolean = false,
+    /** سرورهای DNS همین VPN (IPv4)؛ فقط DNS به این‌ها بی‌پرسیدن صاحب رد می‌شود */
+    dnsServers: Collection<String> = emptyList(),
 ) {
+    /**
+     * ۱.۳۷ (بررسی امنیتی): قبلاً هر بسته به پورت ۵۳ یا ۸۵۳ به هر مقصدی رد می‌شد، پس برنامه‌ی بسته‌شده با سرور خودش روی همین پورت‌ها
+     * اینترنت داشت. حالا فقط مقصدهای DNS خود VPN بی‌پرسش؛ بقیه‌ی ۵۳/۸۵۳ هم صاحبشان پرسیده می‌شود (صاحب نامعلوم: مثل قبل رد می‌شود
+     * تا DNS بازی هیچ‌وقت نخوابد، ولی برنامه‌ای که صاحبش معلوم و بسته است، بسته می‌ماند).
+     */
+    private val dnsDst: Set<Long> = dnsServers.mapNotNull { d ->
+        runCatching { (java.net.InetAddress.getByName(d) as? java.net.Inet4Address)?.address }.getOrNull()?.let { a ->
+            ((a[0].toLong() and 0xff) shl 24) or ((a[1].toLong() and 0xff) shl 16) or ((a[2].toLong() and 0xff) shl 8) or (a[3].toLong() and 0xff)
+        }
+    }.toSet()
+
     companion object {
         /** شناختن صاحب هر اتصال از اندروید ۱۰ ممکن است */
         val supported: Boolean get() = Build.VERSION.SDK_INT >= 29
@@ -130,14 +143,15 @@ class AppGate(
         if (n < hl + 4) return false
         val sport = (b(p, hl) shl 8) or b(p, hl + 1)
         val dport = (b(p, hl + 2) shl 8) or b(p, hl + 3)
-        if (dport == 53 || dport == 853) return true
         val dst = (b(p, 16).toLong() shl 24) or (b(p, 17).toLong() shl 16) or (b(p, 18).toLong() shl 8) or b(p, 19).toLong()
+        val dnsPort = dport == 53 || dport == 853
+        if (dnsPort && dst in dnsDst) return true
         val key = (dst shl 32) or (dport.toLong() shl 16) or sport.toLong()
         val map = if (proto == 6) tcpOwners else udpOwners
         val uid = map[key] ?: run {
             val now = System.currentTimeMillis()
             val retry = unknown[key]
-            if (retry != null && now < retry) return false
+            if (retry != null && now < retry) return dnsPort
             owner(proto, p, sport, dport).also { u ->
                 if (u >= 0) {
                     if (map.size > 4096) map.clear()
@@ -150,7 +164,7 @@ class AppGate(
             }
         }
         // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) همیشه رد می‌شوند
-        val ok = uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID)
+        val ok = uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID) || (uid < 0 && dnsPort)
         refusable = !ok && uid >= 0
         return ok
     }

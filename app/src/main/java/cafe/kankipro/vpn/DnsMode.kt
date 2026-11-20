@@ -10,7 +10,6 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.Socket
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -118,7 +117,12 @@ object KankiDns {
     }
 
     class Forwarder(private val svc: VpnService, private val tun: ParcelFileDescriptor, private val targets: List<Target>) {
-        private val pool = Executors.newFixedThreadPool(16)
+        // ۱.۳۷ (بررسی امنیتی): صف محدود؛ برنامه‌ای که پشت سر هم بسته به DNS می‌فرستد دیگر حافظه‌ی برنامه را پر نمی‌کند
+        // (سؤال‌های اضافه دور ریخته می‌شوند، مثل گم شدن یک بسته‌ی UDP)
+        private val pool = java.util.concurrent.ThreadPoolExecutor(
+            16, 16, 30, java.util.concurrent.TimeUnit.SECONDS,
+            java.util.concurrent.ArrayBlockingQueue(256), java.util.concurrent.ThreadPoolExecutor.DiscardPolicy(),
+        )
         private val cur = AtomicInteger(0)
         private val fails = AtomicInteger(0)
         @Volatile private var running = true
@@ -168,7 +172,7 @@ object KankiDns {
             val sport = ((pkt[ihl].toInt() and 0xff) shl 8) or (pkt[ihl + 1].toInt() and 0xff)
             val total = ((pkt[2].toInt() and 0xff) shl 8) or (pkt[3].toInt() and 0xff)
             val end = minOf(total, n)
-            if (end <= ihl + 8) return true
+            if (end <= ihl + 8 || end - ihl - 8 > 4096) return true
             val query = pkt.copyOfRange(ihl + 8, end)
             val src = pkt.copyOfRange(12, 16)
             tx.addAndGet(query.size.toLong())
@@ -180,6 +184,8 @@ object KankiDns {
             DatagramSocket().use { s ->
                 svc.protect(s)
                 s.soTimeout = 2500
+                // جواب فقط از همان سرور DNS (نه هر کسی که شماره‌ی سؤال را حدس بزند)
+                s.connect(t.ip, 53)
                 s.send(DatagramPacket(q, q.size, t.ip, 53))
                 val rb = ByteArray(4096)
                 val p = DatagramPacket(rb, rb.size)

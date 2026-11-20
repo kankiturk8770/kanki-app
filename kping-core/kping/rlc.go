@@ -313,7 +313,7 @@ func (r *rlcRx) repair(pl []byte, now time.Time) []rebuilt {
 	if unknown == 0 {
 		return nil // nothing in it we do not have
 	}
-	if need > r.free() && !r.evict(need) {
+	if need > r.free() && !r.evict(need, base, n) {
 		return nil
 	}
 	e := &r.scratch
@@ -332,6 +332,11 @@ func (r *rlcRx) repair(pl []byte, now time.Time) []rebuilt {
 		col := r.col(s)
 		if col < 0 {
 			col = r.alloc(s)
+		}
+		if col < 0 { // cannot happen after evict; drop the repair, never the program (same as the panel's kprlc.rs)
+			r.build = false
+			r.gc()
+			return nil
 		}
 		e.coef[col] ^= c
 	}
@@ -371,12 +376,14 @@ func (r *rlcRx) alloc(seq uint32) int {
 	return -1
 }
 
-// evict: drop the oldest unknowns (with their equations) until n columns are free
-func (r *rlcRx) evict(n int) bool {
+// evict: drop the oldest unknowns (with their equations) until n columns are free, never one of the
+// window [base, base+wn) being added (a late repair would otherwise free a column it needs itself and
+// alloc would return -1: index out of range, the whole core exits)
+func (r *rlcRx) evict(n int, base uint32, wn byte) bool {
 	for r.free() < n {
 		oldest := -1
 		for c := range r.colUsed {
-			if r.colUsed[c] && (oldest < 0 || int32(r.colSeq[oldest]-r.colSeq[c]) > 0) {
+			if r.colUsed[c] && r.colSeq[c]-base >= uint32(wn) && (oldest < 0 || int32(r.colSeq[oldest]-r.colSeq[c]) > 0) {
 				oldest = c
 			}
 		}
