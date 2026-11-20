@@ -15,11 +15,19 @@ function Ask($cmd, $args2) {
   $o = @{ id = $script:id; cmd = $cmd }
   if ($args2) { $o.args = $args2 }
   $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', 'KankiVPN', [System.IO.Pipes.PipeDirection]::InOut)
-  $pipe.Connect(10000)
-  $w = New-Object System.IO.StreamWriter($pipe); $w.AutoFlush = $true
-  $r = New-Object System.IO.StreamReader($pipe)
-  $w.WriteLine(($o | ConvertTo-Json -Compress -Depth 6))
-  $a = $r.ReadLine(); $pipe.Dispose()
+  try {
+    $pipe.Connect(15000)
+    $w = New-Object System.IO.StreamWriter($pipe); $w.AutoFlush = $true
+    $r = New-Object System.IO.StreamReader($pipe)
+    $w.WriteLine(($o | ConvertTo-Json -Compress -Depth 6))
+    $a = $r.ReadLine()
+  } catch { $a = $null } finally { $pipe.Dispose() }
+  if (-not $a) {
+    $svc = Get-Service KankiVPN -ErrorAction SilentlyContinue
+    Write-Host "!! no answer to $cmd (service $($svc.Status))"
+    Get-Content "$env:ProgramData\KankiVPN\service.log" -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
+    return [pscustomobject]@{ ok = $false; error = "no answer"; data = $null }
+  }
   return ($a | ConvertFrom-Json)
 }
 function MyIP { try { (Invoke-RestMethod 'https://api.ipify.org?format=json' -TimeoutSec 15).ip } catch { "none ($($_.Exception.Message))" } }
@@ -35,6 +43,9 @@ $ids = @($servers | ForEach-Object { $_.id })
 $pings = (Ask 'ping' @{ servers = $ids }).data
 Write-Host "ping: $($pings | ConvertTo-Json -Compress -Depth 4)"
 
+# Hysteria2 by hand: the same config the service writes, once with 127.0.0.1 and once with a 127.x address
+$hy = $servers | Where-Object { $_.proto -eq 'hysteria2' -and -not $_.tunnel } | Select-Object -First 1
+if ($hy) { Write-Host "hysteria server: $($hy.id)" }
 $rows = @()
 foreach ($s in $servers) {
   $res = [ordered]@{ server = $s.id; proto = $s.proto; tunnel = $s.tunnel; state = ''; ip = ''; leak = ''; dns = ''; ms = ''; error = '' }
@@ -49,6 +60,10 @@ foreach ($s in $servers) {
     }
     $res.state = $st.state
     if ($st.error) { $res.error = $st.error }
+    if ($st.state -ne 'connected') {
+      Write-Host "-- service log for $($s.id):"
+      (Ask 'logs').data | Select-Object -Last 25 | Write-Host
+    }
     if ($st.state -eq 'connected') {
       $t = Measure-Command { $res.ip = MyIP }
       $res.ms = [int]$t.TotalMilliseconds

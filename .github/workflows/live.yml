@@ -43,7 +43,7 @@ jobs:
       - name: live
         env:
           LIVE_SUB: ${{ secrets.LIVE_SUB }}
-        uses: reactivecircus/android-emulator-runner@REPLACE_SHA # v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 30
           target: google_apis
