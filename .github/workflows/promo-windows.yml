@@ -29,6 +29,10 @@ jobs:
           $hook = 'var promo = Array.IndexOf(args, "--promo"); if (promo >= 0 && promo + 1 < args.Length) { crashLog = Path.Combine(args[promo + 1], "crash.log"); try { await Promo(args[promo + 1]); } catch (Exception ex) { Crash(ex); } Shutdown(); return; }' + "`n            "
           $app = $app.Replace('var shot = Array.IndexOf(args, "--shot");', $hook + 'var shot = Array.IndexOf(args, "--shot");')
           Set-Content "$d\App.xaml.cs" $app -NoNewline
+          # the brand as the video shows it
+          $x = Get-Content "$d\MainWindow.xaml" -Raw
+          $x = $x.Replace('Text="KANKI VPN"', 'Text="KANKI PING"')
+          Set-Content "$d\MainWindow.xaml" $x -NoNewline -Encoding utf8
           # numbers in Latin digits for the video
           $j = Get-Content "$d\Jalali.cs" -Raw
           $j = $j.Replace("c[i] = (char)('۰' + (c[i] - '0'));", "{ }")
