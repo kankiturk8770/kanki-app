@@ -1,0 +1,63 @@
+name: فریم‌های ویندوز برای ویدیوی تبلیغاتی
+# فقط روی برنچ ویدیو: برنامه‌ی واقعی ویندوز با داده‌ی نمونه، فریم به فریم؛ خروجی در promo-out/ همین برنچ.
+on:
+  push:
+    branches: ["claude/app-promo-teaser-video-fn11yl"]
+    paths: [".github/promo/**", ".github/workflows/promo-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  frames:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Promo mode (only in this run, not in the app's source)
+        shell: pwsh
+        run: |
+          $d = "windows\ui\KankiVPN"
+          Copy-Item .github\promo\Promo.cs "$d\Promo.cs"
+          $app = Get-Content "$d\App.xaml.cs" -Raw
+          $hook = 'var promo = Array.IndexOf(args, "--promo"); if (promo >= 0 && promo + 1 < args.Length) { crashLog = Path.Combine(args[promo + 1], "crash.log"); try { await Promo(args[promo + 1]); } catch (Exception ex) { Crash(ex); } Shutdown(); return; }' + "`n            "
+          $app = $app.Replace('var shot = Array.IndexOf(args, "--shot");', $hook + 'var shot = Array.IndexOf(args, "--shot");')
+          Set-Content "$d\App.xaml.cs" $app -NoNewline
+          # numbers in Latin digits for the video
+          $j = Get-Content "$d\Jalali.cs" -Raw
+          $j = $j.Replace("c[i] = (char)('۰' + (c[i] - '0'));", "{ }")
+          Set-Content "$d\Jalali.cs" $j -NoNewline -Encoding utf8
+          Select-String -Path "$d\App.xaml.cs" -Pattern '--promo' | Select-Object -First 1
+      - name: Build
+        run: dotnet publish windows\ui\KankiVPN\KankiVPN.csproj -c Release -r win-x64 --self-contained true -o pub
+      - name: Frames
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force frames | Out-Null
+          $p = Start-Process -FilePath pub\KankiVPN.exe -ArgumentList '--promo', "$PWD\frames" -PassThru -Wait
+          if (Test-Path frames\crash.log) { Get-Content frames\crash.log }
+          $n = (Get-ChildItem frames -Filter *.jpg).Count
+          Write-Host "frames: $n (exit $($p.ExitCode))"
+          if ($n -lt 200) { throw "expected 210 frames, got $n" }
+          Compress-Archive -Path frames\*.jpg -DestinationPath windows-frames.zip
+      - name: Put the frames on this branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git config user.name "kanki-promo"
+          git config user.email "promo@users.noreply.github.com"
+          git fetch -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${GITHUB_REF_NAME}"
+          git checkout -q -B out FETCH_HEAD
+          mkdir -p promo-out
+          mv windows-frames.zip promo-out/
+          git add promo-out/windows-frames.zip
+          git commit -qm "promo: Windows app frames of ${GITHUB_SHA::7}"
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
