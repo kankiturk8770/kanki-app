@@ -69,13 +69,16 @@ fun LoginScreen(state: AppState) {
 
     // صفحه‌ی ورود (۱.۳۲.۶): ظاهر شیشه‌ای ۱.۳۲ با همان متن‌ها و دکمه‌های ۱.۳۱. متن‌هایی مثل «کد را از ربات تلگرام بگیر و این‌جا بگذار»
     // و آیکون کلید احتمالاً Play Protect را به یاد صفحه‌های دزدیدن کد تلگرام می‌انداخت (۱.۳۲.۰ تا ۱.۳۲.۵ «مضر»)؛ برنگردند.
+    // ۱.۴۱: همه‌چیز وسط صفحه (قبلاً خیلی بالا بود)؛ صفحه‌ی کوتاه یا کیبورد باز: اسکرول
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(48.dp))
         Logo3D(96.dp, animate = true, glow = 1f)
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(14.dp))
+        BrandTitle(22.sp)
+        Spacer(Modifier.height(20.dp))
 
         KCard(Modifier.fillMaxWidth(), padding = 18.dp, radius = D.RX) {
             T("ورود به حساب", size = 21.sp, weight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -132,6 +135,7 @@ fun LoginScreen(state: AppState) {
         SmallLine("اشتراک نداری؟ از ربات بگیر") { openBot(ctx) }
         Spacer(Modifier.height(12.dp))
     }
+    }
 }
 
 // ================================================================== قاب اصلی
@@ -185,7 +189,7 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
                 state.speed.copy(
                     live = state.speedLive,
                     viaVpn = if (state.speed.running) state.speed.viaVpn else state.vstate == VState.ON,
-                    vpnPlace = if (state.speed.running) state.speed.vpnPlace else if (state.vstate == VState.ON) state.node?.let { n -> countryName(state.isoOfNode(n)) ?: state.placeName(n) } else null,
+                    vpnPlace = if (state.speed.running) state.speed.vpnPlace else if (state.vstate == VState.ON) state.node?.let { n -> (countryName(state.isoOfNode(n)) ?: state.placeName(n)) + " · " + protoTitle(state.proto) } else null,
                 ),
                 net = state.netCheck.let { n -> n.speed?.let { s -> n.copy(speed = if (s.running) s.copy(live = state.speedLive) else s) } ?: n },
                 section = state.speedSection,
@@ -274,6 +278,8 @@ fun MainScreen(state: AppState, onToggle: () -> Unit) {
 
     if (showSplit) SplitTunnelPanel(state) { showSplit = false }
     if (state.gameAppsOpen) GameAppsPanel(state) { state.gameAppsOpen = false }
+    // پیام کوتاه شناور (مثل «اشتراک شما DNS ندارد»): بالای نوار پایین، ۳ ثانیه بعد خودش محو می‌شود
+    GlassToast(state.toast) { state.toast = null }
 
     // «برگشت» گوشی روی سؤال اول یعنی «بعداً»
     androidx.activity.compose.BackHandler(enabled = Guide.asking) { Guide.asking = false; state.guideDone = true }
@@ -531,12 +537,24 @@ private fun ModeSheets(state: AppState) {
             server(c.node, "xray", pn).let { sv -> sv.copy(name = sv.name + " · " + pn, group = state.xrayGroup(c.node)) }
         }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
-    val awgRows = nodes.flatMap { n -> listOf("amneziawg-direct", "amneziawg").filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, state.cfgTag(n.node, p)) } }
+    fun rowsOf(ps: List<String>) = nodes.flatMap { n -> ps.filter { state.hasCfg(n.node, it) }.map { p -> server(n.node, p, state.cfgTag(n.node, p)) } }
         .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
+    // ضد فیلتر (۱.۴۱): Xray، Amnezia (مستقیم و تانل)، WireGuard و Hysteria2؛ فقط آن‌هایی که در اشتراک هست
+    val filterFams = listOf(
+        GameFamilyUi("xray", "Xray", "", xrayRows),
+        GameFamilyUi("amnezia", "Amnezia", "", rowsOf(listOf("amneziawg-direct", "amneziawg"))),
+        GameFamilyUi("wireguard", "WireGuard", "", rowsOf(listOf("wireguard"))),
+        GameFamilyUi("hysteria2", "Hysteria2", "", rowsOf(listOf("hysteria2"))),
+    ).filter { it.servers.isNotEmpty() }
     FilterSheet(
         visible = state.filterSheet,
-        xray = xrayRows,
-        amnezia = awgRows,
+        families = filterFams,
+        initFamily = when {
+            state.filterProto.startsWith("xray-") -> "xray"
+            state.filterProto.startsWith("amneziawg") -> "amnezia"
+            state.filterProto == "wireguard" || state.filterProto == "hysteria2" -> state.filterProto
+            else -> "xray"
+        },
         useX = state.filterUseX,
         useAwg = !state.filterXray,
         auto = state.filterAuto,

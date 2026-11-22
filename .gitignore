@@ -33,3 +33,6 @@ dist/
 publish/
 shots/
 app/src/main/jniLibs/*/libawg.so
+
+# کش کاتلین
+.kotlin/

@@ -225,7 +225,7 @@ abstract class ShotsBase {
         Frame(KTab.HOME) { HomeContent(home(false), HomeActions()) }
         AccountSheet(true, account, AccountActions())
     }
-    protected fun pgGame(init: String = "kankimix"): @Composable () -> Unit = {
+    protected fun pgGame(init: String = "kankimix", settings: Boolean = false): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.GAME), HomeActions()) }
         // ترکیه: مستقیم ۶۱ و تانلش ۹۰ روبه‌رویش، حتی اگر تانل آلمان (۸۱) بهتر باشد؛ هلند فقط مستقیم
         val servers = listOf(
@@ -248,11 +248,11 @@ abstract class ShotsBase {
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
             initFamily = init, current = "tr|" + (if (init == "kping") "kping" else "kankimix"), currentAuto = false, busy = false, kmixDup = true,
-            onKmixDup = {}, gameOnly = true, gameCount = 2, onGameOnly = {}, onPickGames = {}, onFamilyShown = {},
-            onConnect = { _, _ -> }, onFastest = {}, onClose = {},
+            onKmixDup = {}, gameCount = 2, onPickGames = {}, onFamilyShown = {},
+            onConnect = { _, _ -> }, onFastest = {}, onClose = {}, startInSettings = settings,
         )
     }
-    protected fun pgFilter(): @Composable () -> Unit = {
+    protected fun pgFilter(settings: Boolean = false): @Composable () -> Unit = {
         Frame(KTab.HOME) { HomeContent(home(false, mode = KMode.FILTER), HomeActions()) }
         val x = listOf(
             SheetServer("x1", "xray", "🇩🇪", "آلمان · فرانکفورت · Trojan", "Trojan", 84, "direct"),
@@ -264,7 +264,13 @@ abstract class ShotsBase {
             SheetServer("tr", "amneziawg-direct", "🇹🇷", "ترکیه · استانبول", "مستقیم", 61, "direct"),
             SheetServer("tr", "amneziawg", "🇹🇷", "ترکیه · استانبول", "تانل", 92, "tunnel"),
         )
-        FilterSheet(true, x, awg, true, true, false, "x3|xray", false, { _, _ -> }, {}, {}, { _, _ -> }, {})
+        val fams = listOf(
+            GameFamilyUi("xray", "Xray", "", x),
+            GameFamilyUi("amnezia", "Amnezia", "", awg),
+            GameFamilyUi("wireguard", "WireGuard", "", awg.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
+            GameFamilyUi("hysteria2", "Hysteria2", "", awg.map { it.copy(proto = "hysteria2") }),
+        )
+        FilterSheet(true, fams, "xray", true, true, false, "x3|xray", false, { _, _ -> }, {}, {}, { _, _ -> }, {}, startInSettings = settings)
     }
     /** یک قدم آموزش ربات روی صفحه‌ی خودش (قدم با guideShot تنظیم می‌شود) */
     protected fun pgGuide(page: @Composable () -> Unit): @Composable () -> Unit = {
@@ -449,6 +455,17 @@ class ShotsTall : ShotsBase() {
 @Config(sdk = [34], qualifiers = "w411dp-h915dp-xxhdpi")
 class Shots : ShotsBase() {
     @Test fun l01() = shot("kanki-00-login", "kanki") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
+    // ۱.۴۱: اسپلش، ورود کد، پاپ‌آپ‌های گیمینگ و ضد فیلتر (فهرست و تنظیمات)، تست سرعت و «اینترنت من» با تم Vulcanico
+    @Test fun v01() = shot("vulcan-00-login", "vulcan") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
+    @Test fun v02() = shot("vulcan-09-intro", "vulcan", pgIntro())
+    @Test fun v03() = shot("vulcan-08-gaming", "vulcan", pgGame())
+    @Test fun v04() = shot("vulcan-08b-gaming-kping", "vulcan", pgGame("kping"))
+    @Test fun v05() = shot("vulcan-08c-gaming-settings", "vulcan", pgGame(settings = true))
+    @Test fun v06() = shot("vulcan-10-filter", "vulcan", pgFilter())
+    @Test fun v07() = shot("vulcan-10b-filter-settings", "vulcan", pgFilter(settings = true))
+    @Test fun v08() = shot("vulcan-05-speed", "vulcan", pgSpeed())
+    @Test fun v09() = shot("vulcan-05b-net", "vulcan") { Frame(KTab.TEST) { SpeedContent(SpeedUi(), net = sampleNet(), section = "net") } }
+    @Test fun v10() = shot("vulcan-05c-speed-idle", "vulcan") { Frame(KTab.TEST) { SpeedContent(SpeedUi()) } }
     @Test fun l02() = shot("malt-00-login", "malt") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
     @Test fun g01() = shot("malt-01-home-off", "malt", pgHomeOff())
     @Test fun g02() = shot("malt-02-home-on", "malt", pgHomeOn())

@@ -1,12 +1,10 @@
 package cafe.kankipro.vpn
 
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.blur
 import android.app.Activity
 import android.net.VpnService
 import android.os.Bundle
@@ -141,25 +139,23 @@ fun App() {
         }
     }
 
-    // گذر نرم بین اسپلش، باز شدن قفل و صفحه‌ی اصلی (۱.۳۴.۲): محو متقاطع، و صفحه‌ی تازه از کمی تار و کوچک‌تر به واضح می‌رسد (بی پرش)
+    // گذر نرم بین اسپلش، صفحه‌ی ورود کد، باز شدن قفل و صفحه‌ی اصلی: فقط محو متقاطع روی یک پس‌زمینه‌ی ثابت تم (۱.۴۱: بی تار شدن، که پرش دیده می‌شد)
     val screen = when { splash -> 0; state.unlocking -> 1; else -> 2 }
-    androidx.compose.animation.Crossfade(targetState = screen, animationSpec = tween(650, easing = FastOutSlowInEasing), label = "screen") { sc ->
-        val intro = remember { Animatable(if (sc == 0) 1f else 0f) }
-        LaunchedEffect(Unit) { intro.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-        Box(
-            Modifier.fillMaxSize()
-                .graphicsLayer { val k = .97f + .03f * intro.value; scaleX = k; scaleY = k }
-                .then(if (intro.value < 1f) Modifier.blur((14f * (1f - intro.value)).dp) else Modifier),
-        ) {
+    Box(Modifier.fillMaxSize().background(K.Ink)) {
+    androidx.compose.animation.Crossfade(targetState = screen, animationSpec = tween(700, easing = FastOutSlowInEasing), label = "screen") { sc ->
+        Box(Modifier.fillMaxSize()) {
             when (sc) {
                 0 -> SplashScreen { splash = false }
                 1 -> UnlockScreen { state.unlocking = false }
                 else -> KankiBackground(accent = if (state.vstate == VState.ON) modeColor(state.mode) else K.Gold, calm = !state.loggedIn) {
                     Box(Modifier.systemBarsPadding()) {
-                        if (!state.loggedIn) LoginScreen(state) else MainScreen(state) { toggle() }
+                        androidx.compose.animation.Crossfade(targetState = state.loggedIn, animationSpec = tween(600, easing = FastOutSlowInEasing), label = "login") { inside ->
+                            if (!inside) LoginScreen(state) else MainScreen(state) { toggle() }
+                        }
                     }
                 }
             }
         }
+    }
     }
 }
