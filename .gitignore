@@ -32,3 +32,4 @@ windows/dist/
 dist/
 publish/
 shots/
+app/src/main/jniLibs/*/libawg.so

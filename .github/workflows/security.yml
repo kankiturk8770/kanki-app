@@ -30,7 +30,7 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
           fail=0
-          for d in kmix-core mtun-core kping-core; do
+          for d in kmix-core mtun-core kping-core awg-core; do
             echo "== $d"; (cd "$d" && "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1
           done
           echo "== windows/service"; (cd windows/service && GOOS=windows "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1

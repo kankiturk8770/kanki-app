@@ -40,6 +40,7 @@ gob() { # dir pkg out tags
 gob kmix-core ./cmd/kmix libkmix.so "-tags tcp"
 gob mtun-core . libmtun.so ""
 gob kping-core . libkping.so ""
+gob awg-core . libawg.so ""
 ls -la "$d"
 
 # this copy only: build the x86_64 split

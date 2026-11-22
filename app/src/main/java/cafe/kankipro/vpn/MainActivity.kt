@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        LiveTest.take(this, intent)
         // فقط بار اول (نه با چرخیدن صفحه، که اندروید همان intent قدیمی را دوباره می‌دهد)
         setContent {
             CompositionLocalProvider(
@@ -50,6 +51,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        LiveTest.take(this, intent)
+    }
+}
+
+/**
+ * فقط نسخه‌ی تست (debuggable، که منتشر نمی‌شود؛ نسخه‌ی release این را نادیده می‌گیرد): تست زنده‌ی شبیه‌ساز
+ * (.github/live/android.sh) با یک intent یک کانفیگ مشخص را در یک حالت وصل می‌کند و وضعیت را در logcat (KankiLive) می‌نویسد.
+ *   am start -n cafe.kankipro.vpn/.MainActivity --es kk_pick "node|protocol" --es kk_mode game --es kk_games "pkg1,pkg2" [--es kk_nogate 1]
+ */
+object LiveTest {
+    @Volatile var pick: String? = null
+    @Volatile var mode: String? = null
+    @Volatile var games: String? = null
+    /** kk_nogate=1: گیمینگ بی دروازه (موتور خود کتابخانه‌ی امنزیا برای WireGuard/AmneziaWG)، فقط برای تست همان موتور */
+    @Volatile var noGate = false
+    @Volatile var gen = 0
+
+    fun on(ctx: android.content.Context) = (ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    fun take(ctx: android.content.Context, i: android.content.Intent?) {
+        if (i == null || !on(ctx)) return
+        i.getStringExtra("kk_pick")?.let { pick = it; mode = i.getStringExtra("kk_mode"); games = i.getStringExtra("kk_games"); noGate = i.getStringExtra("kk_nogate") == "1"; gen++ }
+    }
+
+    fun log(m: String) = android.util.Log.i("KankiLive", m)
 }
 
 @Composable
@@ -90,6 +118,25 @@ fun App() {
         if (state.loggedIn) {
             state.startupLoad()
             if (state.autoConnect && state.vstate == VState.OFF && state.account != null) toggle()
+        }
+    }
+
+    // تست زنده (فقط نسخه‌ی تست): فهرست کانفیگ‌ها، وصل شدن به کانفیگ خواسته‌شده و وضعیت هر ۲ ثانیه در logcat
+    if (LiveTest.on(ctx)) LaunchedEffect(state.loggedIn) {
+        var done = -1
+        while (true) {
+            val a = state.account
+            if (a != null && LiveTest.gen != done && LiveTest.pick != null) {
+                done = LiveTest.gen
+                a.configs.forEach { c -> LiveTest.log("cfg ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} tag=${state.cfgTag(c.node, c.protocol)}") }
+                val (n, p) = LiveTest.pick!!.split("|").let { it[0] to it.getOrElse(1) { "" } }
+                LiveTest.games?.let { g -> state.gameApps.clear(); state.gameApps.addAll(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
+                state.changeMode(KMode.of(LiveTest.mode ?: "game"))
+                LiveTest.log("pick $n|$p mode=${state.mode.key} games=${state.gameApps.toList()}")
+                state.pickFromServers(n, p)
+            }
+            LiveTest.log("state ${state.vstate} mode=${state.mode.key} err=${state.error ?: ""} detail=${state.errorDetail ?: ""}")
+            kotlinx.coroutines.delay(2000)
         }
     }
 
