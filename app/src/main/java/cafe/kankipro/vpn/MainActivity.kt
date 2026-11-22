@@ -74,6 +74,7 @@ object LiveTest {
 
     fun take(ctx: android.content.Context, i: android.content.Intent?) {
         if (i == null || !on(ctx)) return
+        log("intent ${i.getStringExtra("kk_pick")} ${i.getStringExtra("kk_mode")}")
         i.getStringExtra("kk_pick")?.let { pick = it; mode = i.getStringExtra("kk_mode"); games = i.getStringExtra("kk_games"); noGate = i.getStringExtra("kk_nogate") == "1"; gen++ }
     }
 
@@ -130,7 +131,7 @@ fun App() {
                 done = LiveTest.gen
                 a.configs.forEach { c -> LiveTest.log("cfg ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} tag=${state.cfgTag(c.node, c.protocol)}") }
                 val (n, p) = LiveTest.pick!!.split("|").let { it[0] to it.getOrElse(1) { "" } }
-                LiveTest.games?.let { g -> state.gameApps.clear(); state.gameApps.addAll(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
+                LiveTest.games?.takeIf { it != "-" }?.let { g -> state.gameApps.clear(); state.gameApps.addAll(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
                 state.changeMode(KMode.of(LiveTest.mode ?: "game"))
                 LiveTest.log("pick $n|$p mode=${state.mode.key} games=${state.gameApps.toList()}")
                 state.pickFromServers(n, p)

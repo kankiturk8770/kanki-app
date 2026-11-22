@@ -61,7 +61,8 @@ for m in re.finditer(r"<node [^>]*>",sys.stdin.read()):
 # ---- every config, one by one, through the test hook of the debug build (LiveTest in MainActivity.kt)
 kk() { # pick mode games nogate
   adb logcat -c
-  adb shell am start -n $P/.MainActivity --es kk_pick "$1" --es kk_mode "$2" --es kk_games "$3" --es kk_nogate "${4:-0}" >/dev/null 2>&1
+  # single-top: the running activity gets the intent (onNewIntent); an empty value would vanish in adb's shell line
+  adb shell am start --activity-single-top --activity-clear-top -n $P/.MainActivity --es kk_pick "'$1'" --es kk_mode "$2" --es kk_games "${3:--}" --es kk_nogate "${4:-0}"
 }
 st() { adb logcat -d -s KankiLive:I | grep " state " | tail -1 | sed 's/.*KankiLive: //'; }
 kk "none|none" game ""; sleep 8

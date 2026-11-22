@@ -330,8 +330,8 @@ class AppState private constructor(context: Context) {
      * پروتکل‌های دیگر که پنل گفته به آدرس ایران می‌رود «تانل»؛ بقیه برچسب tunnelTag را می‌گیرند.
      */
     fun cfgTag(id: String, p: String): String? = when {
-        // KPING همیشه از سرور ایران و تانل خودش است
-        p == KpingCfg.PROTO -> tr("تانل")
+        // KPING (پنل ۳.۵۸): مثل هر هسته، مستقیم به سرور یا از راه تانل ایران همان سرور (@tunnel)
+        p == KpingCfg.PROTO -> tr(if (isTunnelTwin(id)) "تانل" else "مستقیم")
         p == "amneziawg-direct" -> tr("مستقیم")
         p == "amneziawg" && !isTunnelTwin(id) -> tr("تانل")
         isTunnelTwin(id) -> tunnelTag(id)
@@ -351,8 +351,8 @@ class AppState private constructor(context: Context) {
         isTunnelTwin(id) -> "tunnel"
         p == "amneziawg-direct" -> "direct"
         p == "amneziawg" -> "tunnel"
-        // KPING همیشه از سرور ایران و تانل خودش
-        p == KpingCfg.PROTO -> "tunnel"
+        // KPING (پنل ۳.۵۸): مثل هر هسته، مستقیم یا از راه تانل ایران همان سرور
+        p == KpingCfg.PROTO -> if (isTunnelTwin(id)) "tunnel" else "direct"
         // Xray: همان چیزی که پنل گفته (via)؛ پنل قدیمی: کپی تانل اسمش «🇮🇷→…» (۳.۳۹) یا «… (تانل)» (قدیمی‌تر) است
         p == "xray" -> account?.xrayById?.get(id)?.let { x ->
             x.via.ifBlank { if (xrayTunnelName(x.name)) "tunnel" else "direct" }

@@ -5,6 +5,11 @@
 هماهنگ باشد. **قرارداد کامل اشتراک (چه فیلدی، کجا، تانل یا مستقیم): `docs/SUB-CONTRACT.md`.** اپ کانفیگ‌ها را دقیقاً همان‌طور که پنل
 می‌فرستد می‌چیند و هیچ کپی تانلی خودش نمی‌سازد (نبود تانل = «—»).
 
+## Execution & Output Rules (MANDATORY)
+- Perform all file analysis, coding, refactoring, and build tasks silently in the background.
+- DO NOT output explanations, step-by-step commentary, summaries, or extra text in the chat.
+- Only respond with a single-line completion confirmation once all tasks are finished.
+
 ## قانون‌های قفل‌شده (دستور قطعی صاحب اپ، 2026-11-22)
 1. **سکوت کامل:** بین ابزارها هیچ متن، گزارش پیشرفت یا «حالا X را می‌کنم» ننویس. همه‌ی کارها در پس‌زمینه و بی‌صدا؛ فقط یک پیام آخر وقتی کار ۱۰۰٪ تمام شد.
 2. **امنیت برنچ:** کار روی برنچ جدا؛ هیچ‌وقت بدون تأیید صریح صاحب اپ بعد از تست، push یا merge مستقیم به `main` نه.

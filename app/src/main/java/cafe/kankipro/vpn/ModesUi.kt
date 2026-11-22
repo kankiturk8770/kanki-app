@@ -803,7 +803,7 @@ fun GameSheet(
             }
         }
         SheetLabel(trf("سرورهای %s", f?.title ?: "")) {
-            if (f != null && f.servers.isNotEmpty()) T(if (fam == "kping") trf("%d سرور · تانل", pairsOf(f.servers).size) else trf("%d سرور", pairsOf(f.servers).size) + " · " + tr("مستقیم / تانل"), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            if (f != null && f.servers.isNotEmpty()) T(trf("%d سرور", pairsOf(f.servers).size) + " · " + tr("مستقیم / تانل"), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         if (f == null || f.servers.isEmpty()) {
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
@@ -817,7 +817,7 @@ fun GameSheet(
                 // سرور تازه (مثلاً بعد از بروزرسانی اشتراک) ته فهرست اضافه می‌شود
                 pairs.forEach { if (it.id !in order) order.add(it.id) }
                 pairs.sortedBy { order.indexOf(it.id) }.forEach { p ->
-                    key(p.id) { PairRow(p, current, currentAuto, c, !busy, tunnelOnly = fam == "kping") { sv -> onConnect(sv.node, sv.proto) } }
+                    key(p.id) { PairRow(p, current, currentAuto, c, !busy, tunnelOnly = false) { sv -> onConnect(sv.node, sv.proto) } }
                 }
             }
         }
