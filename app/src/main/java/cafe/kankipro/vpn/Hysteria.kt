@@ -656,11 +656,12 @@ class KankiHyService : VpnService() {
         }
         val c2 = org.amnezia.awg.config.Config.parse(withIp.byteInputStream())
         val uapi = c2.`interface`.toAwgUserspaceString() + c2.peers.joinToString("") { it.toAwgUserspaceString(true, this) }
-        val uapiFile = File(filesDir, "awg.uapi")
-        uapiFile.delete()
+        // a file of this attempt only: the core of the previous one may still be exiting and its monitor removes its own file
+        File(filesDir, ".").listFiles()?.filter { (it.name.startsWith("awg-") && (it.name.endsWith(".uapi") || it.name.endsWith(".sock"))) }?.forEach { runCatching { it.delete() } }
+        val uapiFile = File(filesDir, "awg-$my.uapi")
         uapiFile.writeText(uapi)
         uapiFile.setReadable(false, false); uapiFile.setReadable(true, true)
-        val sock = File(filesDir, "awg.sock")
+        val sock = File(filesDir, "awg-$my.sock")
         HyEngine.mtunRx = 0
         HyEngine.mtunTx = 0
         val ready = java.util.concurrent.LinkedBlockingQueue<String>()
@@ -683,6 +684,7 @@ class KankiHyService : VpnService() {
                         }
                         line == "WAIT" -> {}
                         else -> synchronized(log) {
+                            android.util.Log.i("KankiAwg", line.take(200))
                             log.append(line).append('\n')
                             if (log.length > 6000) log.delete(0, log.length - 4000)
                         }

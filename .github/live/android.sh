@@ -80,7 +80,7 @@ run() { # label pick nogate games
   echo "   state: $s"
   echo "   chrome IP: ${ip:-no answer} (without VPN: $real) -> $([ -z "$ip" ] && echo 'no answer' || { [ "$ip" = "$real" ] && echo LEAK || echo 'through VPN'; })"
   echo "   shell (not a game) TCP 1.1.1.1:80: $sh"
-  adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|kanki-awg|wireguard" | grep -v -F "$code" | tail -8 | sed 's/^/   log: /'
+  adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|wireguard" | grep -v -F "$code" | tail -8 | sed 's/^/   log: /'
 }
 run "WireGuard direct, gaming (libawg + gate)" "$(pickof wireguard direct)"
 run "WireGuard direct, amnezia engine (no gate)" "$(pickof wireguard direct)" 1
