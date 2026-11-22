@@ -58,7 +58,8 @@ for m in re.finditer(r"<node [^>]*>",sys.stdin.read()):
     if "clickable=\"true\"" in n:
         b=re.search(r"bounds=\"([^\"]+)\"",n); t=re.search(r" text=\"([^\"]*)\"",n); c=re.search(r"class=\"([^\"]*)\"",n)
         print(" ",b.group(1) if b else "", c.group(1) if c else "", (t.group(1) if t else "")[:30])' | head -30
-# ---- every config, one by one, through the test hook of the debug build (LiveTest in MainActivity.kt)
+# ---- every config, one by one, through the test hook of the debug build (LiveTest in MainActivity.kt).
+# One run at a time: the test account allows one device, two emulators at once take each other's place
 kk() { # pick mode games nogate
   adb logcat -c
   # single-top: the running activity gets the intent (onNewIntent); an empty value would vanish in adb's shell line
