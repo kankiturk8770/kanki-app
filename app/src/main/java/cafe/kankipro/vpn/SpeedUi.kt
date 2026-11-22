@@ -151,31 +151,79 @@ fun scoreColor(i: Int): Color = when (i) { 0, 1 -> K.Red; 2 -> K.Warn; else -> K
 private fun lossColor(l: Double?) = when { l == null -> K.Sub; l == 0.0 -> K.Good; l < 2 -> K.Warn; else -> K.Red }
 private fun msColor(v: Double?) = v?.let { pingColor(it.toLong()) } ?: K.Sub
 
+/**
+ * ارزیابی کاربردی (۱.۴۱) با مقیاس‌های رایج (ITU-T G.114 و QoE بازی): ۰ ضعیف، ۱ متوسط، ۲ خوب، ۳ عالی؛ null تا عدد لازم نیامده.
+ * پینگ بازی: زیر ۶۰ عالی، ۶۰ تا ۱۰۰ خوب، ۱۰۰ تا ۱۵۰ متوسط، بالای ۱۵۰ ضعیف. جیتر زیر ۱۵ پایدار. پکت‌لاس ۰٪ ایده‌آل، بالای ۱٪ بحرانی.
+ * هر کاربرد = بدترین شاخص خودش.
+ */
+object Qoe {
+    val NAMES = listOf("ضعیف", "متوسط", "خوب", "عالی")
+    fun color(l: Int): Color = when (l) { 0 -> K.Red; 1 -> K.Warn; else -> K.Good }
+
+    private fun pingGame(p: Double) = when { p < 60 -> 3; p < 100 -> 2; p < 150 -> 1; else -> 0 }
+    private fun jit(j: Double, stable: Double) = when { j < stable -> 3; j < stable * 2 -> 1; else -> 0 }
+    private fun loss(l: Double) = when { l <= 0.0 -> 3; l <= 1.0 -> 1; else -> 0 }
+
+    fun gaming(ping: Double?, jitter: Double?, lossPct: Double?): Int? {
+        ping ?: return null
+        return listOfNotNull(pingGame(ping), jitter?.let { jit(it, 15.0) }, lossPct?.let { loss(it) }).min()
+    }
+
+    /** تماس تصویری: پینگ یک‌طرفه تا ۱۵۰ms خوب (G.114)، جیتر زیر ۳۰، پکت‌لاس تا ۱٪، دست‌کم ۱.۵ مگ دانلود و آپلود */
+    fun call(ping: Double?, jitter: Double?, lossPct: Double?, down: Double?, up: Double?): Int? {
+        ping ?: return null
+        val p = when { ping < 100 -> 3; ping < 150 -> 2; ping < 300 -> 1; else -> 0 }
+        val bw = listOfNotNull(down, up).minOrNull()?.let { when { it >= 4 -> 3; it >= 1.5 -> 2; it >= .8 -> 1; else -> 0 } }
+        return listOfNotNull(p, jitter?.let { jit(it, 30.0) }, lossPct?.let { if (it <= 1.0) 3 else if (it <= 3) 1 else 0 }, bw).min()
+    }
+
+    /** استریم: سرعت دانلود (۲۵ مگ 4K، ۱۰ مگ HD، ۵ مگ SD) */
+    fun stream(down: Double?, lossPct: Double?): Int? {
+        down ?: return null
+        val d = when { down >= 25 -> 3; down >= 10 -> 2; down >= 5 -> 1; else -> 0 }
+        return listOfNotNull(d, lossPct?.let { if (it <= 2.0) 3 else 1 }).min()
+    }
+}
+
 @Composable
 fun SpeedContent(
     ui: SpeedUi,
     net: NetUi = NetUi(),
     section: String = "speed",
     history: List<SpeedRecord> = emptyList(),
-    tip: RobotAlert? = null,
+    @Suppress("UNUSED_PARAMETER") tip: RobotAlert? = null,
     act: SpeedActions = SpeedActions(),
 ) {
+    // یک صفحه، بی آمپر و (روی گوشی معمولی) بی اسکرول؛ اسکرول فقط برای صفحه‌های خیلی کوتاه
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
         Spacer(Modifier.height(D.S2))
-        Heading(
-            "تست سرعت",
-            if (section == "net") "اینترنت خود گوشی، بیرون از VPN"
-            else if (ui.viaVpn) (ui.vpnPlace?.let { trf("متصل به VPN · %s", it) } ?: "از داخل تونل کانکی") else "بدون VPN",
-        )
-        Spacer(Modifier.height(D.S3))
         Segmented(
             listOf(SegItem("speed", "تست سرعت", "bolt"), SegItem("net", "اینترنت من", "ping")),
             section, enabled = !ui.running && !net.running, onSelect = act.section,
         )
-        tip?.let { Spacer(Modifier.height(D.S3)); RobotBanner(it, onClose = act.closeTip) }
+        Spacer(Modifier.height(D.S2))
+        // برچسب مسیر تست: اینترنت آزاد گوشی، یا سروری که الان به آن وصلی
+        RouteChip(
+            if (section == "net" || !ui.viaVpn) tr("مسیر تست: اینترنت آزاد گوشی")
+            else trf("مسیر تست: VPN · %s", ui.vpnPlace ?: tr("تونل کانکی")),
+            if (section == "net" || !ui.viaVpn) K.Gold2 else K.Gold,
+        )
         Spacer(Modifier.height(D.S3))
         if (section == "net") NetSection(net, act) else SpeedSection(ui, history, act)
-        Spacer(Modifier.height(D.S6))
+        Spacer(Modifier.height(D.S4))
+    }
+}
+
+@Composable
+private fun RouteChip(text: String, c: Color) {
+    val sh = RoundedCornerShape(50)
+    Row(
+        Modifier.fillMaxWidth().height(30.dp).clip(sh).background(c.copy(alpha = .10f)).border(1.dp, c.copy(alpha = .35f), sh).padding(horizontal = D.S3),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Dot(c, 6.dp)
+        Spacer(Modifier.width(D.S2))
+        AutoText(text, size = 12.sp, color = K.Text)
     }
 }
 
@@ -183,77 +231,118 @@ fun SpeedContent(
 
 @Composable
 private fun SpeedSection(ui: SpeedUi, history: List<SpeedRecord>, act: SpeedActions) {
-    KCard(Modifier.fillMaxWidth(), padding = D.CardPad) {
-        Row(
-            Modifier.align(Alignment.CenterHorizontally).goldGlass(RoundedCornerShape(50)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(D.S2),
-        ) {
-            PhaseChip("ping", "پینگ", ui)
-            PhaseChip("down", "دانلود", ui)
-            PhaseChip("up", "آپلود", ui)
-        }
-        Spacer(Modifier.height(D.S2))
-        val gaugeColor = if (ui.phase == "up") K.Accent else if (ui.phase == "done") K.Green else K.Gold
-        val shown = if (ui.running && (ui.phase == "down" || ui.phase == "up")) ui.live else ui.down ?: 0.0
-        Box(Modifier.fillMaxWidth().height(236.dp).guideTarget("speed"), contentAlignment = Alignment.BottomCenter) {
-            SpeedGauge(shown, gaugeColor, Modifier.fillMaxSize())
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
-                T(f1(shown), size = 40.sp, font = Poppins, weight = FontWeight.Bold, shadow = glow(gaugeColor, 18f), ltr = true)
-                T(
-                    when (ui.phase) {
-                        "server" -> "در حال پیدا کردن نزدیک‌ترین سرور…"
-                        "ping" -> "در حال سنجش پینگ…"
-                        "down" -> "دانلود · Mbps"
-                        "up" -> "آپلود · Mbps"
-                        "done" -> "دانلود · Mbps"
-                        else -> "Mbps"
-                    },
-                    size = 12.sp, color = gaugeColor,
-                )
+    val dl = if (ui.running && ui.phase == "down") ui.live else ui.down
+    val upv = if (ui.running && ui.phase == "up") ui.live else ui.up
+    // سه کارت هم‌اندازه داخل یک قاب شیشه‌ای
+    Column(Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(D.RL)).padding(D.S2).guideTarget("speed")) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+            Kpi("دانلود", "down", dl?.let { mbps(it) }, "Mbps", K.Gold, ui.downPts, ui.running && ui.phase == "down", Modifier.weight(1f)) {
+                T(ui.downPeak?.let { trf("اوج %s", ltr(mbps(it))) } ?: " ", size = 9.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            }
+            Kpi("آپلود", "up", upv?.let { mbps(it) }, "Mbps", K.Accent, ui.upPts, ui.running && ui.phase == "up", Modifier.weight(1f)) {
+                T(ui.upPeak?.let { trf("اوج %s", ltr(mbps(it))) } ?: " ", size = 9.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            }
+            Kpi("پینگ", "ping", ui.ping?.let { ms(it) }, "ms", msColor(ui.ping), ui.pingPts, ui.running && (ui.phase == "ping" || ui.phase == "server"), Modifier.weight(1f)) {
+                CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+                    T("±" + (ui.jitter?.let { ms(it) } ?: "–") + " · " + (ui.loss?.let { pct(it) + "%" } ?: "–"), size = 9.5.sp, font = Poppins,
+                        color = if (ui.loss != null && ui.loss > 1.0) K.Red else K.Sub, ltr = true, maxLines = 1)
+                }
             }
         }
-        Spacer(Modifier.height(D.S3))
-        T("مدت تست", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-        Spacer(Modifier.height(D.S1))
-        Segmented(
-            listOf(SegItem("quick", "سریع · ۲۰ ثانیه"), SegItem("full", "کامل · ۴۰ ثانیه")),
-            ui.mode, enabled = !ui.running, onSelect = act.mode,
-        )
-        Spacer(Modifier.height(D.S2))
-        T("سرور تست", size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-        Spacer(Modifier.height(D.S1))
-        Segmented(
-            listOf(SegItem("auto", "نزدیک‌ترین (Speedtest)"), SegItem("cf", "Cloudflare")),
-            ui.pick, enabled = !ui.running, onSelect = act.pick,
-        )
-        ui.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
-        Spacer(Modifier.height(D.S3))
-        GoldButton(
-            when {
-                ui.running -> "در حال تست…"
-                ui.phase == "done" -> "تست دوباره"
-                else -> "شروع تست سرعت"
-            },
-            Modifier.fillMaxWidth(), loading = ui.running, onClick = act.start,
-        )
-        Spacer(Modifier.height(D.S2))
-        T(
-            ui.usedBytes?.let { trf("مصرف اینترنت این تست: %s", ltr(formatBytes(it))) }
-                ?: "پینگ بی‌بار و زیر بار، جیتر و پکت‌لاس UDP، بعد دانلود و آپلود با چند اتصال همزمان. وصل باشی، از داخل VPN سنجیده می‌شه.",
-            size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
-        )
     }
-    if (ui.hasResult || ui.running) {
-        Spacer(Modifier.height(D.CardGap))
-        SpeedResults(ui)
-        if (ui.phase == "done") {
-            Spacer(Modifier.height(D.CardGap))
-            LineButton("اشتراک‌گذاری نتیجه", Modifier.fillMaxWidth()) { act.share(shareText(ui, null)) }
+    Spacer(Modifier.height(D.S3))
+    // ارزیابی کاربردی
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        val loaded = listOfNotNull(ui.loadedDown, ui.loadedUp).maxOrNull()
+        val gamePing = ui.ping?.let { p -> loaded?.let { maxOf(p, (p + it) / 2) } ?: p }
+        Verdict("بازی آنلاین", if (ui.running) null else Qoe.gaming(gamePing, ui.jitter, ui.loss), Modifier.weight(1f))
+        Verdict("تماس تصویری", if (ui.running) null else Qoe.call(ui.ping, ui.jitter, ui.loss, ui.down, ui.up), Modifier.weight(1f))
+        Verdict("استریم", if (ui.running) null else Qoe.stream(ui.down, ui.loss), Modifier.weight(1f))
+    }
+    Spacer(Modifier.height(D.S3))
+    // انتخاب فشرده‌ی سرور و مدت تست
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        Box(Modifier.weight(1.15f)) {
+            Segmented(listOf(SegItem("auto", "نزدیک‌ترین"), SegItem("cf", "Cloudflare")), ui.pick, enabled = !ui.running, onSelect = act.pick)
+        }
+        Box(Modifier.weight(1f)) {
+            Segmented(listOf(SegItem("quick", "سریع"), SegItem("full", "کامل")), ui.mode, enabled = !ui.running, onSelect = act.mode)
         }
     }
-    if (history.isNotEmpty()) {
-        Spacer(Modifier.height(D.CardGap))
-        HistoryCard(history, act.clearHistory)
+    ui.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
+    Spacer(Modifier.height(D.S3))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        GoldButton(
+            when {
+                ui.running -> when (ui.phase) { "server" -> "پیدا کردن سرور…"; "ping" -> "سنجش پینگ…"; "down" -> "سنجش دانلود…"; "up" -> "سنجش آپلود…"; else -> "در حال تست…" }
+                ui.phase == "done" -> "تست دوباره"
+                else -> "شروع تست"
+            },
+            Modifier.weight(1f), loading = ui.running, onClick = act.start,
+        )
+        if (ui.phase == "done") {
+            Spacer(Modifier.width(D.S2))
+            RoundIcon(D.BtnH, K.Gold, onClick = { act.share(shareText(ui, null)) }) { Canvas(Modifier.size(18.dp)) { settingIcon("share", K.Text) } }
+        }
+    }
+    Spacer(Modifier.height(D.S2))
+    // یک خط کوتاه: سرور تست و آخرین تست قبلی
+    val last = history.firstOrNull()
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T(
+        listOfNotNull(
+            ui.server?.let { trf("سرور: %s", it) },
+            ui.usedBytes?.let { trf("مصرف: %s", ltr(formatBytes(it))) },
+            if (ui.phase != "done" && last != null) trf("آخرین تست: %s", ltr("↓${last.down?.let { mbps(it) } ?: "–"} ↑${last.up?.let { mbps(it) } ?: "–"} · ${last.ping?.let { ms(it) } ?: "–"}ms")) else null,
+        ).joinToString(" · ").ifBlank { " " },
+        size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 2,
+    ) }
+}
+
+/** یک کارت KPI جمع‌وجور: آیکون و اسم، عدد بزرگ و واحد، نمودار موجی ظریف و یک خط ریز */
+@Composable
+private fun Kpi(label: String, icon: String, value: String?, unit: String, c: Color, pts: List<Float>, live: Boolean, modifier: Modifier, foot: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(D.RM)
+    Column(
+        modifier.fillMaxHeight().clip(shape).background(Color.Black.copy(alpha = .22f))
+            .border(1.dp, if (live) c.copy(alpha = .7f) else Color.White.copy(alpha = .07f), shape).padding(D.S2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MiniIcon(icon, c, 12.dp)
+            Spacer(Modifier.width(4.dp))
+            T(label, size = 11.sp, color = K.Sub, maxLines = 1, modifier = Modifier.weight(1f))
+            if (live) Spinner(9.dp, c)
+        }
+        Spacer(Modifier.height(4.dp))
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                T(value ?: "–", size = 21.sp, font = Poppins, weight = FontWeight.Bold, color = if (value == null) K.Sub else K.Text, ltr = true, maxLines = 1)
+                Spacer(Modifier.width(2.dp))
+                T(unit, size = 9.sp, font = Poppins, color = K.Sub, ltr = true, modifier = Modifier.padding(bottom = 4.dp))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Chart(pts, c, null, Modifier.fillMaxWidth().height(30.dp))
+        Spacer(Modifier.height(4.dp))
+        foot()
+    }
+}
+
+/** نشانگر کاربردی کوچک: اسم کاربرد و برچسب رنگی عالی / خوب / متوسط / ضعیف */
+@Composable
+private fun Verdict(name: String, level: Int?, modifier: Modifier) {
+    val c = level?.let { Qoe.color(it) } ?: K.Sub
+    val shape = RoundedCornerShape(D.RM)
+    Column(
+        modifier.clip(shape).background(c.copy(alpha = .08f)).border(1.dp, c.copy(alpha = .30f), shape).padding(vertical = D.S2, horizontal = D.S1),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        T(name, size = 11.sp, color = K.Text, maxLines = 1)
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Dot(c, 6.dp)
+            Spacer(Modifier.width(4.dp))
+            T(level?.let { tr(Qoe.NAMES[it]) } ?: "–", size = 12.sp, color = c, weight = FontWeight.Black, maxLines = 1)
+        }
     }
 }
 
@@ -514,7 +603,7 @@ private fun whenText(t: Long): String =
 
 /** متن نتیجه برای اشتراک‌گذاری (بی IP و بی کد اشتراک) */
 fun shareText(ui: SpeedUi, title: String?): String = buildString {
-    appendLine(title ?: if (ui.viaVpn) "Kanki VPN speed test" + (ui.vpnPlace?.let { " · $it" } ?: "") else "Kanki speed test (no VPN)")
+    appendLine(title ?: if (ui.viaVpn) "KANKI PING speed test" + (ui.vpnPlace?.let { " · $it" } ?: "") else "Kanki speed test (no VPN)")
     ui.down?.let { appendLine("Download: ${mbps(it)} Mbps") }
     ui.up?.let { appendLine("Upload: ${mbps(it)} Mbps") }
     ui.ping?.let { p -> append("Latency: ${ms(p)} ms"); ui.loadedDown?.let { append(" (↓ ${ms(it)})") }; ui.loadedUp?.let { append(" (↑ ${ms(it)})") }; appendLine() }
@@ -564,210 +653,117 @@ private fun FactRow(label: String, value: String, c: Color) {
 
 // ------------------------------------------------------------------ بخش «اینترنت من»
 
-/** جمع‌بندی «اینترنت من»: هر خط (رنگ، متن) */
+/** جمع‌بندی «اینترنت من»: هر خط (رنگ، متن)؛ کوتاه و بی پیشنهاد پروتکل */
 fun netVerdict(n: NetUi): List<Pair<Int, String>> {
     // رنگ: ۰ خوب، ۱ توجه، ۲ بد
     val out = ArrayList<Pair<Int, String>>()
-    n.info?.let { if (!it.validated) out.add(2 to "اندروید این شبکه را «بی اینترنت» می‌شناسد (شاید وای‌فای بدون اینترنت یا نیاز به ورود)") }
+    n.info?.let { if (!it.validated) out.add(2 to "اندروید این شبکه را «بی اینترنت» می‌شناسد") }
     val global = n.targets.filter { !it.target.domestic }
     val local = n.targets.filter { it.target.domestic }
     if (global.isNotEmpty() && global.all { it.ms == null } && local.any { it.ms != null })
-        out.add(2 to "سایت‌های داخلی باز می‌شوند ولی هیچ سایت خارجی جواب نمی‌دهد؛ با VPN کانکی وصل شو")
+        out.add(2 to "فقط سایت‌های داخلی جواب می‌دهند")
     else if (n.targets.isNotEmpty() && n.targets.all { it.ms == null })
         out.add(2 to "هیچ مقصدی جواب نداد؛ اینترنت گوشی وصل نیست")
     val udpAll = n.udp.filter { it.loss != null }
     if (udpAll.isNotEmpty() && udpAll.all { it.ping == null })
-        out.add(2 to "UDP در این شبکه بسته است: WireGuard، AmneziaWG و KANKI MIX وصل نمی‌شوند؛ «ضد فیلتر» (Xray) را بزن")
-    else udpAll.mapNotNull { it.loss }.maxOrNull()?.takeIf { it >= 2 }?.let {
-        out.add(1 to trf("پکت‌لاس UDP %s٪ است؛ بازی ممکن است لگ بزند. حالت گیمینگ کانکی (KANKI MIX) کمکت می‌کند", pct(it)))
-    }
+        out.add(2 to "UDP در این شبکه بسته است")
+    else udpAll.mapNotNull { it.loss }.maxOrNull()?.takeIf { it >= 2 }?.let { out.add(1 to trf("پکت‌لاس UDP %s٪", pct(it))) }
     val dnsBad = n.sites.count { it.status == "dns" }
-    if (dnsBad > 0) out.add(1 to trf("DNS شبکه‌ات برای %d سایت آدرس درست نداد", dnsBad))
+    if (dnsBad > 0) out.add(1 to trf("DNS برای %d سایت آدرس درست نداد", dnsBad))
     val certBad = n.sites.count { it.status == "cert" }
-    if (certBad > 0) out.add(2 to trf("برای %d سایت گواهی امنیتی نادرست آمد: کسی وسط راه جواب می‌دهد. بدون VPN رمز وارد نکن", certBad))
-    n.speed?.let { s ->
-        s.scores()["gaming"]?.let { g -> out.add((if (g >= 3) 0 else if (g == 2) 1 else 2) to trf("اینترنتت برای بازی: %s", tr(SCORE_NAMES[g]))) }
-        s.bloat?.takeIf { it >= 60 }?.let { b -> out.add(1 to trf("وقتی دانلود هست پینگت %s میلی‌ثانیه بالا می‌رود (رتبه %s)", ms(b), Aim.bloatGrade(b))) }
-    }
+    if (certBad > 0) out.add(2 to trf("گواهی نادرست برای %d سایت: کسی وسط راه است", certBad))
     if (out.isEmpty() && n.done) out.add(0 to "اینترنت گوشی سالم است")
     return out
 }
 
+/** «اینترنت من» (۱.۴۱): همه‌ی شاخص‌ها در کارت‌های کوچک دوستونه با نقطه‌ی رنگی وضعیت، در یک صفحه */
 @Composable
 private fun NetSection(n: NetUi, act: SpeedActions) {
-    KCard(Modifier.fillMaxWidth()) {
-        CardTitle("shield", "بررسی کامل اینترنت خودت")
+    val pend = n.running
+    fun avg(l: List<NetCheck.TargetResult>) = l.mapNotNull { it.ms }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+    val local = n.targets.filter { it.target.domestic }
+    val global = n.targets.filter { !it.target.domestic }
+    val udp = n.udp.firstOrNull { it.ping != null } ?: n.udp.firstOrNull()
+    val sitesOk = n.sites.count { it.status == "ok" }
+    data class Cell(val title: String, val value: String, val sub: String, val c: Color, val ready: Boolean)
+    val cells = listOf(
+        n.info.let { i ->
+            Cell("اتصال", i?.let { tr(when (it.transport) { "wifi" -> "وای‌فای"; "cell" -> "دیتای موبایل"; "eth" -> "کابل"; else -> "دیگر" }) } ?: "–",
+                i?.operator ?: i?.let { if (it.validated) tr("اینترنت تأیید شد") else tr("بی اینترنت") } ?: "",
+                i?.let { if (it.validated) K.Good else K.Red } ?: K.Sub, i != null)
+        },
+        n.meta.let { m -> Cell("IP بیرونی", m?.ip ?: "–", m?.isp?.takeIf { it.isNotBlank() } ?: "", if (m != null) K.Good else K.Sub, m != null) },
+        n.timing.let { t ->
+            val tot = t?.let { it.dns + it.tcp + it.tls + it.ttfb }
+            Cell("TLS / HTTPS", tot?.let { "$it ms" } ?: "–", t?.let { "DNS ${it.dns} · TLS ${it.tls} ms" } ?: "",
+                tot?.let { if (it < 400) K.Good else if (it < 900) K.Warn else K.Red } ?: K.Sub, t != null)
+        },
+        Cell("پینگ داخلی", avg(local)?.let { "$it ms" } ?: if (local.isNotEmpty()) tr("بی‌جواب") else "–", "TCP",
+            avg(local)?.let { pingColor(it) } ?: if (local.isNotEmpty()) K.Red else K.Sub, local.isNotEmpty()),
+        Cell("پینگ خارجی", avg(global)?.let { "$it ms" } ?: if (global.isNotEmpty()) tr("بی‌جواب") else "–", "TCP",
+            avg(global)?.let { pingColor(it) } ?: if (global.isNotEmpty()) K.Red else K.Sub, global.isNotEmpty()),
+        Cell("UDP", udp?.ping?.let { "$it ms" } ?: if (udp != null) tr("بسته") else "–",
+            udp?.let { u -> u.ping?.let { "±${u.jitter ?: 0} · ${pct(u.loss ?: 0.0)}%" } ?: "" } ?: "",
+            udp?.let { u -> if (u.ping == null) K.Red else lossColor(u.loss) } ?: K.Sub, udp != null),
+        Cell("دسترسی به سایت‌ها", if (n.sites.isEmpty()) "–" else "$sitesOk / ${n.sites.size}", tr("باز می‌شوند"),
+            if (n.sites.isEmpty()) K.Sub else if (sitesOk == n.sites.size) K.Good else if (sitesOk * 2 >= n.sites.size) K.Warn else K.Red, n.sites.isNotEmpty()),
+        n.speed.let { s ->
+            Cell("سرعت", s?.down?.let { "↓ ${mbps(it)}" } ?: if (n.withSpeed) "–" else tr("خاموش"), s?.up?.let { "↑ ${mbps(it)} Mbps" } ?: "",
+                s?.down?.let { if (it >= 10) K.Good else if (it >= 3) K.Warn else K.Red } ?: K.Sub, s?.down != null)
+        },
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(D.S2)) {
+        cells.chunked(2).forEachIndexed { r, row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                row.forEachIndexed { i, x ->
+                    val waiting = pend && !x.ready && n.step <= r * 2 + i + 1
+                    NetTile(x.title, x.value, x.sub, x.c, waiting, Modifier.weight(1f))
+                }
+            }
+        }
+    }
+    n.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
+    // یک خط جمع‌بندی (مهم‌ترین مورد)
+    netVerdict(n).firstOrNull()?.let { (lv, txt) ->
         Spacer(Modifier.height(D.S2))
-        T(
-            "اینترنت خود گوشی (وای‌فای یا دیتا) را بیرون از VPN می‌سنجد، حتی وقتی وصلی: شبکه، IP، DNS، پینگ داخلی و خارجی، UDP، سایت‌ها و سرعت.",
-            size = 11.sp, color = K.Sub, weight = FontWeight.Normal,
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Dot(when (lv) { 0 -> K.Good; 1 -> K.Warn; else -> K.Red }, 7.dp)
+            Spacer(Modifier.width(D.S2))
+            T(txt, size = 12.sp, weight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+    Spacer(Modifier.height(D.S3))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+        GoldButton(
+            if (n.running) (NET_STEPS.getOrNull(n.step)?.let { trf("در حال بررسی: %s…", tr(it)) } ?: "در حال بررسی…") else if (n.done) "بررسی دوباره" else "بررسی اینترنت من",
+            Modifier.weight(1f), loading = n.running, onClick = act.netStart,
         )
-        Spacer(Modifier.height(D.S3))
-        Segmented(
-            listOf(SegItem("1", "با تست سرعت"), SegItem("0", "بدون تست سرعت (کم‌مصرف)")),
-            if (n.withSpeed) "1" else "0", enabled = !n.running, onSelect = { act.netSpeed(it == "1") },
-        )
-        if (n.running || n.done) {
-            Spacer(Modifier.height(D.S3))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                NET_STEPS.forEachIndexed { i, name ->
-                    if (i == NET_STEPS.lastIndex && !n.withSpeed) return@forEachIndexed
-                    val st = when { n.done || i < n.step -> 2; i == n.step && n.running -> 1; else -> 0 }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        when (st) { 2 -> CheckMark(true, 14.dp); 1 -> Spinner(12.dp, K.Gold); else -> Dot(K.Sub.copy(alpha = .5f), 6.dp) }
-                        Spacer(Modifier.width(D.S2))
-                        T(name, size = 12.sp, color = if (st == 0) K.Sub else K.Text, weight = if (st == 1) FontWeight.Black else FontWeight.Bold)
-                    }
-                }
-            }
-        }
-        n.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
-        Spacer(Modifier.height(D.S3))
-        GoldButton(if (n.running) "در حال بررسی…" else if (n.done) "بررسی دوباره" else "بررسی اینترنت من", Modifier.fillMaxWidth(), loading = n.running, onClick = act.netStart)
-    }
-    val verdict = netVerdict(n)
-    if (verdict.isNotEmpty()) {
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("spark", "جمع‌بندی")
-            Spacer(Modifier.height(D.S2))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                verdict.forEach { (lv, txt) ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.padding(top = 6.dp)) { Dot(when (lv) { 0 -> K.Good; 1 -> K.Warn; else -> K.Red }, 7.dp) }
-                        Spacer(Modifier.width(D.S2))
-                        T(txt, size = 12.sp, weight = FontWeight.Bold)
-                    }
-                }
-            }
+        Box(Modifier.width(118.dp)) {
+            Segmented(listOf(SegItem("1", "با سرعت"), SegItem("0", "بی سرعت")), if (n.withSpeed) "1" else "0", enabled = !n.running, onSelect = { act.netSpeed(it == "1") })
         }
     }
-    if (n.info != null || n.meta != null) {
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("data", "اتصال تو")
-            Spacer(Modifier.height(D.S2))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                n.info?.let { i ->
-                    FactRow("نوع شبکه", tr(when (i.transport) { "wifi" -> "وای‌فای"; "cell" -> "دیتای موبایل"; "eth" -> "کابل (اترنت)"; else -> "دیگر" }) + (i.operator?.let { " · $it" } ?: ""), K.Text)
-                    FactRow("اینترنت تأییدشده", if (i.validated) "بله" else "نه", if (i.validated) K.Good else K.Red)
-                    FactRow("حجمی (پولی)", if (i.metered) "بله" else "نه", K.Text)
-                    i.signal?.let { FactRow("قدرت سیگنال", ltr("$it dBm"), if (it > -67) K.Good else if (it > -80) K.Warn else K.Red) }
-                    if (i.downKbps != null && i.upKbps != null) FactRow("برآورد اندروید از لینک", ltr("↓ ${i.downKbps / 1000} / ↑ ${i.upKbps / 1000} Mbps"), K.Text)
-                    if (i.dnsServers.isNotEmpty()) FactRow("DNS گوشی", ltr(i.dnsServers.take(2).joinToString(", ")), K.Text)
-                    FactRow("DNS خصوصی (DoT)", if (i.privateDns) "روشن" else "خاموش", K.Text)
-                    i.mtu?.let { FactRow("MTU", ltr("$it"), K.Text) }
-                    FactRow("IPv6", if (i.ipv6) "دارد" else "ندارد", K.Text)
-                }
-                n.meta?.let { m ->
-                    FactRow("IP بیرونی", ltr(m.ip), K.Text)
-                    if (m.isp.isNotBlank()) FactRow("شرکت اینترنت", m.isp + (m.asn?.let { " · AS$it" } ?: ""), K.Text)
-                    val place = listOfNotNull(m.city.takeIf { it.isNotBlank() }, countryName(m.country) ?: m.country.takeIf { it.isNotBlank() }).joinToString(if (LangState.en) ", " else "، ")
-                    if (place.isNotBlank()) FactRow("محل", place, K.Text)
-                }
-                if (n.bypass) FactRow("مسیر", "بیرون از VPN کانکی", K.Green)
-            }
+    if (n.done) n.speed?.takeIf { it.hasResult }?.let { s ->
+        Spacer(Modifier.height(D.S2))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            T("اشتراک‌گذاری نتیجه", size = 12.sp, color = K.Gold, weight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(D.RT)).pressable { act.share(shareText(s, "Kanki · my internet (no VPN)")) }.padding(D.S1))
         }
     }
-    n.timing?.let { t ->
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("clock", "زمان‌بندی یک اتصال HTTPS")
-            Spacer(Modifier.height(D.S3))
-            val parts = listOf(Triple("DNS", t.dns, K.Gold), Triple("TCP", t.tcp, K.Accent), Triple("TLS", t.tls, K.Gold2), Triple("TTFB", t.ttfb, K.Green))
-            val tot = parts.sumOf { it.second }.coerceAtLeast(1)
-            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
-                Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50))) {
-                    parts.forEach { (_, v, c) -> if (v > 0) Box(Modifier.weight(v.toFloat().coerceAtLeast(.01f)).fillMaxHeight().background(c)) }
-                }
-                Spacer(Modifier.height(D.S2))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    parts.forEach { (name, v, c) ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            T(name, size = 10.sp, font = Poppins, color = c, ltr = true)
-                            T("$v ms", size = 12.sp, font = Poppins, weight = FontWeight.Bold, ltr = true)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(D.S2))
-            T(trf("کل: %d میلی‌ثانیه تا اولین بایت (Cloudflare%s)", tot, t.tlsVersion?.let { " · $it" } ?: ""), size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
+}
+
+/** یک کارت کوچک «اینترنت من»: نقطه‌ی رنگی و اسم، مقدار و یک خط ریز */
+@Composable
+private fun NetTile(title: String, value: String, sub: String, c: Color, waiting: Boolean, modifier: Modifier) {
+    val shape = RoundedCornerShape(D.RM)
+    Column(modifier.height(70.dp).goldGlass(shape).padding(horizontal = D.S3, vertical = D.S2)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (waiting) Spinner(9.dp, K.Gold) else Dot(c, 7.dp)
+            Spacer(Modifier.width(6.dp))
+            T(title, size = 11.sp, color = K.Sub, maxLines = 1)
         }
-    }
-    if (n.targets.isNotEmpty()) {
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("ping", "پینگ مقصدها (TCP)")
-            Spacer(Modifier.height(D.S2))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                n.targets.forEach { r ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Dot(r.ms?.let { pingColor(it) } ?: K.Red, 6.dp)
-                        Spacer(Modifier.width(D.S2))
-                        AutoText(r.target.name, size = 12.sp)
-                        Spacer(Modifier.width(D.S2))
-                        Tag(if (r.target.domestic) "داخلی" else "خارجی", if (r.target.domestic) K.Accent else K.Gold)
-                        Spacer(Modifier.weight(1f))
-                        T(r.ms?.let { "$it ms" + (r.jitter?.let { j -> " ±$j" } ?: "") } ?: tr("جواب نداد"), size = 12.sp, font = if (r.ms != null) Poppins else Vazir,
-                            color = r.ms?.let { pingColor(it) } ?: K.Red, ltr = r.ms != null)
-                    }
-                }
-            }
-        }
-    }
-    if (n.udp.isNotEmpty()) {
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("bolt", "UDP (بازی و WireGuard)")
-            Spacer(Modifier.height(D.S2))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                n.udp.forEach { u ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Dot(if (u.ping == null) K.Red else lossColor(u.loss), 6.dp)
-                        Spacer(Modifier.width(D.S2))
-                        AutoText(u.name, size = 12.sp)
-                        Spacer(Modifier.weight(1f))
-                        if (u.ping == null) T("بسته / بی‌جواب", size = 12.sp, color = K.Red)
-                        else T(ltr("${u.ping} ms · ±${u.jitter ?: 0} · ${pct(u.loss ?: 0.0)}%"), size = 12.sp, font = Poppins, color = lossColor(u.loss), ltr = true)
-                    }
-                }
-            }
-        }
-    }
-    if (n.sites.isNotEmpty()) {
-        Spacer(Modifier.height(D.CardGap))
-        KCard(Modifier.fillMaxWidth()) {
-            CardTitle("unlock", "باز شدن سایت‌ها (بدون VPN)")
-            Spacer(Modifier.height(D.S2))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                n.sites.forEach { s ->
-                    val (txt, c) = when (s.status) {
-                        "ok" -> (s.ms?.let { trf("باز است · %s", ltr("$it ms")) } ?: "باز است") to K.Good
-                        "dns" -> "DNS آدرس درست نداد" to K.Warn
-                        "tcp" -> "وصل نشد" to K.Red
-                        "cert" -> "گواهی نادرست" to K.Red
-                        else -> "دست‌دادن TLS بسته شد" to K.Red
-                    }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Dot(c, 6.dp)
-                        Spacer(Modifier.width(D.S2))
-                        AutoText(s.site.name, size = 12.sp)
-                        Spacer(Modifier.weight(1f))
-                        T(txt, size = 12.sp, color = c)
-                    }
-                }
-            }
-        }
-    }
-    n.speed?.let { s ->
-        if (s.hasResult || s.running) {
-            Spacer(Modifier.height(D.CardGap))
-            SpeedResults(s)
-            if (n.done) {
-                Spacer(Modifier.height(D.CardGap))
-                LineButton("اشتراک‌گذاری نتیجه", Modifier.fillMaxWidth()) { act.share(shareText(s, "Kanki · my internet (no VPN)")) }
-            }
-        }
+        Spacer(Modifier.height(3.dp))
+        AutoText(value, size = 15.sp, color = if (value == "–") K.Sub else K.Text, weight = FontWeight.Black)
+        if (sub.isNotBlank()) AutoText(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
     }
 }
 

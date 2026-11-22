@@ -315,3 +315,34 @@ fun Heading(title: String, sub: String? = null, modifier: Modifier = Modifier, t
         trailing()
     }
 }
+
+
+/**
+ * پیام کوتاه شیشه‌ای شناور (۱.۴۱): پایین صفحه بالای نوار تب‌ها، روی هیچ چیز قفل نمی‌شود و بعد از ۳ ثانیه خودش محو می‌شود.
+ * پیام تازه زمان را از اول می‌گیرد.
+ */
+@Composable
+fun GlassToast(text: String?, onGone: () -> Unit) {
+    var shown by remember { mutableStateOf<String?>(null) }
+    if (text != null) shown = text
+    LaunchedEffect(text) {
+        if (text != null) { kotlinx.coroutines.delay(3000); onGone() }
+    }
+    Box(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, bottom = 96.dp), contentAlignment = Alignment.BottomCenter) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = text != null,
+            enter = androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.slideInVertically(tween(260)) { it / 2 },
+            exit = androidx.compose.animation.fadeOut(tween(300)),
+        ) {
+            val shape = RoundedCornerShape(50)
+            Row(
+                Modifier.goldGlass(shape, tint = K.Gold).padding(horizontal = D.S4, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Dot(K.Warn, 7.dp)
+                Spacer(Modifier.width(D.S2))
+                T(shown ?: "", size = 13.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 2)
+            }
+        }
+    }
+}

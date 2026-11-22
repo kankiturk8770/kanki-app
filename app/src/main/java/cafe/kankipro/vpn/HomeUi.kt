@@ -137,7 +137,7 @@ fun MainFrame(tab: KTab, onTab: (KTab) -> Unit, onRobot: () -> Unit, onAccount: 
     }
 }
 
-/** سربرگ: لوگوی گرد K و KANKI VPN در یک طرف، سه دکمه‌ی گرد برجسته (لینک، ربات، گفتگو) در طرف دیگر */
+/** سربرگ: لوگوی گرد K و KANKI PING در یک طرف، سه دکمه‌ی گرد برجسته (لینک، ربات، گفتگو) در طرف دیگر */
 @Composable
 fun AppHeader(onRobot: () -> Unit, onAccount: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = D.PagePad, end = D.PagePad, top = D.S2, bottom = D.S2), verticalAlignment = Alignment.CenterVertically) {

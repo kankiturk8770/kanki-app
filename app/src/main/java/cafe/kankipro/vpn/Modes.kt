@@ -16,9 +16,9 @@ import android.content.Context
  * (فقط «هوشمند» و «انتخاب هوشمند سرور» اجازه‌ی امتحان گزینه‌ی بعدی را دارند).
  */
 enum class KMode(val key: String, val title: String, val sub: String) {
-    SMART("smart", "هوشمند", "پینگ همه را می‌گیرد و به بهترین وصل می‌شود"),
+    SMART("smart", "هوشمند", "بهترین سرور ضد فیلتر را خودش پیدا و وصل می‌کند"),
     GAME("game", "گیمینگ", "کمترین پینگ برای بازی · پروتکل و کشور با شما"),
-    FILTER("filter", "ضد فیلتر", "یک لمس: بهترین راه اتصال · لمس دوباره: انتخاب دستی"),
+    FILTER("filter", "ضد فیلتر", "Xray، Amnezia، WireGuard و Hysteria2 · مستقیم یا تانل"),
     DNS("dns", "DNS", "رفع تحریم بازی‌ها و برنامه‌ها با DNS کانکی");
 
     companion object {

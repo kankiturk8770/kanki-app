@@ -69,6 +69,8 @@ class AppState private constructor(context: Context) {
     var gameSheet by mutableStateOf(false)
     /** پنل ضد فیلتر (نگه‌داشتن کاشی، یا لمس دوباره وقتی همین حالت انتخاب است): فقط سرورهای Xray و Amnezia */
     var filterSheet by mutableStateOf(false)
+    /** پیام کوتاه شناور پایین صفحه (۱.۴۱): بعد از ۳ ثانیه خودش محو می‌شود و نقشه را نمی‌پوشاند */
+    var toast by mutableStateOf<String?>(null)
 
     /** KANKI MIX: هر بسته‌ی بازی دو بار فرستاده شود (ضد پکت‌لاس)؛ وسط اتصال هم عوض می‌شود */
     var kmixDup by mutableStateOf(prefs.getBoolean("kmixDup", true))
@@ -212,15 +214,13 @@ class AppState private constructor(context: Context) {
                 changeMode(m); gameSheet = true
             }
             KMode.FILTER -> {
-                // لمس دوباره: پنل ضد فیلتر (فقط Xray و Amnezia)، نه همه‌ی سرورها
-                if (mode == KMode.FILTER) { filterSheet = true; return }
-                changeMode(m)
-                setFilter(true, "", null)
-                launchConnect(reconnect = true) { connectFilter() }
+                // ۱.۴۱: مثل گیمینگ، همان لمس اول پاپ‌آپ ضد فیلتر باز می‌شود (Xray، Amnezia، WireGuard، Hysteria2؛ «اتصال خودکار» بالای فهرست)
+                if (mode == KMode.DNS && vstate != VState.OFF) userDisconnect()
+                changeMode(m); filterSheet = true
             }
             KMode.DNS -> {
                 // دکمه‌ی DNS همیشه دیده می‌شود (۱.۳۲)؛ اشتراکی که DNS ندارد همان لحظه پیامش را می‌گیرد و حالت عوض نمی‌شود
-                if (account != null && account?.dns == null) { error = "اشتراک شما DNS ندارد"; errorDetail = null; return }
+                if (account != null && account?.dns == null) { toast = tr("اشتراک شما DNS ندارد"); return }
                 val wasOther = mode != KMode.DNS && vstate == VState.ON
                 changeMode(m)
                 if (wasOther) launchConnect(reconnect = true) { connectDns() }
@@ -513,7 +513,8 @@ class AppState private constructor(context: Context) {
             val list = when {
                 p.startsWith("xray-") -> listOf(p to "xray").filter { hasCfg(it.first, "xray") }
                 // یک سرور Amnezia مشخص از پنل ضد فیلتر (تانل یا مستقیم): دقیقاً همان
-                n != null && p.startsWith("amneziawg") -> listOf(n to p).filter { hasCfg(it.first, it.second) }
+                // یک سرور مشخص از پنل ضد فیلتر (Amnezia تانل یا مستقیم، WireGuard، Hysteria2): دقیقاً همان
+                n != null && p in FILTER_PICK -> listOf(n to p).filter { hasCfg(it.first, it.second) }
                 n != null -> listOf(n to "amneziawg-direct", n to "amneziawg").filter { hasCfg(it.first, it.second) }
                 else -> emptyList()
             }
@@ -555,7 +556,7 @@ class AppState private constructor(context: Context) {
         when {
             p == "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
             // در حالت ضد فیلتر، AmneziaWG (مستقیم/تانل) هم انتخاب دستی همین حالت است
-            mode == KMode.FILTER && p.startsWith("amneziawg") -> setFilter(false, "", id)
+            mode == KMode.FILTER && p in FILTER_PICK -> setFilter(false, p, id)
             // هر پروتکل دیگر (KANKI MIX، WireGuard، Hysteria2، …) انتخاب دستی همان در گیمینگ است
             else -> { setGame(false, p, id); changeMode(KMode.GAME) }
         }
@@ -594,8 +595,7 @@ class AppState private constructor(context: Context) {
     suspend fun connectDns() {
         val info = account?.dns
         if (info == null) {
-            error = "اشتراک شما DNS ندارد"
-            errorDetail = null
+            toast = tr("اشتراک شما DNS ندارد")
             return
         }
         error = null
@@ -690,12 +690,16 @@ class AppState private constructor(context: Context) {
     /** پینگ و جیتر همه‌ی کانفیگ‌ها را می‌سنجد؛ نتیجه به ترتیب کیفیت */
     /** پروتکل‌های فقط گیمینگ: نه در هوشمند، نه در ضد فیلتر خودکار */
     private val GAME_ONLY = setOf("kankimix", MtunCfg.PROTO, KpingCfg.PROTO)
+    /** پروتکل‌هایی که پاپ‌آپ ضد فیلتر با سرور مشخص وصل می‌کند (Xray جدا، با شناسه‌ی اینباندش) */
+    private val FILTER_PICK = setOf("amneziawg-direct", "amneziawg", "wireguard", "hysteria2")
     /**
      * هوشمند (روزمره) این‌ها را هم امتحان می‌کند. microtun آخرین گزینه است و KANKI MIX هیچ‌وقت: در حالت گیمینگ هر بسته‌اش
      * دو بار می‌رود و FEC هم بسته‌ی اضافه دارد، پس حجم کاربر دو برابر حساب می‌شد؛ microtun فقط بسته‌های خیلی کوچک
      * (کمتر از ۳۰۰ بایت) را دو بار می‌فرستد و دانلود یک بار می‌رود.
      */
-    private val SMART_EXTRA = setOf(MtunCfg.PROTO)
+    private val SMART_EXTRA = emptySet<String>()
+    /** ۱.۴۱: هوشمند فقط پروتکل‌های ضد فیلتر را می‌سنجد و وصل می‌کند؛ هیچ‌وقت سرورها و پروتکل‌های گیمینگ (KANKI MIX، microtun، KPING) */
+    private val SMART_PROTOS = setOf("xray", "amneziawg-direct", "amneziawg", "wireguard", "hysteria2")
 
     /**
      * ردیف هوشمند هر کانفیگ (کمتر = زودتر):
@@ -717,7 +721,7 @@ class AppState private constructor(context: Context) {
         val cands = a.configs.distinctBy { it.node }.flatMap { n ->
             (available(n.node, "tunnel") + available(n.node, "direct")).mapNotNull { p ->
                 // KANKI MIX و microtun فقط مال گیمینگ‌اند و هوشمند هیچ‌وقت به آن‌ها وصل نمی‌شود
-                if (p in GAME_ONLY && p !in SMART_EXTRA) return@mapNotNull null
+                if (p !in SMART_PROTOS || (p in GAME_ONLY && p !in SMART_EXTRA)) return@mapNotNull null
                 infos["${n.node}/$p"]?.takeIf { it.host != "—" }?.let { i -> Triple(n, p, i) }
             }
         }
@@ -753,7 +757,8 @@ class AppState private constructor(context: Context) {
         // پنل بعد از گرفتن اجازه‌ی VPN باز می‌شود (اگر کاربر رد کرد، پنل باز نمی‌ماند)
         val go: () -> Unit = {
             if (!smartBusy) {
-                smartOpen = true
+                // ۱.۴۱: سنجش در پس‌زمینه؛ فهرست متنی روی نقشه باز نمی‌شود (حلقه‌ی دور دکمه‌ی هوشمند می‌چرخد)
+                smartOpen = false
                 smartBusy = true
                 smartRows.clear()
                 smartDone = 0; smartTotal = 0; smartCurrent = null
@@ -1070,7 +1075,7 @@ class AppState private constructor(context: Context) {
         // ۱.۳۲: همه‌ی تم‌های قبلی برداشته شدند (طرح شیشه‌ای)؛ هر کس تمی دارد که دیگر نیست Kanki Default می‌گیرد
         val savedTheme = prefs.getString("theme", null)
         if (Themes.none { it.id == savedTheme }) prefs.edit().putString("theme", Themes[0].id).remove("theme122").remove("theme128").apply()
-        ThemeState.set(prefs.getString("theme", Themes[0].id) ?: Themes[0].id)
+        ThemeState.snap(prefs.getString("theme", Themes[0].id) ?: Themes[0].id)
         LangState.lang = prefs.getString("lang", "fa") ?: "fa"
     }
 
@@ -1653,7 +1658,7 @@ class AppState private constructor(context: Context) {
     fun setNetSpeed(on: Boolean) { netCheck = netCheck.copy(withSpeed = on); prefs.edit().putBoolean("net_speed", on).apply() }
 
     /** اسم جای VPN برای تاریخچه */
-    private fun vpnPlaceNow(): String? = if (vstate == VState.ON) node?.let { n -> countryName(isoOfNode(n)) ?: placeName(n) } else null
+    private fun vpnPlaceNow(): String? = if (vstate == VState.ON) node?.let { n -> (countryName(isoOfNode(n)) ?: placeName(n)) + " · " + protoTitle(proto) } else null
 
     /**
      * یک دور کامل تست سرعت روی net (null = مسیر عادی؛ وقتی VPN وصل است از داخل تونل). get/set حالت را می‌خواند و می‌نویسد
@@ -1725,8 +1730,10 @@ class AppState private constructor(context: Context) {
         speedLive = 0.0
         bg.launch {
             try {
-                speedRound(null, speed.mode == "quick", speed.pick, { speed }, { speed = it }) {
-                    withContext(Dispatchers.IO) { udpSeries(null, via) }
+                // ۱.۴۱: VPN خاموش = مستقیم روی اینترنت خود گوشی (شبکه‌ی واقعی، هیچ کانفیگی از برنامه)؛ وصل = از داخل همان تونل
+                val net = if (via) null else withContext(Dispatchers.IO) { Probe.underlying(ctx) }
+                speedRound(net, speed.mode == "quick", speed.pick, { speed }, { speed = it }) {
+                    withContext(Dispatchers.IO) { udpSeries(net, via) }
                 }
                 addSpeedRecord(SpeedRecord.of(speed, "vpn".takeIf { via } ?: "direct", speed.vpnPlace, System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1743,14 +1750,9 @@ class AppState private constructor(context: Context) {
      * بی VPN: ۵۰ بسته‌ی پینگ KANKI MIX به کم‌پینگ‌ترین سرور KANKI MIX این اشتراک (همان مسیر UDP که بازی می‌رود)؛
      * با VPN یا بدون KANKI MIX: ۵۰ سؤال DNS روی UDP به 1.1.1.1 (وقتی وصلی از داخل تونل).
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun udpSeries(net: android.net.Network?, viaVpn: Boolean): Pair<String, List<Long?>>? {
-        if (!viaVpn) {
-            val l = account?.configs?.filter { it.protocol == "kankimix" }?.minByOrNull { protoPing(it.node, it.protocol)?.takeIf { p -> p > 0 } ?: 99_999L }
-            if (l != null) runCatching {
-                val r = Probe.kmixSeries(net ?: Probe.underlying(ctx), fetchConfig(l), 50, 40)
-                if (r != null && r.any { it != null }) return (l.nodeName + " · KANKI MIX") to r
-            }
-        }
+        // ۱.۴۱: همیشه ۵۰ سؤال DNS روی UDP به Cloudflare روی همان مسیر تست (بی VPN: شبکه‌ی خود گوشی)؛ هیچ‌وقت سرورهای برنامه
         return UdpSeries.dns(50, 40, net)?.let { "Cloudflare DNS" to it }
     }
 
@@ -1784,11 +1786,10 @@ class AppState private constructor(context: Context) {
                         val s = UdpSeries.summary(r)
                         rows.add(UdpRow(name, s?.first, s?.second, UdpSeries.lossPct(r)))
                     }
-                    val kmix = account?.configs?.filter { it.protocol == "kankimix" }?.minByOrNull { protoPing(it.node, it.protocol)?.takeIf { p -> p > 0 } ?: 99_999L }
                     val jobs = listOf(
                         "Cloudflare DNS · 1.1.1.1" to { UdpSeries.dns(50, 40, net, "1.1.1.1") },
                         "Google DNS · 8.8.8.8" to { UdpSeries.dns(50, 40, net, "8.8.8.8") },
-                    ) + listOfNotNull(kmix?.let { l -> "${l.nodeName} · KANKI MIX" to { runCatching { Probe.kmixSeries(net ?: Probe.underlying(ctx), fetchConfig(l), 50, 40) }.getOrNull() } })
+                    )
                     val res = NetCheck.parallel(jobs, 20_000, { it.second() }, { null })
                     jobs.forEachIndexed { i, j -> row(j.first, res[i]) }
                     rows

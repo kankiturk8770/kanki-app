@@ -169,6 +169,12 @@ object ThemeState {
         targetId = t.id
     }
 
+    /** تم ذخیره‌شده همان لحظه‌ی باز شدن برنامه، بی انیمیشن: اسپلش و صفحه‌ی ورود کد از اول با رنگ تم کاربرند (نه سبز پیش‌فرض) */
+    fun snap(id: String) {
+        val t = Themes.firstOrNull { it.id == id } ?: Themes[0]
+        from = t; targetId = t.id; current = t
+    }
+
     /** عوض شدن تم را نرم می‌کند (رنگ‌ها در ۴۲۰ میلی‌ثانیه از تم قبلی به تم تازه می‌رسند) */
     @Composable
     fun animate() {
@@ -414,7 +420,7 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
 }
 
 @Composable
-fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
+fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI PING") {
     T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true, maxLines = 1)
 }
 
@@ -602,63 +608,6 @@ fun InfoRow(label: String, value: String, valueColor: Color = K.Text) {
 @Composable
 fun Dot(color: Color, size: Dp = 9.dp) {
     Box(Modifier.size(size).clip(CircleShape).background(color))
-}
-
-
-// ------------------------------------------------------------------ گیج تست سرعت
-
-private val gaugeTicks = listOf(0.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0)
-
-/** موقعیت یک عدد روی گیج (۰ تا ۱) با مقیاس لگاریتمی مثل اسپیدتست */
-fun gaugeFraction(v: Double): Float {
-    val x = v.coerceIn(0.0, 1000.0)
-    for (i in 0 until gaugeTicks.size - 1) {
-        if (x <= gaugeTicks[i + 1]) {
-            val f = (x - gaugeTicks[i]) / (gaugeTicks[i + 1] - gaugeTicks[i])
-            return ((i + f) / (gaugeTicks.size - 1)).toFloat()
-        }
-    }
-    return 1f
-}
-
-@Composable
-fun SpeedGauge(value: Double, color: Color, modifier: Modifier = Modifier) {
-    val tm = rememberTextMeasurer()
-    val anim by animateFloatAsState(gaugeFraction(value), tween(300), label = "g")
-    Canvas(modifier) {
-        val c = Offset(size.width / 2, size.height * .55f)
-        // شعاع طوری که قوس از بالای کادر بیرون نزند
-        val r = minOf(size.width / 2, size.height * .55f) * .9f
-        val start = 145f
-        val sweep = 250f
-        val tl = Offset(c.x - r, c.y - r)
-        val sz = Size(r * 2, r * 2)
-        val sw = 14.dp.toPx()
-        drawArc(Color(0x22FFFFFF), start, sweep, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round))
-        if (anim > 0.001f) {
-            for ((m, a) in listOf(2.2f to .15f, 1.4f to .35f, 1f to 1f)) {
-                drawArc(color.copy(alpha = a), start, sweep * anim, false, tl, sz, style = Stroke(sw * m, cap = StrokeCap.Round))
-            }
-        }
-        val labelStyle = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = K.Sub)
-        gaugeTicks.forEachIndexed { i, t ->
-            val ang = Math.toRadians((start + sweep * i / (gaugeTicks.size - 1)).toDouble())
-            val p1 = Offset(c.x + (r - sw * 1.3f) * cos(ang).toFloat(), c.y + (r - sw * 1.3f) * sin(ang).toFloat())
-            val p2 = Offset(c.x + (r - sw * 2.1f) * cos(ang).toFloat(), c.y + (r - sw * 2.1f) * sin(ang).toFloat())
-            drawLine(K.Gold.copy(alpha = .8f), p1, p2, 2.dp.toPx(), cap = StrokeCap.Round)
-            val lp = Offset(c.x + (r - sw * 3.4f) * cos(ang).toFloat(), c.y + (r - sw * 3.4f) * sin(ang).toFloat())
-            val layout = tm.measure(t.toInt().toString(), labelStyle)
-            drawText(layout, topLeft = Offset(lp.x - layout.size.width / 2f, lp.y - layout.size.height / 2f))
-        }
-        // عقربه
-        val na = Math.toRadians((start + sweep * anim).toDouble())
-        val tip = Offset(c.x + (r - sw * 1.2f) * cos(na).toFloat(), c.y + (r - sw * 1.2f) * sin(na).toFloat())
-        for ((m, a) in listOf(3f to .15f, 1.8f to .35f, 1f to 1f)) {
-            drawLine(color.copy(alpha = a), c, tip, 4.dp.toPx() * m, cap = StrokeCap.Round)
-        }
-        drawCircle(K.Panel, 12.dp.toPx(), c)
-        drawCircle(color, 12.dp.toPx(), c, style = Stroke(3.dp.toPx()))
-    }
 }
 
 

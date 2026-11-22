@@ -393,84 +393,106 @@ private fun dnsRowLabel(r: DnsRowUi): String = dnsRowTitle(r) + " · " + dnsRowT
 
 // ================================================================== پنل‌های پایین (گیمینگ و ضد فیلتر)
 
-/** قاب پنل پایین با پرده‌ی تیره روی نقشه؛ با لمس بیرون بسته می‌شود */
+/**
+ * پاپ‌آپ شناور گیمینگ و ضد فیلتر (۱.۴۱): کارت شیشه‌ای تیره با فاصله‌ی ۲۰dp از پایین و دو لبه، گوشه‌ی ۲۴dp و ارتفاع ثابت
+ * (۶۴٪ صفحه) در همه‌ی پروتکل‌ها؛ فهرست کم هم بالا چیده می‌شود و قاب کوچک نمی‌شود، فهرست زیاد داخل خودش اسکرول می‌خورد.
+ * سربرگ یک خط: آیکون و عنوان، و آن طرف چرخ‌دنده و ✕. در نمای تنظیمات به‌جای چرخ‌دنده «بازگشت به سرورها».
+ * با لمس بیرون هم بسته می‌شود.
+ */
 @Composable
 fun ModeSheet(
-    visible: Boolean, mode: KMode, title: String, sub: String, onClose: () -> Unit,
-    trailing: @Composable RowScope.() -> Unit = {},
+    visible: Boolean, mode: KMode, title: String, onClose: () -> Unit,
+    inSettings: Boolean = false, onSettings: (() -> Unit)? = null, onBack: () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val mc = modeColor(mode)
     AnimatedVisibility(visible, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
         Box(
-            Modifier.fillMaxSize().background(Color(0xA6000000))
+            Modifier.fillMaxSize().background(Color(0x99000000))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
         )
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+    val h = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * .64f).dp
+    Box(Modifier.fillMaxSize().padding(SHEET_GAP), contentAlignment = Alignment.BottomCenter) {
         AnimatedVisibility(
             visible,
-            enter = slideInVertically(tween(260)) { it } + fadeIn(),
-            exit = slideOutVertically(tween(220)) { it } + fadeOut(),
+            enter = slideInVertically(tween(280)) { it / 3 } + fadeIn(tween(240)),
+            exit = slideOutVertically(tween(220)) { it / 3 } + fadeOut(tween(180)),
         ) {
-            val shape = RoundedCornerShape(topStart = D.RX, topEnd = D.RX)
-            // کشیدن سربرگ پنل به پایین می‌بندد (۱.۲۹)؛ کمتر از ۹۶dp با فنر برمی‌گردد
-            val drag = remember { Animatable(0f) }
-            val scope = rememberCoroutineScope()
-            val dragMod = Modifier.pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = {
-                        if (drag.value > 96.dp.toPx()) { onClose(); scope.launch { drag.snapTo(0f) } }
-                        else scope.launch { drag.animateTo(0f, spring(Spring.DampingRatioMediumBouncy)) }
-                    },
-                    onDragCancel = { scope.launch { drag.animateTo(0f) } },
-                ) { _, dy -> scope.launch { drag.snapTo((drag.value + dy).coerceAtLeast(0f)) } }
-            }
+            val shape = RoundedCornerShape(SHEET_R)
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 660.dp)
-                    .graphicsLayer { translationY = drag.value }
+                Modifier.fillMaxWidth().height(h)
+                    .drawBehind { liftShadow(shape.createOutline(size, layoutDirection, this), 14.dp.toPx(), .7f, mc) }
                     .clip(shape)
-                    .background(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.White, .09f), lerp(K.BgMid, Color.Black, .35f))))
-                    .background(Brush.linearGradient(listOf(Color.White.copy(alpha = .06f), Color.Transparent, Color.Black.copy(alpha = .1f))))
-                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .35f), mc.copy(alpha = .25f), Color.Transparent)), shape)
+                    .background(Brush.verticalGradient(listOf(lerp(K.BgMid, Color.Black, .25f).copy(alpha = .97f), lerp(K.BgMid, Color.Black, .55f).copy(alpha = .98f))))
+                    .background(Brush.linearGradient(listOf(Color.White.copy(alpha = .07f), Color.Transparent, mc.copy(alpha = .05f))))
+                    .border(1.dp, Brush.verticalGradient(listOf(mc.copy(alpha = .55f), mc.copy(alpha = .18f), Color.White.copy(alpha = .06f))), shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .padding(horizontal = D.PagePad, vertical = D.S2),
+                    .padding(start = D.S4, end = D.S4, top = D.S3),
             ) {
-                Box(Modifier.fillMaxWidth().height(D.S5).then(dragMod), contentAlignment = Alignment.Center) {
-                    Box(Modifier.width(D.S6 * 2).height(5.dp).clip(CircleShape).background(Color.White.copy(alpha = .25f)))
-                }
-                Spacer(Modifier.height(D.S1))
-                Row(Modifier.then(dragMod), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(D.IconBox + D.S1).goldFill(CircleShape), contentAlignment = Alignment.Center) { ModeIcon(mode, K.OnGold, D.S5) }
-                    Spacer(Modifier.width(D.S3))
-                    Column(Modifier.weight(1f)) {
-                        T(title, size = D.TxtPage, color = K.Text, weight = FontWeight.Black)
-                        T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
-                    }
-                    trailing()
+                // سربرگ یک‌خطی
+                Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(34.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { ModeIcon(mode, K.OnGold, 18.dp) }
                     Spacer(Modifier.width(D.S2))
-                    // دکمه‌ی بستن (قبلاً فقط با لمس روی نقشه بسته می‌شد)
+                    T(if (inSettings) "تنظیمات" else title, size = 17.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (inSettings) {
+                        val sh = RoundedCornerShape(50)
+                        Row(
+                            Modifier.height(D.BtnS).goldGlass(sh, tint = mc).pressable(onClick = onBack).padding(horizontal = D.S3),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Canvas(Modifier.size(12.dp)) { backArrow(K.Text) }
+                            Spacer(Modifier.width(6.dp))
+                            T("بازگشت به لیست سرورها", size = 11.5.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
+                        }
+                    } else if (onSettings != null) {
+                        Box(Modifier.guideTarget(if (mode == KMode.GAME) "game_only" else "filter_set")) {
+                            RoundIcon(D.IconBox, mc, onClick = onSettings) { Canvas(Modifier.size(18.dp)) { gearIcon(K.Text) } }
+                        }
+                    }
+                    Spacer(Modifier.width(D.S2))
                     RoundIcon(D.IconBox, K.Sub, onClick = onClose) {
-                        Canvas(Modifier.size(14.dp)) {
+                        Canvas(Modifier.size(13.dp)) {
                             val w = size.width
-                            drawLine(K.Text, Offset(0f, 0f), Offset(w, w), w * .16f, StrokeCap.Round)
-                            drawLine(K.Text, Offset(w, 0f), Offset(0f, w), w * .16f, StrokeCap.Round)
+                            drawLine(K.Text, Offset(0f, 0f), Offset(w, w), w * .17f, StrokeCap.Round)
+                            drawLine(K.Text, Offset(w, 0f), Offset(0f, w), w * .17f, StrokeCap.Round)
                         }
                     }
                 }
                 Spacer(Modifier.height(D.S2))
-                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { content() }
+                Column(Modifier.weight(1f).fillMaxWidth()) { content() }
             }
         }
     }
 }
 
-@Composable
-private fun SheetLabel(text: String, trailing: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(top = D.S3, bottom = D.S2, start = D.S1, end = D.S1), verticalAlignment = Alignment.CenterVertically) {
-        T(text, size = 12.sp, color = K.Sub, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        trailing()
+private val SHEET_GAP = 20.dp
+private val SHEET_R = 24.dp
+
+/** چرخ‌دنده‌ی تنظیمات (بی متن) */
+fun DrawScope.gearIcon(c: Color) {
+    val w = size.minDimension
+    val ctr = center
+    val teeth = 8
+    for (i in 0 until teeth) {
+        rotate(i * 360f / teeth, ctr) {
+            drawRoundRect(c, Offset(ctr.x - w * .09f, ctr.y - w * .5f), Size(w * .18f, w * .26f), CornerRadius(w * .04f))
+        }
     }
+    drawCircle(c, w * .33f, ctr)
+    drawCircle(Color.Black.copy(alpha = .55f), w * .14f, ctr)
+}
+
+/** فلش «بازگشت»: رو به جهت خواندن (در فارسی به راست) */
+fun DrawScope.backArrow(c: Color) {
+    val w = size.minDimension
+    val rtl = layoutDirection == LayoutDirection.Rtl
+    val tip = if (rtl) w * .85f else w * .15f
+    val tail = if (rtl) w * .15f else w * .85f
+    val k = w * .17f
+    drawLine(c, Offset(tail, w / 2), Offset(tip, w / 2), k, StrokeCap.Round)
+    drawLine(c, Offset(tip, w / 2), Offset((tip + tail) / 2, w * .18f), k, StrokeCap.Round)
+    drawLine(c, Offset(tip, w / 2), Offset((tip + tail) / 2, w * .82f), k, StrokeCap.Round)
 }
 
 /** برچسب کوچک گرد */
@@ -482,14 +504,6 @@ private fun Tag(text: String, c: Color, strong: Boolean = false) {
         modifier = Modifier.clip(sh).background(c.copy(alpha = if (strong) .18f else .10f)).border(1.dp, c.copy(alpha = .35f), sh)
             .padding(horizontal = D.S2, vertical = 2.dp),
     )
-}
-
-@Composable
-private fun Radio(on: Boolean, c: Color) {
-    Box(
-        Modifier.size(D.Icon).clip(CircleShape).border(1.6.dp, if (on) c else K.Sub.copy(alpha = .6f), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) { if (on) Box(Modifier.size(10.dp).clip(CircleShape).background(c)) }
 }
 
 @Composable
@@ -506,135 +520,104 @@ private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, en
 /** یک سرور در پنل گیمینگ / ضد فیلتر: پرچم، اسم، برچسب (تانل، مستقیم، …)، پینگ و راهش (tunnel / direct) */
 data class SheetServer(val node: String, val proto: String, val flag: String, val name: String, val tag: String?, val ping: Long?, val side: String = "direct", val q: Modes.GameQ? = null, val group: String = "")
 
-/** یک سرور با دو راهش کنار هم: کانفیگ تانل (راست) و کانفیگ مستقیم (چپ)؛ هر کدام ممکن است نباشد */
-data class SheetPair(val flag: String, val name: String, val tunnel: SheetServer?, val direct: SheetServer?) {
-    /** شناسه‌ی ثابت ردیف (اسم دو سرور می‌تواند یکی باشد) */
-    val id: String get() = (tunnel?.let { it.node + "|" + it.proto } ?: "-") + "/" + (direct?.let { it.node + "|" + it.proto } ?: "-")
-    val best: Long? get() = listOfNotNull(tunnel?.ping, direct?.ping).filter { it > 0 }.minOrNull()
-}
-
-/**
- * کانفیگ‌های یک پروتکل، هر سرور یک ردیف: تانل و مستقیم همان سرور روبه‌روی هم (حتی اگر تانل سرور دیگری پینگ بهتری
- * داشته باشد)؛ ردیف‌ها به ترتیب بهترین پینگ هر سرور.
- */
-fun pairsOf(list: List<SheetServer>): List<SheetPair> =
-    list.groupBy { it.node.removeSuffix(TUNNEL_TWIN) }.values.flatMap { g ->
-        val t = g.filter { it.side == "tunnel" }
-        val d = g.filter { it.side != "tunnel" }
-        val head = g.first()
-        (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
-    }.sortedBy { it.best ?: 99_999L }
-
-/** لینک‌های Xray، جفت‌شده با «group» پنل (یا اسم ردیف: کشور خروج · نوع پروتکل): هر ردیف یک خانه‌ی تانل و یک خانه‌ی مستقیم */
-fun xrayPairs(list: List<SheetServer>): List<SheetPair> =
-    list.groupBy { it.group.ifBlank { it.name } }.values.flatMap { g ->
-        val t = g.filter { it.side == "tunnel" }
-        val d = g.filter { it.side != "tunnel" }
-        // پرچم و اسم ردیف از لینک مستقیم (مکان خروج خود سرور)، نه از کپی تانل
-        val head = d.firstOrNull() ?: g.first()
-        (0 until maxOf(t.size, d.size)).map { i -> SheetPair(head.flag, head.name, t.getOrNull(i), d.getOrNull(i)) }
-    }.sortedBy { it.best ?: 99_999L }
-
-/** یک خانواده‌ی پروتکل در پنل گیمینگ (KANKI MIX، Amnezia، WireGuard) با سرورهای خودش */
+/** یک خانواده‌ی پروتکل در پنل گیمینگ یا ضد فیلتر (KANKI MIX، Amnezia، Xray، …) با سرورهای خودش */
 data class GameFamilyUi(val key: String, val title: String, val sub: String, val servers: List<SheetServer>) {
     val best: Long? get() = servers.mapNotNull { it.ping }.filter { it > 0 }.minOrNull()
 }
 
-/** دکمه‌ی کپسولی کوچک یک خانواده‌ی پروتکل (۱.۳۲.۳): فقط اسم؛ انتخاب‌شده شیشه‌ی نئونی */
+/** راه هر سرور برای فیلتر سه‌حالته‌ی بالای فهرست */
+fun sideOf(sv: SheetServer): String = if (sv.side == "tunnel") "tunnel" else "direct"
+
+/** فهرست یک پروتکل با فیلتر «همه / مستقیم / تانل» */
+fun filterSide(list: List<SheetServer>, side: String): List<SheetServer> = if (side == "all") list else list.filter { sideOf(it) == side }
+
+/** کپسول یک پروتکل در نوار افقی بالای پاپ‌آپ */
 @Composable
-private fun FamilyCard(f: GameFamilyUi, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val c = familyColor(f.key)
-    val has = f.servers.isNotEmpty()
-    // ۱.۳۴.۲: شیشه‌ی تم با فشردگی نرم هنگام لمس و پالس نئونی دورنگ (رنگ اصلی تا رنگ دوم تم) دور کپسول انتخاب‌شده
-    val press = remember { MutableInteractionSource() }
-    val down by press.collectIsPressedAsState()
-    val k by animateFloatAsState(if (down) .95f else 1f, spring(dampingRatio = .55f, stiffness = 700f), label = "famPress")
-    val selA by animateFloatAsState(if (selected) 1f else 0f, tween(300), label = "famSel")
-    val clock = motionTime()
+private fun ProtoPill(title: String, c: Color, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val selA by animateFloatAsState(if (selected) 1f else 0f, tween(260), label = "pill")
     Box(
-        modifier.height(36.dp)
-            .graphicsLayer { scaleX = k; scaleY = k }
-            .drawBehind {
-                if (selA > .01f) {
-                    val pulse = .5f + .5f * kotlin.math.sin(clock.value * 3.2f)
-                    val o = CircleShape.createOutline(size, layoutDirection, this)
-                    val br = Brush.linearGradient(listOf(c, K.Gold2, c), Offset.Zero, Offset(size.width, size.height))
-                    drawOutline(o, br, alpha = selA * (.10f + .14f * pulse), style = Stroke((5f + 3f * pulse).dp.toPx()))
-                }
-            }
+        Modifier.height(32.dp)
             .goldGlass(CircleShape, selected = selected, tint = c)
-            .alpha(if (has) 1f else .4f)
-            .clickable(enabled = has, interactionSource = press, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
-            .padding(horizontal = D.S2),
+            .alpha(if (enabled) 1f else .4f)
+            .then(if (enabled) Modifier.pressable(scale = .95f, onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        AutoText(f.title, size = 12.sp, color = if (selected) Color.White else K.Text)
+        T(title, size = 12.sp, color = lerp(K.Text, Color.White, selA), weight = FontWeight.Bold, maxLines = 1, ltr = true)
     }
 }
 
-/** یک سرور در یک ردیف باریک (۱.۳۲): پرچم گرد و اسم، و کنارش دو خانه‌ی کوچک تانل و مستقیم؛ لمس هر خانه = اتصال به همان */
+/** نوار افقی و اسکرولی پروتکل‌ها (یک ردیف) */
 @Composable
-private fun PairRow(p: SheetPair, current: String?, auto: Boolean, color: Color, enabled: Boolean, tunnelOnly: Boolean = false, onClick: (SheetServer) -> Unit) {
-    val shape = RoundedCornerShape(D.RM)
-    val lit = !auto && listOfNotNull(p.tunnel, p.direct).any { current == it.node + "|" + it.proto }
+private fun ProtoBar(families: List<GameFamilyUi>, sel: String, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 7.dp).height(52.dp).goldGlass(shape, selected = lit, tint = color).padding(horizontal = D.S2),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(D.S2),
     ) {
-        Box(
-            Modifier.size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = .4f)).border(1.5.dp, Color.White.copy(alpha = .4f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { T(p.flag, size = 17.sp, weight = FontWeight.Normal) }
-        Spacer(Modifier.width(D.S2))
-        AutoText(p.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f))
-        PairCell(p.tunnel, "تانل", !auto && p.tunnel != null && current == p.tunnel.node + "|" + p.tunnel.proto, color, enabled, Modifier.width(66.dp), onClick)
-        if (!tunnelOnly) Spacer(Modifier.width(6.dp))
-        if (!tunnelOnly) PairCell(p.direct, "مستقیم", !auto && p.direct != null && current == p.direct.node + "|" + p.direct.proto, color, enabled, Modifier.width(66.dp), onClick)
+        families.forEach { f -> ProtoPill(f.title, familyColor(f.key), f.key == sel, f.servers.isNotEmpty()) { onPick(f.key) } }
+    }
+}
+
+/** سوییچ کپسولی سه‌حالته: همه | مستقیم | تانل */
+@Composable
+private fun SideSwitch(sel: String, c: Color, counts: Map<String, Int>, onPick: (String) -> Unit) {
+    val sh = RoundedCornerShape(50)
+    Row(
+        Modifier.fillMaxWidth().height(34.dp).clip(sh).background(Color.Black.copy(alpha = .28f)).border(1.dp, Color.White.copy(alpha = .08f), sh).padding(3.dp),
+    ) {
+        listOf("all" to "همه", "direct" to "مستقیم", "tunnel" to "تانل").forEach { (k, name) ->
+            val on = k == sel
+            val n = counts[k] ?: 0
+            Box(
+                Modifier.weight(1f).fillMaxHeight().clip(sh)
+                    .then(if (on) Modifier.goldGlass(sh, selected = true, tint = c) else Modifier)
+                    .alpha(if (n > 0 || k == "all") 1f else .45f)
+                    .pressable(scale = .97f) { onPick(k) },
+                contentAlignment = Alignment.Center,
+            ) {
+                T(tr(name) + "  " + n, size = 11.5.sp, color = if (on) Color.White else K.Sub, weight = FontWeight.Bold, maxLines = 1)
+            }
+        }
     }
 }
 
 /**
- * یک خانه: دکمه‌ی انتخاب، اسم راه (تانل، مستقیم یا اسمی که ادمین گذاشته) و پینگ؛ زیرش پایداری برای بازی (پایدار / متوسط / ضعیف
- * و درصد افت، از سنجش واقعی). جای خط دوم همیشه هست تا با رسیدن سنجش چیزی جابه‌جا نشود. خالی وقتی این سرور آن راه را ندارد.
+ * کارت افقی یک کانفیگ (۱.۴۱): پرچم، اسم و برچسب رنگی «مستقیم» یا «تانل» (و برای گیمینگ خط پایداری) در یک طرف، پینگ با رنگ
+ * وضعیت در طرف دیگر. سروری که جواب نداد کم‌رنگ و با برچسب «آفلاین»، و لمس نمی‌شود.
  */
 @Composable
-private fun PairCell(sv: SheetServer?, label: String, selected: Boolean, color: Color, enabled: Boolean, modifier: Modifier, onClick: (SheetServer) -> Unit) {
-    val shape = RoundedCornerShape(10.dp)
-    Column(
-        modifier.height(38.dp)
-            .then(if (sv != null) Modifier.goldGlass(shape, selected = selected, tint = color) else Modifier.clip(shape).border(1.dp, Color.White.copy(alpha = .06f), shape))
-            .alpha(if (sv == null) .4f else if (enabled) 1f else .55f)
-            .clickable(enabled = enabled && sv != null) { sv?.let(onClick) },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun ServerCard(sv: SheetServer, selected: Boolean, color: Color, enabled: Boolean, gaming: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(D.RM)
+    val off = sv.ping != null && sv.ping < 0
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = D.S2).height(if (gaming) 58.dp else 52.dp)
+            .goldGlass(shape, selected = selected, tint = color)
+            .alpha(if (off) .45f else if (enabled) 1f else .6f)
+            .then(if (enabled && !off) Modifier.pressable(onClick = onClick) else Modifier)
+            .padding(horizontal = D.S3),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (sv == null) { T("—", size = 12.sp, color = K.Sub, ltr = true); return@Column }
-        // اسم راه و نقطه‌ی پایداری (سبز پایدار، زرد متوسط، قرمز ضعیف؛ خاکستری تا سنجش برسد)
-        val q = sv.q
-        val dot = when {
-            sv.ping != null && sv.ping < 0 -> K.Sub
-            q == null -> K.Sub.copy(alpha = .5f)
-            else -> when (Modes.stability(q)) { 0 -> K.Ok; 1 -> K.Warn; else -> K.Red }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(5.dp).clip(CircleShape).background(dot))
-            Spacer(Modifier.width(3.dp))
-            T(label, size = 10.sp, color = Color.White, weight = FontWeight.Bold, maxLines = 1)
-        }
-        val p = sv.ping
-        CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                T(when { p == null -> "…"; p < 0 -> "✕"; else -> "$p" }, size = 12.sp, color = if (p != null && p > 0) K.Text else K.Sub, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
-                if (p != null && p > 0) {
-                    Spacer(Modifier.width(2.dp))
-                    T("ms", size = 8.5.sp, color = K.Sub, font = Poppins, ltr = true, modifier = Modifier.padding(bottom = 1.dp))
-                }
+        Box(
+            Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = .4f)).border(1.2.dp, Color.White.copy(alpha = .35f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { T(sv.flag, size = 17.sp, weight = FontWeight.Normal) }
+        Spacer(Modifier.width(D.S2))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(6.dp))
+                val tun = sideOf(sv) == "tunnel"
+                Tag(tr(if (tun) "تانل" else "مستقیم"), if (tun) K.Gold2 else K.Gold, strong = true)
+                if (off) { Spacer(Modifier.width(4.dp)); Tag(tr("آفلاین"), K.Sub) }
             }
+            if (gaming && !off) StabilityLine(sv.q, sv.ping)
         }
+        Spacer(Modifier.width(D.S2))
+        PingSlot(sv.ping, 12.5.sp, 58.dp)
     }
 }
 
-/** خط دوم هر خانه: نقطه‌ی رنگی و «پایدار / متوسط / ضعیف · افت ٪»؛ تا سنجش برسد «در حال سنجش…» */
+/** خط دوم هر کارت گیمینگ: نقطه‌ی رنگی و «پایدار / متوسط / ضعیف · افت ٪»؛ تا سنجش برسد «در حال سنجش…» */
 @Composable
 private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
     val (txt, col) = when {
@@ -648,7 +631,7 @@ private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
             (if (q.n >= Modes.LOSS_MIN_SAMPLES) name + " · " + trf("افت %d٪", q.loss) else name) to c
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = D.S1, top = 2.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(col))
         Spacer(Modifier.width(D.S1))
         T(txt, size = 10.sp, color = if (q == null) K.Sub else col, weight = FontWeight.SemiBold, maxLines = 1)
@@ -662,36 +645,13 @@ private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
 private fun PingSlot(p: Long?, size: androidx.compose.ui.unit.TextUnit, width: androidx.compose.ui.unit.Dp = 50.dp) {
     Box(Modifier.width(width), contentAlignment = Alignment.CenterEnd) {
         if (p == null) T("…", size = size, color = K.Sub, font = Poppins, ltr = true, maxLines = 1)
-        else T(if (p < 0) "✕" else "$p ms", size = size, color = pingColor(p), font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1)
-    }
-}
-
-/** یک ردیف سرور: لمس یعنی همین حالا به همین وصل شو */
-@Composable
-private fun ServerRow(sv: SheetServer, selected: Boolean, color: Color, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(D.RS)
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH).clip(shape)
-            .background(if (selected) color.copy(alpha = .12f) else Color(0x08FFFFFF))
-            .border(if (selected) 1.3.dp else 1.dp, if (selected) color.copy(alpha = .85f) else K.Gold.copy(alpha = .16f), shape)
-            .alpha(if (enabled) 1f else .55f)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = D.S3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Radio(selected, color)
-        Spacer(Modifier.width(D.S3))
-        T(sv.flag, size = 15.sp, weight = FontWeight.Normal)
-        Spacer(Modifier.width(D.S2))
-        AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f))
-        sv.tag?.let { Tag(it, color); Spacer(Modifier.width(D.S2)) }
-        PingSlot(sv.ping, 11.sp)
+        else T(if (p < 0) "✕" else "$p ms", size = size, color = pingColor(p), font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
     }
 }
 
 /**
- * ردیف «بهترین سرور برای بازی» (۱.۳۲): قاب ویژه با لبه‌ی گرادیان نئونی، آیکون صاعقه در دکمه‌ی گرد پر، برچسب «پایدار» و
- * پینگ؛ خودش پایدارترین سرور همین پروتکل را انتخاب و وصل می‌کند.
+ * ردیف «بهترین سرور» (۱.۳۲): قاب ویژه با لبه‌ی گرادیان نئونی، آیکون صاعقه در دکمه‌ی گرد پر، برچسب «پایدار» و
+ * پینگ؛ خودش بهترین سرور همین پروتکل را انتخاب و وصل می‌کند.
  */
 @Composable
 private fun FastestRow(
@@ -700,23 +660,22 @@ private fun FastestRow(
     steady: Boolean = true,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(D.RL)
+    val shape = RoundedCornerShape(D.RM)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH + 4.dp)
+        Modifier.fillMaxWidth().padding(bottom = D.S2).height(D.RowH)
             .drawBehind {
                 val o = shape.createOutline(size, layoutDirection, this)
-                liftShadow(o, 6.dp.toPx(), .5f, color)
-                for ((m, a) in listOf(10f to .05f, 5f to .12f)) drawOutline(o, color.copy(alpha = a * (if (selected) 1.5f else 1f)), style = Stroke(m.dp.toPx()))
+                for ((m, a) in listOf(8f to .05f, 4f to .12f)) drawOutline(o, color.copy(alpha = a * (if (selected) 1.5f else 1f)), style = Stroke(m.dp.toPx()))
             }
             .clip(shape)
             .background(Brush.linearGradient(listOf(lerp(K.BgMid, color, .16f), lerp(K.BgMid, Color.Black, .45f))))
             .border(1.5.dp, Brush.linearGradient(listOf(lerp(color, Color.White, .5f), color, Color.Transparent, color.copy(alpha = .5f), lerp(color, Color.White, .5f))), shape)
             .alpha(if (enabled) 1f else .5f)
-            .clickable(enabled = enabled, onClick = onClick)
+            .then(if (enabled) Modifier.pressable(onClick = onClick) else Modifier)
             .padding(horizontal = D.S3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(34.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { MiniIcon("bolt", K.OnGold, 15.dp) }
+        Box(Modifier.size(32.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { MiniIcon("bolt", K.OnGold, 15.dp) }
         Spacer(Modifier.width(D.S3))
         Column(Modifier.weight(1f)) {
             T(title, size = D.TxtTitle, color = K.Text, weight = FontWeight.Black, maxLines = 1)
@@ -724,28 +683,86 @@ private fun FastestRow(
         }
         Spacer(Modifier.width(D.S2))
         val sh = RoundedCornerShape(50)
-        // برچسب «پایدار» فقط برای گیمینگ (که با لرزش و افت انتخاب می‌کند)؛ ضد فیلتر با پینگ و وصل شدن انتخاب می‌کند
         if (steady) Row(
             Modifier.clip(sh).background(K.Good.copy(alpha = .15f)).border(1.dp, K.Good.copy(alpha = .4f), sh).padding(horizontal = D.S2, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // رنگ وضعیت ثابت (سبز «خوب») در هر تم
             Dot(K.Good, 5.dp)
             Spacer(Modifier.width(4.dp))
             T("پایدار", size = 10.sp, color = K.Good, weight = FontWeight.Black, maxLines = 1)
         }
-        // جای عدد همیشه هست (خالی تا اولین پینگ): متن کنارش با رسیدن عدد جابه‌جا نمی‌شود
-        Box(Modifier.width(48.dp), contentAlignment = Alignment.CenterEnd) {
-            best?.let { T("$it ms", size = 12.sp, color = K.Text, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1) }
+        Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) {
+            best?.let { T("$it ms", size = 12.sp, color = pingColor(it), font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1) }
         }
     }
 }
 
 /**
- * پنل گیمینگ: بالا چهار پروتکل هم‌اندازه (KANKI MIX اول، Hysteria2، Amnezia، WireGuard)؛ زیرش سرورهای همان
- * پروتکل در دو ستون، تانل راست و مستقیم چپ، هر سرور یک ردیف. لمس یک خانه = اتصال به همان.
- * «سریع‌ترین سرور» کم‌پینگ‌ترین کانفیگ همان پروتکل را برمی‌دارد.
- * برای KANKI MIX کلید «ارسال دوتایی» هست. همه‌ی برنامه‌ها (بازی، سرویس‌های گوگل، مرورگر) از VPN رد می‌شوند.
+ * نمای فهرست مشترک هر دو پاپ‌آپ: نوار پروتکل‌ها، فیلتر سه‌حالته و زیرش (داخل قاب ثابت، اسکرولی) «بهترین سرور» و کارت‌ها.
+ * ترتیب کارت‌ها با باز شدن پنل (یا عوض شدن پروتکل) یک بار ثابت می‌شود: پینگ‌هایی که بعد می‌رسند فقط عددها را عوض
+ * می‌کنند، نه جای کارت‌ها (وگرنه کارت زیر انگشت کاربر جابه‌جا می‌شد).
+ */
+@Composable
+private fun ColumnScope.SheetList(
+    visible: Boolean, families: List<GameFamilyUi>, fam: String, onFam: (String) -> Unit,
+    side: String, onSide: (String) -> Unit, current: String?, auto: Boolean, busy: Boolean, gaming: Boolean,
+    listTarget: String, fastest: @Composable (GameFamilyUi) -> Unit, onConnect: (String, String) -> Unit,
+) {
+    val f = families.firstOrNull { it.key == fam }
+    val c = familyColor(fam)
+    ProtoBar(families, fam, Modifier.guideTarget(if (gaming) "game_fams" else "filter_list"), onFam)
+    Spacer(Modifier.height(D.S2))
+    val all = f?.servers ?: emptyList()
+    SideSwitch(side, c, mapOf("all" to all.size, "direct" to all.count { sideOf(it) == "direct" }, "tunnel" to all.count { sideOf(it) == "tunnel" }), onSide)
+    Spacer(Modifier.height(D.S2))
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).guideTarget(listTarget)) {
+        if (f == null || all.isEmpty()) {
+            Spacer(Modifier.height(D.S4))
+            T("این پروتکل در اشتراک شما نیست.", size = 12.sp, color = K.Warn, weight = FontWeight.Normal, modifier = Modifier.align(Alignment.CenterHorizontally))
+        } else {
+            fastest(f)
+            val shown = filterSide(all, side)
+            val order = remember(visible, fam) { mutableListOf<String>() }
+            all.sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }.forEach { s -> (s.node + "|" + s.proto + "|" + s.name).let { if (it !in order) order.add(it) } }
+            if (shown.isEmpty()) T(if (side == "tunnel") "این پروتکل کانفیگ تانل ندارد." else "این پروتکل کانفیگ مستقیم ندارد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(D.S2))
+            shown.sortedBy { order.indexOf(it.node + "|" + it.proto + "|" + it.name) }.forEach { sv ->
+                key(sv.node + "|" + sv.proto + "|" + sv.name) {
+                    ServerCard(sv, !auto && current == sv.node + "|" + sv.proto, c, !busy, gaming) { onConnect(sv.node, sv.proto) }
+                }
+            }
+        }
+        Spacer(Modifier.height(D.S4))
+    }
+}
+
+/** یک ردیف تنظیمات با آیکون و فلش (مثل «انتخاب بازی‌ها») */
+@Composable
+private fun SettingLink(title: String, sub: String, c: Color, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(D.RM)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).goldGlass(shape, tint = c).pressable(onClick = onClick).padding(horizontal = D.S3, vertical = D.S2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(32.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { ModeIcon(KMode.GAME, K.OnGold, 16.dp) }
+        Spacer(Modifier.width(D.S3))
+        Column(Modifier.weight(1f)) {
+            T(title, size = 13.5.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
+            T(sub, size = D.TxtSub, color = K.Sub, weight = FontWeight.Normal)
+        }
+        Canvas(Modifier.size(12.dp).graphicsLayer { rotationZ = 180f }) { backArrow(K.Sub) }
+    }
+}
+
+/** عنوان کوچک یک بخش تنظیمات */
+@Composable
+private fun SetLabel(text: String) {
+    T(text, size = 12.sp, color = K.Sub, weight = FontWeight.Bold, modifier = Modifier.padding(top = D.S4, bottom = D.S2, start = D.S1))
+}
+
+/**
+ * پنل گیمینگ: نوار پروتکل‌ها (KANKI MIX، KPING، microtun، Amnezia، WireGuard؛ فقط آن‌هایی که در اشتراک هست)، فیلتر
+ * «همه / مستقیم / تانل» و کارت هر کانفیگ؛ لمس کارت = اتصال به همان. چرخ‌دنده: انتخاب بازی‌ها (در گیمینگ فقط همین‌ها
+ * اینترنت دارند؛ فایروال همیشه روشن است) و تنظیمات هر هسته‌ی گیمینگ جدا (KANKI MIX، KPING، microtun).
  */
 @Composable
 fun GameSheet(
@@ -763,78 +780,88 @@ fun GameSheet(
     onConnect: (node: String, proto: String) -> Unit,
     onFastest: (family: String) -> Unit,
     onClose: () -> Unit,
+    startInSettings: Boolean = false,
 ) {
     var fam by remember(visible) {
         mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
             ?: families.firstOrNull { it.servers.isNotEmpty() }?.key ?: initFamily)
     }
+    var side by remember(visible) { mutableStateOf("all") }
+    var settings by remember(visible) { mutableStateOf(startInSettings) }
     LaunchedEffect(visible, fam) { if (visible) onFamilyShown(fam) }
-    val f = families.firstOrNull { it.key == fam }
-    val c = familyColor(fam)
-    ModeSheet(visible, KMode.GAME, "گیمینگ", "پروتکل را انتخاب کن، بعد سرور را بزن", onClose) {
-        // سه کارت کوچک در هر ردیف (طرح شیشه‌ای ۱.۳۲): اسم، پینگ و نوار پایداری
-        Column(Modifier.fillMaxWidth().padding(top = D.S1).guideTarget("game_fams"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            families.chunked(3).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    row.forEach { x -> FamilyCard(x, x.key == fam, Modifier.weight(1f)) { fam = x.key } }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
+    ModeSheet(visible, KMode.GAME, "گیمینگ", onClose, inSettings = settings, onSettings = { settings = true }, onBack = { settings = false }) {
+        androidx.compose.animation.Crossfade(settings, animationSpec = tween(220), label = "gset", modifier = Modifier.weight(1f)) { inSet ->
+            Column(Modifier.fillMaxSize()) {
+                if (!inSet) {
+                    SheetList(
+                        visible, families, fam, { fam = it }, side, { side = it }, current, currentAuto, busy, gaming = true, listTarget = "game_list",
+                        fastest = { f -> FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == f.key, familyColor(f.key), f.best, !busy) { onFastest(f.key) } },
+                        onConnect = onConnect,
+                    )
+                } else GameSettings(families, fam, kmixDup, onKmixDup, gameCount, onPickGames)
             }
         }
-        // بازی‌ها: یک فهرست برای همه‌ی پروتکل‌های گیمینگ؛ در گیمینگ فقط همین بازی‌ها (و ورود گوگل و DNS) اینترنت دارند
-        val ok = AppGate.supported
-        SmallLine(
-            if (ok) trf("بازی‌ها (%d) · بقیه‌ی برنامه‌ها تا قطع بسته‌اند", gameCount) else "بازی‌ها · بستن بقیه‌ی برنامه‌ها روی اندروید ۱۰ به بالا",
-            Modifier.padding(top = D.S2).guideTarget("game_only"), onClick = onPickGames,
-        )
-        // تنظیمات خود هسته (KPING، ارسال دوتایی KANKI MIX) پشت یک دکمه‌ی کوچک، تا فهرست سرورها اول دیده شود
-        val has = f?.servers?.isNotEmpty() == true
-        val dupOn = fam == "kankimix" && has
-        val kpOn = fam == "kping" && has
-        var setOpen by remember(fam) { mutableStateOf(false) }
-        if (dupOn || kpOn) {
-            SmallLine(if (setOpen) "بستن تنظیمات" else "تنظیمات", Modifier.padding(top = D.S2), onClick = { setOpen = !setOpen })
-            androidx.compose.animation.AnimatedVisibility(setOpen) {
-                if (kpOn) KpingPanel(c) else Column(
-                    Modifier.fillMaxWidth().padding(top = D.S2).goldGlass(RoundedCornerShape(D.RL)).padding(horizontal = D.S3, vertical = D.S1),
-                ) {
-                    SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
-                }
-            }
-        }
-        SheetLabel(trf("سرورهای %s", f?.title ?: "")) {
-            if (f != null && f.servers.isNotEmpty()) T(trf("%d سرور", pairsOf(f.servers).size) + " · " + tr("مستقیم / تانل"), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
-        }
-        if (f == null || f.servers.isEmpty()) {
-            T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-        } else {
-            Column(Modifier.fillMaxWidth().guideTarget("game_list")) {
-                FastestRow(currentAuto && Modes.familyOf(current?.substringAfter("|") ?: "") == fam, c, f.best, !busy) { onFastest(fam) }
-                // ترتیب سرورها با باز شدن پنل (یا عوض شدن پروتکل) یک بار ثابت می‌شود: پینگ‌هایی که بعد می‌رسند فقط
-                // عددها را عوض می‌کنند، نه جای ردیف‌ها (وگرنه ردیف زیر انگشت کاربر جابه‌جا می‌شد)
-                val pairs = pairsOf(f.servers)
-                val order = remember(visible, fam) { mutableListOf<String>() }
-                // سرور تازه (مثلاً بعد از بروزرسانی اشتراک) ته فهرست اضافه می‌شود
-                pairs.forEach { if (it.id !in order) order.add(it.id) }
-                pairs.sortedBy { order.indexOf(it.id) }.forEach { p ->
-                    key(p.id) { PairRow(p, current, currentAuto, c, !busy, tunnelOnly = false) { sv -> onConnect(sv.node, sv.proto) } }
-                }
-            }
-        }
+    }
+}
 
-        Spacer(Modifier.height(D.S2))
+/** نمای تنظیمات گیمینگ: «انتخاب بازی‌ها» بالا، بعد هر هسته‌ی گیمینگ با کپسول خودش و تنظیمات همان هسته زیرش */
+@Composable
+private fun ColumnScope.GameSettings(families: List<GameFamilyUi>, fam: String, kmixDup: Boolean, onKmixDup: (Boolean) -> Unit, gameCount: Int, onPickGames: () -> Unit) {
+    val cores = listOf("kankimix", "kping", "mtun").filter { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
+    var core by remember { mutableStateOf(fam.takeIf { it in cores } ?: cores.firstOrNull() ?: "") }
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+        SettingLink(
+            "انتخاب بازی‌ها",
+            if (AppGate.supported) trf("لیست برنامه‌های مجاز در حالت گیمینگ · %d بازی", gameCount)
+            else tr("لیست برنامه‌های مجاز در حالت گیمینگ · بستن بقیه‌ی برنامه‌ها روی اندروید ۱۰ به بالا"),
+            modeColor(KMode.GAME), onPickGames,
+        )
+        if (cores.isNotEmpty()) {
+            SetLabel(tr("تنظیمات هسته‌های گیمینگ"))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
+                cores.forEach { k ->
+                    Box(Modifier.weight(1f)) {
+                        val sel = k == core
+                        Box(
+                            Modifier.fillMaxWidth().height(36.dp).goldGlass(CircleShape, selected = sel, tint = familyColor(k)).pressable(scale = .96f) { core = k },
+                            contentAlignment = Alignment.Center,
+                        ) { T(families.first { it.key == k }.title, size = 12.sp, color = if (sel) Color.White else K.Text, weight = FontWeight.Bold, maxLines = 1, ltr = true) }
+                    }
+                }
+            }
+            val c = familyColor(core)
+            androidx.compose.animation.Crossfade(core, animationSpec = tween(200), label = "core") { k ->
+                Column(Modifier.fillMaxWidth()) {
+                    when (k) {
+                        "kankimix" -> Column(Modifier.fillMaxWidth().padding(top = D.S3).goldGlass(RoundedCornerShape(D.RL), tint = c).padding(horizontal = D.S3, vertical = D.S2)) {
+                            T("KANKI MIX", size = 13.sp, color = c, weight = FontWeight.Black, ltr = true)
+                            Spacer(Modifier.height(D.S1))
+                            SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
+                        }
+                        "kping" -> Column(Modifier.fillMaxWidth().padding(top = D.S1)) { KpingPanel(c) }
+                        "mtun" -> Column(Modifier.fillMaxWidth().padding(top = D.S3).goldGlass(RoundedCornerShape(D.RL), tint = c).padding(D.S3)) {
+                            T("microtun", size = 13.sp, color = c, weight = FontWeight.Black, ltr = true)
+                            Spacer(Modifier.height(D.S1))
+                            T("تنظیم دستی لازم ندارد: بسته‌های کوچک بازی خودکار دو بار می‌روند تا یک بسته‌ی گم‌شده لگ نیاورد و دانلود یک بار می‌رود. MTU را خود پنل برای هر کانفیگ می‌گذارد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(D.S4))
     }
 }
 
 /**
- * پنل ضد فیلتر (نگه‌داشتن کاشی «ضد فیلتر»): فقط سرورهای Xray و Amnezia، نه همه‌ی سرورها.
- * دو تیک بالا (Xray و Amnezia) هم فهرست را عوض می‌کنند و هم اینکه «خودکار» بین کدام‌ها بگردد.
+ * پنل ضد فیلتر (لمس اول کاشی ضد فیلتر، مثل گیمینگ): نوار پروتکل‌ها (Xray، Amnezia، WireGuard، Hysteria2)، فیلتر
+ * «همه / مستقیم / تانل» و کارت هر کانفیگ؛ «اتصال خودکار» بالای فهرست کم‌پینگ‌ترین راه را پیدا و وصل می‌کند.
+ * چرخ‌دنده: پروتکل‌هایی که اتصال خودکار از بینشان می‌گردد.
  */
 @Composable
 fun FilterSheet(
     visible: Boolean,
-    xray: List<SheetServer>,
-    amnezia: List<SheetServer>,
+    families: List<GameFamilyUi>,
+    initFamily: String,
     useX: Boolean,
     useAwg: Boolean,
     auto: Boolean,
@@ -845,51 +872,39 @@ fun FilterSheet(
     onAuto: () -> Unit,
     onConnect: (node: String, proto: String) -> Unit,
     onClose: () -> Unit,
+    startInSettings: Boolean = false,
 ) {
     val mc = modeColor(KMode.FILTER)
     LaunchedEffect(visible) { if (visible) onShown() }
-    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", "Xray و Amnezia برای محدودیت شدید شبکه", onClose) {
-        SheetLabel("پروتکل‌ها")
-        Row(Modifier.fillMaxWidth().guideTarget("filter_list"), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            TickChip("Xray", trf("%d سرور", xrayPairs(xray).size), useX, protoColor("xray"), Modifier.weight(1f)) { onTicks(!useX, useAwg) }
-            TickChip("Amnezia", trf("%d سرور", pairsOf(amnezia).size), useAwg, protoColor("amneziawg"), Modifier.weight(1f)) { onTicks(useX, !useAwg) }
-        }
-        val list = (if (useX) xray else emptyList()) + (if (useAwg) amnezia else emptyList())
-        Spacer(Modifier.height(D.S3))
-        FastestRow(
-            auto, mc, list.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && list.isNotEmpty(),
-            title = "اتصال خودکار ضد فیلتر", sub = "کم‌پینگ‌ترینِ تیک‌خورده‌ها را پیدا و وصل می‌کند", steady = false, onClick = onAuto,
-        )
-        if (useX) {
-            SheetLabel("Xray")
-            if (xray.isEmpty()) T("اشتراک شما Xray ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            // مثل Amnezia و گیمینگ: هر کشور و نوع پروتکل یک ردیف با دو خانه‌ی تانل و مستقیم و پینگ زنده (اسم راه داخل خود خانه است)
-            xrayPairs(xray).forEach { p -> PairRow(p, current, auto, protoColor("xray"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
-        }
-        if (useAwg) {
-            SheetLabel("Amnezia")
-            if (amnezia.isEmpty()) T("اشتراک شما Amnezia ندارد.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
-            pairsOf(amnezia).forEach { p -> PairRow(p, current, auto, protoColor("amneziawg"), !busy) { sv -> onConnect(sv.node, sv.proto) } }
-        }
-        Spacer(Modifier.height(8.dp))
+    var fam by remember(visible) {
+        mutableStateOf(initFamily.takeIf { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
+            ?: families.firstOrNull { it.servers.isNotEmpty() }?.key ?: initFamily)
     }
-}
-
-/** چیپ تیک‌دار بزرگ (Xray / Amnezia) */
-@Composable
-private fun TickChip(title: String, sub: String, on: Boolean, c: Color, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(D.RS)
-    Row(
-        modifier.height(D.RowH).goldGlass(shape, selected = on, tint = c)
-            .clickable(onClick = onClick)
-            .padding(horizontal = D.S3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CheckMark(on, D.Icon, c)
-        Spacer(Modifier.width(D.S2))
-        Column {
-            T(title, size = 13.5.sp, color = K.Text, weight = FontWeight.Black, font = Poppins, ltr = true)
-            T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+    var side by remember(visible) { mutableStateOf("all") }
+    var settings by remember(visible) { mutableStateOf(startInSettings) }
+    // اتصال خودکار فقط بین پروتکل‌های تیک‌خورده (Xray، و Amnezia / WireGuard / Hysteria2 با هم)
+    val pool = families.filter { if (it.key == "xray") useX else useAwg }.flatMap { it.servers }
+    ModeSheet(visible, KMode.FILTER, "ضد فیلتر", onClose, inSettings = settings, onSettings = { settings = true }, onBack = { settings = false }) {
+        androidx.compose.animation.Crossfade(settings, animationSpec = tween(220), label = "fset", modifier = Modifier.weight(1f)) { inSet ->
+            Column(Modifier.fillMaxSize()) {
+                if (!inSet) {
+                    SheetList(
+                        visible, families, fam, { fam = it }, side, { side = it }, current, auto, busy, gaming = false, listTarget = "filter_cards",
+                        fastest = {
+                            FastestRow(
+                                auto, mc, pool.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && pool.isNotEmpty(),
+                                title = "اتصال خودکار ضد فیلتر", sub = "کم‌پینگ‌ترین و پایدارترین راه را پیدا و وصل می‌کند", steady = false, onClick = onAuto,
+                            )
+                        },
+                        onConnect = onConnect,
+                    )
+                } else Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    SetLabel(tr("اتصال خودکار از بین این‌ها می‌گردد"))
+                    SwitchRow("Xray", tr("VLESS، Trojan و Shadowsocks؛ برای سخت‌ترین محدودیت‌ها"), useX, protoColor("xray"), enabled = useAwg || !useX) { onTicks(it, useAwg) }
+                    SwitchRow("Amnezia · WireGuard · Hysteria2", tr("مستقیم و تانل؛ سریع‌تر روی شبکه‌ی کم‌محدود"), useAwg, protoColor("amneziawg"), enabled = useX || !useAwg) { onTicks(useX, it) }
+                    Spacer(Modifier.height(D.S4))
+                }
+            }
         }
     }
 }
@@ -912,6 +927,7 @@ fun familyColor(f: String): Color = when (f) {
     "kping" -> protoColor("kping")
     "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
+    "xray" -> protoColor("xray")
     else -> protoColor("wireguard")
 }
 
