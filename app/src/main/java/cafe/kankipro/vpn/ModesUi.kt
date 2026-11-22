@@ -499,6 +499,31 @@ private fun Tag(text: String, c: Color, strong: Boolean = false) {
     )
 }
 
+/**
+ * برچسب راه («مستقیم»، «تانل»، «آفلاین»): هم‌عرض و هم‌ارتفاع همه‌جا، متن دقیقاً وسط (بی فاصله‌ی اضافه‌ی بالا و پایین فونت)،
+ * تا در گیمینگ و ضد فیلتر یک خط منظم بسازند.
+ */
+@Composable
+fun SideTag(text: String, c: Color) {
+    val sh = RoundedCornerShape(50)
+    Box(
+        Modifier.width(50.dp).height(19.dp).clip(sh).background(c.copy(alpha = .16f)).border(1.dp, c.copy(alpha = .45f), sh),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Text(
+            tr(text), maxLines = 1,
+            style = androidx.compose.ui.text.TextStyle(
+                fontFamily = Vazir, fontWeight = FontWeight.Black, fontSize = 10.sp, color = c, lineHeight = 10.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                ),
+            ),
+        )
+    }
+}
+
 @Composable
 private fun SwitchRow(title: String, sub: String?, on: Boolean, color: Color, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = D.S1), verticalAlignment = Alignment.CenterVertically) {
@@ -520,6 +545,9 @@ data class GameFamilyUi(val key: String, val title: String, val sub: String, val
 
 /** راه هر سرور برای فیلتر سه‌حالته‌ی بالای فهرست */
 fun sideOf(sv: SheetServer): String = if (sv.side == "tunnel") "tunnel" else "direct"
+
+/** یک سرور برای کنار هم گذاشتن مستقیم و تانلش: Xray با «group» پنل (یا اسم ردیف)، بقیه با شناسه‌ی سرور بی پسوند تانل */
+fun serverKey(sv: SheetServer): String = if (sv.proto == "xray") "x:" + sv.group.ifBlank { sv.name } else sv.node.removeSuffix(TUNNEL_TWIN)
 
 /** فهرست یک پروتکل با فیلتر «همه / مستقیم / تانل» */
 fun filterSide(list: List<SheetServer>, side: String): List<SheetServer> = if (side == "all") list else list.filter { sideOf(it) == side }
@@ -606,17 +634,15 @@ private fun ServerCard(sv: SheetServer, selected: Boolean, color: Color, enabled
         ) { T(sv.flag, size = 17.sp, weight = FontWeight.Normal) }
         Spacer(Modifier.width(D.S2))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AutoText(sv.name, size = 13.sp, color = K.Text, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(6.dp))
-                val tun = sideOf(sv) == "tunnel"
-                Tag(tr(if (tun) "تانل" else "مستقیم"), if (tun) K.Gold2 else K.Gold, strong = true)
-                if (off) { Spacer(Modifier.width(4.dp)); Tag(tr("آفلاین"), K.Sub) }
-            }
+            AutoText(sv.name, size = 13.sp, color = K.Text)
             if (gaming && !off) StabilityLine(sv.q, sv.ping)
         }
         Spacer(Modifier.width(D.S2))
-        PingSlot(sv.ping, 12.5.sp, 58.dp)
+        // برچسب راه در یک ستون ثابت کنار پینگ: در همه‌ی کارت‌ها دقیقاً زیر هم
+        val tun = sideOf(sv) == "tunnel"
+        if (off) SideTag("آفلاین", K.Sub) else SideTag(if (tun) "تانل" else "مستقیم", if (tun) K.Gold2 else K.Gold)
+        Spacer(Modifier.width(D.S2))
+        PingSlot(sv.ping, 12.5.sp, 54.dp)
     }
 }
 
@@ -727,10 +753,12 @@ private fun ColumnScope.SheetList(
         } else {
             fastest(f)
             val shown = filterSide(all, side)
+            // هر سرور (کشور) با هم: اول مستقیمش، زیرش تانلش (نبود = فقط همان یکی)؛ سرورها به ترتیب بهترین پینگ، که با باز شدن پنل یک بار ثابت می‌شود
             val order = remember(visible, fam) { mutableListOf<String>() }
-            all.sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }.forEach { s -> (s.node + "|" + s.proto + "|" + s.name).let { if (it !in order) order.add(it) } }
+            all.groupBy { serverKey(it) }.entries.sortedBy { e -> e.value.mapNotNull { it.ping }.filter { it > 0 }.minOrNull() ?: 99_999L }
+                .forEach { if (it.key !in order) order.add(it.key) }
             if (shown.isEmpty()) T(if (side == "tunnel") "این پروتکل کانفیگ تانل ندارد." else "این پروتکل کانفیگ مستقیم ندارد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(D.S2))
-            shown.sortedBy { order.indexOf(it.node + "|" + it.proto + "|" + it.name) }.forEach { sv ->
+            shown.sortedWith(compareBy({ order.indexOf(serverKey(it)) }, { if (sideOf(it) == "direct") 0 else 1 }, { it.ping?.takeIf { v -> v > 0 } ?: 99_999L })).forEach { sv ->
                 key(sv.node + "|" + sv.proto + "|" + sv.name) {
                     ServerCard(sv, !auto && current == sv.node + "|" + sv.proto, c, !busy, gaming) { onConnect(sv.node, sv.proto) }
                 }
