@@ -1,12 +1,5 @@
 # تغییرات نسخه‌ی ویندوز
 
-## نسخه‌ی ۱.۴.۰ — شش تم شیشه‌ای اندروید، گیمینگ و هوشمند مثل اندروید، KANKI MIX بی FEC روی TCP
-- **ظاهر:** همان شش تم شیشه‌ای اپ اندروید (Kanki Default سبز نئونی، Cyber Gaming، Tiffany Pro، Vulcanico، Gold Malt، Cyprus Sand) با همان فرمول
-  `glassTheme` (`Theme.Glass`)؛ تم زرد و زرشکی قدیمی دیگر نیست (هر کس داشت Kanki Default می‌گیرد). کارت تم‌ها سه‌تایی، سه نقطه‌ی هر تم از رنگ‌های خودش.
-- **گیمینگ** فقط KANKI MIX، microtun، AmneziaWG و WireGuard (Hysteria2 فقط ضد فیلتر)؛ **ضد فیلتر** WireGuard مستقیم (Jc) را هم دارد؛ **هوشمند** VLESS خوب
-  (پینگ تا ۲۵۰) اول، بعد AmneziaWG یا WireGuard مستقیم.
-- **KANKI MIX:** TCP بی FEC با سرور تازه (همان هسته‌ی اندروید، `kmix-core`).
-
 ## نسخه‌ی ۱.۳.۴ — Hysteria2، VLESS، KANKI MIX و microtun دوباره وصل می‌شوند
 - **تست زنده با اشتراک واقعی روی ویندوز گیت‌هاب پیدا کرد:** در فایل نصبی (از ۱.۳.۱ و قبل‌تر) فقط WireGuard و AmneziaWG وصل می‌شد؛ با Hysteria2،
   VLESS، KANKI MIX و microtun سرویس همان لحظه می‌خوابید و دوباره بالا می‌آمد. علت: ابزار مبهم‌سازی (garble) کتابخانه‌ی gVisor را هم به‌هم می‌ریخت

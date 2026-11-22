@@ -254,21 +254,15 @@ namespace KankiVPN
             return Best(prefs.Mode) ?? ById(prefs.LastServer) ?? account.Servers[0];
         }
 
-        /// <summary>Smart: VLESS (Xray) first when one answers well (ping up to 250 ms), else the lowest of AmneziaWG and
-        /// direct WireGuard (junk packets), else the lowest ping of all. Gaming: the four gaming protocols (KANKI MIX,
-        /// microtun, AmneziaWG, WireGuard; Hysteria2 is anti-filter only) on the chosen way, the best GameScores result,
-        /// else the lowest ping with KANKI MIX and microtun first. Anti-filter: the hidden protocols first (VLESS, Hysteria2,
-        /// AmneziaWG, direct WireGuard).</summary>
-        /// <summary>The gaming protocols (Hysteria2 is anti-filter only, like the Android app 1.39)</summary>
-        static readonly string[] GamingProtos = { "kankimix", "microtun", "amneziawg", "wireguard" };
-
+        /// <summary>Smart: the lowest ping of all. Gaming: the five gaming protocols on the chosen way,
+        /// the best GameScores result, else the lowest ping with KANKI MIX and microtun first. Anti-filter: the hidden protocols first (VLESS, Hysteria2, AmneziaWG).</summary>
         Server? Best(string mode)
         {
             if (account == null) return null;
             string[] order = mode switch
             {
-                "gaming" => GamingProtos,
-                "anti" => new[] { "vless", "hysteria2", "amneziawg", "wireguard" },
+                "gaming" => new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" },
+                "anti" => new[] { "vless", "hysteria2", "amneziawg" },
                 _ => Array.Empty<string>(),
             };
             IEnumerable<Server> pool = account.Servers;
@@ -290,13 +284,6 @@ namespace KankiVPN
                 if (scored.Count > 0) return scored.OrderBy(s => scores[s.Id]).First();
             }
             long P(Server s) => pings.TryGetValue(s.Id, out var v) && v > 0 ? v : long.MaxValue;
-            if (mode == "smart")
-            {
-                var x = pool.Where(s => s.Proto == "vless" && P(s) <= 250).OrderBy(P).FirstOrDefault();
-                if (x != null) return x;
-                var w = pool.Where(s => (s.Proto == "amneziawg" || (s.Proto == "wireguard" && !s.Tunnel)) && P(s) != long.MaxValue).OrderBy(P).FirstOrDefault();
-                if (w != null) return w;
-            }
             int Rank(Server s) => order.Length == 0 ? 0 : Array.IndexOf(order, s.Proto) < 0 ? 99 : Array.IndexOf(order, s.Proto);
             // with pings: the lowest; the family order only breaks near-ties (within 15 ms)
             var list = pool.ToList();
@@ -384,7 +371,8 @@ namespace KankiVPN
         async Task GameScores()
         {
             if (pipe == null || account == null) return;
-            var pool = account.Servers.Where(s => GamingProtos.Contains(s.Proto)).ToList();
+            var games = new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" };
+            var pool = account.Servers.Where(s => games.Contains(s.Proto)).ToList();
             if (prefs.GameRoute is "direct" or "tunnel")
             {
                 var way = pool.Where(s => s.Tunnel == (prefs.GameRoute == "tunnel")).ToList();
@@ -1257,7 +1245,7 @@ namespace KankiVPN
         void BuildThemeCards()
         {
             ThemeCards.Children.Clear();
-            foreach (var (name, label) in Theme.Names)
+            foreach (var (name, label) in new[] { ("yellow", "Kanki yellow"), ("crimson", "Crimson") })
             {
                 var btn = new Button { Style = (Style)FindResource("Plain"), Margin = new Thickness(4) };
                 // SettingsUi.kt ThemePicker: the theme's own black, its three colours, its gold edge
@@ -1270,7 +1258,7 @@ namespace KankiVPN
                 };
                 var st = new StackPanel();
                 var dots = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-                foreach (var c in Theme.Dots(name))
+                foreach (var c in new[] { tp.Gold, tp.Accent, tp.Connected })
                     dots.Children.Add(new Ellipse { Width = 14, Height = 14, Margin = new Thickness(2, 0, 2, 0), Fill = Gfx.Solid(c) });
                 st.Children.Add(dots);
                 var t = new TextBlock { Text = Strings.T(label), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Gfx.Solid(sel ? tp.Gold : tp.Sub) };
