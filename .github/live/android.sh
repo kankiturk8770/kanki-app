@@ -82,9 +82,11 @@ run() { # label pick nogate games
   echo "   shell (not a game) TCP 1.1.1.1:80: $sh"
   adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|wireguard" | grep -v -F "$code" | tail -8 | sed 's/^/   log: /'
 }
+# the tunnel copies first: the test account allows one device, and the server counts the same WireGuard key from two
+# addresses (straight and through Iran) as two devices for a while
+run "WireGuard tunnel, gaming" "$(pickof wireguard tunnel)"
 run "WireGuard direct, gaming (libawg + gate)" "$(pickof wireguard direct)"
 run "WireGuard direct, amnezia engine (no gate)" "$(pickof wireguard direct)" 1
-run "WireGuard tunnel, gaming" "$(pickof wireguard tunnel)"
 run "AmneziaWG direct, gaming" "$(pickof amneziawg-direct direct)"
 run "AmneziaWG tunnel, gaming" "$(pickof amneziawg tunnel)"
 run "KANKI MIX, gaming" "$(pickof kankimix direct)"

@@ -71,7 +71,8 @@ object VpnEngine {
             HyEngine.up(ctx, configText)
         } else {
             HyEngine.down(ctx)
-            val config = Config.parse(resolveEndpoint(configText).byteInputStream())
+            val resolved = resolveEndpoint(configText)
+            val config = Config.parse(resolved.byteInputStream())
             try {
                 backend(ctx).setState(tunnel, Tunnel.State.UP, config)
             } catch (e: org.amnezia.awg.backend.BackendException) {
@@ -80,7 +81,7 @@ object VpnEngine {
                 android.util.Log.w("KankiVPN", "amnezia engine: $why; trying libawg")
                 runCatching { backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
                 try {
-                    HyEngine.up(ctx, configText.trimEnd() + "\n" + HyEngine.AWG_OWN + " = 1\n")
+                    HyEngine.up(ctx, resolved.trimEnd() + "\n" + HyEngine.AWG_OWN + " = 1\n")
                 } catch (e2: Exception) {
                     throw IllegalStateException("$why; kanki core: ${e2.message}")
                 }
