@@ -39,7 +39,7 @@ private val BackOut = CubicBezierEasing(.34f, 1.36f, .64f, 1f)    // کمی جل
  *  ۰ تا ۱.۳ ثانیه  نور ملایم وسط صفحه روشن می‌شود، ذرات طلایی آهسته جمع می‌شوند و
  *                  یک حلقه‌ی نازک طلایی دور خودش کامل می‌شود (یعنی «اتصال امن در حال آماده شدن»)
  *  ۱.۳ ثانیه       حلقه کامل شد ← لوگو با چرخش نرم ظاهر می‌شود و یک موج نور آرام پخش می‌شود
- *  ۱.۷ تا ۲.۷      حرف‌های KANKI PING یکی‌یکی بالا می‌آیند، خط زیرش باز می‌شود، شعار ظاهر می‌شود
+ *  ۱.۷ تا ۲.۷      حرف‌های KANKI VPN یکی‌یکی بالا می‌آیند، خط زیرش باز می‌شود، شعار ظاهر می‌شود
  *  ۳.۴ تا ۴.۰      همه‌چیز آرام محو می‌شود و برنامه باز می‌شود
  */
 @Composable
@@ -57,7 +57,7 @@ fun SplashVisual(v: Float) {
     val line = SoftOut.transform(seg(2.25f, 2.9f))
     val tag = SoftOut.transform(seg(2.45f, 3.05f))
     val exit = FastOutSlowInEasing.transform(seg(3.4f, 4f))
-    val title = "KANKI PING"
+    val title = "KANKI VPN"
 
     KankiBackground {
         Box(

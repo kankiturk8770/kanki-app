@@ -603,7 +603,7 @@ private fun whenText(t: Long): String =
 
 /** متن نتیجه برای اشتراک‌گذاری (بی IP و بی کد اشتراک) */
 fun shareText(ui: SpeedUi, title: String?): String = buildString {
-    appendLine(title ?: if (ui.viaVpn) "KANKI PING speed test" + (ui.vpnPlace?.let { " · $it" } ?: "") else "Kanki speed test (no VPN)")
+    appendLine(title ?: if (ui.viaVpn) "KANKI VPN speed test" + (ui.vpnPlace?.let { " · $it" } ?: "") else "Kanki speed test (no VPN)")
     ui.down?.let { appendLine("Download: ${mbps(it)} Mbps") }
     ui.up?.let { appendLine("Upload: ${mbps(it)} Mbps") }
     ui.ping?.let { p -> append("Latency: ${ms(p)} ms"); ui.loadedDown?.let { append(" (↓ ${ms(it)})") }; ui.loadedUp?.let { append(" (↑ ${ms(it)})") }; appendLine() }

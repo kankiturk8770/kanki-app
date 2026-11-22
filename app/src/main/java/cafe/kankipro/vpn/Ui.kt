@@ -420,7 +420,7 @@ fun Logo3D(size: Dp, animate: Boolean = false, sweep: Float = -1f, glow: Float =
 }
 
 @Composable
-fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI PING") {
+fun BrandTitle(size: TextUnit = 26.sp, text: String = "KANKI VPN") {
     T(text, size = size, color = K.Gold, weight = FontWeight.Black, font = Orbitron, shadow = glow(K.Gold, 28f), ltr = true, maxLines = 1)
 }
 
