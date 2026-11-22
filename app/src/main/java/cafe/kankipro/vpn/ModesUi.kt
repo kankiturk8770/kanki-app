@@ -434,17 +434,10 @@ fun ModeSheet(
                 Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(34.dp).goldFill(CircleShape), contentAlignment = Alignment.Center) { ModeIcon(mode, K.OnGold, 18.dp) }
                     Spacer(Modifier.width(D.S2))
-                    T(if (inSettings) "تنظیمات" else title, size = 17.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+                    T(if (inSettings) trf("تنظیمات %s", tr(title)) else title, size = 17.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
                     if (inSettings) {
-                        val sh = RoundedCornerShape(50)
-                        Row(
-                            Modifier.height(D.BtnS).goldGlass(sh, tint = mc).pressable(onClick = onBack).padding(horizontal = D.S3),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Canvas(Modifier.size(12.dp)) { backArrow(K.Text) }
-                            Spacer(Modifier.width(6.dp))
-                            T("بازگشت به لیست سرورها", size = 11.5.sp, color = K.Text, weight = FontWeight.Bold, maxLines = 1)
-                        }
+                        // بازگشت به فهرست سرورها: دکمه‌ی گرد کوچک با فلش، کنار ✕ (عنوان کامل دیده شود)
+                        RoundIcon(D.IconBox, mc, onClick = onBack) { Canvas(Modifier.size(14.dp)) { backArrow(K.Text) } }
                     } else if (onSettings != null) {
                         Box(Modifier.guideTarget(if (mode == KMode.GAME) "game_only" else "filter_set")) {
                             RoundIcon(D.IconBox, mc, onClick = onSettings) { Canvas(Modifier.size(18.dp)) { gearIcon(K.Text) } }
@@ -558,25 +551,35 @@ private fun ProtoBar(families: List<GameFamilyUi>, sel: String, modifier: Modifi
     }
 }
 
-/** سوییچ کپسولی سه‌حالته: همه | مستقیم | تانل */
+/** سوییچ کپسولی سه‌حالته‌ی یکپارچه: همه | مستقیم | تانل (یک قاب، سه خانه‌ی هم‌عرض، متن وسط، جداکننده‌ی نازک بین خانه‌های خاموش) */
 @Composable
 private fun SideSwitch(sel: String, c: Color, counts: Map<String, Int>, onPick: (String) -> Unit) {
     val sh = RoundedCornerShape(50)
+    val opts = listOf("all" to "همه", "direct" to "مستقیم", "tunnel" to "تانل")
     Row(
-        Modifier.fillMaxWidth().height(34.dp).clip(sh).background(Color.Black.copy(alpha = .28f)).border(1.dp, Color.White.copy(alpha = .08f), sh).padding(3.dp),
+        Modifier.fillMaxWidth().height(36.dp).clip(sh).background(Color.Black.copy(alpha = .30f))
+            .border(1.dp, Brush.horizontalGradient(listOf(c.copy(alpha = .45f), Color.White.copy(alpha = .12f), c.copy(alpha = .45f))), sh).padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        listOf("all" to "همه", "direct" to "مستقیم", "tunnel" to "تانل").forEach { (k, name) ->
+        opts.forEachIndexed { i, (k, name) ->
             val on = k == sel
             val n = counts[k] ?: 0
+            val bg by animateColorAsState(if (on) c.copy(alpha = .85f) else Color.Transparent, tween(200), label = "side")
             Box(
-                Modifier.weight(1f).fillMaxHeight().clip(sh)
-                    .then(if (on) Modifier.goldGlass(sh, selected = true, tint = c) else Modifier)
+                Modifier.weight(1f).fillMaxHeight().clip(sh).background(bg)
                     .alpha(if (n > 0 || k == "all") 1f else .45f)
                     .pressable(scale = .97f) { onPick(k) },
                 contentAlignment = Alignment.Center,
             ) {
-                T(tr(name) + "  " + n, size = 11.5.sp, color = if (on) Color.White else K.Sub, weight = FontWeight.Bold, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    T(name, size = 12.sp, color = if (on) K.OnGold else K.Text, weight = FontWeight.Bold, maxLines = 1)
+                    Spacer(Modifier.width(5.dp))
+                    T("$n", size = 11.sp, color = if (on) K.OnGold.copy(alpha = .75f) else K.Sub, font = Poppins, weight = FontWeight.Bold, ltr = true, maxLines = 1)
+                }
             }
+            // جداکننده فقط بین دو خانه‌ی خاموش
+            if (i < opts.lastIndex && !on && opts[i + 1].first != sel) Box(Modifier.width(1.dp).height(16.dp).background(Color.White.copy(alpha = .12f)))
+            else if (i < opts.lastIndex) Spacer(Modifier.width(1.dp))
         }
     }
 }
@@ -622,6 +625,8 @@ private fun ServerCard(sv: SheetServer, selected: Boolean, color: Color, enabled
 private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
     val (txt, col) = when {
         ping != null && ping < 0 -> tr("بدون جواب") to K.Sub
+        // پینگ رسیده ولی سنجش پایداری بازی هنوز نه: «آماده اتصال»، نه «در حال سنجش»
+        q == null && ping != null && ping > 0 -> tr("آماده اتصال") to K.Good
         q == null -> tr("در حال سنجش…") to K.Sub
         else -> {
             val lv = Modes.stability(q)
@@ -634,7 +639,7 @@ private fun StabilityLine(q: Modes.GameQ?, ping: Long?) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(col))
         Spacer(Modifier.width(D.S1))
-        T(txt, size = 10.sp, color = if (q == null) K.Sub else col, weight = FontWeight.SemiBold, maxLines = 1)
+        T(txt, size = 10.sp, color = col, weight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 

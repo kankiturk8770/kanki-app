@@ -283,22 +283,56 @@ private fun SpeedSection(ui: SpeedUi, history: List<SpeedRecord>, act: SpeedActi
             },
             Modifier.weight(1f), loading = ui.running, onClick = act.start,
         )
-        if (ui.phase == "done") {
-            Spacer(Modifier.width(D.S2))
-            RoundIcon(D.BtnH, K.Gold, onClick = { act.share(shareText(ui, null)) }) { Canvas(Modifier.size(18.dp)) { settingIcon("share", K.Text) } }
-        }
     }
     Spacer(Modifier.height(D.S2))
-    // یک خط کوتاه: سرور تست و آخرین تست قبلی
-    val last = history.firstOrNull()
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T(
-        listOfNotNull(
-            ui.server?.let { trf("سرور: %s", it) },
-            ui.usedBytes?.let { trf("مصرف: %s", ltr(formatBytes(it))) },
-            if (ui.phase != "done" && last != null) trf("آخرین تست: %s", ltr("↓${last.down?.let { mbps(it) } ?: "–"} ↑${last.up?.let { mbps(it) } ?: "–"} · ${last.ping?.let { ms(it) } ?: "–"}ms")) else null,
-        ).joinToString(" · ").ifBlank { " " },
-        size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 2,
-    ) }
+    // یک خط کوتاه: سرور تست و مصرف
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        T(
+            listOfNotNull(ui.server?.let { trf("سرور: %s", it) }, ui.usedBytes?.let { trf("مصرف: %s", ltr(formatBytes(it))) }).joinToString(" · ").ifBlank { " " },
+            size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1,
+        )
+    }
+    Spacer(Modifier.height(D.S3))
+    RecentTests(history.take(3), if (ui.phase == "done") ({ act.share(shareText(ui, null)) }) else null)
+}
+
+/** «تاریخچه تست‌های اخیر» (۱.۴۱): ۳ تست آخر با زمان، مسیر، دانلود/آپلود و پینگ؛ اشتراک‌گذاری نتیجه در سربرگش */
+@Composable
+private fun RecentTests(h: List<SpeedRecord>, share: (() -> Unit)?) {
+    Column(Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(D.RL)).padding(horizontal = D.S3, vertical = D.S2)) {
+        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            MiniIcon("clock", K.Gold, 13.dp)
+            Spacer(Modifier.width(6.dp))
+            T("تاریخچه تست‌های اخیر", size = 12.5.sp, weight = FontWeight.Black, modifier = Modifier.weight(1f), maxLines = 1)
+            share?.let { f ->
+                T("اشتراک‌گذاری", size = 11.5.sp, color = K.Gold, weight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(D.RT)).pressable(onClick = f).padding(horizontal = D.S2, vertical = 4.dp))
+            }
+        }
+        if (h.isEmpty()) {
+            T("هنوز تستی نگرفته‌ای", size = 11.5.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(vertical = D.S2))
+        }
+        h.forEachIndexed { i, r ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .06f)))
+            Row(Modifier.fillMaxWidth().height(42.dp), verticalAlignment = Alignment.CenterVertically) {
+                Dot(if (r.kind == "vpn") K.Gold else K.Gold2, 6.dp)
+                Spacer(Modifier.width(D.S2))
+                Column(Modifier.weight(1f)) {
+                    T(if (r.kind == "vpn") (r.place?.let { trf("VPN · %s", it) } ?: "با VPN") else "اینترنت آزاد گوشی", size = 11.5.sp, maxLines = 1)
+                    T(ltr(whenText(r.time)), size = 9.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1, ltr = true)
+                }
+                CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        T("↓" + (r.down?.let { mbps(it) } ?: "–"), size = 11.sp, font = Poppins, color = K.Gold, ltr = true)
+                        Spacer(Modifier.width(6.dp))
+                        T("↑" + (r.up?.let { mbps(it) } ?: "–"), size = 11.sp, font = Poppins, color = K.Accent, ltr = true)
+                        Spacer(Modifier.width(6.dp))
+                        T((r.ping?.let { ms(it) } ?: "–") + "ms", size = 11.sp, font = Poppins, color = msColor(r.ping), ltr = true)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** یک کارت KPI جمع‌وجور: آیکون و اسم، عدد بزرگ و واحد، نمودار موجی ظریف و یک خط ریز */
@@ -745,6 +779,21 @@ private fun NetSection(n: NetUi, act: SpeedActions) {
             Segmented(listOf(SegItem("1", "با سرعت"), SegItem("0", "بی سرعت")), if (n.withSpeed) "1" else "0", enabled = !n.running, onSelect = { act.netSpeed(it == "1") })
         }
     }
+    netAdvice(n)?.let { (title, why) ->
+        Spacer(Modifier.height(D.S3))
+        Row(
+            Modifier.fillMaxWidth().goldGlass(RoundedCornerShape(D.RL), tint = K.Gold).padding(horizontal = D.S3, vertical = D.S2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(32.dp).goldFill(androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) { MiniIcon("bolt", K.OnGold, 15.dp) }
+            Spacer(Modifier.width(D.S3))
+            Column(Modifier.weight(1f)) {
+                T("وضعیت پیشنهادی اتصال", size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+                T(title, size = 13.5.sp, weight = FontWeight.Black, maxLines = 1)
+                T(why, size = 10.5.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 2)
+            }
+        }
+    }
     if (n.done) n.speed?.takeIf { it.hasResult }?.let { s ->
         Spacer(Modifier.height(D.S2))
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -754,11 +803,27 @@ private fun NetSection(n: NetUi, act: SpeedActions) {
     }
 }
 
+/** حالت پیشنهادی اتصال از روی نتیجه‌ی «اینترنت من» (عنوان، دلیل کوتاه)؛ null تا بررسی تمام نشده */
+fun netAdvice(n: NetUi): Pair<String, String>? {
+    if (!n.done) return null
+    val udpAll = n.udp.filter { it.loss != null }
+    val udpBlocked = udpAll.isNotEmpty() && udpAll.all { it.ping == null }
+    val global = n.targets.filter { !it.target.domestic }
+    val globalDown = global.isNotEmpty() && global.all { it.ms == null }
+    val loss = udpAll.mapNotNull { it.loss }.maxOrNull() ?: 0.0
+    return when {
+        n.targets.isNotEmpty() && n.targets.all { it.ms == null } -> "اول اینترنت گوشی را وصل کن" to "هیچ مقصدی جواب نداد"
+        udpBlocked || globalDown -> "ضد فیلتر" to "UDP یا سایت‌های خارجی بسته‌اند؛ Xray از همه بهتر رد می‌شود"
+        loss >= 2 -> "گیمینگ از راه تانل" to "پکت‌لاس UDP بالاست؛ تانل ضد افت کمک می‌کند"
+        else -> "هوشمند یا گیمینگ مستقیم" to "شبکه سالم است؛ مستقیم کمترین پینگ را دارد"
+    }
+}
+
 /** یک کارت کوچک «اینترنت من»: نقطه‌ی رنگی و اسم، مقدار و یک خط ریز */
 @Composable
 private fun NetTile(title: String, value: String, sub: String, c: Color, waiting: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(D.RM)
-    Column(modifier.height(70.dp).goldGlass(shape).padding(horizontal = D.S3, vertical = D.S2)) {
+    Column(modifier.height(76.dp).goldGlass(shape).padding(horizontal = D.S3, vertical = D.S2)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (waiting) Spinner(9.dp, K.Gold) else Dot(c, 7.dp)
             Spacer(Modifier.width(6.dp))
@@ -766,7 +831,7 @@ private fun NetTile(title: String, value: String, sub: String, c: Color, waiting
         }
         Spacer(Modifier.height(3.dp))
         AutoText(value, size = 15.sp, color = if (value == "–") K.Sub else K.Text, weight = FontWeight.Black)
-        if (sub.isNotBlank()) AutoText(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+        if (sub.isNotBlank()) T(sub, size = 10.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
     }
 }
 
