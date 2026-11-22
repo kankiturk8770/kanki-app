@@ -117,7 +117,10 @@ object HyEngine {
      * بنشیند؛ پس در گیمینگ همین سرویس با هسته‌ی جدای libawg.so (awg-core، همان amneziawg-go کتابخانه) وصل می‌شود.
      */
     fun isAwgGated(text: String) = text.contains("[Peer]", ignoreCase = true) && !KmixUri.isKmix(text) && !MtunCfg.isMtun(text) && !KpingCfg.isKping(text) &&
-        text.lines().any { it.trim().startsWith("GameOnly", ignoreCase = true) && it.contains("=") }
+        text.lines().any { (it.trim().startsWith("GameOnly", ignoreCase = true) || it.trim().startsWith(AWG_OWN, ignoreCase = true)) && it.contains("=") }
+
+    /** این خط یعنی WireGuard/AmneziaWG بی دروازه هم با هسته‌ی خود کانکی (libawg.so) بالا بیاید (وقتی موتور کتابخانه‌ی امنزیا رد کرد) */
+    const val AWG_OWN = "KankiCore"
 
     fun isUp() = state == UP
 
@@ -633,13 +636,13 @@ class KankiHyService : VpnService() {
      * فایلش فقط تا وقتی هسته بخواندش می‌ماند. آدرس سرور بیرون از مسیرهای VPN است تا سوکت هسته دور خودش نچرخد.
      */
     private fun startAwg(text: String, my: Int) {
-        if (!AppGate.supported) error("gaming: needs Android 10 or newer")
         val lines = text.lines().map { it.trim() }
-        val games = gameOnly(lines) ?: error("gaming: no game is chosen")
+        // گیمینگ: دروازه‌ی بازی‌ها؛ بی خط GameOnly (موتور کتابخانه رد کرده بود): همان هسته، بی دروازه
+        val games = gameOnly(lines)
         val bin = File(applicationInfo.nativeLibraryDir, "libawg.so")
         if (!bin.exists()) error("wireguard: the gaming core is missing in this build")
         // خط‌های خود کانکی (GameOnly و …) را کتابخانه نمی‌شناسد
-        val clean = text.lines().filterNot { l -> val t = l.trim(); t.startsWith("GameOnly", true) || t.startsWith("IncludedApplications", true) || t.startsWith("ExcludedApplications", true) }.joinToString("\n")
+        val clean = text.lines().filterNot { l -> val t = l.trim(); t.startsWith("GameOnly", true) || t.startsWith(HyEngine.AWG_OWN, true) || t.startsWith("IncludedApplications", true) || t.startsWith("ExcludedApplications", true) }.joinToString("\n")
         val cfg = org.amnezia.awg.config.Config.parse(clean.byteInputStream())
         val peer = cfg.peers.firstOrNull() ?: error("wireguard: the config has no server")
         val ep = peer.endpoint.orElse(null) ?: error("wireguard: the config has no server address")
@@ -700,6 +703,8 @@ class KankiHyService : VpnService() {
         }, "kanki-awg-mon").start()
 
         val b = Builder().setSession("Kanki · WireGuard").setMtu(mtu)
+        val excluded = lines.firstOrNull { it.startsWith("ExcludedApplications", true) && it.contains("=") }?.substringAfter("=")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        if (games == null) excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
         // دروازه فقط IPv4 را می‌شناسد: IPv6 بی آدرس (برنامه‌ها فوری IPv4 می‌گیرند)، مسیر ::/0 در serverRoutes تا بیرون نرود
         cfg.`interface`.addresses.filter { it.address is Inet4Address }.forEach { a -> b.addAddress(a.address, a.mask) }
         serverRoutes(b, ip)
