@@ -195,7 +195,9 @@ fun SpeedContent(
     act: SpeedActions = SpeedActions(),
 ) {
     // یک صفحه، بی آمپر و (روی گوشی معمولی) بی اسکرول؛ اسکرول فقط برای صفحه‌های خیلی کوتاه
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
+    // ۱.۴۱: همه‌چیز وسط صفحه (پایین خالی نماند)؛ صفحه‌ی کوتاه: اسکرول
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = D.PagePad)) {
         Spacer(Modifier.height(D.S2))
         Segmented(
             listOf(SegItem("speed", "تست سرعت", "bolt"), SegItem("net", "اینترنت من", "ping")),
@@ -211,6 +213,7 @@ fun SpeedContent(
         Spacer(Modifier.height(D.S3))
         if (section == "net") NetSection(net, act) else SpeedSection(ui, history, act)
         Spacer(Modifier.height(D.S4))
+    }
     }
 }
 
