@@ -68,7 +68,7 @@ st() { adb logcat -d -s KankiLive:I | grep " state " | tail -1 | sed 's/.*KankiL
 kk "none|none" game ""; sleep 8
 adb logcat -d -s KankiLive:I | grep " cfg " | sed 's/.*KankiLive: //' | sort -u > $out/cfgs.txt
 echo "configs:"; cat $out/cfgs.txt
-pickof() { grep " cfg [^|]*|$1 side=$2" $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//'; }
+pickof() { grep "^cfg [^|]*|$1 side=$2" $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//'; }
 GAME=com.android.chrome
 run() { # label pick nogate games
   [ -z "$2" ] && { echo "== $1: not in this subscription"; return; }
@@ -88,7 +88,7 @@ run "AmneziaWG direct, gaming" "$(pickof amneziawg-direct direct)"
 run "AmneziaWG tunnel, gaming" "$(pickof amneziawg tunnel)"
 run "KANKI MIX, gaming" "$(pickof kankimix direct)"
 run "microtun, gaming" "$(pickof mtun direct)"
-run "KPING, gaming" "$(grep ' cfg [^|]*|kping ' $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//')"
+run "KPING, gaming" "$(grep '^cfg [^|]*|kping ' $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//')"
 run "WireGuard direct, gaming, Chrome NOT a game (must be closed)" "$(pickof wireguard direct)" 0 "com.example.notagame"
 shot 03-connect
 adb logcat -d -t 800 | grep -i -E "kanki|AndroidRuntime|FATAL" | grep -v -F "$code" | tail -40
