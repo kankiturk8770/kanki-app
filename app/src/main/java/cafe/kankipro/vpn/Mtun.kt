@@ -76,19 +76,28 @@ object MtunCfg {
  * هسته‌ی جدای libkping.so (پوشه‌ی kping-core): UDP خام بی فرستادن دوباره؛ هر بسته روی هر مسیر (وای‌فای و دیتا با هم)
  * یک نسخه، یا روی یک مسیر دو نسخه با چند میلی‌ثانیه فاصله؛ اولین نسخه‌ای که رسید برنده؛ پریتی سبک. سرور ایران (رله) از
  * هر بسته یک نسخه را با تانل Game-FEC به سرور خارج می‌برد.
- * فقط PUBG Global (com.tencent.ig) و سرویس‌های گوگل که ورود بازی با آن‌هاست اینترنت دارند؛ بقیه‌ی برنامه‌ها کاملاً بسته‌اند
+ * فقط بازی‌هایی که کاربر انتخاب کرده (بار اول بازی‌های نصب‌شده‌ی گوشی، خودکار) و سرویس‌های گوگل که ورود بازی با آن‌هاست
+ * اینترنت دارند؛ بقیه‌ی برنامه‌ها کاملاً بسته‌اند
  * (دروازه‌ی AppGate، اندروید ۱۰ به بالا). شبکه‌های خود گوشی بسته نمی‌شوند: سوکت‌های هسته روی هر شبکه جدا ساخته می‌شوند.
  */
 object KpingCfg {
     const val PROTO = "kping"
     const val TITLE = "KPING"
 
-    /** فقط پابجی گلوبال (خواسته‌ی صاحب اپ؛ نسخه‌های کره، هند، ویتنام و تایوان نه) */
-    const val GAME = "com.tencent.ig"
-
     fun supported(link: String) = link.trim().startsWith("kping://")
 
-    fun installed(ctx: Context): Boolean = runCatching { ctx.packageManager.getApplicationInfo(GAME, 0); true }.getOrDefault(false)
+    /**
+     * بازی‌هایی که با KPING اینترنت دارند: همان «بازی‌های مجاز» گیمینگ (انتخاب کاربر، فقط نصب‌شده‌ها)؛ اگر کاربر هنوز
+     * چیزی انتخاب نکرده، بازی‌های نصب‌شده‌ی گوشی (GameApps.detect). هیچ بازی‌ای در کد ثابت نیست.
+     */
+    fun games(ctx: Context): List<String> {
+        val pm = ctx.packageManager
+        val chosen = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE).getStringSet("gameApps", null)
+        val list = chosen?.toList() ?: GameApps.detect(ctx)
+        return list.filter { pkg -> runCatching { pm.getApplicationInfo(pkg, 0); true }.getOrDefault(false) }
+    }
+
+    fun installed(ctx: Context): Boolean = games(ctx).isNotEmpty()
 
     /** متنی که برنامه نگه می‌دارد (مثل microtun) */
     fun wrap(link: String): String {

@@ -88,7 +88,11 @@ class AppState private constructor(context: Context) {
     fun changeGameOnly(v: Boolean) {
         gameOnly = v
         prefs.edit().putBoolean("gameFirewall", v).apply()
-        if (v && !prefs.contains("gameApps")) bg.launch {
+        if (v) seedGameApps()
+    }
+    /** بار اول (هنوز چیزی انتخاب نشده): بازی‌های نصب‌شده‌ی گوشی، خودکار */
+    fun seedGameApps() {
+        if (!prefs.contains("gameApps")) bg.launch {
             val found = withContext(Dispatchers.IO) { GameApps.detect(ctx) }
             if (!prefs.contains("gameApps")) { gameApps.clear(); gameApps.addAll(found); saveGameApps() }
         }
@@ -107,7 +111,8 @@ class AppState private constructor(context: Context) {
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
     var gameAuto by mutableStateOf(prefs.getBoolean("gameAuto", true))
         private set
-    var gameProto by mutableStateOf(prefs.getString("gameProto", "amneziawg") ?: "amneziawg")
+    // Hysteria2 از ۱.۳۹ در گیمینگ نیست (فقط ضد فیلتر)؛ انتخاب قدیمی به KANKI MIX برمی‌گردد
+    var gameProto by mutableStateOf((prefs.getString("gameProto", "amneziawg") ?: "amneziawg").let { if (it == "hysteria2") "kankimix" else it })
         private set
     var gameNode by mutableStateOf(prefs.getString("gameNode", null))
         private set
@@ -339,6 +344,8 @@ class AppState private constructor(context: Context) {
         isTunnelTwin(id) -> tunnelTag(id)
         // پنل ۳.۹.۵ به بعد می‌گوید کانفیگ اصلی هر پروتکل به آدرس ایران می‌رود یا به خود سرور
         account?.viaProto?.get(id)?.get(p) == "tunnel" -> tr("تانل")
+        // WireGuard مستقیم پنل ۳.۵۷ (با بسته‌های Jc قبل از دست دادن؛ فقط اپ کانکی)
+        p == "wireguard" && account?.viaProto?.get(id)?.get(p) == "direct" -> tr("مستقیم")
         else -> tunnelTag(id)
     }
 
@@ -705,7 +712,8 @@ class AppState private constructor(context: Context) {
         val direct = cfgSide(node, p) != "tunnel"
         return when {
             p == "xray" && direct -> 0
-            p == "amneziawg-direct" || (p == "amneziawg" && direct) -> 1
+            // AmneziaWG مستقیم و WireGuard مستقیم با Jc (پنل ۳.۵۷) جای دوم، بعد از Xray
+            p == "amneziawg-direct" || (p == "amneziawg" && direct) || (p == "wireguard" && direct) -> 1
             p == MtunCfg.PROTO -> 3
             else -> 2
         }
@@ -791,6 +799,14 @@ class AppState private constructor(context: Context) {
                 node = r.node
                 selectProto(r.proto)
                 connect(quiet = i < order.size - 1, chained = true)
+                // دست دادن موفق بس نیست: یک دانلود کوچک از داخل تونل (Xray گاهی وصل می‌شود ولی داده نمی‌برد)؛
+                // اگر رد شد و گزینه‌ی دیگری مانده، سراغ بعدی (AmneziaWG یا WireGuard مستقیم)
+                if (vstate == VState.ON && i < order.size - 1 && !quickThroughput()) {
+                    smartStatus = trf("%s داده نبرد؛ گزینه‌ی بعدی…", r.title)
+                    disconnect()
+                    wantTry = true
+                    continue
+                }
                 if (vstate == VState.ON) {
                     smartStatus = trf("وصل شد: %s", r.title)
                     kotlinx.coroutines.delay(1300)   // چند لحظه برنده دیده شود، بعد پنل بسته شود
@@ -1517,7 +1533,7 @@ class AppState private constructor(context: Context) {
                 cfg = applyExcluded(cfg, excluded.toSet())
                 cfg = applyKmixGaming(cfg, kmixDup)
                 if (link.protocol == KpingCfg.PROTO) {
-                    // KPING: فقط پابجی گلوبال و سرویس‌های گوگل اینترنت دارند؛ بقیه‌ی برنامه‌ها بسته (دروازه، در خود سرویس)
+                    // KPING: فقط بازی‌های انتخابی و سرویس‌های گوگل اینترنت دارند؛ بقیه‌ی برنامه‌ها بسته (دروازه، در خود سرویس)
                     if (!KpingCfg.installed(ctx) || !AppGate.supported) throw IllegalStateException(KPING_NO_GAME)
                 } else if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
                     cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
@@ -1544,7 +1560,7 @@ class AppState private constructor(context: Context) {
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
             if (!quiet && wantTry && e.message == KPING_NO_GAME) {
-                error = if (!AppGate.supported) "KPING روی اندروید ۱۰ به بالا کار می‌کند (بستن بقیه‌ی برنامه‌ها)." else "پابجی گلوبال روی این گوشی نصب نیست؛ KPING فقط برای پابجی گلوبال است."
+                error = if (!AppGate.supported) "KPING روی اندروید ۱۰ به بالا کار می‌کند (بستن بقیه‌ی برنامه‌ها)." else "هیچ بازی‌ای برای KPING انتخاب نشده؛ در گیمینگ › «بازی‌های مجاز» بازی‌ات را روشن کن."
             } else if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
                 errorDetail = "${protoKey()}: ${e.message ?: e.javaClass.simpleName}"
@@ -1555,6 +1571,27 @@ class AppState private constructor(context: Context) {
     /** چند بار از داخل تونل درخواست می‌فرستد؛ اگر جواب آمد یعنی هندشیک واقعی انجام شده */
     // هر تلاش مهلت کوتاه دارد و دو آدرس به نوبت امتحان می‌شوند، تا یک درخواست کند (مثلاً اولین بسته
     // که پیش از تمام شدن هندشیک امنزیا رفته) کل زمان را نخورد و اتصال سالم «ناموفق» حساب نشود
+    /**
+     * سنجش سبک سرعت بعد از اتصال (هوشمند): ۱۲۸ کیلوبایت از داخل تونل در ۶ ثانیه. فقط می‌گوید داده واقعاً رد می‌شود، نه سرعت دقیق.
+     */
+    private suspend fun quickThroughput(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = java.net.URL("https://speed.cloudflare.com/__down?bytes=131072").openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 5000; c.readTimeout = 5000; c.useCaches = false
+            val end = System.currentTimeMillis() + 6000
+            var got = 0
+            try {
+                c.inputStream.use { ins ->
+                    val b = ByteArray(16384)
+                    while (got < 131072 && System.currentTimeMillis() < end) {
+                        val n = ins.read(b); if (n < 0) break; got += n
+                    }
+                }
+            } finally { c.disconnect() }
+            got >= 65536
+        }.getOrDefault(false)
+    }
+
     private fun awaitHandshake(timeoutMs: Long = 12000): Boolean {
         val end = System.currentTimeMillis() + timeoutMs
         var i = 0
@@ -2005,8 +2042,8 @@ val PROTO_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amneziawg-di
 /** همان ترتیب برای خانواده‌ها (AmneziaWG تانل و مستقیم یک خانواده‌اند) */
 val FAMILY_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amnezia", "xray", "wireguard")
 
-/** خطای اتصال KPING وقتی هیچ نسخه‌ی پابجی نصب نیست */
-const val KPING_NO_GAME = "kping: PUBG Global is not installed"
+/** خطای اتصال KPING وقتی هیچ بازی انتخاب‌شده‌ای روی گوشی نصب نیست */
+const val KPING_NO_GAME = "kping: no game is chosen or installed"
 
 /** پرچم ایران (اول اسم کپی تانل لینک‌های Xray پنل ۳.۳۹: «🇮🇷→🇩🇪 Germany · Trojan») */
 const val IR_FLAG = "\uD83C\uDDEE\uD83C\uDDF7"

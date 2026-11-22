@@ -11,7 +11,8 @@
 // دو مسیر جدا تا سرور:
 //   - UDP (بازی، DNS): مسیر سریع دیتاگرام؛ بدون صف، بدون ارسال مجدد، بدون دست‌دادن.
 //     در حالت گیمینگ هر بسته دو بار فرستاده می‌شود تا گم شدن یک بسته اثری نداشته باشد.
-//   - TCP: روی KCP + FEC + smux (قابل اطمینان). حتی اگر اینجا دانلود سنگینی باشد،
+//   - TCP: روی KCP + smux (قابل اطمینان)؛ بی FEC (TCP خودش دوباره می‌فرستد، FEC فقط پهنای باند هدر می‌داد)،
+//     با سرور قدیمی که KCP بی FEC را نمی‌شناسد همان KCP + FEC. حتی اگر اینجا دانلود سنگینی باشد،
 //     بسته‌های بازی پشت آن منتظر نمی‌مانند.
 package mobile
 
@@ -54,10 +55,12 @@ var (
 
 	dg atomic.Pointer[dgramConn] // مسیر سریع UDP
 
-	psk       []byte
-	server    string
-	fecData   int
-	fecPty    int
+	psk     []byte
+	server  string
+	fecData int
+	fecPty  int
+	// kcpMode نوع KCP مسیر TCP: ۰ هنوز معلوم نیست، ۱ بی FEC (سرور تازه)، ۲ با FEC (سرور قدیمی)
+	kcpMode   atomic.Int32
 	sessionID uint64
 	gaming    atomic.Bool
 
@@ -170,6 +173,7 @@ func setup(serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool)
 		return errors.New("تنظیمات FEC نامعتبر")
 	}
 	psk, server, fecData, fecPty = k, serverAddr, fecShards, fecParity
+	kcpMode.Store(0)
 	gaming.Store(gamingMode)
 	var sid [8]byte
 	rand.Read(sid[:])
@@ -463,7 +467,14 @@ func smuxConfig() *smux.Config {
 	return c
 }
 
+// errNoAnswer سرور به دست دادن جواب نداد (کلید، فایروال یا سرور قدیمی بی KCP ساده)
+var errNoAnswer = errors.New("پاسخی از سرور نیامد — آدرس/پورت UDP، فایروال، کلید و نسخه‌ی سرور را بررسی کن")
+
+// plainProbe مهلت جواب KCP بی FEC وقتی هنوز نمی‌دانیم سرور آن را می‌شناسد
+const plainProbe = 3 * time.Second
+
 // connectLocked باید با connMu قفل‌شده صدا زده شود.
+// اول KCP بی FEC؛ اگر سرور (قدیمی) جواب نداد، همان KCP با FEC و نتیجه تا Start بعدی یادش می‌ماند.
 func connectLocked() error {
 	if mux != nil {
 		mux.Close()
@@ -473,7 +484,28 @@ func connectLocked() error {
 		rawConn.Close()
 		rawConn = nil
 	}
+	switch kcpMode.Load() {
+	case 1:
+		return dialKCP(true, 10*time.Second)
+	case 2:
+		return dialKCP(false, 10*time.Second)
+	}
+	err := dialKCP(true, plainProbe)
+	if err == nil {
+		kcpMode.Store(1)
+		return nil
+	}
+	if err != errNoAnswer {
+		return err
+	}
+	if err = dialKCP(false, 10*time.Second); err == nil {
+		kcpMode.Store(2)
+	}
+	return err
+}
 
+// dialKCP یک اتصال KCP + smux می‌سازد و احراز هویت می‌کند؛ plain = بی FEC (نوع KindKCPPlain)
+func dialKCP(plain bool, wait time.Duration) error {
 	srv, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
 		return fmt.Errorf("آدرس سرور نامعتبر: %w", err)
@@ -487,7 +519,12 @@ func connectLocked() error {
 		raw.Close()
 		return err
 	}
-	sess, err := kcp.NewConn2(srv, nil, fecData, fecPty, oc)
+	data, pty := fecData, fecPty
+	if plain {
+		oc.ClientPlain()
+		data, pty = 0, 0
+	}
+	sess, err := kcp.NewConn2(srv, nil, data, pty, oc)
 	if err != nil {
 		raw.Close()
 		return err
@@ -513,11 +550,11 @@ func connectLocked() error {
 	if _, err := st.Write(proto.AuthToken(psk)); err != nil {
 		return fail(err)
 	}
-	st.SetReadDeadline(time.Now().Add(10 * time.Second))
+	st.SetReadDeadline(time.Now().Add(wait))
 	var ok [1]byte
 	if _, err := io.ReadFull(st, ok[:]); err != nil {
 		// سرور به بسته‌های نامعتبر جواب نمی‌دهد؛ پس کلید اشتباه هم همین شکل دیده می‌شود
-		return fail(errors.New("پاسخی از سرور نیامد — آدرس/پورت UDP، فایروال، کلید و نسخه‌ی سرور را بررسی کن"))
+		return fail(errNoAnswer)
 	}
 	if ok[0] != 0x01 {
 		return fail(errors.New("احراز هویت ناموفق"))

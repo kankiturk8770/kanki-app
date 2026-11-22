@@ -53,6 +53,10 @@ type PacketConn struct {
 	ring    *Keyring // حالت چندکاربره (nil = یک کلید مشترک)
 	handler Handler
 	bufPool sync.Pool
+	// kcpKind نوع بسته‌های KCP این اتصال (۰ = KindKCP؛ اپ تازه KindKCPPlain، plain.go)
+	kcpKind byte
+	// plain شنونده‌ی KCP بی FEC (سمت سرور، plain.go؛ nil = ندارد)
+	plain *plainConn
 }
 
 // New یک PacketConn مبهم‌سازی‌شده با کلید ۳۲ بایتی می‌سازد.
@@ -173,7 +177,7 @@ func (c *PacketConn) open(pkt []byte, addr net.Addr) (byte, []byte, bool) {
 // ---- رابط net.PacketConn برای KCP ----
 
 func (c *PacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	if err := c.WritePacket(KindKCP, b, addr); err != nil {
+	if err := c.WritePacket(c.kcpKindOf(), b, addr); err != nil {
 		return 0, err
 	}
 	return len(b), nil
@@ -192,7 +196,10 @@ func (c *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		if !ok {
 			continue
 		}
-		if kind != KindKCP {
+		if kind == KindKCPPlain && c.kcpKind != KindKCPPlain && c.deliverPlain(p, addr) {
+			continue
+		}
+		if kind != c.kcpKindOf() {
 			if c.handler != nil {
 				c.handler(kind, p, addr)
 			}

@@ -624,13 +624,14 @@ class KankiHyService : VpnService() {
 
     /**
      * KPING: هسته‌ی libkping.so با سوکت جدا روی هر شبکه‌ی گوشی (وای‌فای و دیتا با هم، دیتا حتی وقتی وای‌فای هست روشن می‌ماند).
-     * همه‌ی برنامه‌ها داخل VPN‌اند و دروازه فقط پابجی گلوبال و سرویس‌های گوگل را رد می‌کند؛ بقیه بی‌اینترنت. سوکت‌های هسته با
+     * همه‌ی برنامه‌ها داخل VPN‌اند و دروازه فقط بازی‌های انتخابی و سرویس‌های گوگل را رد می‌کند؛ بقیه بی‌اینترنت. سوکت‌های هسته با
      * protect و bindSocket از VPN بیرون‌اند، پس اینترنت خود گوشی (وای‌فای و دیتا) هیچ‌وقت بسته نمی‌شود.
      */
     private fun startKping(link: String, lines: List<String>, my: Int) {
         fun v(k: String) = lines.firstOrNull { it.startsWith(k, ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim()
         if (!AppGate.supported) error("kping: needs Android 10 or newer")
-        if (!KpingCfg.installed(this)) error(KPING_NO_GAME)
+        val games = KpingCfg.games(this)
+        if (games.isEmpty()) error(KPING_NO_GAME)
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.contains(':') }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val bin = File(applicationInfo.nativeLibraryDir, "libkping.so")
         if (!bin.exists()) error("kping: core is missing in this build")
@@ -689,10 +690,10 @@ class KankiHyService : VpnService() {
             if (cancelled(my)) error("kping: cancelled")
             (b.establish() ?: error("VPN permission is missing")).also { tun = it }
         }
-        // دروازه: فقط پابجی گلوبال + سرویس‌های گوگل (و خود اپ برای سنجش)؛ بقیه فوراً «اینترنت نیست»
+        // دروازه: فقط بازی‌های انتخابی + سرویس‌های گوگل (و خود اپ برای سنجش)؛ بقیه فوراً «اینترنت نیست»
         val coreFd = synchronized(this) {
             if (cancelled(my)) error("kping: cancelled")
-            gameGate(fd, listOf(KpingCfg.GAME) + GAME_NEEDS).also { gate = it; it.start() }.inner
+            gameGate(fd, games + GAME_NEEDS).also { gate = it; it.start() }.inner
         }
         kpSend(sock, "TUN", coreFd, my)
         kpSend(sock, "SET " + prefs.json(), null, my)

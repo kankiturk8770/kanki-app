@@ -7,6 +7,13 @@ import org.junit.Test
 
 /** امتیاز انتخاب سرور گیمینگ: پینگ + لرزش×۳ + افت×۲۰ (کمتر بهتر) */
 class GameScoreTest {
+    /** گیمینگ فقط KANKI MIX، KPING، microtun، AmneziaWG و WireGuard (Hysteria2 مال ضد فیلتر است) */
+    @Test
+    fun gamingFamiliesHaveNoHysteria() {
+        assertEquals(listOf("kankimix", "kping", "mtun", "amnezia", "wireguard"), Modes.GAME_FAMILIES.map { it.first })
+        assertNull(Modes.familyOf("hysteria2"))
+    }
+
     @Test
     fun flatPathBeatsAFasterJumpyOne() {
         // ۶۰ صاف: امتیاز ۶۰

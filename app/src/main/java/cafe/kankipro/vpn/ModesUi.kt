@@ -792,7 +792,11 @@ fun GameSheet(
         if (dupOn || gateOn || kpOn) {
             SmallLine(if (setOpen) "بستن تنظیمات" else "تنظیمات", Modifier.padding(top = D.S2).then(if (gateOn) Modifier.guideTarget("game_only") else Modifier), onClick = { setOpen = !setOpen })
             androidx.compose.animation.AnimatedVisibility(setOpen) {
-                if (kpOn) KpingPanel(c) else Column(
+                if (kpOn) Column {
+                    // KPING هم فقط بازی‌های انتخابی را رد می‌کند (هر بازی، نه یک بازی ثابت)
+                    SmallLine(trf("بازی‌های مجاز (%d)", gameCount), Modifier.padding(top = D.S2), onClick = onPickGames)
+                    KpingPanel(c)
+                } else Column(
                     Modifier.fillMaxWidth().padding(top = D.S2).goldGlass(RoundedCornerShape(D.RL)).padding(horizontal = D.S3, vertical = D.S1),
                 ) {
                     if (dupOn) SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)

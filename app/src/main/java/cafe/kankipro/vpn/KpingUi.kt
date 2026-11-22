@@ -210,7 +210,7 @@ private fun KpingSettings(c: Color) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 T("خودکار", size = 13.sp, color = K.Text)
-                T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی پابجی می‌سنجد و فاصله‌ی نسخه‌ی دوم و بسته‌ی ترمیم را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
+                T("هسته هر مسیر را با بسته‌هایی به اندازه‌ی بسته‌ی بازی می‌سنجد و فاصله‌ی نسخه‌ی دوم و بسته‌ی ترمیم را خودش انتخاب می‌کند؛ با یک افت لحظه‌ای چیزی را عوض نمی‌کند.", size = 10.sp, color = K.Sub, weight = FontWeight.Normal)
             }
             GlassSwitch(v.auto, { set(v.copy(auto = it)) })
         }
