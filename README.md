@@ -2,6 +2,9 @@
 
 اپ اندروید (Kotlin + Jetpack Compose) با موتور AmneziaWG / WireGuard و اشتراک از پنل `kankipro.cafe`.
 
+## تازه‌های نسخه‌ی ۱.۴۰.۰
+گیمینگ با هر پروتکل فقط بازی‌های یک فهرست، رفع WireGuard مستقیم (BackendException)، KPING مستقیم یا از تانل مثل هر هسته.
+
 ## تازه‌های نسخه‌ی ۱.۳۹.۰
 KPING برای هر بازی (بازی‌های نصب‌شده خودکار، «افزودن بازی»)، TCP در KANKI MIX بی FEC، WireGuard مستقیم با Jc، گیمینگ بی Hysteria2، هوشمند با Xray اول و
 سنجش سبک داده.
