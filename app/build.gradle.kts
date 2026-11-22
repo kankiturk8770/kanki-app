@@ -24,8 +24,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 111
-        versionName = "1.39.0"
+        versionCode = 112
+        versionName = "1.40.0"
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -88,6 +88,8 @@ android {
             keepDebugSymbols += "**/libmtun.so"
             // libkping.so هم برنامه‌ی هسته‌ی KPING است
             keepDebugSymbols += "**/libkping.so"
+            // libawg.so هم برنامه‌ی هسته‌ی WireGuard/AmneziaWG گیمینگ است
+            keepDebugSymbols += "**/libawg.so"
         }
         resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/{AL2.0,LGPL2.1}", "META-INF/INDEX.LIST") }
     }

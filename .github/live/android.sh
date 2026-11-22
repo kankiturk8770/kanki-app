@@ -58,14 +58,41 @@ for m in re.finditer(r"<node [^>]*>",sys.stdin.read()):
     if "clickable=\"true\"" in n:
         b=re.search(r"bounds=\"([^\"]+)\"",n); t=re.search(r" text=\"([^\"]*)\"",n); c=re.search(r"class=\"([^\"]*)\"",n)
         print(" ",b.group(1) if b else "", c.group(1) if c else "", (t.group(1) if t else "")[:30])' | head -30
-tap orb || tap "آماده"; sleep 40; shot 03-connect
-echo "after connect: $(texts 30)"
-echo "system VPN networks: $(vpn)"
-vip=$(myip); echo "IP with VPN: $vip (without: $real) -> $([ -z "$vip" ] && echo 'no answer' || { [ "$vip" = "$real" ] && echo LEAK || echo 'ok, different'; })"
-adb shell am force-stop com.android.chrome
-# network change: wifi and data off, then on; the app must come back by itself
-adb shell svc wifi disable; adb shell svc data disable; sleep 6; adb shell svc wifi enable; adb shell svc data enable; sleep 40
-echo "system VPN networks after the network came back: $(vpn)"
-v2=$(myip); echo "IP after the network came back: $v2 -> $([ -z "$v2" ] && echo 'no answer' || { [ "$v2" = "$real" ] && echo LEAK || echo 'ok, different'; })"
-front; shot 04-after; echo "app now: $(texts 30)"
-adb logcat -d -t 600 | grep -i -E "kanki|hysteria|xray|kmix|AndroidRuntime|FATAL" | grep -v -F "$code" | tail -60
+# ---- every config, one by one, through the test hook of the debug build (LiveTest in MainActivity.kt).
+# One run at a time: the test account allows one device, two emulators at once take each other's place
+kk() { # pick mode games nogate
+  adb logcat -c
+  # single-top: the running activity gets the intent (onNewIntent); an empty value would vanish in adb's shell line
+  adb shell am start --activity-single-top --activity-clear-top -n $P/.MainActivity --es kk_pick "'$1'" --es kk_mode "$2" --es kk_games "${3:--}" --es kk_nogate "${4:-0}"
+}
+st() { adb logcat -d -s KankiLive:I | grep " state " | tail -1 | sed 's/.*KankiLive: //'; }
+kk "none|none" game ""; sleep 8
+adb logcat -d -s KankiLive:I | grep " cfg " | sed 's/.*KankiLive: //' | sort -u > $out/cfgs.txt
+echo "configs:"; cat $out/cfgs.txt
+pickof() { grep "^cfg [^|]*|$1 side=$2" $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//'; }
+GAME=com.android.chrome
+run() { # label pick nogate games
+  [ -z "$2" ] && { echo "== $1: not in this subscription"; return; }
+  kk "$2" game "${4:-$GAME}" "${3:-0}"; sleep 35
+  local s; s=$(st); local ip; ip=$(myip); adb shell am force-stop com.android.chrome
+  local sh; sh=$(adb shell 'toybox nc -w 5 1.1.1.1 80 </dev/null >/dev/null 2>&1 && echo open || echo closed')
+  echo "== $1 [$2] gate=$([ "${3:-0}" = 1 ] && echo off || echo on) games=${4:-$GAME}"
+  echo "   state: $s"
+  echo "   chrome IP: ${ip:-no answer} (without VPN: $real) -> $([ -z "$ip" ] && echo 'no answer' || { [ "$ip" = "$real" ] && echo LEAK || echo 'through VPN'; })"
+  echo "   shell (not a game) TCP 1.1.1.1:80: $sh"
+  adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|wireguard" | grep -v -F "$code" | tail -8 | sed 's/^/   log: /'
+}
+# the tunnel copies first: the test account allows one device, and the server counts the same WireGuard key from two
+# addresses (straight and through Iran) as two devices for a while
+run "WireGuard tunnel, gaming" "$(pickof wireguard tunnel)"
+run "WireGuard direct, gaming (libawg + gate)" "$(pickof wireguard direct)"
+run "WireGuard direct, amnezia engine (no gate)" "$(pickof wireguard direct)" 1
+run "AmneziaWG direct, gaming" "$(pickof amneziawg-direct direct)"
+run "AmneziaWG tunnel, gaming" "$(pickof amneziawg tunnel)"
+run "KANKI MIX, gaming" "$(pickof kankimix direct)"
+run "microtun, gaming" "$(pickof mtun direct)"
+run "KPING, gaming" "$(grep '^cfg [^|]*|kping ' $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//')"
+run "WireGuard direct, gaming, Chrome NOT a game (must be closed)" "$(pickof wireguard direct)" 0 "com.example.notagame"
+shot 03-connect
+adb logcat -d -t 800 | grep -i -E "kanki|AndroidRuntime|FATAL" | grep -v -F "$code" | tail -40
+exit 0

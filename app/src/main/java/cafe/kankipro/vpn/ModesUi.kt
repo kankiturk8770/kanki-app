@@ -757,9 +757,7 @@ fun GameSheet(
     busy: Boolean,
     kmixDup: Boolean,
     onKmixDup: (Boolean) -> Unit,
-    gameOnly: Boolean,
     gameCount: Int,
-    onGameOnly: (Boolean) -> Unit,
     onPickGames: () -> Unit,
     onFamilyShown: (String) -> Unit,
     onConnect: (node: String, proto: String) -> Unit,
@@ -783,39 +781,29 @@ fun GameSheet(
                 }
             }
         }
-        // تنظیمات (KPING، KANKI MIX، microtun) پشت یک دکمه‌ی کوچک، تا فهرست سرورها اول دیده شود
+        // بازی‌ها: یک فهرست برای همه‌ی پروتکل‌های گیمینگ؛ در گیمینگ فقط همین بازی‌ها (و ورود گوگل و DNS) اینترنت دارند
+        val ok = AppGate.supported
+        SmallLine(
+            if (ok) trf("بازی‌ها (%d) · بقیه‌ی برنامه‌ها تا قطع بسته‌اند", gameCount) else "بازی‌ها · بستن بقیه‌ی برنامه‌ها روی اندروید ۱۰ به بالا",
+            Modifier.padding(top = D.S2).guideTarget("game_only"), onClick = onPickGames,
+        )
+        // تنظیمات خود هسته (KPING، ارسال دوتایی KANKI MIX) پشت یک دکمه‌ی کوچک، تا فهرست سرورها اول دیده شود
         val has = f?.servers?.isNotEmpty() == true
         val dupOn = fam == "kankimix" && has
-        val gateOn = (fam == "kankimix" || fam == "mtun") && has
         val kpOn = fam == "kping" && has
         var setOpen by remember(fam) { mutableStateOf(false) }
-        if (dupOn || gateOn || kpOn) {
-            SmallLine(if (setOpen) "بستن تنظیمات" else "تنظیمات", Modifier.padding(top = D.S2).then(if (gateOn) Modifier.guideTarget("game_only") else Modifier), onClick = { setOpen = !setOpen })
+        if (dupOn || kpOn) {
+            SmallLine(if (setOpen) "بستن تنظیمات" else "تنظیمات", Modifier.padding(top = D.S2), onClick = { setOpen = !setOpen })
             androidx.compose.animation.AnimatedVisibility(setOpen) {
-                if (kpOn) Column {
-                    // KPING هم فقط بازی‌های انتخابی را رد می‌کند (هر بازی، نه یک بازی ثابت)
-                    SmallLine(trf("بازی‌های مجاز (%d)", gameCount), Modifier.padding(top = D.S2), onClick = onPickGames)
-                    KpingPanel(c)
-                } else Column(
+                if (kpOn) KpingPanel(c) else Column(
                     Modifier.fillMaxWidth().padding(top = D.S2).goldGlass(RoundedCornerShape(D.RL)).padding(horizontal = D.S3, vertical = D.S1),
                 ) {
-                    if (dupOn) SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
-                    if (dupOn && gateOn) Box(Modifier.fillMaxWidth().height(1.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = .1f), Color.Transparent))))
-                    // فایروال «فقط بازی»: فقط پروتکل‌های مخصوص بازی (KANKI MIX و microtun)، اندروید ۱۰ به بالا
-                    if (gateOn) {
-                        val ok = AppGate.supported
-                        Box { SwitchRow(
-                            "فقط بازی اینترنت داشته باشد",
-                            if (!ok) "روی اندروید ۱۰ به بالا" else trf("%d بازی · سرویس‌های گوگل و DNS هم باز می‌مانند؛ بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند", gameCount),
-                            gameOnly && ok, c, enabled = ok, onChange = onGameOnly,
-                        ) }
-                        if (gameOnly && ok) SmallLine("انتخاب بازی‌ها", Modifier.padding(bottom = D.S2), onClick = onPickGames)
-                    }
+                    SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
                 }
             }
         }
         SheetLabel(trf("سرورهای %s", f?.title ?: "")) {
-            if (f != null && f.servers.isNotEmpty()) T(if (fam == "kping") trf("%d سرور · تانل", pairsOf(f.servers).size) else trf("%d سرور", pairsOf(f.servers).size) + " · " + tr("مستقیم / تانل"), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            if (f != null && f.servers.isNotEmpty()) T(trf("%d سرور", pairsOf(f.servers).size) + " · " + tr("مستقیم / تانل"), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
         }
         if (f == null || f.servers.isEmpty()) {
             T("این پروتکل در اشتراک شما نیست.", size = 11.sp, color = K.Warn, weight = FontWeight.Normal)
@@ -829,7 +817,7 @@ fun GameSheet(
                 // سرور تازه (مثلاً بعد از بروزرسانی اشتراک) ته فهرست اضافه می‌شود
                 pairs.forEach { if (it.id !in order) order.add(it.id) }
                 pairs.sortedBy { order.indexOf(it.id) }.forEach { p ->
-                    key(p.id) { PairRow(p, current, currentAuto, c, !busy, tunnelOnly = fam == "kping") { sv -> onConnect(sv.node, sv.proto) } }
+                    key(p.id) { PairRow(p, current, currentAuto, c, !busy, tunnelOnly = false) { sv -> onConnect(sv.node, sv.proto) } }
                 }
             }
         }

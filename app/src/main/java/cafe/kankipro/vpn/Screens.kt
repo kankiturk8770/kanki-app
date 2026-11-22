@@ -503,10 +503,8 @@ private fun ModeSheets(state: AppState) {
         busy = busy,
         kmixDup = state.kmixDup,
         onKmixDup = { state.changeKmixDup(it) },
-        gameOnly = state.gameOnly,
         gameCount = state.gameApps.size,
-        onGameOnly = { state.changeGameOnly(it) },
-        onPickGames = { state.gameAppsOpen = true },
+        onPickGames = { state.seedGameApps(); state.gameAppsOpen = true },
         // پینگ همه با باز شدن پنل یک بار (با محدودیت همزمانی) گرفته می‌شود؛ اینجا دوباره پینگ نمی‌شود
         onFamilyShown = { state.measureFamily(it) },
         onConnect = { n, p ->

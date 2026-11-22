@@ -79,17 +79,10 @@ class AppState private constructor(context: Context) {
         if (HyEngine.kmix) KmixCore.setGaming(v)
     }
 
-    /**
-     * گیمینگ «فقط بازی اینترنت داشته باشد»: فقط با KANKI MIX و microtun و اندروید ۱۰ به بالا (AppGate).
-     * بازی‌های انتخابی، سرویس‌های گوگل و DNS اینترنت دارند و بقیه‌ی برنامه‌ها تا قطع VPN نه.
+    /*
+     * گیمینگ (۱.۴۰): با هر پروتکلی (KANKI MIX، KPING، microtun، AmneziaWG، WireGuard) فقط بازی‌های یک فهرست («بازی‌ها»)، سرویس‌های
+     * گوگل و DNS اینترنت دارند و بقیه‌ی برنامه‌ها تا قطع VPN نه (AppGate، اندروید ۱۰ به بالا). تنظیم جدا برای هر پروتکل نیست.
      */
-    var gameOnly by mutableStateOf(prefs.getBoolean("gameFirewall", false))
-        private set
-    fun changeGameOnly(v: Boolean) {
-        gameOnly = v
-        prefs.edit().putBoolean("gameFirewall", v).apply()
-        if (v) seedGameApps()
-    }
     /** بار اول (هنوز چیزی انتخاب نشده): بازی‌های نصب‌شده‌ی گوشی، خودکار */
     fun seedGameApps() {
         if (!prefs.contains("gameApps")) bg.launch {
@@ -337,8 +330,8 @@ class AppState private constructor(context: Context) {
      * پروتکل‌های دیگر که پنل گفته به آدرس ایران می‌رود «تانل»؛ بقیه برچسب tunnelTag را می‌گیرند.
      */
     fun cfgTag(id: String, p: String): String? = when {
-        // KPING همیشه از سرور ایران و تانل خودش است
-        p == KpingCfg.PROTO -> tr("تانل")
+        // KPING (پنل ۳.۵۸): مثل هر هسته، مستقیم به سرور یا از راه تانل ایران همان سرور (@tunnel)
+        p == KpingCfg.PROTO -> tr(if (isTunnelTwin(id)) "تانل" else "مستقیم")
         p == "amneziawg-direct" -> tr("مستقیم")
         p == "amneziawg" && !isTunnelTwin(id) -> tr("تانل")
         isTunnelTwin(id) -> tunnelTag(id)
@@ -358,8 +351,8 @@ class AppState private constructor(context: Context) {
         isTunnelTwin(id) -> "tunnel"
         p == "amneziawg-direct" -> "direct"
         p == "amneziawg" -> "tunnel"
-        // KPING همیشه از سرور ایران و تانل خودش
-        p == KpingCfg.PROTO -> "tunnel"
+        // KPING (پنل ۳.۵۸): مثل هر هسته، مستقیم یا از راه تانل ایران همان سرور
+        p == KpingCfg.PROTO -> if (isTunnelTwin(id)) "tunnel" else "direct"
         // Xray: همان چیزی که پنل گفته (via)؛ پنل قدیمی: کپی تانل اسمش «🇮🇷→…» (۳.۳۹) یا «… (تانل)» (قدیمی‌تر) است
         p == "xray" -> account?.xrayById?.get(id)?.let { x ->
             x.via.ifBlank { if (xrayTunnelName(x.name)) "tunnel" else "direct" }
@@ -1535,8 +1528,11 @@ class AppState private constructor(context: Context) {
                 if (link.protocol == KpingCfg.PROTO) {
                     // KPING: فقط بازی‌های انتخابی و سرویس‌های گوگل اینترنت دارند؛ بقیه‌ی برنامه‌ها بسته (دروازه، در خود سرویس)
                     if (!KpingCfg.installed(ctx) || !AppGate.supported) throw IllegalStateException(KPING_NO_GAME)
-                } else if (mode == KMode.GAME && gameOnly && link.protocol in GAME_ONLY && AppGate.supported) {
-                    cfg = applyGameOnly(cfg, gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() })
+                } else if (mode == KMode.GAME && link.protocol in GAME_GATED && AppGate.supported && !LiveTest.noGate) {
+                    // گیمینگ با هر پروتکلی: فقط بازی‌های همان یک فهرست («بازی‌ها») اینترنت دارند؛ بقیه‌ی برنامه‌ها تا قطع بسته‌اند
+                    val games = gameApps.toSet().ifEmpty { GameApps.detect(ctx).toSet() }
+                    if (games.isEmpty()) throw IllegalStateException(GAME_NONE)
+                    cfg = applyGameOnly(cfg, games)
                 }
                 if (!wantTry) throw IllegalStateException("cancelled")
                 VpnEngine.up(ctx, cfg)
@@ -1559,7 +1555,9 @@ class AppState private constructor(context: Context) {
             // «قطع» وسط اتصال: کار لغو شده، پس بدون NonCancellable همین down هم اجرا نمی‌شد و VPN وصل می‌ماند
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { VpnEngine.down(ctx) }
             vstate = VState.OFF
-            if (!quiet && wantTry && e.message == KPING_NO_GAME) {
+            if (!quiet && wantTry && e.message == GAME_NONE) {
+                error = "هیچ بازی‌ای انتخاب نشده؛ در گیمینگ «بازی‌ها» را بزن و بازی‌ات را روشن کن."
+            } else if (!quiet && wantTry && e.message == KPING_NO_GAME) {
                 error = if (!AppGate.supported) "KPING روی اندروید ۱۰ به بالا کار می‌کند (بستن بقیه‌ی برنامه‌ها)." else "هیچ بازی‌ای برای KPING انتخاب نشده؛ در گیمینگ › «بازی‌های مجاز» بازی‌ات را روشن کن."
             } else if (!quiet && wantTry) {
                 error = "اتصال برقرار نشد. سرور یا پروتکل دیگری را امتحان کنید."
@@ -2041,6 +2039,12 @@ val PROTO_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amneziawg-di
 
 /** همان ترتیب برای خانواده‌ها (AmneziaWG تانل و مستقیم یک خانواده‌اند) */
 val FAMILY_ORDER = listOf("kankimix", "kping", "mtun", "hysteria2", "amnezia", "xray", "wireguard")
+
+/** پروتکل‌هایی که در گیمینگ پشت دروازه‌ی بازی‌ها می‌روند (KPING دروازه‌ی خودش را دارد، با همان فهرست) */
+val GAME_GATED = setOf("kankimix", MtunCfg.PROTO, "wireguard", "amneziawg", "amneziawg-direct")
+
+/** خطای اتصال گیمینگ وقتی هیچ بازی‌ای انتخاب یا پیدا نشده */
+const val GAME_NONE = "gaming: no game is chosen"
 
 /** خطای اتصال KPING وقتی هیچ بازی انتخاب‌شده‌ای روی گوشی نصب نیست */
 const val KPING_NO_GAME = "kping: no game is chosen or installed"

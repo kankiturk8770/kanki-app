@@ -101,6 +101,8 @@ object HyEngine {
     @Volatile internal var mtun = false
     @Volatile internal var mtunRx = 0L
     @Volatile internal var mtunTx = 0L
+    /** اتصال فعلی WireGuard/AmneziaWG گیمینگ است (هسته‌ی libawg.so)؛ آمار از mtunRx/mtunTx */
+    @Volatile internal var awg = false
     /** اتصال فعلی KPING است؛ آمار زنده از گزارش هر ثانیه‌ی هسته */
     @Volatile internal var kping = false
     @Volatile internal var kpStat: KpStat? = null
@@ -108,7 +110,17 @@ object HyEngine {
     @Volatile internal var dnsBase: Pair<Long, Long>? = null
 
     /** این متن با این موتور بالا می‌آید: Hysteria2، Xray، DNS کانکی یا KANKI MIX */
-    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || MtunCfg.isMtun(text) || KpingCfg.isKping(text)
+    fun isHy(text: String) = text.contains("hysteria2://") || XrayCfg.isXray(text) || KankiDns.isDns(text) || KmixUri.isKmix(text) || MtunCfg.isMtun(text) || KpingCfg.isKping(text) || isAwgGated(text)
+
+    /**
+     * WireGuard / AmneziaWG در گیمینگ (خط GameOnly): موتور خود کتابخانه‌ی امنزیا کارت VPN را خودش می‌سازد و دروازه نمی‌تواند جلویش
+     * بنشیند؛ پس در گیمینگ همین سرویس با هسته‌ی جدای libawg.so (awg-core، همان amneziawg-go کتابخانه) وصل می‌شود.
+     */
+    fun isAwgGated(text: String) = text.contains("[Peer]", ignoreCase = true) && !KmixUri.isKmix(text) && !MtunCfg.isMtun(text) && !KpingCfg.isKping(text) &&
+        text.lines().any { (it.trim().startsWith("GameOnly", ignoreCase = true) || it.trim().startsWith(AWG_OWN, ignoreCase = true)) && it.contains("=") }
+
+    /** این خط یعنی WireGuard/AmneziaWG بی دروازه هم با هسته‌ی خود کانکی (libawg.so) بالا بیاید (وقتی موتور کتابخانه‌ی امنزیا رد کرد) */
+    const val AWG_OWN = "KankiCore"
 
     fun isUp() = state == UP
 
@@ -157,7 +169,7 @@ object HyEngine {
     fun stats(): Pair<Long, Long>? = when {
         state != UP -> null
         kmix -> KmixCore.stats()
-        mtun || kping -> mtunRx to mtunTx
+        mtun || kping || awg -> mtunRx to mtunTx
         dnsMode && !dnsGate -> deviceStats()?.let { now ->
             val b = dnsBase ?: now.also { dnsBase = it }
             (now.first - b.first).coerceAtLeast(0) to (now.second - b.second).coerceAtLeast(0)
@@ -233,6 +245,7 @@ class KankiHyService : VpnService() {
         if (KpingCfg.isKping(text)) return startKping(v("URI") ?: error("kping: link missing"), lines, my)
         if (KankiDns.isDns(text)) return startDns(lines, my)
         if (KmixUri.isKmix(text)) return startKmix(v("URI") ?: error("kanki mix: link missing"), lines, my)
+        if (HyEngine.isAwgGated(text)) return startAwg(text, my)
         val uri = HyUri.parse(v("URI") ?: error("hysteria2: link missing"))
         val dns = (v("DNS") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
         val mtu = v("MTU")?.toIntOrNull()?.coerceIn(1280, 9000) ?: TUN_MTU
@@ -615,6 +628,105 @@ class KankiHyService : VpnService() {
         }, "kanki-mtun-addr").start()
     }
 
+    // ---------------------------------------------------------------- WireGuard / AmneziaWG در گیمینگ
+
+    /**
+     * WireGuard یا AmneziaWG با دروازه‌ی بازی‌ها: کارت VPN همین سرویس، دروازه جلوی آن (فقط بازی‌های انتخابی، سرویس‌های گوگل و DNS)،
+     * و هسته‌ی libawg.so پشت دروازه. تنظیم دستگاه (UAPI) را خود کتابخانه‌ی امنزیا از کانفیگ می‌سازد (همان که موتور خودش می‌سازد)؛
+     * فایلش فقط تا وقتی هسته بخواندش می‌ماند. آدرس سرور بیرون از مسیرهای VPN است تا سوکت هسته دور خودش نچرخد.
+     */
+    private fun startAwg(text: String, my: Int) {
+        val lines = text.lines().map { it.trim() }
+        // گیمینگ: دروازه‌ی بازی‌ها؛ بی خط GameOnly (موتور کتابخانه رد کرده بود): همان هسته، بی دروازه
+        val games = gameOnly(lines)
+        val bin = File(applicationInfo.nativeLibraryDir, "libawg.so")
+        if (!bin.exists()) error("wireguard: the gaming core is missing in this build")
+        // خط‌های خود کانکی (GameOnly و …) را کتابخانه نمی‌شناسد
+        val clean = text.lines().filterNot { l -> val t = l.trim(); t.startsWith("GameOnly", true) || t.startsWith(HyEngine.AWG_OWN, true) || t.startsWith("IncludedApplications", true) || t.startsWith("ExcludedApplications", true) }.joinToString("\n")
+        val cfg = org.amnezia.awg.config.Config.parse(clean.byteInputStream())
+        val peer = cfg.peers.firstOrNull() ?: error("wireguard: the config has no server")
+        val ep = peer.endpoint.orElse(null) ?: error("wireguard: the config has no server address")
+        val addrs = InetAddress.getAllByName(ep.host)
+        val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
+        val mtu = cfg.`interface`.mtu.orElse(1280).coerceIn(1280, 1500)
+        val dns = cfg.`interface`.dnsServers.mapNotNull { it.hostAddress }.filter { !it.contains(':') }.ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+        // سرور با آی‌پی (هسته‌ی جدا DNS نمی‌پرسد)
+        val withIp = clean.lines().joinToString("\n") { l ->
+            if (l.trim().startsWith("Endpoint", true) && l.contains("=")) "Endpoint = " + (if (ip is Inet4Address) ip.hostAddress else "[${ip.hostAddress}]") + ":" + ep.port else l
+        }
+        val c2 = org.amnezia.awg.config.Config.parse(withIp.byteInputStream())
+        val uapi = c2.`interface`.toAwgUserspaceString() + c2.peers.joinToString("") { it.toAwgUserspaceString(true, this) }
+        // a file of this attempt only: the core of the previous one may still be exiting and its monitor removes its own file
+        File(filesDir, ".").listFiles()?.filter { (it.name.startsWith("awg-") && (it.name.endsWith(".uapi") || it.name.endsWith(".sock"))) }?.forEach { runCatching { it.delete() } }
+        val uapiFile = File(filesDir, "awg-$my.uapi")
+        uapiFile.writeText(uapi)
+        uapiFile.setReadable(false, false); uapiFile.setReadable(true, true)
+        val sock = File(filesDir, "awg-$my.sock")
+        HyEngine.mtunRx = 0
+        HyEngine.mtunTx = 0
+        val ready = java.util.concurrent.LinkedBlockingQueue<String>()
+        val pb = ProcessBuilder(bin.path, "client", "--uapi", uapiFile.path, "--sock", sock.path, "--mtu", mtu.toString())
+            .directory(filesDir).redirectErrorStream(true)
+        val p = synchronized(this) {
+            if (cancelled(my)) { uapiFile.delete(); error("wireguard: cancelled") }
+            killStaleCores()
+            pb.start().also { proc = it }
+        }
+        Thread({
+            runCatching {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    when {
+                        line == "READY" -> ready.put("1")
+                        line.startsWith("STAT ") -> runCatching {
+                            val o = org.json.JSONObject(line.removePrefix("STAT "))
+                            HyEngine.mtunRx = o.optLong("rx")
+                            HyEngine.mtunTx = o.optLong("tx")
+                        }
+                        line == "WAIT" -> {}
+                        else -> synchronized(log) {
+                            android.util.Log.i("KankiAwg", line.take(200))
+                            log.append(line).append('\n')
+                            if (log.length > 6000) log.delete(0, log.length - 4000)
+                        }
+                    }
+                }
+            }
+        }, "kanki-awg-log").start()
+        Thread({
+            runCatching { p.waitFor() }
+            uapiFile.delete()
+            ready.put("")
+            if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
+                HyEngine.crashed = true
+                HyEngine.lastError = "wireguard core exited. " + lastLog()
+                shutdown()
+                HyEngine.state = HyEngine.IDLE
+            }
+        }, "kanki-awg-mon").start()
+
+        val b = Builder().setSession("Kanki · WireGuard").setMtu(mtu)
+        val excluded = lines.firstOrNull { it.startsWith("ExcludedApplications", true) && it.contains("=") }?.substringAfter("=")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        if (games == null) excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
+        // دروازه فقط IPv4 را می‌شناسد: IPv6 بی آدرس (برنامه‌ها فوری IPv4 می‌گیرند)، مسیر ::/0 در serverRoutes تا بیرون نرود
+        cfg.`interface`.addresses.filter { it.address is Inet4Address }.forEach { a -> b.addAddress(a.address, a.mask) }
+        serverRoutes(b, ip)
+        tunDns = dns
+        dns.forEach { d -> runCatching { b.addDnsServer(d) } }
+        if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        val fd = synchronized(this) {
+            if (cancelled(my)) error("wireguard: cancelled")
+            (b.establish() ?: error("VPN permission is missing")).also { tun = it }
+        }
+        sendTun(sock, gated(fd, games, my), my)
+        val r = ready.poll(15, java.util.concurrent.TimeUnit.SECONDS)
+        if (r.isNullOrEmpty()) error("wireguard: " + (lastLog().ifBlank { "the core did not start" }))
+        synchronized(this) {
+            if (cancelled(my)) error("wireguard: cancelled")
+            HyEngine.awg = true
+            HyEngine.state = HyEngine.UP
+        }
+    }
+
     // ---------------------------------------------------------------- KPING
 
     /** سوکت یونیکس هسته‌ی KPING (null = وصل نیست) */
@@ -836,7 +948,7 @@ class KankiHyService : VpnService() {
                 Thread.sleep(100)
             }
         }
-        error("microtun: core did not take the VPN (${last?.message ?: "cancelled"})")
+        error("core did not take the VPN (${last?.message ?: "cancelled"})")
     }
 
     /**
@@ -850,7 +962,7 @@ class KankiHyService : VpnService() {
             if (pid == me) return@forEach
             runCatching {
                 val cmd = File(d, "cmdline").readText()
-                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libmtun.so") || cmd.contains("libkping.so")) android.os.Process.killProcess(pid)
+                if (cmd.contains("libhysteria.so") || cmd.contains("libxray.so") || cmd.contains("libkmix.so") || cmd.contains("libmtun.so") || cmd.contains("libkping.so") || cmd.contains("libawg.so")) android.os.Process.killProcess(pid)
             }
         }
     }
@@ -944,6 +1056,7 @@ class KankiHyService : VpnService() {
         HyEngine.kmix = false
         HyEngine.mtun = false
         HyEngine.kping = false
+        HyEngine.awg = false
         HyEngine.kpStat = null
         KpHud.stop()
         kpNets.forEach { cb -> runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(cb) } }

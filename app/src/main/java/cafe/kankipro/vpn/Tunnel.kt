@@ -19,7 +19,7 @@ fun applyExcluded(cfg: String, pkgs: Set<String>): String {
 }
 
 /**
- * «فقط بازی اینترنت داشته باشد» (گیمینگ، فقط KANKI MIX و microtun): فقط این برنامه‌ها و پیش‌نیازهای ورود بازی
+ * گیمینگ با هر پروتکل (KANKI MIX، microtun، WireGuard، AmneziaWG؛ KPING فهرست خودش را می‌خواند): فقط این برنامه‌ها و پیش‌نیازهای ورود بازی
  * (سرویس‌های گوگل و پلی‌استور) اینترنت دارند؛ DNS همیشه رد می‌شود و بقیه‌ی برنامه‌ها تا قطع VPN اینترنت ندارند.
  */
 fun applyGameOnly(cfg: String, games: Set<String>): String {
