@@ -69,11 +69,12 @@ fun LoginScreen(state: AppState) {
 
     // صفحه‌ی ورود (۱.۳۲.۶): ظاهر شیشه‌ای ۱.۳۲ با همان متن‌ها و دکمه‌های ۱.۳۱. متن‌هایی مثل «کد را از ربات تلگرام بگیر و این‌جا بگذار»
     // و آیکون کلید احتمالاً Play Protect را به یاد صفحه‌های دزدیدن کد تلگرام می‌انداخت (۱.۳۲.۰ تا ۱.۳۲.۵ «مضر»)؛ برنگردند.
+    // ۱.۴۱: همه‌چیز وسط صفحه (قبلاً خیلی بالا بود)؛ صفحه‌ی کوتاه یا کیبورد باز: اسکرول
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(48.dp))
         Logo3D(96.dp, animate = true, glow = 1f)
         Spacer(Modifier.height(14.dp))
         BrandTitle(22.sp)
@@ -133,6 +134,7 @@ fun LoginScreen(state: AppState) {
         Spacer(Modifier.height(22.dp))
         SmallLine("اشتراک نداری؟ از ربات بگیر") { openBot(ctx) }
         Spacer(Modifier.height(12.dp))
+    }
     }
 }
 
