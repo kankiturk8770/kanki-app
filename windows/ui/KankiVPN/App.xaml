@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:k="clr-namespace:KankiVPN"
              ShutdownMode="OnExplicitShutdown">
-    <!-- Colours are set by Theme.Apply (the Android app's yellow and crimson themes); every
+    <!-- Colours are set by Theme.Apply (the Android app's six glass themes); every
          themed brush below is a DynamicResource so a theme change repaints at once. -->
     <Application.Resources>
         <FontFamily x:Key="Vazir">pack://application:,,,/Assets/#Vazirmatn</FontFamily>

@@ -12,7 +12,7 @@ namespace KankiVPN
         public string Lang { get; set; } = "fa";
         public string LastServer { get; set; } = "";
         public bool TrayHintShown { get; set; }
-        public string Theme { get; set; } = "yellow";
+        public string Theme { get; set; } = "kanki";
         /// <summary>smart, gaming or anti (the three tiles on Home); a server picked by hand wins.</summary>
         public string Mode { get; set; } = "smart";
         public bool Manual { get; set; }

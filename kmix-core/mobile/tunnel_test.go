@@ -189,6 +189,14 @@ func TestTunnel(t *testing.T) {
 	if len(data) < size {
 		t.Fatalf("TCP: فقط %d بایت", len(data))
 	}
+	// سرور تازه KCP بی FEC را می‌شناسد؛ سرور قدیمی (SRVKCP=fec) با FEC
+	want := int32(1)
+	if os.Getenv("SRVKCP") == "fec" {
+		want = 2
+	}
+	if m := kcpMode.Load(); m != want {
+		t.Fatalf("نوع KCP: %d، باید %d", m, want)
+	}
 
 	// عوض شدن شبکه: جریان UDP بازی نباید بشکند
 	Reconnect()

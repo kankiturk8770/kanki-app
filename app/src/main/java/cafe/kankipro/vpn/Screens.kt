@@ -485,7 +485,7 @@ private fun ModeSheets(state: AppState) {
             when (key) {
                 "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
                 "mtun" -> tr("microtun: VPN سبک بازی؛ بسته‌های کوچک بازی دو بار می‌روند تا یک بسته‌ی گم‌شده لگ نیاورد، دانلود یک بار")
-                "kping" -> tr("KPING: فقط پابجی گلوبال؛ هر بسته از وای‌فای و دیتا با هم، اولی که رسید برنده؛ بقیه‌ی برنامه‌ها تا قطع بی‌اینترنت")
+                "kping" -> tr("KPING: فقط بازی‌های انتخابی؛ هر بسته از وای‌فای و دیتا با هم، اولی که رسید برنده؛ بقیه‌ی برنامه‌ها تا قطع بی‌اینترنت")
                 "hysteria2" -> tr("روی UDP (QUIC): پرسرعت و پایدار، حتی روی اینترنت ضعیف و پرپکت‌لاس")
                 "amnezia" -> tr("پایدار روی شبکه‌ی محدود؛ مستقیم یا از تانل ایران")
                 else -> tr("سبک و سریع، روی اینترنت پایدار")
@@ -659,19 +659,27 @@ fun SplitTunnelPanel(state: AppState, onClose: () -> Unit) =
 
 /** گیمینگ «فقط بازی»: بازی‌هایی که اینترنت دارند (سرویس‌های گوگل و DNS همیشه باز می‌مانند) */
 @Composable
-fun GameAppsPanel(state: AppState, onClose: () -> Unit) =
+fun GameAppsPanel(state: AppState, onClose: () -> Unit) {
+    LaunchedEffect(Unit) { state.seedGameApps() }
     AppPickerPanel(
         "بازی‌های مجاز", "فقط این بازی‌ها (و سرویس‌های گوگل برای ورود) اینترنت دارند؛ بقیه‌ی برنامه‌ها تا قطع VPN نه",
-        selected = state.gameApps, onToggle = { state.toggleGameApp(it) }, onClose = onClose,
+        selected = state.gameApps, onToggle = { state.toggleGameApp(it) }, onClose = onClose, gamesOnly = true,
     )
+}
 
 /** فهرست برنامه‌های گوشی با کلید روشن/خاموش (روشن‌ها بالای فهرست) */
 @Composable
-private fun AppPickerPanel(title: String, sub: String, selected: List<String>, onToggle: (String) -> Unit, onClose: () -> Unit) {
+private fun AppPickerPanel(title: String, sub: String, selected: List<String>, onToggle: (String) -> Unit, onClose: () -> Unit, gamesOnly: Boolean = false) {
     val ctx = LocalContext.current
     var apps by remember { mutableStateOf<List<AppItem>?>(null) }
     var q by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { apps = withContext(Dispatchers.IO) { AppsRepo.load(ctx) } }
+    // gamesOnly: فقط بازی‌های نصب‌شده (و آن‌هایی که کاربر خودش افزوده)؛ «افزودن بازی» همه‌ی برنامه‌ها را نشان می‌دهد
+    var games by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var all by remember { mutableStateOf(!gamesOnly) }
+    LaunchedEffect(Unit) {
+        apps = withContext(Dispatchers.IO) { AppsRepo.load(ctx) }
+        if (gamesOnly) games = withContext(Dispatchers.IO) { GameApps.detect(ctx).toSet() }
+    }
     Box(
         Modifier.fillMaxSize().background(K.Ink.copy(alpha = .97f))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { },
@@ -699,8 +707,13 @@ private fun AppPickerPanel(title: String, sub: String, selected: List<String>, o
             if (list == null) {
                 Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = K.Gold) }
             } else {
-                val shown = list.filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
+                val shown = list.filter { all || it.pkg in games || it.pkg in selected }
+                    .filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
                     .sortedByDescending { it.pkg in selected }
+                if (gamesOnly) {
+                    SmallLine(if (all) "فقط بازی‌ها" else "افزودن بازی", Modifier.padding(bottom = D.S2), onClick = { all = !all })
+                    if (!all && shown.isEmpty()) T("بازی‌ای روی گوشی پیدا نشد؛ با «افزودن بازی» خودت انتخاب کن.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                }
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
                     items(shown.size) { idx ->
                         val app = shown[idx]

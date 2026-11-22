@@ -16,6 +16,8 @@ namespace KankiVPN
         public Color GameAlt, Tracer, NavTop, NavBottom, OnNav;
         /// <summary>Colour of the gaming runners; null = the gaming colour.</summary>
         public Color? Runner;
+        /// <summary>The second neon of the theme (Ui.kt gold2): gradients of lights and edges</summary>
+        public Color Gold2;
 
         public static Palette Lerp(Palette a, Palette b, double f)
         {
@@ -34,47 +36,58 @@ namespace KankiVPN
                 GameAlt = L(a.GameAlt, b.GameAlt), Tracer = L(a.Tracer, b.Tracer),
                 NavTop = L(a.NavTop, b.NavTop), NavBottom = L(a.NavBottom, b.NavBottom), OnNav = L(a.OnNav, b.OnNav),
                 Runner = a.Runner is { } ra && b.Runner is { } rb ? L(ra, rb) : b.Runner,
+                Gold2 = L(a.Gold2, b.Gold2),
             };
         }
     }
 
-    /// <summary>The Android app's two themes (Ui.kt Themes: "yellow" and "crimson"), same colours.
+    /// <summary>The Android app's six glass themes (Ui.kt glassTheme, «Kanki Glass» 1.32+), same colours: each theme is one
+    /// background and one neon colour (plus a second neon), and every other colour is made from them.
     /// Every themed colour in XAML is a DynamicResource of the keys below; the drawn parts (Gfx and the
     /// controls in Draw.cs) read <see cref="P"/> and repaint on <see cref="Changed"/>.</summary>
     public static class Theme
     {
         static Color H(uint argb) => Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
+        /// <summary>Ui.kt glassTheme, line for line</summary>
+        static Palette Glass(string id, uint bg, uint accent, uint accent2, uint ink = 0xFF0A0D0B, uint text = 0xFFF2F5F1, uint sub = 0xFFA9B3AB)
+        {
+            Color b = H(bg), a = H(accent), on = H(ink);
+            Color hi = Gfx.Lerp(a, Colors.White, .40), deep = Gfx.Lerp(a, Colors.Black, .45);
+            return new Palette
+            {
+                Id = id, Gold = a, GoldLight = hi, GoldDeep = deep, Shine = Gfx.Lerp(a, Colors.White, .75),
+                Ink = Gfx.Lerp(b, Colors.Black, .55), Text = H(text), Sub = H(sub),
+                BgTop = Gfx.Lerp(b, Colors.White, .035), BgMid = b, BgBottom = Gfx.Lerp(b, Colors.Black, .45),
+                Surface = Gfx.A(Gfx.Lerp(b, Colors.White, .07), .90), Surface2 = Gfx.A(Gfx.Lerp(b, Colors.White, .11), .94),
+                Panel = Gfx.A(Gfx.Lerp(b, Colors.Black, .30), .96), OnGold = on,
+                Accent = hi, Connected = a,
+                ModeSmart = a, ModeGame = a, ModeAnti = a, ModeDns = a, Mix = a,
+                Danger = H(0xFFFF6C65), Warn = H(0xFFFFC24A), UserCountry = hi, ToggleOn = a,
+                GameAlt = hi, Tracer = Colors.White,
+                NavTop = hi, NavBottom = a, OnNav = on,
+                Gold2 = H(accent2),
+            };
+        }
+
         static readonly Palette[] Themes =
         {
-            new()
-            {
-                // Ui.kt "yellow": AMOLED yellow and black, only the yellow family (no green beside it)
-                Id = "yellow", Gold = H(0xFFFFD60A), GoldLight = H(0xFFFFE566), GoldDeep = H(0xFFC9A100), Shine = H(0xFFFFF3B0),
-                Ink = H(0xFF000000), Text = H(0xFFFFFDF2), Sub = H(0xFF9C9A8E),
-                BgTop = H(0xFF000000), BgMid = H(0xFF000000), BgBottom = H(0xFF000000),
-                Surface = H(0xE6000000), Surface2 = H(0xF0070600), Panel = H(0xFF000000), OnGold = H(0xFF0D0B00),
-                Accent = H(0xFFFFF3B0), Connected = H(0xFFFFE566),
-                ModeSmart = H(0xFFFFD60A), ModeGame = H(0xFFFF9F0A), ModeAnti = H(0xFFFFF3B0), ModeDns = H(0xFFE0AE2E),
-                Mix = H(0xFFFF9F0A), Danger = H(0xFFFF453A), Warn = H(0xFFFF9F0A), UserCountry = H(0xFFFFF3B0), ToggleOn = H(0xFFFFD60A),
-                GameAlt = H(0xFFFFE566), Tracer = H(0xFFFFFFFF),
-                NavTop = H(0xFFFFE566), NavBottom = H(0xFFFFD60A), OnNav = H(0xFF0D0B00),
-            },
-            new()
-            {
-                Id = "crimson", Gold = H(0xFFE8203F), GoldLight = H(0xFFFF5C74), GoldDeep = H(0xFF9E0E28), Shine = H(0xFFFF7A8E),
-                Ink = H(0xFF000000), Text = H(0xFFFFF5F6), Sub = H(0xFFA8949A),
-                BgTop = H(0xFF000000), BgMid = H(0xFF000000), BgBottom = H(0xFF000000),
-                Surface = H(0xE6070203), Surface2 = H(0xF00E0406), Panel = H(0xFF070203), OnGold = H(0xFFFFFFFF),
-                Accent = H(0xFFF2C879), Connected = H(0xFFF2C879),
-                ModeSmart = H(0xFFE8203F), ModeGame = H(0xFFF2C879), ModeAnti = H(0xFFFF6B8E), ModeDns = H(0xFFB565D9),
-                Mix = H(0xFFF2C879), Danger = H(0xFFFF4D4D), Warn = H(0xFFF5B342), UserCountry = H(0xFFF2C879), ToggleOn = H(0xFFE8203F),
-                GameAlt = H(0xFFFF5C74), Tracer = H(0xFFFFE08A),
-                NavTop = H(0xFFC0152F), NavBottom = H(0xFF6E0918), OnNav = H(0xFFFFFFFF),
-            },
+            Glass("kanki", 0xFF141414, 0xFF2BEE34, 0xFF19E6C1),
+            Glass("cyber", 0xFF3C1A47, 0xFFB6FF00, 0xFFB44CFF),
+            Glass("tiffany", 0xFF171717, 0xFF21F1A8, 0xFF4FACFE),
+            Glass("vulcan", 0xFF001621, 0xFFFF4103, 0xFFFF2A6D),
+            Glass("malt", 0xFF2A2312, 0xFFFFBE0B, 0xFFFF8C00),
+            Glass("cyprus", 0xFF004741, 0xFFF0EDE4, 0xFFB8C4C2, ink: 0xFF062A27, sub: 0xFFA6C2BD),
         };
 
-        public static string Current { get; private set; } = "yellow";
+        /// <summary>The theme ids and their names in Settings (Ui.kt ThemeNames)</summary>
+        public static readonly (string Id, string Name)[] Names =
+        {
+            ("kanki", "Kanki Default"), ("cyber", "Cyber Gaming"), ("tiffany", "Tiffany Pro"),
+            ("vulcan", "Vulcanico"), ("malt", "Gold Malt"), ("cyprus", "Cyprus Sand"),
+        };
+
+        public static string Current { get; private set; } = "kanki";
 
         /// <summary>The colours in use right now (during a theme change, part way between the two).</summary>
         public static Palette P { get; private set; } = Themes[0];
@@ -164,9 +177,11 @@ namespace KankiVPN
 
         public static Color Col(string key) => (Color)Application.Current.Resources["C" + key];
 
-        /// <summary>The three dots on a theme card in Settings, as on Android.</summary>
-        public static Color[] Dots(string name) => name == "crimson"
-            ? new[] { H(0xFFF2C879), H(0xFFFF5C74), H(0xFFE8203F) }
-            : new[] { H(0xFFFFF3B0), H(0xFFFF9F0A), H(0xFFFFD60A) };
+        /// <summary>The three dots on a theme card in Settings, as on Android: light neon, second neon, neon.</summary>
+        public static Color[] Dots(string name)
+        {
+            var t = Of(name);
+            return new[] { t.GoldLight, t.Gold2, t.Gold };
+        }
     }
 }

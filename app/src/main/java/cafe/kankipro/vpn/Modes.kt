@@ -41,7 +41,6 @@ object Modes {
         // KPING فقط برای تسترهایی که پنل به آن‌ها داده (بقیه این ردیف را نمی‌بینند)
         "kping" to listOf("kping"),
         "mtun" to listOf("mtun"),
-        "hysteria2" to listOf("hysteria2"),
         "amnezia" to listOf("amneziawg-direct", "amneziawg"),
         "wireguard" to listOf("wireguard"),
     )

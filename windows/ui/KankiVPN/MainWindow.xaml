@@ -523,7 +523,7 @@
                                     <k:SettingIcon DockPanel.Dock="Left" Kind="palette" Tint="Accent" Margin="0,0,12,0"/>
                                     <TextBlock Text="{k:T 'App theme'}" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </DockPanel>
-                                <UniformGrid x:Name="ThemeCards" Columns="2" Margin="0,8,0,4"/>
+                                <UniformGrid x:Name="ThemeCards" Columns="3" Margin="0,8,0,4"/>
                                 <Rectangle Height="1" Fill="{DynamicResource Divider}"/>
                                 <DockPanel MinHeight="52">
                                     <k:SettingIcon DockPanel.Dock="Left" Kind="lang" Tint="Primary" Margin="0,0,12,0"/>
