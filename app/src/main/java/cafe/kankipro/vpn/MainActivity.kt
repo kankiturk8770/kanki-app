@@ -127,7 +127,7 @@ fun App() {
             val a = state.account
             if (a != null && LiveTest.gen != done && LiveTest.pick != null) {
                 done = LiveTest.gen
-                a.configs.forEach { c -> LiveTest.log("cfg ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} tag=${state.cfgTag(c.node, c.protocol)}") }
+                a.configs.forEach { c -> LiveTest.log("cfg ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} tag=${state.cfgTag(c.node, c.protocol)} port=${state.infos["${c.node}/${c.protocol}"]?.port}") }
                 val (n, p) = LiveTest.pick!!.split("|").let { it[0] to it.getOrElse(1) { "" } }
                 // «PINGALL|»: پینگ همه‌ی کانفیگ‌ها با همان «تست پینگ همه» و سنجش گیمینگ، نتیجه‌ی هر کدام در logcat
                 if (n == "PINGALL") {
@@ -136,7 +136,7 @@ fun App() {
                     kotlinx.coroutines.delay(45_000)
                     a.configs.forEach { c ->
                         val k = "${c.node}/${c.protocol}"
-                        LiveTest.log("ping ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} vpn=${state.vstate} ping=${state.protoPing(c.node, c.protocol)} q=${state.gameQ[k]} info=${state.infos.containsKey(k)}")
+                        LiveTest.log("ping ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} vpn=${state.vstate} ping=${state.protoPing(c.node, c.protocol)} q=${state.gameQ[k]} info=${state.infos.containsKey(k)} series=${state.gameSeries[k]?.joinToString(",") { it?.toString() ?: "x" }}")
                     }
                     LiveTest.log("pingall done")
                     continue

@@ -409,6 +409,42 @@ func Ping(link string) (int64, error) {
 	return 0, errors.New("no answer from " + cfg.Server)
 }
 
+// PingSeries: n handshakes, gap apart, each on its own socket with one try; each round trip in ms (-1 = no
+// answer within a second). The app judges a server for games by it (loss and jitter need a series).
+func PingSeries(link string, n int, gap time.Duration) ([]int64, error) {
+	cfg, err := parseURL(link)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int64, 0, n)
+	for i := 0; i < n; i++ {
+		if i > 0 && gap > 0 {
+			time.Sleep(gap)
+		}
+		out = append(out, pingOnce(cfg, time.Second))
+	}
+	return out, nil
+}
+
+func pingOnce(cfg *linkConfig, wait time.Duration) int64 {
+	c, err := newClient(cfg, 0)
+	if err != nil {
+		return -1
+	}
+	defer c.conn.Close()
+	c.probe = true
+	go c.udpLoop()
+	c.mu.Lock()
+	c.sendInit()
+	c.mu.Unlock()
+	select {
+	case <-c.ready:
+		return c.rtt.Load()
+	case <-time.After(wait):
+		return -1
+	}
+}
+
 // Address is the address the server gave this device ("<v4/bits> <v6/64|->").
 func (x *Client) Address() string {
 	x.c.mu.Lock()

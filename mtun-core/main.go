@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -121,6 +122,18 @@ func main() {
 	case "ping":
 		if f["fd"] != "" {
 			mtun.SocketHook = fdHook(f["fd"])
+		}
+		// a series for the gaming score: one line per handshake (round trip in ms, or -1)
+		if n, _ := strconv.Atoi(f["count"]); n > 0 {
+			gap, _ := strconv.Atoi(f["gap"])
+			r, err := mtun.PingSeries(f["url"], min(n, 60), time.Duration(min(max(gap, 10), 1000))*time.Millisecond)
+			if err != nil {
+				fail(err)
+			}
+			for _, ms := range r {
+				fmt.Println(ms)
+			}
+			return
 		}
 		rtt, err := mtun.Ping(f["url"])
 		if err != nil {

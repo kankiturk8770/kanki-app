@@ -80,6 +80,9 @@ pingall() {
 pingall "VPN off"
 run() { # label pick nogate games mode
   [ -z "$2" ] && { echo "== $1: not in this subscription"; return; }
+  # the test account allows one device: the panel counts the last config ~30 s after its last data (plus a sync
+  # round), so a switch right away is refused as a second device; wait that out (a real user switching does too)
+  [ -n "${RAN:-}" ] && { kk "none|none" game; sleep 75; }; RAN=1
   kk "$2" "${5:-game}" "${4:-$GAME}" "${3:-0}"; sleep 35
   local s; s=$(st); local ip; ip=$(myip); adb shell am force-stop com.android.chrome
   local sh; sh=$(adb shell 'toybox nc -w 5 1.1.1.1 80 </dev/null >/dev/null 2>&1 && echo open || echo closed')
