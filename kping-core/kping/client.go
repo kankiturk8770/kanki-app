@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -1395,7 +1396,7 @@ func PingFull(l Link) (int64, int64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	conn, err := net.DialUDP("udp", nil, ra)
+	conn, err := dialUDP(ra)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1435,4 +1436,26 @@ func PingFull(l Link) (int64, int64, error) {
 		return 0, 0, errors.New("the relay did not answer")
 	}
 	return best, tun, nil
+}
+
+// SocketHook, when set, runs on the probe's UDP socket before it is used: the app binds it to the
+// phone's real network with it while its VPN is up (Android only).
+var SocketHook func(fd uintptr) error
+
+func dialUDP(ra *net.UDPAddr) (*net.UDPConn, error) {
+	if SocketHook == nil {
+		return net.DialUDP("udp", nil, ra)
+	}
+	d := net.Dialer{Control: func(_, _ string, rc syscall.RawConn) error {
+		var herr error
+		if err := rc.Control(func(fd uintptr) { herr = SocketHook(fd) }); err != nil {
+			return err
+		}
+		return herr
+	}}
+	c, err := d.Dial("udp", ra.String())
+	if err != nil {
+		return nil, err
+	}
+	return c.(*net.UDPConn), nil
 }

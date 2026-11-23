@@ -3,7 +3,7 @@ name: تست زنده با اشتراک تست
 on:
   push:
     branches: ["ccr-93b13567-5n0xqx"]
-    paths: [".github/live/**", ".github/workflows/live.yml", "app/**", "awg-core/**"]
+    paths: [".github/live/**", ".github/workflows/live.yml", "app/**", "awg-core/**", "mtun-core/**", "kping-core/**", "kmix-core/**"]
 permissions:
   contents: read
 env:

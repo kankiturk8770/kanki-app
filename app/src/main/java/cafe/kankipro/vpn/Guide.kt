@@ -101,14 +101,14 @@ val guideSteps = listOf(
     GuideStep("game_fams", "پروتکل‌های گیمینگ", "همه روی UDP‌ان، مثل خود بازی. فقط اونایی که توی اشتراکت هست دیده می‌شن:",
         "Gaming protocols", "All run on UDP, like the game itself. Only the ones in your subscription are shown:",
         points = listOf(
-            "KANKI MIX" to "پروتکل خود کانکی؛ کمترین لگ و پکت‌لاس. با «ارسال دوتایی» هر بسته‌ی بازی دو بار می‌ره و پکت‌لاس اثر نمی‌کنه.",
-            "microtun" to "سبک و کم‌حجم؛ بسته‌های کوچیک بازی دو بار می‌رن و دانلود یه بار.",
+            "KANKI MIX" to "پروتکل خود کانکی؛ کمترین لگ و پکت‌لاس.",
+            "microtun" to "سبک و کم‌حجم، مخصوص بازی.",
             "Hysteria2" to "پرسرعت و روی اینترنت ضعیف هم پایدار.",
             "Amnezia / WireGuard" to "Amnezia روی شبکه‌ی محدود هم وصل می‌مونه؛ WireGuard سبک و سریعه.",
         ),
         pointsEn = listOf(
-            "KANKI MIX" to "Kanki's own protocol, the lowest lag and packet loss. With Duplicate packets every game packet goes twice, so packet loss doesn't hurt.",
-            "microtun" to "Light and small; small game packets go twice, downloads once.",
+            "KANKI MIX" to "Kanki's own protocol, the lowest lag and packet loss.",
+            "microtun" to "Light and small, made for games.",
             "Hysteria2" to "Fast, and steady even on weak internet.",
             "Amnezia / WireGuard" to "Amnezia stays connected on restricted networks; WireGuard is light and fast.",
         ), sheet = "game"),

@@ -129,6 +129,18 @@ fun App() {
                 done = LiveTest.gen
                 a.configs.forEach { c -> LiveTest.log("cfg ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} tag=${state.cfgTag(c.node, c.protocol)}") }
                 val (n, p) = LiveTest.pick!!.split("|").let { it[0] to it.getOrElse(1) { "" } }
+                // «PINGALL|»: پینگ همه‌ی کانفیگ‌ها با همان «تست پینگ همه» و سنجش گیمینگ، نتیجه‌ی هر کدام در logcat
+                if (n == "PINGALL") {
+                    state.pingAll()
+                    listOf("kankimix", "kping", "mtun", "amnezia", "wireguard").forEach { state.measureFamily(it) }
+                    kotlinx.coroutines.delay(45_000)
+                    a.configs.forEach { c ->
+                        val k = "${c.node}/${c.protocol}"
+                        LiveTest.log("ping ${c.node}|${c.protocol} side=${state.cfgSide(c.node, c.protocol)} vpn=${state.vstate} ping=${state.protoPing(c.node, c.protocol)} q=${state.gameQ[k]} info=${state.infos.containsKey(k)}")
+                    }
+                    LiveTest.log("pingall done")
+                    continue
+                }
                 LiveTest.games?.takeIf { it != "-" }?.let { g -> state.gameApps.clear(); state.gameApps.addAll(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
                 state.changeMode(KMode.of(LiveTest.mode ?: "game"))
                 LiveTest.log("pick $n|$p mode=${state.mode.key} games=${state.gameApps.toList()}")

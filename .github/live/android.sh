@@ -71,9 +71,16 @@ adb logcat -d -s KankiLive:I | grep " cfg " | sed 's/.*KankiLive: //' | sort -u 
 echo "configs:"; cat $out/cfgs.txt
 pickof() { grep "^cfg [^|]*|$1 side=$2" $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//'; }
 GAME=com.android.chrome
-run() { # label pick nogate games
+# ping of every config (the app's own «ping all» and the gaming measurement), with the VPN off or on
+pingall() {
+  kk "PINGALL|" game; sleep 90
+  echo "== ping of every config ($1):"
+  adb logcat -d -s KankiLive:I | grep -E " ping |pingall done" | sed 's/.*KankiLive: /   /' | grep -v -F "$code"
+}
+pingall "VPN off"
+run() { # label pick nogate games mode
   [ -z "$2" ] && { echo "== $1: not in this subscription"; return; }
-  kk "$2" game "${4:-$GAME}" "${3:-0}"; sleep 35
+  kk "$2" "${5:-game}" "${4:-$GAME}" "${3:-0}"; sleep 35
   local s; s=$(st); local ip; ip=$(myip); adb shell am force-stop com.android.chrome
   local sh; sh=$(adb shell 'toybox nc -w 5 1.1.1.1 80 </dev/null >/dev/null 2>&1 && echo open || echo closed')
   echo "== $1 [$2] gate=$([ "${3:-0}" = 1 ] && echo off || echo on) games=${4:-$GAME}"
@@ -93,6 +100,12 @@ run "KANKI MIX, gaming" "$(pickof kankimix direct)"
 run "microtun, gaming" "$(pickof mtun direct)"
 run "KPING, gaming" "$(grep '^cfg [^|]*|kping ' $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//')"
 run "WireGuard direct, gaming, Chrome NOT a game (must be closed)" "$(pickof wireguard direct)" 0 "com.example.notagame"
+# anti-filter (every app through the VPN): Xray and Hysteria2, straight and through Iran
+run "Xray direct, anti-filter" "$(pickof xray direct)" 0 "" filter
+run "Xray tunnel, anti-filter" "$(pickof xray tunnel)" 0 "" filter
+run "Hysteria2 direct, anti-filter" "$(pickof hysteria2 direct)" 0 "" filter
+run "Hysteria2 tunnel, anti-filter" "$(pickof hysteria2 tunnel)" 0 "" filter
+pingall "VPN on (the last config still connected)"
 shot 03-connect
 adb logcat -d -t 800 | grep -i -E "kanki|AndroidRuntime|FATAL" | grep -v -F "$code" | tail -40
 exit 0

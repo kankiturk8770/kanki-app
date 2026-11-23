@@ -150,27 +150,33 @@ object Probe {
      * microtun: خود هسته یک بار با کلید همین کاربر دست می‌دهد و رفت‌وبرگشت آن را می‌سنجد
      * (`libmtun.so ping`؛ دستگاهی روی سرور ساخته نمی‌شود).
      */
-    fun mtun(ctx: Context, cfg: String): Long? {
-        val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libmtun.so")
-        if (!bin.exists()) return null
-        return runCatching {
-            val p = ProcessBuilder(bin.path, "ping", "--url", link).redirectErrorStream(true).start()
-            if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return null }
-            p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
-        }.getOrNull()
-    }
+    fun mtun(ctx: Context, cfg: String, net: Network? = null): Long? = coreProbe(ctx, cfg, "libmtun.so", net)
 
     /** KPING: سه PING خود هسته مستقیم به رله‌ی ایران (فقط با کلید همین کاربر جواب می‌دهد) */
-    fun kping(ctx: Context, cfg: String): Long? {
+    fun kping(ctx: Context, cfg: String, net: Network? = null): Long? = coreProbe(ctx, cfg, "libkping.so", net)
+
+    /**
+     * پینگ microtun و KPING با خود هسته (`ping --url`). وقتی VPN بالاست (net = شبکه‌ی واقعی گوشی)، هسته سوکتش را با
+     * `--fd` به برنامه می‌دهد و برنامه آن را به همان شبکه می‌بندد (FdGate، مثل Hysteria2)، تا پینگ بیرون از تونل برود
+     * (۱.۴۲؛ قبلاً وقتی وصل بودی این دو اصلاً پینگ نمی‌شدند).
+     */
+    private fun coreProbe(ctx: Context, cfg: String, lib: String, net: Network?): Long? {
         val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        val bin = File(ctx.applicationInfo.nativeLibraryDir, "libkping.so")
+        val bin = File(ctx.applicationInfo.nativeLibraryDir, lib)
         if (!bin.exists()) return null
-        return runCatching {
-            val p = ProcessBuilder(bin.path, "ping", "--url", link).redirectErrorStream(true).start()
-            if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return null }
-            p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
-        }.getOrNull()
+        val tag = "kanki-fd-" + java.util.UUID.randomUUID().toString().replace("-", "")
+        val gate = if (net != null) FdGate(tag, net).also { it.start() } else null
+        return try {
+            runCatching {
+                val cmd = mutableListOf(bin.path, "ping", "--url", link)
+                if (gate != null) { cmd += "--fd"; cmd += tag }
+                val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+                if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return@runCatching null }
+                p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
+            }.getOrNull()
+        } finally {
+            gate?.stop()
+        }
     }
 
     /** Xray روی TCP: زمان اتصال به پورت خود اینباند (کمترین از دو بار) */
