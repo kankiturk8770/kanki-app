@@ -90,7 +90,7 @@ run() { # label pick nogate games mode
   echo "   state: $s"
   echo "   chrome IP: ${ip:-no answer} (without VPN: $real) -> $([ -z "$ip" ] && echo 'no answer' || { [ "$ip" = "$real" ] && echo LEAK || echo 'through VPN'; })"
   echo "   shell (not a game) TCP 1.1.1.1:80: $sh"
-  adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|wireguard" | grep -v -F "$code" | tail -8 | sed 's/^/   log: /'
+  adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|KankiKp|wireguard" | grep -v -E "KankiLive: (cfg|ping) " | grep -v -F "$code" | tail -10 | sed 's/^/   log: /'
 }
 # the tunnel copies first: the test account allows one device, and the server counts the same WireGuard key from two
 # addresses (straight and through Iran) as two devices for a while

@@ -433,7 +433,10 @@ object UdpSeries {
                 s.soTimeout = left
                 val dp = java.net.DatagramPacket(buf, buf.size)
                 try { s.receive(dp) } catch (e: java.net.SocketTimeoutException) { break }
-                if (ok(buf.copyOf(dp.length))) got = ((System.nanoTime() - t0) / 1_000_000L).coerceAtLeast(1)
+                // زمان رسیدن همان لحظه‌ی دریافت است، نه بعد از بررسی جواب: باز کردن جواب دست‌دادن WireGuard (دو X25519) روی گوشی
+                // صدها میلی‌ثانیه طول می‌کشید و پینگ و لرزش WireGuard/AmneziaWG را غلط (۳۰۰ تا ۸۰۰ms) نشان می‌داد (۱.۴۲.۱)
+                val at = System.nanoTime()
+                if (ok(buf.copyOf(dp.length))) got = ((at - t0) / 1_000_000L).coerceAtLeast(1)
             }
             out.add(got)
             if (i < count - 1) Thread.sleep(gapMs)
