@@ -101,6 +101,8 @@ class AppState private constructor(context: Context) {
         saveGameApps()
     }
     private fun saveGameApps() { prefs.edit().putStringSet("gameApps", gameApps.toSet()).apply() }
+    /** فهرست بازی‌ها یک‌جا (تست زنده)؛ ذخیره هم می‌شود تا KPING (که از ذخیره می‌خواند) همان را ببیند */
+    fun setGameApps(l: List<String>) { gameApps.clear(); gameApps.addAll(l); saveGameApps() }
     var gameAppsOpen by mutableStateOf(false)
 
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
@@ -429,7 +431,8 @@ class AppState private constructor(context: Context) {
             listOf(n to gameProto)
         }
         val ok = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
-        if (!ok && wantTry && !gameAuto) {
+        // خطای دقیق‌تر خود اتصال (مثلاً «بازی‌ای انتخاب نشده») جای خود را به این پیام کلی نمی‌دهد
+        if (!ok && wantTry && !gameAuto && error == null) {
             error = trf("اتصال با %s برقرار نشد. سرور یا پروتکل دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(gameNode ?: ""))
         }
     }

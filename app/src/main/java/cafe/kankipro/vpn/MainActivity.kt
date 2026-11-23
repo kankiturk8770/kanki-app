@@ -141,7 +141,7 @@ fun App() {
                     LiveTest.log("pingall done")
                     continue
                 }
-                LiveTest.games?.takeIf { it != "-" }?.let { g -> state.gameApps.clear(); state.gameApps.addAll(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
+                LiveTest.games?.takeIf { it != "-" }?.let { g -> state.setGameApps(g.split(",").map { it.trim() }.filter { it.isNotEmpty() }) }
                 state.changeMode(KMode.of(LiveTest.mode ?: "game"))
                 LiveTest.log("pick $n|$p mode=${state.mode.key} games=${state.gameApps.toList()}")
                 state.pickFromServers(n, p)
