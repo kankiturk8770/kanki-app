@@ -463,8 +463,8 @@ class AppState private constructor(context: Context) {
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
-                            MtunCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t) } }
-                            KpingCfg.PROTO -> if (net != null) null else fetchConfig(l).let { t -> List(4) { Probe.kping(ctx, t) } }
+                            MtunCfg.PROTO -> fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t, net) } }
+                            KpingCfg.PROTO -> fetchConfig(l).let { t -> List(4) { Probe.kping(ctx, t, net) } }
                             else -> null
                         }
                         val q = series?.let { Modes.gameQ(it) }
@@ -1958,14 +1958,14 @@ class AppState private constructor(context: Context) {
                 val net = Probe.underlying(ctx)
                 // وقتی VPN بالاست، پینگ‌هایی که نمی‌شود بیرون از تونل فرستاد (برنامه‌ی جدای microtun، پینگ ICMP) از داخل
                 // تونل می‌رفتند و عدد غلط می‌دادند: آخرین پینگ درست همان کانفیگ (پیش از اتصال) نشان داده می‌شود
-                val viaTunnelOnly = net != null && (p == MtunCfg.PROTO || p == KpingCfg.PROTO || (p != "hysteria2" && p !in setOf("amneziawg", "amneziawg-direct", "wireguard", "kankimix") &&
+                val viaTunnelOnly = net != null && ((p != "hysteria2" && p != MtunCfg.PROTO && p != KpingCfg.PROTO && p !in setOf("amneziawg", "amneziawg-direct", "wireguard", "kankimix") &&
                     infos[k]?.let { it.transport != "TCP" || it.port <= 0 } != false))
                 if (viaTunnelOnly) { skipped = true; return@runCatching pings[k]?.takeIf { it > 0 } }
                 when (p) {
                     "amneziawg", "amneziawg-direct", "wireguard" -> Probe.wg(net, text)
                     "kankimix" -> Probe.kmix(net, text)
-                    MtunCfg.PROTO -> Probe.mtun(ctx, text)
-                    KpingCfg.PROTO -> Probe.kping(ctx, text)
+                    MtunCfg.PROTO -> Probe.mtun(ctx, text, net)
+                    KpingCfg.PROTO -> Probe.kping(ctx, text, net)
                     "hysteria2" -> Probe.hysteria(ctx, net, text)
                     else -> infos[k]?.takeIf { it.host != "—" }?.let { i ->
                         // Xray روی TCP: اتصال به پورت خودش؛ mKCP (UDP) پاسخی بدون کلید ندارد: پینگ ساده‌ی آدرس

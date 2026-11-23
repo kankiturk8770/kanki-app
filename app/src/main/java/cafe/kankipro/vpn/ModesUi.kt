@@ -840,7 +840,8 @@ fun GameSheet(
 /** نمای تنظیمات گیمینگ: «انتخاب بازی‌ها» بالا، بعد هر هسته‌ی گیمینگ با کپسول خودش و تنظیمات همان هسته زیرش */
 @Composable
 private fun ColumnScope.GameSettings(families: List<GameFamilyUi>, fam: String, kmixDup: Boolean, onKmixDup: (Boolean) -> Unit, gameCount: Int, onPickGames: () -> Unit) {
-    val cores = listOf("kankimix", "kping", "mtun").filter { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
+    // فقط هسته‌هایی که تنظیم دارند (microtun تنظیمی برای کاربر ندارد)
+    val cores = listOf("kankimix", "kping").filter { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
     var core by remember { mutableStateOf(fam.takeIf { it in cores } ?: cores.firstOrNull() ?: "") }
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         SettingLink(
@@ -869,14 +870,9 @@ private fun ColumnScope.GameSettings(families: List<GameFamilyUi>, fam: String, 
                         "kankimix" -> Column(Modifier.fillMaxWidth().padding(top = D.S3).goldGlass(RoundedCornerShape(D.RL), tint = c).padding(horizontal = D.S3, vertical = D.S2)) {
                             T("KANKI MIX", size = 13.sp, color = c, weight = FontWeight.Black, ltr = true)
                             Spacer(Modifier.height(D.S1))
-                            SwitchRow("ارسال دوتایی بسته‌ها", "هر بسته‌ی بازی دو بار می‌رود: پکت‌لاس اثر ندارد (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
+                            SwitchRow("حالت پایدار", "برای اینترنت ضعیف و پرقطعی (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
                         }
                         "kping" -> Column(Modifier.fillMaxWidth().padding(top = D.S1)) { KpingPanel(c) }
-                        "mtun" -> Column(Modifier.fillMaxWidth().padding(top = D.S3).goldGlass(RoundedCornerShape(D.RL), tint = c).padding(D.S3)) {
-                            T("microtun", size = 13.sp, color = c, weight = FontWeight.Black, ltr = true)
-                            Spacer(Modifier.height(D.S1))
-                            T("تنظیم دستی لازم ندارد: بسته‌های کوچک بازی خودکار دو بار می‌روند تا یک بسته‌ی گم‌شده لگ نیاورد و دانلود یک بار می‌رود. MTU را خود پنل برای هر کانفیگ می‌گذارد.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
-                        }
                     }
                 }
             }

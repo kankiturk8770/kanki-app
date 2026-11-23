@@ -4,6 +4,7 @@
 package mtun
 
 import (
+	"context"
 	"crypto/cipher"
 	"crypto/ecdh"
 	"crypto/sha256"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -132,7 +134,7 @@ func newClient(cfg *linkConfig, dev uint64) (*client, error) {
 	}
 	c.server = netip.AddrPortFrom(ua.AddrPort().Addr().Unmap(), ua.AddrPort().Port())
 	// unconnected: ICMP "port unreachable" while the server restarts is no read error
-	if c.conn, err = net.ListenUDP("udp", nil); err != nil {
+	if c.conn, err = listenUDP(); err != nil {
 		return nil, err
 	}
 	_ = c.conn.SetReadBuffer(4 << 20)
@@ -440,3 +442,25 @@ func (x *Client) Close() {
 
 // peer is the server side's user (session.peer in proto.go); a client has none
 type peer struct{}
+
+// SocketHook, when set, runs on every UDP socket this package opens, before it is used: the app
+// binds a probe's socket to the phone's real network with it while its VPN is up (Android only).
+var SocketHook func(fd uintptr) error
+
+func listenUDP() (*net.UDPConn, error) {
+	if SocketHook == nil {
+		return net.ListenUDP("udp", nil)
+	}
+	lc := net.ListenConfig{Control: func(_, _ string, rc syscall.RawConn) error {
+		var herr error
+		if err := rc.Control(func(fd uintptr) { herr = SocketHook(fd) }); err != nil {
+			return err
+		}
+		return herr
+	}}
+	pc, err := lc.ListenPacket(context.Background(), "udp", ":0")
+	if err != nil {
+		return nil, err
+	}
+	return pc.(*net.UDPConn), nil
+}

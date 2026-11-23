@@ -119,6 +119,9 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "ping":
+		if f["fd"] != "" {
+			mtun.SocketHook = fdHook(f["fd"])
+		}
 		rtt, err := mtun.Ping(f["url"])
 		if err != nil {
 			fail(err)
@@ -136,5 +139,24 @@ func main() {
 		fail(takeTUNs(c, f["sock"]))
 	default:
 		fail(errors.New("unknown command " + os.Args[1]))
+	}
+}
+
+// fdHook hands each socket to the app over the abstract unix socket NAME (SCM_RIGHTS) and waits for its
+// answer: the app binds it to the phone's real network (outside its own VPN) before the probe sends
+func fdHook(name string) func(fd uintptr) error {
+	return func(fd uintptr) error {
+		c, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: "@" + name, Net: "unix"})
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		if _, _, err := c.WriteMsgUnix([]byte{0}, syscall.UnixRights(int(fd)), nil); err != nil {
+			return err
+		}
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		b := make([]byte, 1)
+		_, err = c.Read(b)
+		return err
 	}
 }
