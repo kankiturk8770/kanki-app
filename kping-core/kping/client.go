@@ -1388,40 +1388,63 @@ func Ping(l Link) (int64, error) {
 
 // PingFull: the same, and the relay's own round trip to the exit abroad (0 when a v2 relay does not say)
 func PingFull(l Link) (int64, int64, error) {
-	w, err := newWire(l.Obfs, l.Key)
+	r, tun, err := PingSeries(l, 3, 0)
 	if err != nil {
 		return 0, 0, err
+	}
+	best := int64(-1)
+	for _, ms := range r {
+		if ms > 0 && (best < 0 || ms < best) {
+			best = ms
+		}
+	}
+	if best < 0 {
+		return 0, 0, errors.New("the relay did not answer")
+	}
+	return best, tun, nil
+}
+
+// PingSeries: n PINGs on one socket, gap apart; each round trip in ms (-1 = no answer within 1.5 s), and the
+// relay's last word on its own round trip to the exit (0 = not said). The app judges a server for games by
+// it (loss and jitter need a series, not the best of three).
+func PingSeries(l Link, n int, gap time.Duration) ([]int64, int64, error) {
+	w, err := newWire(l.Obfs, l.Key)
+	if err != nil {
+		return nil, 0, err
 	}
 	ra, err := net.ResolveUDPAddr("udp", net.JoinHostPort(l.Host, strconv.Itoa(l.Port)))
 	if err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 	conn, err := dialUDP(ra)
 	if err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 	defer conn.Close()
 	sess := uint16(rand.Intn(65534) + 1)
-	best, tun := int64(-1), int64(0)
+	tun := int64(0)
+	out := make([]int64, 0, n)
 	b := make([]byte, 2048)
-	for i := uint32(0); i < 3; i++ {
+	for i := uint32(0); i < uint32(n); i++ {
+		if i > 0 && gap > 0 {
+			time.Sleep(gap)
+		}
 		pl := make([]byte, 11)
 		binary.BigEndian.PutUint64(pl, uint64(time.Now().UnixMilli()))
 		pl[8] = 0xff
 		pl[10] = capRLC
 		t0 := time.Now()
 		conn.Write(w.seal(hdr{l.UID, sess, i, kPing, 1}, pl))
-		_ = conn.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+		_ = conn.SetReadDeadline(t0.Add(1500 * time.Millisecond))
+		got := int64(-1)
 		for {
-			n, err := conn.Read(b)
+			m, err := conn.Read(b)
 			if err != nil {
 				break
 			}
-			h, body, ok := w.open(b[:n])
+			h, body, ok := w.open(b[:m])
 			if ok && h.kind == kPong|down && h.sess == sess && h.seq == i {
-				if ms := time.Since(t0).Milliseconds(); best < 0 || ms < best {
-					best = max(ms, 1)
-				}
+				got = max(time.Since(t0).Milliseconds(), 1)
 				if len(body) >= 9 {
 					rest := body[min(len(body), 9+int(body[8])*9):]
 					if len(rest) >= 5 {
@@ -1431,11 +1454,9 @@ func PingFull(l Link) (int64, int64, error) {
 				break
 			}
 		}
+		out = append(out, got)
 	}
-	if best < 0 {
-		return 0, 0, errors.New("the relay did not answer")
-	}
-	return best, tun, nil
+	return out, tun, nil
 }
 
 // SocketHook, when set, runs on the probe's UDP socket before it is used: the app binds it to the

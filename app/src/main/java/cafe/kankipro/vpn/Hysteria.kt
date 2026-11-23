@@ -768,6 +768,7 @@ class KankiHyService : VpnService() {
                             HyEngine.mtunTx = it.tx
                         }
                         else -> synchronized(log) {
+                            android.util.Log.i("KankiKp", line.take(300))
                             log.append(line).append('\n')
                             if (log.length > 6000) log.delete(0, log.length - 4000)
                         }
@@ -839,11 +840,25 @@ class KankiHyService : VpnService() {
             // requestNetwork: دیتای موبایل حتی وقتی وای‌فای وصل است بالا می‌ماند (دو مسیر با هم)
             runCatching { cm.requestNetwork(req, cb); kpNets.add(cb) }
         }
-        // دست‌کم یک مسیر تا ۸ ثانیه
+        // دست‌کم یک مسیر تا ۸ ثانیه. گوشی یا تبلتی که نه وای‌فای دارد نه دیتا (کابل، اترنت، اشتراک USB): بعد از ۴ ثانیه شبکه‌ی
+        // واقعی پیش‌فرض گوشی (هر نوعی، بیرون از VPN) تنها مسیر می‌شود تا KPING باز هم وصل شود
         val end = System.currentTimeMillis() + 8_000
+        var fallback = false
         while (System.currentTimeMillis() < end) {
             if (cancelled(my)) error("kping: cancelled")
             if (HyEngine.kpStat?.paths?.isNotEmpty() == true) break
+            if (!fallback && System.currentTimeMillis() > end - 4_000) {
+                fallback = true
+                @Suppress("DEPRECATION")
+                cm.allNetworks.firstOrNull { n ->
+                    cm.getNetworkCapabilities(n)?.let { c ->
+                        !c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    } == true
+                }?.let { n ->
+                    android.util.Log.i("KankiKp", "no Wi-Fi or mobile path: the phone's other network is the path")
+                    Thread({ runCatching { kpPath(sock, "wifi", n, my) } }, "kanki-kping-other").start()
+                }
+            }
             Thread.sleep(150)
         }
         synchronized(this) {

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -100,6 +101,7 @@ func main() {
 		os.Exit(2)
 	}
 	var link, sock string
+	series, gapMs := 0, 40
 	for i := 2; i+1 < len(os.Args); i += 2 {
 		switch os.Args[i] {
 		case "--url":
@@ -108,12 +110,31 @@ func main() {
 			sock = os.Args[i+1]
 		case "--fd":
 			kping.SocketHook = fdHook(os.Args[i+1])
+		case "--count":
+			series, _ = strconv.Atoi(os.Args[i+1])
+			series = min(max(series, 0), 60)
+		case "--gap":
+			gapMs, _ = strconv.Atoi(os.Args[i+1])
+			gapMs = min(max(gapMs, 10), 1000)
 		}
 	}
 	l, err := kping.ParseLink(link)
 	if err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)
+	}
+	if os.Args[1] == "ping" && series > 0 {
+		// a series for the gaming score: one line per PING (round trip in ms, or -1), then "tunnel <ms>"
+		r, tun, err := kping.PingSeries(l, series, time.Duration(gapMs)*time.Millisecond)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		for _, ms := range r {
+			fmt.Println(ms)
+		}
+		fmt.Println("tunnel", tun)
+		return
 	}
 	if os.Args[1] == "ping" {
 		// the last line is what the app ranks servers by: the phone's round trip to the relay plus (v3) the

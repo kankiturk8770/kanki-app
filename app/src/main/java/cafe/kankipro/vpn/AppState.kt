@@ -101,6 +101,8 @@ class AppState private constructor(context: Context) {
         saveGameApps()
     }
     private fun saveGameApps() { prefs.edit().putStringSet("gameApps", gameApps.toSet()).apply() }
+    /** فهرست بازی‌ها یک‌جا (تست زنده)؛ ذخیره هم می‌شود تا KPING (که از ذخیره می‌خواند) همان را ببیند */
+    fun setGameApps(l: List<String>) { gameApps.clear(); gameApps.addAll(l); saveGameApps() }
     var gameAppsOpen by mutableStateOf(false)
 
     // گیمینگ: پروتکل و کشوری که کاربر انتخاب کرده (قفل)، یا «انتخاب خودکار» کم‌پینگ‌ترین پروتکل
@@ -429,7 +431,8 @@ class AppState private constructor(context: Context) {
             listOf(n to gameProto)
         }
         val ok = connectChain(list) { c -> nodeName(c.first) + " · " + protoTitle(c.second) }
-        if (!ok && wantTry && !gameAuto) {
+        // خطای دقیق‌تر خود اتصال (مثلاً «بازی‌ای انتخاب نشده») جای خود را به این پیام کلی نمی‌دهد
+        if (!ok && wantTry && !gameAuto && error == null) {
             error = trf("اتصال با %s برقرار نشد. سرور یا پروتکل دیگری انتخاب کنید یا «هوشمند» را بزنید.", protoTitle(gameProto) + " · " + nodeName(gameNode ?: ""))
         }
     }
@@ -449,8 +452,10 @@ class AppState private constructor(context: Context) {
     private suspend fun gameScores(list: List<Pair<String, String>>): Map<Pair<String, String>, Double?> = withContext(Dispatchers.IO) {
         val net = Probe.underlying(ctx)
         kotlinx.coroutines.coroutineScope {
-            list.map { c ->
-                async {
+            // ۱.۴۲: کانفیگ‌های یک کلید (مستقیم و تانل همان سرور) پشت هم سنجیده می‌شوند، نه هم‌زمان: دست‌دادن‌های هم‌زمان یک کلید از دو
+            // راه، سرور WireGuard را به «تکرار» و «سیل» می‌انداخت (جواب نمی‌داد یا دیر می‌داد) و پایداری و پینگ غلط درمی‌آمد
+            list.groupBy { peerOf(it.first, it.second) }.values.map { group ->
+                async { group.map { c ->
                     c to runCatching {
                         val l = account?.configs?.firstOrNull { it.node == c.first && it.protocol == c.second } ?: return@runCatching null
                         // کانفیگی که همین الان وصل است دوباره دست نمی‌دهد (سرور اتصال زنده را به سوکت آزمایش می‌برد)
@@ -463,18 +468,23 @@ class AppState private constructor(context: Context) {
                             // Hysteria2 و microtun: هر پینگ یک دست‌دادن کامل خود هسته است (سنگین‌تر)، پس چهار بار پشت هم؛
                             // microtun بیرون از تونل فرستاده نمی‌شود، پس وقتی VPN بالاست فقط با پینگ قبلی
                             "hysteria2" -> fetchConfig(l).let { t -> List(4) { Probe.hysteria(ctx, net, t) } }
-                            MtunCfg.PROTO -> fetchConfig(l).let { t -> List(4) { Probe.mtun(ctx, t, net) } }
-                            KpingCfg.PROTO -> fetchConfig(l).let { t -> List(4) { Probe.kping(ctx, t, net) } }
+                            // ۱.۴۲: سری کامل خود هسته (۲۰ نمونه)، نه ۴ پینگ جدا: افت و لرزش با همان دقت بقیه
+                            MtunCfg.PROTO -> Probe.mtunSeries(ctx, fetchConfig(l), net, 20, 60)
+                            KpingCfg.PROTO -> Probe.kpingSeries(ctx, fetchConfig(l), net, 20, 40)
                             else -> null
                         }
                         val q = series?.let { Modes.gameQ(it) }
+                        if (series != null) gameSeries["${c.first}/${c.second}"] = series
                         if (q != null) gameQ["${c.first}/${c.second}"] = q
                         q?.score ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
                     }.getOrNull()
-                }
-            }.awaitAll().toMap()
+                } }
+            }.awaitAll().flatten().toMap()
         }
     }
+
+    /** آخرین سری خام سنجش گیمینگ هر کانفیگ (برای تست زنده) */
+    val gameSeries = java.util.concurrent.ConcurrentHashMap<String, List<Long?>>()
 
     /** پایداری هر کانفیگ گیمینگ («node/proto»): افت و لرزش آخرین سنجش، برای برچسب زیر هر خانه‌ی پنل گیمینگ */
     val gameQ = mutableStateMapOf<String, Modes.GameQ>()
@@ -1872,18 +1882,23 @@ class AppState private constructor(context: Context) {
         val udp = targets.count { it.second.transport != "TCP" }
         pingAllUi = PingAllUi(running = true, done = 0, total = targets.size, udp = udp, tcp = targets.size - udp)
         val gate = kotlinx.coroutines.sync.Semaphore(6)
+        // کانفیگ‌های یک کلید (مستقیم و تانل همان سرور) پشت هم، نه هم‌زمان (دست‌دادن هم‌زمان یک کلید از دو راه را سرور رد می‌کرد)
+        val locks = HashMap<String, kotlinx.coroutines.sync.Mutex>()
+        targets.forEach { (k, _) -> locks.getOrPut(peerOf(k.substringBeforeLast("/"), k.substringAfterLast("/"))) { kotlinx.coroutines.sync.Mutex() } }
         try {
             kotlinx.coroutines.coroutineScope {
                 targets.map { (k, info) ->
                     async {
+                        val (nd, pr) = k.substringBeforeLast("/") to k.substringAfterLast("/")
+                        locks.getValue(peerOf(nd, pr)).lock()
                         gate.acquire()
                         try {
                             pinging[k] = true
-                            val (nd, pr) = k.substringBeforeLast("/") to k.substringAfterLast("/")
                             probe(nd, pr)
                         } finally {
                             pinging[k] = false
                             gate.release()
+                            locks.getValue(peerOf(nd, pr)).unlock()
                             pingAllUi = pingAllUi.copy(done = pingAllUi.done + 1)
                         }
                         Unit
