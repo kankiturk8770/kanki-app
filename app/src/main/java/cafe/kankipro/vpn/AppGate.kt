@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  * بین این کلاس و hev یک جفت سوکت SEQPACKET است که مرز بسته‌ها را مثل کارت شبکه نگه می‌دارد.
  * سؤال‌های DNS (پورت ۵۳/۸۵۳) همیشه رد می‌شوند، چون از طرف سرویس DNS خود اندروید فرستاده می‌شوند.
  * موتور امنزیا/وایرگارد از این استفاده نمی‌کند؛ فقط Hysteria2، Xray، حالت DNS کانکی و «فقط بازی» گیمینگ
- * (KANKI MIX و microtun، که هسته‌شان به‌جای کارت شبکه سر دیگر همین جفت سوکت را می‌گیرد).
+ * (KANKI MIX و WireGuard/AmneziaWG گیمینگ، که هسته‌شان به‌جای کارت شبکه سر دیگر همین جفت سوکت را می‌گیرد).
  *
  * بی‌اثر روی پینگ بازی:
  *   - صاحب هر اتصال فقط بار اول پرسیده می‌شود و در حافظه می‌ماند (بسته‌های بعدی بازی فقط یک جست‌وجوی جدول‌اند)؛
@@ -66,7 +66,7 @@ class AppGate(
     private val allowed: Set<Int> = allowedUids
     private val pair: Array<ParcelFileDescriptor> = ParcelFileDescriptor.createReliableSocketPair()
 
-    /** سر دیگر جفت سوکت؛ به‌جای کارت شبکه به hev (یا هسته‌ی KANKI MIX / microtun) داده می‌شود */
+    /** سر دیگر جفت سوکت؛ به‌جای کارت شبکه به hev (یا هسته‌ی KANKI MIX / libawg) داده می‌شود */
     val innerFd: Int get() = pair[1].fd
     val inner: ParcelFileDescriptor get() = pair[1]
 

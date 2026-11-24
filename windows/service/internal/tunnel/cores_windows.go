@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/netip"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,15 +31,13 @@ import (
 	"kankivpn/internal/state"
 
 	"kanki-tunnel/mobile"
-	"mtuncore/mtun"
 
 	"kankivpn/internal/core"
 	"kankivpn/internal/cores"
-	"kankivpn/internal/logx"
 )
 
 // packetDev gives a Wintun adapter the "one Read = one IP packet" face the
-// KANKI MIX and microtun cores were written for (an Android TUN file).
+// KANKI MIX core was written for (an Android TUN file).
 type packetDev struct {
 	d         tun.Device
 	rmu, wmu  sync.Mutex
@@ -113,52 +110,6 @@ func (r *kmixRun) close() { mobile.Stop() } // closes the adapter too
 
 func (r *kmixRun) stats() (rx, tx uint64, alive bool) {
 	return uint64(mobile.RxBytes()), uint64(mobile.TxBytes()), mobile.IsRunning() && mobile.GetPing() >= 0
-}
-
-// ---------------------------------------------------------------- microtun
-
-type mtunRun struct {
-	c *mtun.Client
-}
-
-func upMtun(log *logx.Log, t core.Tunnel) (running, winipcfg.LUID, []netip.Prefix, error) {
-	// the link's host becomes the resolved address: the client never asks DNS
-	u, err := url.Parse(strings.TrimSpace(t.Text))
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	u.Host = t.Endpoint.String()
-	c, err := mtun.Dial(u.String(), t.DeviceID, func(line string) { log.Printf("microtun: %s", line) })
-	if err != nil {
-		return nil, 0, nil, fmt.Errorf("microtun: %w", err)
-	}
-	// "<v4/bits> <v6/64|->": the address the server gave this device
-	var addrs []netip.Prefix
-	for _, f := range strings.Fields(c.Address()) {
-		if p, err := netip.ParsePrefix(f); err == nil && p.Addr().Is4() {
-			// only the address itself: with the server's /16 Windows refused the plan's routes
-			// ("routes: Element not found", seen on a live run); everything goes by the plan anyway
-			addrs = append(addrs, netip.PrefixFrom(p.Addr(), 32))
-		}
-	}
-	if len(addrs) == 0 {
-		c.Close()
-		return nil, 0, nil, errors.New("microtun: the server gave no address")
-	}
-	dev, luid, err := newPacketDev(t.MTU)
-	if err != nil {
-		c.Close()
-		return nil, 0, nil, err
-	}
-	c.SetTUN(dev)
-	return &mtunRun{c}, luid, addrs, nil
-}
-
-func (r *mtunRun) close() { r.c.Close() }
-
-func (r *mtunRun) stats() (rx, tx uint64, alive bool) {
-	up, _, rxb, txb := r.c.Stats()
-	return uint64(rxb), uint64(txb), up
 }
 
 // ---------------------------------------------------------------- VLESS / Hysteria2

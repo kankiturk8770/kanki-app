@@ -7,10 +7,10 @@ import org.junit.Test
 
 /** امتیاز انتخاب سرور گیمینگ: پینگ + لرزش×۳ + افت×۲۰ (کمتر بهتر) */
 class GameScoreTest {
-    /** گیمینگ فقط KANKI MIX، KPING، microtun، AmneziaWG و WireGuard (Hysteria2 مال ضد فیلتر است) */
+    /** گیمینگ فقط KANKI MIX، AmneziaWG و WireGuard (Hysteria2 مال ضد فیلتر است) */
     @Test
     fun gamingFamiliesHaveNoHysteria() {
-        assertEquals(listOf("kankimix", "kping", "mtun", "amnezia", "wireguard"), Modes.GAME_FAMILIES.map { it.first })
+        assertEquals(listOf("kankimix", "amnezia", "wireguard"), Modes.GAME_FAMILIES.map { it.first })
         assertNull(Modes.familyOf("hysteria2"))
     }
 
@@ -48,7 +48,7 @@ class GameScoreTest {
         // لرزش ۲۰ بدون افت: متوسط
         val mid = Modes.gameQ(List(20) { if (it % 2 == 0) 60L else 80L })!!
         assertEquals(1, Modes.stability(mid))
-        // سنجش کوتاه (۴ بار، Hysteria2/microtun): یک بی‌جواب «متوسط»، نه «ضعیف»؛ نصف «ضعیف»
+        // سنجش کوتاه (۴ بار، Hysteria2): یک بی‌جواب «متوسط»، نه «ضعیف»؛ نصف «ضعیف»
         assertEquals(1, Modes.stability(Modes.gameQ(listOf(60L, 61L, null, 60L))!!))
         assertEquals(2, Modes.stability(Modes.gameQ(listOf(60L, null, null, 60L))!!))
         assertEquals(0, Modes.stability(Modes.gameQ(listOf(60L, 61L, 62L, 60L))!!))

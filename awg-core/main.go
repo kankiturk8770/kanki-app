@@ -1,4 +1,4 @@
-// libawg.so: WireGuard / AmneziaWG of the Kanki app in gaming mode, a program of its own like libmtun.so (its Go
+// libawg.so: WireGuard / AmneziaWG of the Kanki app in gaming mode, a program of its own like libkmix.so (its Go
 // runtime never shares the app's process). Gaming mode puts every app inside the VPN and a gate in front of the
 // core (AppGate): only the chosen games get through. The amnezia library's own engine opens the VPN card itself,
 // so the gate cannot sit in front of it; this core takes whatever the app hands it (the gate's socket or the card).

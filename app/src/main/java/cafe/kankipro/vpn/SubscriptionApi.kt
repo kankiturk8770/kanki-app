@@ -45,14 +45,7 @@ data class Account(
     val viaProto: Map<String, Map<String, String>> = emptyMap(),
     /** لینک‌های Xray با شناسه‌ی «سرور» برنامه (xray-…)؛ راه (via) و ردیف (group) هر لینک از همین‌جا خوانده می‌شود */
     val xrayById: Map<String, XrayLink> = emptyMap(),
-    /** microtun هر سرور (فیلد mtun؛ پنل ۳.۱۸ به بعد). ورودی تانل هر سرور هم لینک خودش را دارد. */
-    val mtun: List<MtunLink> = emptyList(),
-    /** KPING (پنل ۳.۳۹ به بعد): فقط برای تسترها و فقط در جواب رمزشده؛ هر مسیر یک لینک kping:// به سرور ایران */
-    val kping: List<MtunLink> = emptyList(),
 )
-
-/** یک لینک mtun:// */
-data class MtunLink(val node: String, val nodeName: String, val url: String)
 
 /**
  * via: کانفیگ AmneziaWG همین سرور از تانل (سرور ایران) می‌رود یا مستقیم به خود سرور.
@@ -319,8 +312,6 @@ object SubscriptionApi {
             exits = dataJson(html)?.optJSONArray("nodes")?.let { parseExits(it) } ?: emptyMap(),
             awg = dataJson(html)?.optJSONArray("nodes")?.let { parseAwg(it) } ?: emptyMap(),
             viaProto = dataJson(html)?.optJSONArray("nodes")?.let { parseVia(it) } ?: emptyMap(),
-            mtun = dataJson(html)?.optJSONArray("nodes")?.let { parseMtun(it) } ?: emptyList(),
-            kping = dataJson(html)?.optJSONArray("kping")?.let { parseKping(it) } ?: emptyList(),
         ).also {
             // ۱.۳۷ (بررسی امنیتی): فقط صفحه‌ای که از خود آدرس‌های کانکی آمده می‌تواند آدرس تازه‌ی کانکی اضافه کند؛ پنل دیگری
             // (کاربر می‌تواند با لینک هر پنلی وارد شود) نباید آدرسی بگذارد که بعداً کد اشتراک کانکی به آن برود
@@ -344,23 +335,6 @@ object SubscriptionApi {
             if (id.isBlank()) return@mapNotNull null
             id to o.keys().asSequence().mapNotNull { k -> o.optString(k).takeIf { it == "tunnel" || it == "direct" }?.let { k to it } }.toMap()
         }.toMap()
-
-    private fun parseMtun(a: org.json.JSONArray): List<MtunLink> =
-        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
-            val id = n.optString("id")
-            // null در JSON = این سرور برای این کاربر microtun ندارد
-            val url = if (n.isNull("mtun")) "" else n.optString("mtun").trim()
-            if (id.isBlank() || !MtunCfg.supported(url)) null
-            else MtunLink(id, n.optString("name").ifBlank { id }, url)
-        }
-
-    /** [{id, node, name, url}]: url = kping:// (پنل ۳.۳۹)؛ node = سرور VPN همان دستگاه خارج، یا شناسه‌ی مسیر وقتی سرور خارج فقط ایجنت است */
-    private fun parseKping(a: org.json.JSONArray): List<MtunLink> =
-        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
-            val url = n.optString("url").trim()
-            val node = n.optString("node").ifBlank { "kping-" + n.optString("id") }
-            if (!KpingCfg.supported(url) || node == "kping-") null else MtunLink(node, n.optString("name").ifBlank { node }, url)
-        }
 
     private fun parseAwg(a: org.json.JSONArray): Map<String, AwgRoute> =
         (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.mapNotNull { n ->
@@ -419,15 +393,6 @@ data class ConfigInfo(
                     transport = "UDP", cipher = "KANKI MIX",
                 )
             }
-            if (MtunCfg.isMtun(text)) {
-                val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
-                val (h, p) = runCatching { MtunCfg.endpoint(link) }.getOrDefault("—" to 0)
-                val q = MtunCfg.query(link)
-                return ConfigInfo(
-                    endpoint = "$h:$p", address = q["ip"] ?: "—", dns = "—", mtu = MtunCfg.mtu(link).toString(),
-                    obfuscation = "AES-256-GCM · ${q["burst"] ?: "300"}B ×2", transport = "UDP", cipher = "microtun",
-                )
-            }
             if (XrayCfg.isXray(text)) {
                 val link = text.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) }?.substringAfter("=")?.trim().orEmpty()
                 val (h, p) = runCatching { XrayCfg.endpoint(link) }.getOrDefault("—" to 0)
@@ -476,11 +441,11 @@ data class ConfigInfo(
 /**
  * اعمال MTU دلخواه روی کانفیگ وایرگارد/امنزیا. فقط کمتر از MTU خود کانفیگ (که پنل ۳.۳۲ به بعد از روی هسته و تانل‌های سر راه
  * حساب می‌کند تا بسته روی اینترنت موبایل تکه نشود)؛ عدد بزرگ‌تر نادیده گرفته می‌شود (قبلاً MTU دلخواه ۱۳۸۰ جای ۱۳۲۰ پنل
- * می‌نشست و بسته‌ی ۱۴۴۰ بایتی تکه می‌شد). کانفیگ‌های دیگر (KANKI MIX، microtun) اصلاً عوض نمی‌شوند: اندازه‌شان را هسته می‌گیرد.
+ * می‌نشست و بسته‌ی ۱۴۴۰ بایتی تکه می‌شد). کانفیگ‌های دیگر (KANKI MIX) اصلاً عوض نمی‌شوند: اندازه‌شان را هسته می‌گیرد.
  */
 fun applyMtu(cfg: String, mtu: String): String {
     val v = mtu.trim().toIntOrNull()?.takeIf { it in 576..9000 } ?: return cfg
-    if (KmixUri.isKmix(cfg) || MtunCfg.isMtun(cfg)) return cfg
+    if (KmixUri.isKmix(cfg)) return cfg
     val lines = cfg.lines().toMutableList()
     val i = lines.indexOfFirst { it.trim().startsWith("MTU", ignoreCase = true) && it.contains("=") }
     val panel = if (i >= 0) lines[i].substringAfter("=").trim().toIntOrNull() else null

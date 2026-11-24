@@ -1,6 +1,6 @@
 name: بررسی امنیتی
 # اسکنرهای رایگان روی هر push و هر هفته (۱.۳۵): مثل یک نفوذگر، بی اجرای چیزی روی سرور یا گوشی واقعی.
-#  - govulncheck: آسیب‌پذیری‌های شناخته‌شده‌ی Go در هسته‌های KANKI MIX، microtun، KPING و سرویس ویندوز (فقط آن‌هایی که کد واقعاً صدا می‌زند)
+#  - govulncheck: آسیب‌پذیری‌های شناخته‌شده‌ی Go در هسته‌های KANKI MIX و سرویس ویندوز (فقط آن‌هایی که کد واقعاً صدا می‌زند)
 #  - OSV: آسیب‌پذیری‌های شناخته‌شده‌ی کتابخانه‌های اندروید (درخت وابستگی Gradle، tools/osv_gradle.py)
 #  - mobsfscan: قاعده‌های امنیتی اندروید روی سورس کاتلین و مانیفست (پیکربندی .mobsf)
 #  - gitleaks: رمز یا کلید جاافتاده در کل تاریخچه‌ی git (پیکربندی .gitleaks.toml)
@@ -30,7 +30,7 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
           fail=0
-          for d in kmix-core mtun-core kping-core awg-core; do
+          for d in kmix-core awg-core; do
             echo "== $d"; (cd "$d" && "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1
           done
           echo "== windows/service"; (cd windows/service && GOOS=windows "$(go env GOPATH)/bin/govulncheck" ./...) || fail=1

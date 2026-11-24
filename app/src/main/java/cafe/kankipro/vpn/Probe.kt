@@ -146,69 +146,6 @@ object Probe {
         }.getOrNull()
     }
 
-    /**
-     * microtun: خود هسته یک بار با کلید همین کاربر دست می‌دهد و رفت‌وبرگشت آن را می‌سنجد
-     * (`libmtun.so ping`؛ دستگاهی روی سرور ساخته نمی‌شود).
-     */
-    fun mtun(ctx: Context, cfg: String, net: Network? = null): Long? = coreProbe(ctx, cfg, "libmtun.so", net)
-
-    /** KPING: سه PING خود هسته مستقیم به رله‌ی ایران (فقط با کلید همین کاربر جواب می‌دهد) */
-    fun kping(ctx: Context, cfg: String, net: Network? = null): Long? = coreProbe(ctx, cfg, "libkping.so", net)
-
-    /** سری microtun برای امتیاز گیمینگ: count دست‌دادن با فاصله‌ی gapMs (null = بی‌جواب) */
-    fun mtunSeries(ctx: Context, cfg: String, net: Network?, count: Int, gapMs: Long): List<Long?>? =
-        coreSeries(ctx, cfg, "libmtun.so", net, count, gapMs)?.first
-
-    /** سری KPING: count پینگ روی یک سوکت؛ هر نمونه = گوشی تا رله + رله تا خارج (همان راهی که بسته‌ی بازی می‌رود) */
-    fun kpingSeries(ctx: Context, cfg: String, net: Network?, count: Int, gapMs: Long): List<Long?>? =
-        coreSeries(ctx, cfg, "libkping.so", net, count, gapMs)?.let { (r, tun) -> r.map { v -> v?.plus(tun) } }
-
-    private fun coreSeries(ctx: Context, cfg: String, lib: String, net: Network?, count: Int, gapMs: Long): Pair<List<Long?>, Long>? {
-        val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        val bin = File(ctx.applicationInfo.nativeLibraryDir, lib)
-        if (!bin.exists()) return null
-        val tag = "kanki-fd-" + java.util.UUID.randomUUID().toString().replace("-", "")
-        val gate = if (net != null) FdGate(tag, net).also { it.start() } else null
-        return try {
-            runCatching {
-                val cmd = mutableListOf(bin.path, "ping", "--url", link, "--count", "$count", "--gap", "$gapMs")
-                if (gate != null) { cmd += "--fd"; cmd += tag }
-                val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-                if (!p.waitFor(count * (gapMs + 1600) / 1000 + 10, TimeUnit.SECONDS)) { p.destroy(); return@runCatching null }
-                val lines = p.inputStream.bufferedReader().readText().trim().lines().map { it.trim() }
-                val tun = lines.firstOrNull { it.startsWith("tunnel ") }?.substringAfter(" ")?.toLongOrNull()?.coerceAtLeast(0) ?: 0L
-                val r = lines.mapNotNull { it.toLongOrNull() }.map { v -> v.takeIf { it > 0 } }
-                if (r.size != count) null else r to tun
-            }.getOrNull()
-        } finally {
-            gate?.stop()
-        }
-    }
-
-    /**
-     * پینگ microtun و KPING با خود هسته (`ping --url`). وقتی VPN بالاست (net = شبکه‌ی واقعی گوشی)، هسته سوکتش را با
-     * `--fd` به برنامه می‌دهد و برنامه آن را به همان شبکه می‌بندد (FdGate، مثل Hysteria2)، تا پینگ بیرون از تونل برود
-     * (۱.۴۲؛ قبلاً وقتی وصل بودی این دو اصلاً پینگ نمی‌شدند).
-     */
-    private fun coreProbe(ctx: Context, cfg: String, lib: String, net: Network?): Long? {
-        val link = cfg.lines().firstOrNull { it.trim().startsWith("URI", ignoreCase = true) && it.contains("=") }?.substringAfter("=")?.trim() ?: return null
-        val bin = File(ctx.applicationInfo.nativeLibraryDir, lib)
-        if (!bin.exists()) return null
-        val tag = "kanki-fd-" + java.util.UUID.randomUUID().toString().replace("-", "")
-        val gate = if (net != null) FdGate(tag, net).also { it.start() } else null
-        return try {
-            runCatching {
-                val cmd = mutableListOf(bin.path, "ping", "--url", link)
-                if (gate != null) { cmd += "--fd"; cmd += tag }
-                val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-                if (!p.waitFor(8, TimeUnit.SECONDS)) { p.destroy(); return@runCatching null }
-                p.inputStream.bufferedReader().readText().trim().lines().lastOrNull()?.trim()?.toLongOrNull()?.coerceAtLeast(1)
-            }.getOrNull()
-        } finally {
-            gate?.stop()
-        }
-    }
-
     /** Xray روی TCP: زمان اتصال به پورت خود اینباند (کمترین از دو بار) */
     fun tcp(net: Network?, host: String, port: Int): Long? {
         val ip = resolve(net, host) ?: return null

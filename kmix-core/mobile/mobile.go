@@ -103,13 +103,6 @@ type udpFlow struct {
 	s        smartState
 }
 
-type dgramConn struct {
-	raw  net.PacketConn
-	pc   *obfs.PacketConn
-	srv  atomic.Pointer[net.UDPAddr]
-	home int // پورت اصلی سرور (دور عوض کردن پورت از آن شروع می‌شود)
-}
-
 func getServer() string {
 	serverMu.Lock()
 	defer serverMu.Unlock()
@@ -149,7 +142,8 @@ func StartDevice(tf io.ReadWriteCloser, serverAddr, keyHex string, fecShards, fe
 }
 
 func start(tf io.ReadWriteCloser) error {
-	if err := openDgram(tf); err != nil {
+	tunFile = tf
+	if err := openDgram(); err != nil {
 		tf.Close()
 		return err
 	}
@@ -254,9 +248,7 @@ func Reconnect() {
 		return
 	}
 	lastReconnect.Store(time.Now().UnixNano())
-	if tf := tunFile; tf != nil {
-		openDgram(tf)
-	}
+	openDgram()
 	// closeConn ممکن است پشت یک اتصال در حال انجام منتظر بماند؛ نباید pingLoop را نگه دارد
 	go func() {
 		closeConn()
@@ -264,84 +256,39 @@ func Reconnect() {
 	}()
 }
 
-// ---- مسیر سریع UDP ----
+// ---- مسیر سریع UDP (سوکت‌ها و مسیرها در paths.go) ----
 
-func openDgram(tf io.ReadWriteCloser) error {
-	srv, err := net.ResolveUDPAddr("udp", getServer())
-	if err != nil {
-		return fmt.Errorf("آدرس سرور نامعتبر: %w", err)
+// handleDown یک بسته‌ی سرور (از هر مسیری که رسید)؛ نسخه‌ی دوم یک بسته یا بسته‌ای که از راه دیگر هم رسید را Window رد می‌کند
+func handleDown(tf io.ReadWriteCloser, kind byte, b []byte) {
+	if tf == nil {
+		return
 	}
-	raw, err := net.ListenPacket("udp", "")
-	if err != nil {
-		return err
-	}
-	pc, err := obfs.New(raw, psk, nil)
-	if err != nil {
-		raw.Close()
-		return err
-	}
-	dc := &dgramConn{raw: raw, pc: pc, home: homePort}
-	if dc.home == 0 {
-		dc.home = srv.Port
-	}
-	dc.srv.Store(srv)
-	if old := dg.Swap(dc); old != nil {
-		old.raw.Close()
-	}
-	go dgramReadLoop(dc, tf)
-	return nil
-}
-
-func closeDgram() {
-	if old := dg.Swap(nil); old != nil {
-		old.raw.Close()
-	}
-}
-
-func dgramReadLoop(dc *dgramConn, tf io.ReadWriteCloser) {
-	buf := make([]byte, 65535)
 	// خطای نوشتن (مثلاً بسته‌ی بزرگ‌تر از MTU) فقط همین بسته را از دست می‌دهد
 	write := func(f *udpFlow, payload []byte) {
 		if n, err := tf.Write(BuildUDPPacket(f.dstIP, f.srcIP, f.key.dstPort, f.key.srcPort, payload)); err == nil {
 			rxBytes.Add(int64(n))
 		}
 	}
-	for {
-		kind, n, _, err := dc.pc.ReadPacket(buf)
+	switch kind {
+	case proto.KindUDPDown, proto.KindUDPDownCopy:
+		id, seq, payload, err := proto.ParseUDPDown(b)
 		if err != nil {
-			return // سوکت بسته شد (Stop یا Reconnect)
+			return
 		}
-		switch kind {
-		case proto.KindPong:
-			if n == proto.PingLen && binary.BigEndian.Uint64(buf[0:8]) == sessionID {
-				sent := int64(binary.BigEndian.Uint64(buf[8:16]))
-				now := time.Now().UnixNano()
-				if rtt := now - sent; rtt >= 0 && rtt < int64(10*time.Second) {
-					lastPing.Store(rtt / int64(time.Millisecond))
-					lastPong.Store(now)
-				}
-			}
-		case proto.KindUDPDown, proto.KindUDPDownCopy:
-			id, seq, payload, err := proto.ParseUDPDown(buf[:n])
-			if err != nil {
-				continue
-			}
-			if f := flowByID(id); f != nil {
-				f.lastSeen.Store(time.Now().Unix())
-				// نسخه‌ی دوم یک بسته‌ی تکراری یا بسته‌ی دوباره‌ساخته‌شده‌ای که خودش هم رسید: Window ردش می‌کند
-				gotDown(f, write, kind, seq, payload, time.Now())
-			}
-		case proto.KindRepair:
-			id, rep, err := proto.ParseRepairDown(buf[:n])
-			if err != nil {
-				continue
-			}
-			if f := flowByID(id); f != nil {
-				gotRepair(f, write, rep, time.Now())
-			}
-		case proto.KindStat:
-			gotStat(buf[:n])
+		if f := flowByID(id); f != nil {
+			f.lastSeen.Store(time.Now().Unix())
+			gotDown(f, write, kind, seq, payload, time.Now())
 		}
+	case proto.KindRepair:
+		id, rep, err := proto.ParseRepairDown(b)
+		if err != nil {
+			return
+		}
+		if f := flowByID(id); f != nil {
+			gotRepair(f, write, rep, time.Now())
+		}
+	case proto.KindStat:
+		gotStat(b)
 	}
 }
 
@@ -434,12 +381,13 @@ func cleanerLoop(stop chan struct{}) {
 	}
 }
 
-// pingLoop هر ثانیه از همان مسیر بسته‌های بازی پینگ می‌گیرد (پس عدد پینگ همان تأخیر
-// واقعی بسته‌های بازی تا سرور است) و اگر سرور جواب ندهد، خودکار دوباره وصل می‌شود.
+// pingLoop: پینگ هر مسیر (paths.go)، انتخاب بهترین مسیر، و هر ثانیه گزارش افت، پنجره‌ی KCP و عوض کردن پورت؛ اگر هیچ
+// مسیری جواب ندهد، خودکار دوباره وصل می‌شود.
 func pingLoop(stop chan struct{}) {
-	t := time.NewTicker(pingInterval)
+	t := time.NewTicker(pingPlay)
 	defer t.Stop()
 	var b [proto.PingLen]byte
+	tick := 0
 	for {
 		select {
 		case <-stop:
@@ -447,14 +395,16 @@ func pingLoop(stop chan struct{}) {
 		case <-t.C:
 		}
 		now := time.Now()
-		dc := dg.Load()
-		if dc != nil {
-			binary.BigEndian.PutUint64(b[0:8], sessionID)
-			binary.BigEndian.PutUint64(b[8:16], uint64(now.UnixNano()))
-			dc.pc.WritePacket(proto.KindPing, b[:], dc.dst())
+		binary.BigEndian.PutUint64(b[0:8], sessionID)
+		binary.BigEndian.PutUint64(b[8:16], uint64(now.UnixNano()))
+		pingAll(now, b[:])
+		pickPrimary(now, false)
+		if tick++; tick%4 != 0 {
+			continue
 		}
+		dc := dg.Load()
 		silent := now.Sub(time.Unix(0, lastPong.Load()))
-		statTick(dc, now, silent)
+		statTick(dc, now, homeSilent(now))
 		if silent > deadAfter {
 			lastPing.Store(-1)
 			if now.Sub(time.Unix(0, lastReconnect.Load())) > deadAfter {

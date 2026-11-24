@@ -100,8 +100,6 @@ run "WireGuard direct, amnezia engine (no gate)" "$(pickof wireguard direct)" 1
 run "AmneziaWG direct, gaming" "$(pickof amneziawg-direct direct)"
 run "AmneziaWG tunnel, gaming" "$(pickof amneziawg tunnel)"
 run "KANKI MIX, gaming" "$(pickof kankimix direct)"
-run "microtun, gaming" "$(pickof mtun direct)"
-run "KPING, gaming" "$(grep '^cfg [^|]*|kping ' $out/cfgs.txt | head -1 | sed 's/^cfg //; s/ side=.*//')"
 run "WireGuard direct, gaming, Chrome NOT a game (must be closed)" "$(pickof wireguard direct)" 0 "com.example.notagame"
 # anti-filter (every app through the VPN): Xray and Hysteria2, straight and through Iran
 run "Xray direct, anti-filter" "$(pickof xray direct)" 0 "" filter

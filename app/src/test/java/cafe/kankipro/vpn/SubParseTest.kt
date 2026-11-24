@@ -26,9 +26,6 @@ class SubParseTest {
             "de" to "hysteria2", "de@tunnel" to "hysteria2",
             "local" to "kankimix", "de" to "kankimix", "de@tunnel" to "kankimix",
         )) assertTrue("missing $want in $got", want in got)
-        // microtun از داده‌ی صفحه: هر سه
-        assertEquals(setOf("local", "de", "de@tunnel"), a.mtun.map { it.node }.toSet())
-        assertTrue(a.mtun.all { MtunCfg.supported(it.url) })
         // راه هر کانفیگ و AmneziaWG مستقیم/تانل
         assertEquals("tunnel", a.viaProto["de@tunnel"]?.get("wireguard"))
         assertEquals("direct", a.awg["de"]?.via)
@@ -85,7 +82,7 @@ class SubParseTest {
         assertTrue("MTU = 1280" in applyMtu(wg, "1280"))
         // empty = the panel's
         assertEquals(wg, applyMtu(wg, ""))
-        // KANKI MIX and microtun are never touched
+        // KANKI MIX is never touched
         val km = "[Interface]\n[KankiMix]\nEndpoint = a:1\nURI = kanki://k@a:1\n"
         assertEquals(km, applyMtu(km, "1280"))
     }

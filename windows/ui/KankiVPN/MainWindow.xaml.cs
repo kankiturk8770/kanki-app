@@ -236,7 +236,6 @@ namespace KankiVPN
             "amneziawg" => "AmneziaWG",
             "wireguard" => "WireGuard",
             "kankimix" => "KANKI MIX",
-            "microtun" => "microtun",
             "vless" => "VLESS",
             "hysteria2" => "Hysteria2",
             _ => p,
@@ -255,13 +254,13 @@ namespace KankiVPN
         }
 
         /// <summary>Smart: the lowest ping of all. Gaming: the five gaming protocols on the chosen way,
-        /// the best GameScores result, else the lowest ping with KANKI MIX and microtun first. Anti-filter: the hidden protocols first (VLESS, Hysteria2, AmneziaWG).</summary>
+        /// the best GameScores result, else the lowest ping with KANKI MIX first. Anti-filter: the hidden protocols first (VLESS, Hysteria2, AmneziaWG).</summary>
         Server? Best(string mode)
         {
             if (account == null) return null;
             string[] order = mode switch
             {
-                "gaming" => new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" },
+                "gaming" => new[] { "kankimix", "amneziawg", "wireguard", "hysteria2" },
                 "anti" => new[] { "vless", "hysteria2", "amneziawg" },
                 _ => Array.Empty<string>(),
             };
@@ -371,7 +370,7 @@ namespace KankiVPN
         async Task GameScores()
         {
             if (pipe == null || account == null) return;
-            var games = new[] { "kankimix", "microtun", "amneziawg", "wireguard", "hysteria2" };
+            var games = new[] { "kankimix", "amneziawg", "wireguard", "hysteria2" };
             var pool = account.Servers.Where(s => games.Contains(s.Proto)).ToList();
             if (prefs.GameRoute is "direct" or "tunnel")
             {
@@ -507,7 +506,7 @@ namespace KankiVPN
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
             string Fam(string p) => p == "amneziawg" ? "amnezia" : p;
-            var fams = new[] { "kankimix", "microtun", "hysteria2", "amnezia", "wireguard", "vless" };
+            var fams = new[] { "kankimix", "hysteria2", "amnezia", "wireguard", "vless" };
             var lines = list.GroupBy(s => Fam(s.Proto)).OrderBy(x => Array.IndexOf(fams, x.Key) < 0 ? 99 : Array.IndexOf(fams, x.Key))
                 .SelectMany(x =>
                 {
@@ -544,7 +543,6 @@ namespace KankiVPN
         static Color ProtoColor(string p) => p switch
         {
             "kankimix" => Theme.P.Mix,
-            "microtun" => Theme.P.Connected,
             "amneziawg" => Theme.P.ModeAnti,
             "wireguard" => Theme.P.ModeDns,
             "hysteria2" => Theme.P.Connected,
@@ -1365,14 +1363,13 @@ namespace KankiVPN
                     new() { Id = "de/hysteria2", Name = "GERMANY", Proto = "hysteria2", Country = "DE" },
                     new() { Id = "de/amneziawg", Name = "GERMANY", Proto = "amneziawg", Country = "DE" },
                     new() { Id = "fr/amneziawg", Name = "FRANCE", Proto = "amneziawg", Country = "FR" },
-                    new() { Id = "nl/microtun", Name = "NETHERLANDS", Proto = "microtun", Country = "NL" },
                     new() { Id = "tr/vless", Name = "TURKEY", Proto = "vless", Country = "TR" },
                 },
             };
             foreach (var (k, v) in new Dictionary<string, long>
             {
                 ["de@tunnel/kankimix"] = 81, ["de@tunnel/hysteria2"] = -1, ["de@tunnel/amneziawg"] = 74, ["de@tunnel/wireguard"] = 77,
-                ["de/kankimix"] = 68, ["de/hysteria2"] = 95, ["de/amneziawg"] = 92, ["fr/amneziawg"] = 88, ["nl/microtun"] = 95, ["tr/vless"] = 61,
+                ["de/kankimix"] = 68, ["de/hysteria2"] = 95, ["de/amneziawg"] = 92, ["fr/amneziawg"] = 88 ["tr/vless"] = 61,
             }) pings[k] = v;
             pingHistory.AddRange(new long[] { 78, 74, 80, 72, 74, 90, 74, 73 });
             settings = new Settings { SplitMode = "exclude", SplitList = new List<string> { "5.0.0.0/8" } };

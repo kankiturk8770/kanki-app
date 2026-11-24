@@ -4,7 +4,6 @@
 //
 //	WireGuard / AmneziaWG  amneziawg-go (with no obfuscation keys it is plain WireGuard)
 //	KANKI MIX              the kmix-core Go core, reading and writing the adapter
-//	microtun               the mtun-core Go client, reading and writing the adapter
 //	VLESS / Hysteria2      the official Xray / Hysteria program (SOCKS on 127.0.0.1)
 //	                       and tun2socks between the adapter and that SOCKS port
 //
@@ -106,8 +105,6 @@ func (e *Engine) Up(t core.Tunnel) (err error) {
 	case cores.KankiMix:
 		r, luid, err = upKmix(t)
 		addrs = []netip.Prefix{netip.MustParsePrefix("10.77.0.2/32")}
-	case cores.Microtun:
-		r, luid, addrs, err = upMtun(e.log, t)
 	case cores.VLESS, cores.Hysteria2:
 		r, luid, err = e.upProgram(t)
 		addrs = []netip.Prefix{netip.MustParsePrefix("198.18.0.1/32")}

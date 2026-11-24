@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +20,6 @@ import (
 	"kankivpn/internal/route"
 	"kankivpn/internal/state"
 	"kankivpn/internal/sub"
-
-	"mtuncore/mtun"
 )
 
 // Tunnel is everything the engine needs to bring one tunnel up.
@@ -30,7 +27,6 @@ type Tunnel struct {
 	Proto      string       // cores.WireGuard, cores.KankiMix, ...
 	Config     *conf.Config // WireGuard / AmneziaWG
 	Text       string       // the link of the other protocols
-	DeviceID   string       // microtun keeps one device per install
 	Endpoint   netip.AddrPort
 	Plan       route.Plan
 	DNS        []netip.Addr
@@ -470,8 +466,8 @@ func (m *Manager) watch(ctx context.Context, gen int, up time.Time) string {
 	return ""
 }
 
-// configText is the server's config: the link inside the page (microtun,
-// VLESS) or the text the panel gives for it, with the last good one as a
+// configText is the server's config: the link inside the page (VLESS)
+// or the text the panel gives for it, with the last good one as a
 // fallback when the panel cannot be reached.
 func (m *Manager) configText(ctx context.Context, a *sub.Account, srv sub.Server) (string, error) {
 	if srv.Link != "" {
@@ -523,17 +519,6 @@ func endpointOf(proto, text string) (string, uint16, error) {
 			return "", 0, err
 		}
 		return v.Host, uint16(v.Port), nil
-	case cores.Microtun:
-		l, err := mtun.ParseLink(text)
-		if err != nil {
-			return "", 0, err
-		}
-		h, p, err := net.SplitHostPort(l.Server)
-		if err != nil {
-			return "", 0, err
-		}
-		n, err := strconv.ParseUint(p, 10, 16)
-		return h, uint16(n), err
 	}
 	return "", 0, fmt.Errorf("protocol %q does not run on Windows", proto)
 }
@@ -579,7 +564,7 @@ func (m *Manager) prepare(ctx context.Context, a *sub.Account, srv sub.Server, s
 	} else if t, err = BuildLink(srv.Proto, text, ep, set); err != nil {
 		return nil, err
 	}
-	t.Proto, t.DeviceID = srv.Proto, m.saved.DeviceID
+	t.Proto = srv.Proto
 	return t, nil
 }
 
@@ -595,11 +580,6 @@ func BuildLink(proto, text string, ep netip.AddrPort, set state.Settings) (*Tunn
 	switch proto {
 	case cores.KankiMix:
 		t.MTU = 1280 // the KANKI MIX core's own packet size
-	case cores.Microtun:
-		// the link's MTU (the panel works it out so no packet is cut on the way); a setting may only lower it
-		if l, err := mtun.ParseLink(text); err == nil {
-			t.MTU = lowerOnly(l.MTU, set.MTU)
-		}
 	default:
 		if set.MTU == 0 {
 			t.MTU = 1500 // tun2socks: the adapter stays inside this computer
@@ -653,10 +633,10 @@ func (m *Manager) Ping(ids []string) map[string]int64 {
 }
 
 func (m *Manager) ping(a *sub.Account, srv sub.Server) (int64, error) {
-	// microtun and Hysteria2 ping through their own code / program, which cannot be tied to the real
-	// network card: while the VPN is on they would measure through the tunnel, so the last real
-	// value (taken while disconnected) is shown instead
-	if srv.Proto == cores.Microtun || srv.Proto == cores.Hysteria2 {
+	// Hysteria2 pings through its own program, which cannot be tied to the real network card: while
+	// the VPN is on it would measure through the tunnel, so the last real value (taken while
+	// disconnected) is shown instead
+	if srv.Proto == cores.Hysteria2 {
 		m.mu.Lock()
 		on, last := m.st.State == Connected, m.lastPing[srv.ID]
 		m.mu.Unlock()
@@ -691,8 +671,6 @@ func (m *Manager) ping(a *sub.Account, srv sub.Server) (int64, error) {
 	case cores.KankiMix:
 		k, _ := cores.ParseKmix(text)
 		return cores.KmixPing(k, netip.AddrPortFrom(ep.Addr(), uint16(k.Port)))
-	case cores.Microtun:
-		return mtun.Ping(text)
 	case cores.VLESS:
 		return cores.TCP(ctx, ep)
 	case cores.Hysteria2:
@@ -738,8 +716,8 @@ func GameScore(series []int64) (score float64, ok bool) {
 	return sum/n + j*3 + float64(lost)*100/float64(len(series))*20, true
 }
 
-// samples: how many real hellos each protocol gets for the gaming score (Hysteria2 and microtun
-// run a whole handshake of their core each time, so fewer)
+// samples: how many real hellos each protocol gets for the gaming score (Hysteria2 runs a whole
+// handshake of its core each time, so fewer)
 func samples(proto string) (int, time.Duration) {
 	switch proto {
 	case cores.WireGuard, cores.AmneziaWG:

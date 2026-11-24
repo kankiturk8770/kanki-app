@@ -55,7 +55,7 @@ if ($hy) { Write-Host "hysteria server: $($hy.id)" }
 $seen = @{}
 $pick = @($servers | Where-Object { -not $_.tunnel } | Where-Object { $k = "$($_.proto)"; if ($seen[$k]) { $false } else { $seen[$k] = 1; $true } })
 # the ones that misbehaved first, so their reason shows before anything else
-$pick = @($pick | Sort-Object { @{ hysteria2 = 0; kankimix = 1; vless = 2; microtun = 3 }[$_.proto] ?? 9 })
+$pick = @($pick | Sort-Object { @{ hysteria2 = 0; kankimix = 1; vless = 2 }[$_.proto] ?? 9 })
 Write-Host "testing $($pick.Count) servers (one per protocol and route)"
 # the service in console mode, so a crash prints its reason here
 if ($env:DEBUG_SVC -eq '1') {

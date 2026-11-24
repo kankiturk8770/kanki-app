@@ -83,8 +83,6 @@ class ServersActions(
 /** توضیح کوتاه هر پروتکل */
 fun protoDesc(p: String) = when (p) {
     "kankimix" -> "مخصوص بازی · پینگ کم، ضد لگ"
-    "mtun" -> "مخصوص بازی · بسته‌های کوچک دوتایی، کم‌حجم"
-    "kping" -> "فقط بازی‌های انتخابی · وای‌فای و دیتا با هم"
     "amneziawg" -> "پایدار روی شبکه‌ی محدود"
     "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
     "wireguard" -> "سریع · مناسب گیم"
@@ -101,13 +99,11 @@ private fun protoFamily(p: String) = when (p) {
     "wireguard" -> "WireGuard"
     "hysteria2" -> "Hysteria2"
     "xray" -> "Xray"
-    "mtun" -> "microtun"
-    "kping" -> "KPING"
     else -> p
 }
 
 /** ترتیب دکمه‌های پروتکل (همان ترتیب ثابت برنامه) */
-private val FamilyOrderUi = listOf("KANKI MIX", "Amnezia", "WireGuard", "Xray", "Hysteria2", "microtun", "KPING")
+private val FamilyOrderUi = listOf("KANKI MIX", "Amnezia", "WireGuard", "Xray", "Hysteria2")
 
 @Composable
 fun ServersContent(cards: List<CountryCardUi>, ping: PingAllUi, tip: RobotAlert?, act: ServersActions) {

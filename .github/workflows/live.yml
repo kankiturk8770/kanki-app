@@ -3,7 +3,7 @@ name: تست زنده با اشتراک تست
 on:
   push:
     branches: ["ccr-93b13567-5n0xqx"]
-    paths: [".github/live/**", ".github/workflows/live.yml", "app/**", "awg-core/**", "mtun-core/**", "kping-core/**", "kmix-core/**"]
+    paths: [".github/live/**", ".github/workflows/live.yml", "app/**", "awg-core/**", "kmix-core/**"]
 permissions:
   contents: read
 env:
@@ -38,7 +38,7 @@ jobs:
             go build -tags tcp -trimpath -ldflags "-X main.Version=${{ matrix.ver }}" -o $env:RUNNER_TEMP\kanki-svc-plain.exe .\cmd\kanki-svc
           } else {
             go install mvdan.cc/garble@v0.17.0
-            # only our own code is obfuscated: gVisor (used by tun2socks, KANKI MIX, microtun) walks its structs with reflect
+            # only our own code is obfuscated: gVisor (used by tun2socks, KANKI MIX) walks its structs with reflect
             $env:GOGARBLE = "kankivpn"
             $flags = $b.Substring(7).Split(' ')
             & garble @flags build -tags tcp -trimpath -ldflags "-X main.Version=${{ matrix.ver }}" -o $env:RUNNER_TEMP\kanki-svc-plain.exe .\cmd\kanki-svc
