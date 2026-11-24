@@ -173,3 +173,17 @@ func TestMultiUser(t *testing.T) {
 		t.Fatal("API بدون رمز درست جواب داد")
 	}
 }
+
+// one lost ping (a few per cent of loss) does not make the main path "not answering" (no mirroring for it)
+func TestOneLostPingIsNotSilence(t *testing.T) {
+	now := time.Now().UnixNano()
+	p := &dgramConn{born: now - int64(10*time.Second), samples: 50, srtt: 60, rttvar: 5, lastPong: now - int64(300*time.Millisecond)}
+	p.waitFrom = now - int64(400*time.Millisecond) // the ping sent 400 ms ago got no answer, the next one is on its way
+	if _, sus, dead := p.quality(now); sus || dead {
+		t.Fatalf("one lost ping: suspect %v dead %v", sus, dead)
+	}
+	p.waitFrom = now - int64(900*time.Millisecond) // three pings in a row
+	if _, sus, _ := p.quality(now); !sus {
+		t.Fatal("a path silent for three pings is still taken as answering")
+	}
+}
