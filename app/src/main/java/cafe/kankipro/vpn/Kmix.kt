@@ -7,10 +7,12 @@ import java.net.URLDecoder
  * ------------------------------------
  * هسته‌ی Go همین پروتکل (پوشه‌ی kmix-core) برنامه‌ی جدای libkmix.so است (فایل build.yml) و tun2socks ندارد:
  * کارت شبکه‌ی VPN را می‌گیرد و خودش بسته‌های IP را می‌خواند:
- *   UDP بازی ← مسیر سریع دیتاگرام (بدون صف و ارسال مجدد؛ در حالت گیمینگ هر بسته دو بار)
- *   TCP     ← KCP + FEC
- * پنل لینک kanki://کلید@سرور:پورت?fec=10-3&ports=4001-4010&gaming=1#اسم را در اشتراک می‌گذارد؛
+ *   UDP بازی ← مسیر سریع دیتاگرام (بدون صف و ارسال مجدد؛ ترمیم و نسخه‌ی دوم فقط به اندازه‌ی افت خط)
+ *   TCP     ← KCP
+ * پنل لینک kanki://کلید@سرور:پورت?fec=10-3&ports=4001-4010&gaming=1&alt=ایران:پورت#اسم را در اشتراک می‌گذارد؛
  * کلید مال همین کاربر است و کاربر آن را نمی‌بیند.
+ * چند مسیر (۱.۴۴): وای‌فای و دیتای گوشی هر کدام سوکت خودشان را به هسته می‌دهند (KmixCore.addPath) و alt (ورودی
+ * تانل ایران همین سرور) مقصد دیگر است؛ هسته بسته را روی بهترین مسیر و فقط ترمیم لازم را روی مسیر دیگر می‌فرستد.
  */
 
 /** لینک kanki:// */
@@ -25,6 +27,8 @@ data class KmixUri(
     /** پیشنهاد پنل برای حالت گیمینگ (ارسال دوتایی) */
     val gaming: Boolean,
     val name: String,
+    /** نشانی‌های دیگر همین سرور («میزبان:پورت»، مثلاً ورودی تانل ایران): هر کدام یک مسیر دیگر برای هسته */
+    val alt: List<String> = emptyList(),
 ) {
     /** پورت این اتصال: پورت اصلی یا یکی از پورت‌های اضافه */
     fun pickPort(): Int = ports?.let { r -> (r.toList() + port).random() } ?: port
@@ -61,6 +65,10 @@ data class KmixUri(
                 fecParity = fec?.getOrNull(1)?.takeIf { it in 0..64 } ?: 3,
                 gaming = q["gaming"] == "1",
                 name = u.rawFragment?.let { URLDecoder.decode(it, "UTF-8") }.orEmpty(),
+                alt = (q["alt"] ?: "").split(",").map { it.trim() }.filter { a ->
+                    val p = a.substringAfterLast(":", "").toIntOrNull()
+                    a.contains(":") && p != null && p in 1..65535 && a.substringBeforeLast(":").removePrefix("[").removeSuffix("]").isNotBlank()
+                }.take(2),
             )
         }
 
@@ -113,7 +121,7 @@ object KmixCore {
      */
     fun start(
         bin: java.io.File, tun: android.os.ParcelFileDescriptor, server: String, key: String,
-        fecData: Int, fecParity: Int, gaming: Boolean, ports: String = "", onDied: (String) -> Unit,
+        fecData: Int, fecParity: Int, gaming: Boolean, ports: String = "", alt: String = "", onDied: (String) -> Unit,
     ) {
         stop()
         stopping = false
@@ -139,7 +147,7 @@ object KmixCore {
             val msg = org.json.JSONObject()
                 .put("server", server).put("key", key)
                 .put("fec_data", fecData).put("fec_parity", fecParity).put("gaming", gaming)
-                .put("ports", ports)
+                .put("ports", ports).put("alt", alt)
                 .toString() + "\n"
             s.setFileDescriptorsForSend(arrayOf(tun.fileDescriptor))
             s.outputStream.write(msg.toByteArray())
@@ -182,6 +190,25 @@ object KmixCore {
         }.getOrNull()
     }
 
+    /** سوکت UDP یک شبکه‌ی گوشی («wifi»، «cell»)، بیرون از VPN و بسته به همان شبکه؛ هسته آن را یک مسیر می‌کند */
+    fun addPath(name: String, fd: android.os.ParcelFileDescriptor): Boolean = synchronized(lock) {
+        val s = sock ?: return false
+        val r = reader ?: return false
+        runCatching {
+            s.setFileDescriptorsForSend(arrayOf(fd.fileDescriptor))
+            try {
+                s.outputStream.write("path $name\n".toByteArray())
+                s.outputStream.flush()
+            } finally {
+                s.setFileDescriptorsForSend(null)
+            }
+            r.readLine() == "ok"
+        }.getOrDefault(false)
+    }
+
+    /** آن شبکه‌ی گوشی رفت */
+    fun dropPath(name: String) { cmd("drop $name") }
+
     fun stop() {
         stopping = true
         val p = proc
@@ -212,7 +239,16 @@ object KmixCore {
     private fun poll() {
         val f = cmd("stats")?.split(" ")?.takeIf { it.size >= 4 && it[0] == "stats" } ?: return
         lastStats = Triple(f[1].toLongOrNull() ?: 0L, f[2].toLongOrNull() ?: 0L, f[3].toLongOrNull() ?: -1L)
+        // ۱.۴۴: مسیر اصلی («wifi»، «cell»، «net»، با «+tunnel») و تعداد مسیرهای زنده
+        lastPath = f.getOrNull(7)?.takeIf { it != "-" }
+        livePaths = f.getOrNull(8)?.toIntOrNull() ?: 0
     }
+
+    /** مسیر اصلی الان و تعداد مسیرهای زنده (برای صفحه) */
+    @Volatile var lastPath: String? = null
+        private set
+    @Volatile var livePaths: Int = 0
+        private set
 
     /** پینگ تا سرور (میلی‌ثانیه) از همان مسیر بسته‌های بازی؛ -1 یعنی جواب نمی‌آید */
     fun ping(): Long = lastStats?.third ?: -1L

@@ -793,9 +793,9 @@ private fun SetLabel(text: String) {
 }
 
 /**
- * پنل گیمینگ: نوار پروتکل‌ها (KANKI MIX، KPING، microtun، Amnezia، WireGuard؛ فقط آن‌هایی که در اشتراک هست)، فیلتر
+ * پنل گیمینگ: نوار پروتکل‌ها (KANKI MIX، Amnezia، WireGuard؛ فقط آن‌هایی که در اشتراک هست)، فیلتر
  * «همه / مستقیم / تانل» و کارت هر کانفیگ؛ لمس کارت = اتصال به همان. چرخ‌دنده: انتخاب بازی‌ها (در گیمینگ فقط همین‌ها
- * اینترنت دارند؛ فایروال همیشه روشن است) و تنظیمات هر هسته‌ی گیمینگ جدا (KANKI MIX، KPING، microtun).
+ * اینترنت دارند؛ فایروال همیشه روشن است) و تنظیمات KANKI MIX.
  */
 @Composable
 fun GameSheet(
@@ -840,8 +840,8 @@ fun GameSheet(
 /** نمای تنظیمات گیمینگ: «انتخاب بازی‌ها» بالا، بعد هر هسته‌ی گیمینگ با کپسول خودش و تنظیمات همان هسته زیرش */
 @Composable
 private fun ColumnScope.GameSettings(families: List<GameFamilyUi>, fam: String, kmixDup: Boolean, onKmixDup: (Boolean) -> Unit, gameCount: Int, onPickGames: () -> Unit) {
-    // فقط هسته‌هایی که تنظیم دارند (microtun تنظیمی برای کاربر ندارد)
-    val cores = listOf("kankimix", "kping").filter { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
+    // فقط هسته‌هایی که تنظیم دارند
+    val cores = listOf("kankimix").filter { k -> families.any { it.key == k && it.servers.isNotEmpty() } }
     var core by remember { mutableStateOf(fam.takeIf { it in cores } ?: cores.firstOrNull() ?: "") }
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         SettingLink(
@@ -870,9 +870,8 @@ private fun ColumnScope.GameSettings(families: List<GameFamilyUi>, fam: String, 
                         "kankimix" -> Column(Modifier.fillMaxWidth().padding(top = D.S3).goldGlass(RoundedCornerShape(D.RL), tint = c).padding(horizontal = D.S3, vertical = D.S2)) {
                             T("KANKI MIX", size = 13.sp, color = c, weight = FontWeight.Black, ltr = true)
                             Spacer(Modifier.height(D.S1))
-                            SwitchRow("حالت پایدار", "برای اینترنت ضعیف و پرقطعی (کمی حجم بیشتر)", kmixDup, c, onChange = onKmixDup)
+                            SwitchRow("حالت پایدار", "وای‌فای و دیتا با هم؛ بسته‌ی گم‌شده خودش جبران می‌شود، فقط به اندازه‌ی لازم", kmixDup, c, onChange = onKmixDup)
                         }
-                        "kping" -> Column(Modifier.fillMaxWidth().padding(top = D.S1)) { KpingPanel(c) }
                     }
                 }
             }
@@ -941,8 +940,6 @@ fun FilterSheet(
 /** رنگ هر پروتکل (حلقه و هاله‌ی دکمه‌ی اتصال، کارت‌ها)؛ همه از تُن‌های همان تم، تا کنار هم یکدست بمانند */
 fun protoColor(p: String?): Color = when (p) {
     "kankimix" -> ThemeState.current.mix
-    "mtun" -> ThemeState.current.connected
-    "kping" -> ThemeState.current.modeGame
     "amneziawg", "amneziawg-direct" -> ThemeState.current.modeAnti
     "wireguard" -> ThemeState.current.modeDns
     "hysteria2" -> ThemeState.current.connected
@@ -952,8 +949,6 @@ fun protoColor(p: String?): Color = when (p) {
 
 fun familyColor(f: String): Color = when (f) {
     "kankimix" -> protoColor("kankimix")
-    "mtun" -> protoColor("mtun")
-    "kping" -> protoColor("kping")
     "hysteria2" -> protoColor("hysteria2")
     "amnezia" -> protoColor("amneziawg")
     "xray" -> protoColor("xray")
@@ -965,7 +960,7 @@ fun DrawScope.familyIcon(f: String, c: Color) {
     val w = size.width
     val st = Stroke(w * .09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (f) {
-        "kankimix", "mtun", "kping" -> {
+        "kankimix" -> {
             modeLogo(KMode.GAME, c)
             drawCircle(c, w * .07f, Offset(w * .88f, w * .14f))
         }

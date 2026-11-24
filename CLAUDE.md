@@ -28,10 +28,10 @@
 | تب سرورها | `ServersUi.kt` |
 | تنظیمات و تم‌ها | `SettingsUi.kt` (`ThemePicker`)، رنگ‌ها و تم در `Ui.kt` (`Themes` از ۱.۳۲: kanki، cyber، tiffany، vulcan، malt، cyprus؛ هر تم با `glassTheme(id, زمینه, رنگ نئونی, رنگ دوم)` ساخته می‌شود (رنگ دوم `K.Gold2` از ۱.۳۴ برای گرادیان نورها و لبه‌ها)، اسم‌ها در `ThemeNames`)، اجزای مشترک در `Kit.kt` |
 | موتور WireGuard/AmneziaWG | `VpnEngine.kt`، `Tunnel.kt` |
-| Hysteria2 / Xray / KANKI MIX / microtun | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` / `Mtun.kt` |
-| KPING (فقط تسترها؛ فیلد `kping` اشتراک رمزشده، لینک `kping://`، پنل ۳.۳۹+): هسته‌ی خودش `libkping.so`، وای‌فای و دیتا با هم (`requestNetwork` + `bindSocket`)، فقط بازی‌های انتخابی (`KpingCfg.games` = «بازی‌های مجاز» گیمینگ، بار اول `GameApps.detect`) + `GAME_NEEDS` با دروازه (بقیه بسته)، تنظیم خودکار، آمار زنده و تنظیمات (۱.۳۵: v3، بیدار نگه داشتن دیتا، پنل پینگ روی بازی) | `KpingCfg`/`KpStat` در `Mtun.kt`، `startKping`/`kpPath`/`kpSend` در `Hysteria.kt`، `KpingUi.kt` (`KpV3`)، پنل روی بازی `KpHud.kt`، `parseKping` در `SubscriptionApi.kt`، `Probe.kping` (خط آخر = پینگ تا رله + رله تا خارج) |
+| Hysteria2 / Xray / KANKI MIX | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` |
+| KANKI MIX دو مسیر (۱.۴۴): وای‌فای و دیتا با هم (`kmixPaths`: requestNetwork + bindSocket + protect، فقط در گیمینگ)، نشانی دوم سرور `alt=` لینک (ورودی تانل ایران)، آمار مسیر اصلی `KmixCore.lastPath`/`livePaths` | `Hysteria.kt` (`startKmix`، `kmixPaths`)، `Kmix.kt` (`addPath`/`dropPath`)، هسته: `kmix-core/mobile/paths.go` |
 | پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
-| پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG/microtun `RealPing.l3`) | `AppState.livePing` |
+| پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG `RealPing.l3`) | `AppState.livePing` |
 | DNS کانکی (رفع تحریم) | `DnsMode.kt` |
 | دروازه‌ی برنامه‌ها: گیمینگ با هر پروتکل (یک فهرست «بازی‌ها»، `GAME_GATED`)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt`؛ WireGuard/AmneziaWG گیمینگ: `startAwg` در `Hysteria.kt` + هسته‌ی `awg-core/` (`libawg.so`) |
 | سقف فریم انیمیشن‌ها (گوشی ضعیف ۳۰، بقیه ۶۰) | `Motion` و `motionTime()` در `Kit.kt` |
@@ -52,19 +52,13 @@
 - `kmix-core/` هسته‌ی KANKI MIX (`libkmix.so`)، تست: `cd kmix-core && go test ./...`. بازی هوشمند (۱.۴۳): `mobile/smart.go` + `internal/game` (سنجش افت، ترمیم RLC به اندازه‌ی افت، پنجره‌ی KCP وقت بازی، عوض کردن پورت؛ پیام شروع `ports`، جواب `stats` شش عدد). سرور آن داخل ریپوی پنل است
   (`kanki-panel/src/vpn/kmix-server`)؛ پوشه‌ی `internal/` دو طرف باید **یکی** بماند (`MaxWire` = ۱۳۳۲: سقف ۱۳۸۰ پنل).
   تست سرتاسری با سرور واقعی: `SRVBIN=<kanki-mix-server> HOSTIP=<IP غیر loopback> go test ./...`
-- `mtun-core/` هسته‌ی microtun (`libmtun.so`)، تست: `cd mtun-core && go test ./...`. خود کلاینت در پکیج `mtun-core/mtun` است
-  (`main.go` فقط برنامه‌ی اندروید است)؛ نسخه‌ی ویندوز همان پکیج را استفاده می‌کند. KANKI MIX هم `StartDevice` دارد (ویندوز).
-- `kping-core/` هسته‌ی KPING (`libkping.so`)، تست: `cd kping-core && go test ./...`. قالب بسته همان `src/vpn/kpingd.rs` پنل (بردار تست مشترک در
-  `kping/wire_test.go`؛ v3: ترمیم پنجره‌ای `kping/rlc.go` = `src/vpn/kprlc.rs` پنل، بردار مشترک `TestRLCVector`، تشخیص نوع بسته `kping/classify.go`،
-  DSCP سوکت `kping/sock_unix.go`)؛ پیام‌های سوکت یونیکس: `TUN`، `PATH <اسم>` + سوکت هر شبکه، `DROP <اسم>`، `SET {json}`؛ گزارش `STAT {json}` هر ثانیه.
-  آزمایشگاه پنل (`scripts/kping_lab.sh`) با همین پکیج کار می‌کند.
 - هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
 
 ## نسخه‌ی ویندوز (`windows/`)
 - سرویس Go (`windows/service`، اجرا به‌عنوان SYSTEM: Wintun + amneziawg-go، مسیرها، WFP) و برنامه‌ی WPF
   (`windows/ui/KankiVPN`، کاربر عادی) که با JSON خط‌به‌خط روی `\\.\pipe\KankiVPN` حرف می‌زنند. نقشه‌ی کامل در `windows/README.md`.
 - اشتراک را `windows/service/internal/sub` می‌خواند (مثل `SubscriptionApi.kt`): هر تغییر شکل صفحه‌ی اشتراک پنل هر دو را
-  عوض می‌کند. پروتکل‌ها: WireGuard، AmneziaWG، KANKI MIX، microtun، VLESS، Hysteria2 (OpenVPN نه).
+  عوض می‌کند. پروتکل‌ها: WireGuard، AmneziaWG، KANKI MIX، VLESS، Hysteria2 (OpenVPN نه).
 - ظاهر ویندوز کپی اندروید است (تم زرد و زرشکی، `Theme.cs`؛ شش تم شیشه‌ای اندروید آماده در کامیت `9f94ecf`، منتظر تصمیم صاحب اپ)؛ هر تغییر ظاهر اندروید باید در `windows/ui` هم بیاید.
   کد کشیدن اندروید خط به خط به C# آمده: `Gfx.cs` (رنگ با Oklab، گرادیان، ساعت ۶۰ فریم)، `Draw.cs` (`goldGlass`، آیکن‌ها،
   `Logo3D`، `SpeedGauge`، `PingPulse`، `KankiBackground`)، `Orb.cs` (`OrbButton` و تعقیب گیمینگ)، `WorldMap.cs`. هر تابع
@@ -181,6 +175,7 @@
 ### فهرست نسخه‌ها
 | نسخه | تاریخ | خلاصه |
 |---|---|---|
+| ۱.۴۴.۰ / ویندوز ۱.۳.۶ | 2026-11-24 | KANKI MIX دو مسیر (وای‌فای + دیتا، مستقیم + تانل ایران) هوشمند، همراه پنل ۳.۶۰؛ microtun و KPING از ریشه حذف (اپ و ویندوز)؛ فایل نصبی کوچک‌تر |
 | ۱.۴۳.۰ / ویندوز ۱.۳.۵ | 2026-11-24 | KANKI MIX بازی هوشمند (همراه پنل ۳.۵۹): افت خط سنجیده می‌شود، فقط بازی و به اندازه‌ی افت ترمیم می‌شود، دانلود وقت بازی کوچک، پورت کند عوض می‌شود |
 | ۱.۴۲.۱ | 2026-11-23 | سنجش گیمینگ دقیق: یک کلید هیچ‌وقت هم‌زمان از دو راه سنجیده نمی‌شود (`peerOf`)، سری ۲۰تایی microtun و KPING از خود هسته |
 | ۱.۴۲.۰ | 2026-11-23 | پینگ microtun و KPING وقتی VPN بالاست (`--fd` + `FdGate`)، تنظیمات گیمینگ بی microtun و بی جزئیات داخلی، تست زنده‌ی پینگ همه و Xray/Hysteria2 |
@@ -198,6 +193,13 @@
 | ۱.۲۲ تا ۱.۲۵ | 2026-10-29 تا 11-06 | فایروال «فقط بازی»، کانفیگ رمزشده `kseal1`، بازبینی کامل؛ ویندوز ۱.۰ تا ۱.۲.۹ (سرویس، WFP، ظاهر اندروید) |
 
 ### آخرین کارها
+#### 2026-11-24 — ۱.۴۴.۰ و ویندوز ۱.۳.۶ (برنچ `ccr-f970ec4f-jrr11c`، همراه پنل ۳.۶۰.۰)
+**خواسته:** KANKI MIX با وای‌فای و دیتای گوشی و دو تانل/نشانی، هوشمند و بی بسته‌ی اضافه؛ microtun و KPING بی بکاپ و بی اثر از اپ و ویندوز (و پنل)؛ حجم اپ کمتر اگر شد.
+**مسیر:** `startKmix` ← نشانی `alt` (آی‌پی‌اش هم بیرون از مسیرهای VPN، `routesExcludingAll`) ← `KmixCore.start` ← `kmixPaths` ← `addPath` (fd با SCM_RIGHTS) ← هسته `AddSocket` ← `paths.go` (پینگ هر مسیر، بهترین مسیر با صبر ۳ ثانیه، مسیر بی‌جواب فوراً کنار، نسخه‌ی دوم و ترمیم روی مسیر دیگر، `FlagMirror`) ← سرور پنل ۳.۶۰ ← برگشت از هر مسیر ← `handleDown` ← TUN.
+**تست:** `go test -race` (kmix-core، ویندوز)؛ `TestMultiLab` با سرور واقعی: قطعی‌های ۳۰۰ms خط اصلی، یک مسیر ۸۷.۳٪ به‌موقع، دو مسیر ۹۹.۷۹٪؛ `RoutesTest.twoServers`. **ساخت اندروید این‌جا نشد** (محیط SDK ندارد): CI.
+**امنیت:** سوکت شبکه فقط از خود برنامه (همان سوکت یونیکس با بررسی uid)، اسم مسیر فقط حروف کوچک؛ اجازه‌ی SYSTEM_ALERT_WINDOW (فقط مال پنل KPING) برداشته شد.
+**حجم:** دو هسته‌ی جدا (`libmtun.so`، `libkping.so`) از هر APK رفت؛ نصب‌کننده‌ی ویندوز با lzma2/ultra64. بقیه از قبل فشرده بود (APK هر پردازنده، R8، `-s -w`).
+
 #### 2026-11-22 — ۱.۴۱.۰ (برنچ `ccr-93b13567-5n0xqx`)
 **خواسته:** دستورالعمل بازطراحی صاحب اپ (اسپلش با تم، هوشمند فقط ضد فیلتر، ضد فیلتر مثل گیمینگ، پیام DNS، پاپ‌آپ شناور، تست سرعت و «اینترنت من»).
 **ریشه‌ها:** اسپلش سبز بود چون `ThemeState.set` فقط هدف را عوض می‌کرد و رنگ تا `animate` در خانه سبز می‌ماند (`snap`)؛ تست سرعت بی VPN پکت‌لاس را با سرور KANKI MIX

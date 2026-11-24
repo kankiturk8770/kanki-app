@@ -229,3 +229,49 @@ func labHarness(t *testing.T, bin string, port int, host string) *harness {
 	time.Sleep(300 * time.Millisecond)
 	return &harness{t: t, hostIP: hostIP, echo: echo.LocalAddr().(*net.UDPAddr)}
 }
+
+// two paths to the same server (the server itself and a «tunnel entry»), each with its own line: the main one
+// with full cuts of a few hundred ms (a mobile line that drops), the other independent. With the second path
+// the game goes on through the cuts; on clean lines nothing more goes on the wire than with one path.
+//
+//	SRVBIN=/tmp/ks-new HOSTIP=<IP> go test -run MultiLab -v ./mobile
+func TestMultiLab(t *testing.T) {
+	bin, host := os.Getenv("SRVBIN"), os.Getenv("HOSTIP")
+	if bin == "" || host == "" {
+		t.Skip("SRVBIN و HOSTIP تنظیم نشده‌اند")
+	}
+	clean := lineModel{name: "تمیز", delay: line0Delay}
+	cuts := lineModel{name: "قطعی‌های ۳۰۰ms", pGood: 0.01, pBad: 1, toBad: 0.006, toGood: 0.05, delay: line0Delay}
+	other := lineModel{name: "دوم ۲٪", pGood: 0.02, delay: line0Delay + 10*time.Millisecond}
+	port := 5900
+	for _, c := range []struct {
+		name      string
+		main, alt lineModel
+		two       bool
+	}{
+		{"یک مسیر، تمیز", clean, clean, false},
+		{"دو مسیر، تمیز", clean, clean, true},
+		{"یک مسیر، قطعی", cuts, other, false},
+		{"دو مسیر، قطعی", cuts, other, true},
+	} {
+		port += 4
+		h := labHarness(t, bin, port, host)
+		a := newLabLine(t, fmt.Sprintf("127.0.0.1:%d", port+1), fmt.Sprintf("127.0.0.1:%d", port), c.main, int64(port))
+		b := newLabLine(t, fmt.Sprintf("127.0.0.1:%d", port+2), fmt.Sprintf("127.0.0.1:%d", port), c.alt, int64(port+7))
+		if c.two {
+			SetAlt(fmt.Sprintf("127.0.0.1:%d", port+2))
+		} else {
+			SetAlt("")
+		}
+		both := &labLine{}
+		go func() {
+			for {
+				both.wire.Store(a.wire.Load() + b.wire.Load())
+				time.Sleep(time.Millisecond)
+			}
+		}()
+		ok, cost := labRun(t, h, fmt.Sprintf("127.0.0.1:%d", port+1), both, 15*time.Second)
+		t.Logf("%-16s | به‌موقع %.2f%% | حجم روی سیم ×%.2f | افت خام بالا %d‰ پایین %d‰", c.name, ok*100, cost, LossUp(), LossDown())
+	}
+	SetAlt("")
+}

@@ -54,8 +54,9 @@ func TestParse(t *testing.T) {
 	for _, s := range a.Servers {
 		byProto[s.Proto+map[bool]string{true: "@t"}[s.Tunnel]] = s
 	}
-	if len(a.Servers) != 7 {
-		t.Fatalf("want wg, awg, hy2, kmix, awg tunnel, microtun, vless; got %+v", a.Servers)
+	// an old panel's microtun link (gone in 1.44) is left out
+	if len(a.Servers) != 6 {
+		t.Fatalf("want wg, awg, hy2, kmix, awg tunnel, vless; got %+v", a.Servers)
 	}
 	if byProto["openvpn"].ID != "" {
 		t.Fatal("OpenVPN must not be offered")
@@ -66,8 +67,8 @@ func TestParse(t *testing.T) {
 	if k := byProto["kankimix"]; k.URL == "" || k.Lat != 50.1 {
 		t.Fatalf("kmix: %+v", k)
 	}
-	if m := byProto["microtun"]; m.Link == "" || m.Name != "GERMANY-GAMING" || m.Country != "DE" {
-		t.Fatalf("mtun: %+v", m)
+	if _, ok := byProto["microtun"]; ok {
+		t.Fatal("microtun is gone")
 	}
 	if v := byProto["vless"]; v.Link == "" || v.Country != "DE" || v.Name != "KANKI-XRAY Reality" {
 		t.Fatalf("vless: %+v", v)
@@ -136,7 +137,7 @@ func TestLoadAndConfig(t *testing.T) {
 	c := NewClient()
 	c.HTTP = srv.Client()
 	a, err := c.Load(context.Background(), srv.URL, "kanki-12-abcd1234")
-	if err != nil || len(a.Servers) != 7 {
+	if err != nil || len(a.Servers) != 6 {
 		t.Fatal(a, err)
 	}
 	text, err := c.Config(context.Background(), a, a.Servers[0])
@@ -212,7 +213,7 @@ func TestParseRealPanelPage(t *testing.T) {
 	}
 	for _, id := range []string{
 		"de/amneziawg", "de@tunnel/amneziawg", "de@tunnel/wireguard", "de/hysteria2", "de@tunnel/hysteria2",
-		"local/kankimix", "de/kankimix", "de@tunnel/kankimix", "local/microtun", "de/microtun", "de@tunnel/microtun",
+		"local/kankimix", "de/kankimix", "de@tunnel/kankimix",
 	} {
 		if _, ok := got[id]; !ok {
 			t.Errorf("missing %s (have %v)", id, len(got))

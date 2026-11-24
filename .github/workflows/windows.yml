@@ -5,7 +5,6 @@ on:
     paths:
       - "windows/**"
       - "kmix-core/**"
-      - "mtun-core/**"
       - ".github/workflows/windows.yml"
   workflow_dispatch:
 
@@ -40,7 +39,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      VERSION: "1.3.5"
+      VERSION: "1.3.6"
       # the same core versions as the Android app (build.yml)
       XRAY_VERSION: v26.3.27
       HY_VERSION: v2.12.3
@@ -99,8 +98,8 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           go install mvdan.cc/garble@${{ env.GARBLE_VERSION }}
-          # فقط کد خود ما مبهم می‌شود: gVisor (tun2socks، KANKI MIX، microtun) با reflect ساختارهایش را می‌خواند و با garble کامل
-          # سرویس موقع اتصال Hysteria2/VLESS/KANKI MIX/microtun می‌خوابید (panic در tcpip.Stats.FillIn؛ تست زنده‌ی 2026-11-20)
+          # فقط کد خود ما مبهم می‌شود: gVisor (tun2socks، KANKI MIX) با reflect ساختارهایش را می‌خواند و با garble کامل
+          # سرویس موقع اتصال Hysteria2/VLESS/KANKI MIX می‌خوابید (panic در tcpip.Stats.FillIn؛ تست زنده‌ی 2026-11-20)
           $env:GOGARBLE = "kankivpn"
           garble -literals -tiny build -tags tcp -trimpath -ldflags "-X main.Version=${{ env.VERSION }}" -o ..\..\dist\kanki-svc.exe .\cmd\kanki-svc
           ..\..\dist\kanki-svc.exe version

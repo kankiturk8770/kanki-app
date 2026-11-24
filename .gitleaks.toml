@@ -9,6 +9,4 @@ paths = [
   '''windows/service/internal/.*_test\.go''',
   '''windows/service/internal/sub/testdata/''',
   '''kmix-core/.*_test\.go''',
-  '''mtun-core/.*_test\.go''',
-  '''kping-core/.*_test\.go''',
 ]

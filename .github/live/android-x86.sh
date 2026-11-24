@@ -38,8 +38,6 @@ gob() { # dir pkg out tags
   chmod +x "$d/$3"
 }
 gob kmix-core ./cmd/kmix libkmix.so "-tags tcp"
-gob mtun-core . libmtun.so ""
-gob kping-core . libkping.so ""
 gob awg-core . libawg.so ""
 ls -la "$d"
 

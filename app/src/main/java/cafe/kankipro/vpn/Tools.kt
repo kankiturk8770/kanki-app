@@ -122,7 +122,7 @@ object RealPing {
 
     /**
      * یک پینگ از داخل تونل. زمان DNS حساب نمی‌شود (قبلاً حساب می‌شد و DNS کند داخل تونل پینگ را ۶۰۰۰ تا ۸۰۰۰ نشان می‌داد):
-     * آدرس جدا گرفته می‌شود، بعد فقط رفت‌وبرگشت. وصل شدن TCP خودش یک رفت‌وبرگشت است (WireGuard، AmneziaWG، microtun)؛
+     * آدرس جدا گرفته می‌شود، بعد فقط رفت‌وبرگشت. وصل شدن TCP خودش یک رفت‌وبرگشت است (WireGuard، AmneziaWG)؛
      * وقتی خود گوشی جوابش را می‌دهد (tun2socks: Hysteria2، Xray، KANKI MIX، زیر ۳ میلی‌ثانیه) زمان جواب HTTP حساب می‌شود.
      */
     fun once(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {
@@ -146,7 +146,7 @@ object RealPing {
     }.getOrNull()
 
     /**
-     * پینگ لایه‌ی ۳ (WireGuard، AmneziaWG، microtun): بسته‌ی وصل شدن TCP واقعاً تا سرور می‌رود و برمی‌گردد،
+     * پینگ لایه‌ی ۳ (WireGuard، AmneziaWG): بسته‌ی وصل شدن TCP واقعاً تا سرور می‌رود و برمی‌گردد،
      * پس زمان وصل شدن خودش یک رفت‌وبرگشت است. DNS جدا و بیرون از زمان.
      */
     fun l3(url: String = URL_204, timeoutMs: Int = 5000): Long? = runCatching {

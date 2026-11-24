@@ -35,8 +35,8 @@ func TestHopPorts(t *testing.T) {
 			t.Fatalf("ports %v, want %v", seen, want)
 		}
 	}
-	if sessionID != sid || getServer() != "203.0.113.5:4001" {
-		t.Fatalf("session or server address: %v %s", sessionID == sid, getServer())
+	if sessionID != sid {
+		t.Fatal("the session changed")
 	}
 	// no ports given: never moves
 	SetPorts("")
@@ -67,18 +67,22 @@ func TestHopOnSilence(t *testing.T) {
 	if dc.dst().Port != 5000 {
 		t.Fatal("moved without a socket")
 	}
+	pathsMu.Lock()
+	socks = []*netSock{{paths: []*dgramConn{dc}}}
+	pathsMu.Unlock()
+	defer func() { pathsMu.Lock(); socks = nil; pathsMu.Unlock() }()
 	hopMu.Lock()
 	hopAt = time.Time{}
 	hopMu.Unlock()
-	silentHop(dc, now, time.Second)
+	silentHop(now, time.Second)
 	if dc.dst().Port != 5000 {
 		t.Fatal("moved while the server answers")
 	}
-	silentHop(dc, now, 3*time.Second)
+	silentHop(now, 3*time.Second)
 	if dc.dst().Port != 5001 {
 		t.Fatalf("did not move after silence: %d", dc.dst().Port)
 	}
-	silentHop(dc, now.Add(time.Second), 4*time.Second)
+	silentHop(now.Add(time.Second), 4*time.Second)
 	if dc.dst().Port != 5001 {
 		t.Fatal("moved again at once")
 	}

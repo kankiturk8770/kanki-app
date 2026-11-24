@@ -8,15 +8,18 @@
 // اپ یک سوکت یونیکس انتزاعی باز می‌کند و این برنامه به آن وصل می‌شود. پیام اول اپ یک خط JSON است که
 // fd کارت شبکه‌ی VPN با SCM_RIGHTS همراهش می‌آید:
 //
-//	{"server":"1.2.3.4:4000","key":"<hex 64>","fec_data":10,"fec_parity":3,"gaming":true,"ports":"4001-4010"}
+//	{"server":"1.2.3.4:4000","key":"<hex 64>","fec_data":10,"fec_parity":3,"gaming":true,"ports":"4001-4010","alt":"5.6.7.8:4000"}
 //
 // ports (اختیاری): پورت‌های اضافه‌ی سرور؛ اگر پورت فعلی کند یا بسته شد، هسته بی قطع شدن به پورت دیگری می‌رود.
+// alt (اختیاری): نشانی‌های دیگر همین سرور (ورودی تانل ایران)؛ هر کدام یک مسیر دیگر (mobile/paths.go).
 //
 // جواب: "ok" یا "err <پیام>". بعد فرمان‌ها، هر کدام یک خط:
 //
-//	stats        → "stats <rx> <tx> <ping> <افت بالا ‰> <افت پایین ‰> <نجات‌یافته‌های پایین>"
+//	stats        → "stats <rx> <tx> <ping> <افت بالا ‰> <افت پایین ‰> <نجات‌یافته‌های پایین> <مسیر اصلی> <مسیرهای زنده>"
 //	gaming 0|1   → "ok"
 //	reconnect    → "ok"   (شبکه‌ی گوشی عوض شد)
+//	path <اسم>   → "ok"   با یک fd (SCM_RIGHTS): سوکت UDP اپ روی یک شبکه‌ی گوشی (wifi، cell)، بیرون از VPN
+//	drop <اسم>   → "ok"   آن شبکه رفت
 //	stop         → "ok" و خروج
 //
 // اگر سوکت بسته شود (اپ بسته شد یا مرد)، تونل بسته می‌شود و برنامه خارج می‌شود.
@@ -43,6 +46,7 @@ type startMsg struct {
 	FecParity int    `json:"fec_parity"`
 	Gaming    bool   `json:"gaming"`
 	Ports     string `json:"ports"`
+	Alt       string `json:"alt"`
 }
 
 func main() {
@@ -92,6 +96,7 @@ func run(uc *net.UnixConn) int {
 		return 1
 	}
 	mobile.SetPorts(m.Ports)
+	mobile.SetAlt(m.Alt)
 	if err := mobile.Start(fd, m.Server, m.Key, m.FecData, m.FecParity, m.Gaming); err != nil {
 		reply("err " + err.Error())
 		return 1
@@ -99,24 +104,65 @@ func run(uc *net.UnixConn) int {
 	reply("ok")
 	defer mobile.Stop()
 
-	r := bufio.NewReader(&prefixReader{rest: []byte(rest), c: uc})
-	for {
-		cmd, err := r.ReadString('\n')
-		if err != nil {
-			return 0 // اپ رفت: تونل بسته می‌شود
+	// commands, one a line; a «path» line comes with the fd of its socket in the same message
+	pending := []byte(rest)
+	var fds []int
+	defer func() {
+		for _, x := range fds {
+			syscall.Close(x)
 		}
+	}()
+	rb := make([]byte, 4096)
+	ob := make([]byte, syscall.CmsgSpace(4*4))
+	for {
+		i := strings.IndexByte(string(pending), '\n')
+		if i < 0 {
+			n, oobn, _, _, err := uc.ReadMsgUnix(rb, ob)
+			if err != nil || (n == 0 && oobn == 0) {
+				return 0 // اپ رفت: تونل بسته می‌شود
+			}
+			fds = append(fds, rights(ob[:oobn])...)
+			pending = append(pending, rb[:n]...)
+			if len(pending) > 1<<16 {
+				return 1
+			}
+			continue
+		}
+		cmd := string(pending[:i])
+		pending = pending[i+1:]
 		f := strings.Fields(cmd)
 		if len(f) == 0 {
 			continue
 		}
 		switch f[0] {
 		case "stats":
-			reply(fmt.Sprintf("stats %d %d %d %d %d %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing(), mobile.LossUp(), mobile.LossDown(), mobile.FixedDown()))
+			name, live := mobile.PathInfo()
+			if name == "" {
+				name = "-"
+			}
+			reply(fmt.Sprintf("stats %d %d %d %d %d %d %s %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing(), mobile.LossUp(), mobile.LossDown(), mobile.FixedDown(), name, live))
 		case "gaming":
 			mobile.SetGaming(len(f) > 1 && f[1] == "1")
 			reply("ok")
 		case "reconnect":
 			mobile.Reconnect()
+			reply("ok")
+		case "path":
+			if len(f) < 2 || len(fds) == 0 || !okName(f[1]) {
+				reply("err path needs a name and a socket")
+				continue
+			}
+			fd := fds[0]
+			fds = fds[1:]
+			if err := mobile.AddSocket(f[1], fd); err != nil {
+				reply("err " + err.Error())
+				continue
+			}
+			reply("ok")
+		case "drop":
+			if len(f) > 1 && okName(f[1]) {
+				mobile.DropSocket(f[1])
+			}
 			reply("ok")
 		case "stop":
 			reply("ok")
@@ -125,6 +171,34 @@ func run(uc *net.UnixConn) int {
 			reply("err unknown command")
 		}
 	}
+}
+
+// okName: the name of a phone network (wifi, cell)
+func okName(s string) bool {
+	if s == "" || len(s) > 16 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z') {
+			return false
+		}
+	}
+	return true
+}
+
+// rights: every fd of a SCM_RIGHTS message
+func rights(oob []byte) []int {
+	msgs, err := syscall.ParseSocketControlMessage(oob)
+	if err != nil {
+		return nil
+	}
+	var l []int
+	for i := range msgs {
+		if fds, err := syscall.ParseUnixRights(&msgs[i]); err == nil {
+			l = append(l, fds...)
+		}
+	}
+	return l
 }
 
 // tunFd fd کارت شبکه را از پیام SCM_RIGHTS بیرون می‌آورد.
@@ -141,19 +215,4 @@ func tunFd(oob []byte) (int, error) {
 		syscall.Close(x)
 	}
 	return fds[0], nil
-}
-
-// prefixReader هر چیزی را که بعد از خط اول در همان پیام آمده، قبل از بقیه‌ی سوکت می‌دهد.
-type prefixReader struct {
-	rest []byte
-	c    *net.UnixConn
-}
-
-func (p *prefixReader) Read(b []byte) (int, error) {
-	if len(p.rest) > 0 {
-		n := copy(b, p.rest)
-		p.rest = p.rest[n:]
-		return n, nil
-	}
-	return p.c.Read(b)
 }

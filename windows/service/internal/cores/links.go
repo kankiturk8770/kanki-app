@@ -1,5 +1,5 @@
 // Package cores reads the links of the non-WireGuard protocols (KANKI MIX,
-// microtun, VLESS, Hysteria2) the way the Android app does (Kmix.kt, Mtun.kt,
+// VLESS, Hysteria2) the way the Android app does (Kmix.kt,
 // Xray.kt, Hysteria.kt), builds the configs of the Xray and Hysteria programs,
 // and measures each protocol's real ping (WgHello.kt, KmixHello.kt, Probe.kt).
 package cores
@@ -22,7 +22,6 @@ const (
 	WireGuard = "wireguard"
 	AmneziaWG = "amneziawg"
 	KankiMix  = "kankimix"
-	Microtun  = "microtun"
 	VLESS     = "vless"
 	Hysteria2 = "hysteria2"
 )

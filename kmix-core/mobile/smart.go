@@ -119,7 +119,8 @@ func FixedDown() uint64 { return fixedDown.Load() }
 // smartOn: سرور تازه است و حالت بازی روشن
 func smartOn() bool { return srvKnown.Load() && gaming.Load() }
 
-// sendUp یک بسته‌ی بالارو (out = بسته‌ی آماده با سرآیند) با محافظت هوشمند
+// sendUp یک بسته‌ی بالارو (out = بسته‌ی آماده با سرآیند) با محافظت هوشمند. بسته‌ی اصلی فقط روی مسیر اصلی dc؛ نسخه‌ی
+// دوم و ترمیم، وقتی خط لازمشان دارد، روی مسیر دیگر گوشی (paths.go) و بی صبر، وگرنه روی همان مسیر کمی بعد.
 func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind int, now time.Time) {
 	dst := dc.dst()
 	isGame := kind == game.KindGame && len(payload) <= game.MaxProtect
@@ -136,14 +137,42 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 		later.Push(game.CopyDelay, out, func(b []byte) { dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst()) })
 		return
 	}
+	alt := altPath(dc)
+	// همان بایت پرچم با FlagCopy (و FlagMirror) روی مسیر دیگر؛ بعد به حال اول برمی‌گردد
+	onAlt := func(extra byte) {
+		f0 := out[16]
+		out[16] |= proto.FlagCopy | extra
+		alt.pc.WritePacket(proto.KindUDPUp, out, alt.dst())
+		out[16] = f0
+	}
+	copied := false
+	if alt != nil && mirroring(dc, now.UnixNano()) {
+		// مسیر اصلی همین الان جواب نمی‌دهد: تا روشن شدن، روی مسیر دیگر هم (و سرور جواب‌ها را همان‌جا هم بفرستد)
+		onAlt(proto.FlagMirror)
+		copied = true
+	}
 	upPol.Start(now)
 	pl := upPol.Plan(now)
-	if pl.Copy {
-		out[16] |= proto.FlagCopy
-		later.Push(game.CopyDelay, out, func(b []byte) { dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst()) })
+	if pl.Copy && !copied {
+		if alt != nil {
+			onAlt(0)
+		} else {
+			out[16] |= proto.FlagCopy
+			later.Push(game.CopyDelay, out, func(b []byte) { dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst()) })
+		}
 	}
 	if srvCaps.Load()&uint32(proto.CapRepair) == 0 {
 		return
+	}
+	// ترمیم روی مسیر دیگر (افت مسیر اصلی به آن نمی‌رسد)، وگرنه روی همین مسیر
+	repPath := func() *dgramConn {
+		if a := altPath(dg.Load()); a != nil {
+			return a
+		}
+		if p := dg.Load(); p != nil {
+			return p
+		}
+		return dc
 	}
 	f.mu.Lock()
 	if f.s.upTx == nil {
@@ -160,7 +189,7 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 	}
 	f.mu.Unlock()
 	if rep != nil {
-		later.Push(game.RepairDelay, rep, func(b []byte) { dc.pc.WritePacket(proto.KindRepair, b, dc.dst()) })
+		later.Push(game.RepairDelay, rep, func(b []byte) { p := repPath(); p.pc.WritePacket(proto.KindRepair, b, p.dst()) })
 	}
 	if pl.Every > 0 {
 		// اگر بعد از این بسته‌ای نیامد، یک ترمیم هم برای آخرین‌های این لحظه
@@ -175,7 +204,8 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 			}
 			f.mu.Unlock()
 			if rep != nil {
-				dc.pc.WritePacket(proto.KindRepair, rep, dc.dst())
+				p := repPath()
+				p.pc.WritePacket(proto.KindRepair, rep, p.dst())
 			}
 		})
 	}
@@ -269,7 +299,7 @@ func statTick(dc *dgramConn, now time.Time, silent time.Duration) {
 		lossDown.Store(int32(pm))
 	}
 	if dc != nil {
-		st := proto.Stat{Session: sessionID, Version: proto.StatVersion, Caps: proto.CapRepair | proto.CapCopy,
+		st := proto.Stat{Session: sessionID, Version: proto.StatVersion, Caps: proto.CapRepair | proto.CapCopy | proto.CapMulti,
 			Loss: uint16(pm), Burst: byte(min(burst, 255)), Step: byte(upPol.Step()), Count: uint16(min(n, 65535))}
 		dc.pc.WritePacket(proto.KindStat, proto.AppendStat(nil, &st), dc.dst())
 	}
@@ -281,9 +311,7 @@ func statTick(dc *dgramConn, now time.Time, silent time.Duration) {
 		badLoss = 0
 	}
 	hopMu.Unlock()
-	if dc != nil {
-		silentHop(dc, now, silent)
-	}
+	silentHop(now, silent)
 }
 
 // setWin: for the tests (nil = the KCP session of the app)
@@ -307,7 +335,7 @@ func kcpTick(now time.Time) {
 
 // silentHop: the port gave no answer for a while, or the line on it is badly cut: the next port, with
 // the same session (much sooner than a reconnect)
-func silentHop(dc *dgramConn, now time.Time, silent time.Duration) {
+func silentHop(now time.Time, silent time.Duration) {
 	hopMu.Lock()
 	defer hopMu.Unlock()
 	if len(hopPorts) == 0 || now.Sub(hopAt) < hopEvery {
@@ -315,8 +343,40 @@ func silentHop(dc *dgramConn, now time.Time, silent time.Duration) {
 	}
 	if silent >= hopAfter || badLoss >= 3 {
 		hopAt, badLoss = now, 0
-		dc.hop(hopPorts)
+		// the port is the server's: every path to the server itself moves (the tunnel entries keep theirs)
+		var next int
+		for _, p := range allPaths() {
+			if p.ep == 0 {
+				p.hop(hopPorts)
+				next = p.dst().Port
+			}
+		}
+		if next > 0 {
+			setServerPort(next)
+		}
 	}
+}
+
+// homeSilent: how long no path to the server itself (not a tunnel entry) answered
+func homeSilent(now time.Time) time.Duration {
+	var last int64
+	for _, p := range allPaths() {
+		if p.ep != 0 {
+			continue
+		}
+		p.mu.Lock()
+		if p.lastPong > last {
+			last = p.lastPong
+		}
+		if last == 0 && p.born > last {
+			last = p.born
+		}
+		p.mu.Unlock()
+	}
+	if last == 0 {
+		return 0
+	}
+	return now.Sub(time.Unix(0, last))
 }
 
 // dst آدرس فعلی سرور مسیر بازی
@@ -344,5 +404,4 @@ func (dc *dgramConn) hop(ports []int) {
 	a := *cur
 	a.Port = next
 	dc.srv.Store(&a)
-	setServerPort(next)
 }

@@ -132,7 +132,7 @@ fun App() {
                 // «PINGALL|»: پینگ همه‌ی کانفیگ‌ها با همان «تست پینگ همه» و سنجش گیمینگ، نتیجه‌ی هر کدام در logcat
                 if (n == "PINGALL") {
                     state.pingAll()
-                    listOf("kankimix", "kping", "mtun", "amnezia", "wireguard").forEach { state.measureFamily(it) }
+                    listOf("kankimix", "amnezia", "wireguard").forEach { state.measureFamily(it) }
                     kotlinx.coroutines.delay(45_000)
                     a.configs.forEach { c ->
                         val k = "${c.node}/${c.protocol}"

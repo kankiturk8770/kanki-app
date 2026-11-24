@@ -239,15 +239,11 @@ abstract class ShotsBase {
             visible = true,
             families = listOf(
                 GameFamilyUi("kankimix", "KANKI MIX", "مخصوص بازی", servers),
-                GameFamilyUi("kping", "KPING", "", listOf(
-                    SheetServer("tr", "kping", "🇹🇷", "ترکیه · استانبول", "تانل", 74, "tunnel"),
-                    SheetServer("de", "kping", "🇩🇪", "آلمان · فرانکفورت", "تانل", 88, "tunnel"),
-                )),
                 GameFamilyUi("hysteria2", "Hysteria2", "روی UDP", servers.map { it.copy(proto = "hysteria2") }),
                 GameFamilyUi("amnezia", "Amnezia", "ضد فیلتر", servers.map { it.copy(proto = if (it.side == "tunnel") "amneziawg" else "amneziawg-direct") }),
                 GameFamilyUi("wireguard", "WireGuard", "ساده", servers.filter { it.side == "tunnel" }.map { it.copy(proto = "wireguard") }),
             ),
-            initFamily = init, current = "tr|" + (if (init == "kping") "kping" else "kankimix"), currentAuto = false, busy = false, kmixDup = true,
+            initFamily = init, current = "tr|kankimix", currentAuto = false, busy = false, kmixDup = true,
             onKmixDup = {}, gameCount = 2, onPickGames = {}, onFamilyShown = {},
             onConnect = { _, _ -> }, onFastest = {}, onClose = {}, startInSettings = settings,
         )
@@ -459,7 +455,6 @@ class Shots : ShotsBase() {
     @Test fun v01() = shot("vulcan-00-login", "vulcan") { KankiBackground(calm = true) { LoginScreen(AppState.from(ctx)) } }
     @Test fun v02() = shot("vulcan-09-intro", "vulcan", pgIntro())
     @Test fun v03() = shot("vulcan-08-gaming", "vulcan", pgGame())
-    @Test fun v04() = shot("vulcan-08b-gaming-kping", "vulcan", pgGame("kping"))
     @Test fun v05() = shot("vulcan-08c-gaming-settings", "vulcan", pgGame(settings = true))
     @Test fun v06() = shot("vulcan-10-filter", "vulcan", pgFilter())
     @Test fun v07() = shot("vulcan-10b-filter-settings", "vulcan", pgFilter(settings = true))
@@ -487,7 +482,6 @@ class Shots : ShotsBase() {
     @Test fun m07() = shot("kanki-07-account", "kanki", pgAccount())
     @Test fun m08() = shot("kanki-08-gaming", "kanki", pgGame())
     @Test fun m08f() = shot("kanki-08-filter", "kanki", pgFilter())
-    @Test fun m08k() = shot("kanki-08-gaming-kping", "kanki", pgGame("kping"))
     @Test fun m09() = shot("kanki-09-intro", "kanki", pgIntro())
 
     // ------------------------------------------------------------------ تم زرد کانکی

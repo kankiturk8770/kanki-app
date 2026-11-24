@@ -33,14 +33,11 @@ enum class KMode(val key: String, val title: String, val sub: String) {
 
 object Modes {
     /**
-     * گیمینگ: چهار خانواده‌ی پروتکل UDP، به ترتیب نمایش (KANKI MIX، پروتکل خود کانکی، اول).
+     * گیمینگ: سه خانواده‌ی پروتکل UDP، به ترتیب نمایش (KANKI MIX، پروتکل خود کانکی، اول).
      * Amnezia هر دو راه را دارد: مستقیم و تانل.
      */
     val GAME_FAMILIES = listOf(
         "kankimix" to listOf("kankimix"),
-        // KPING فقط برای تسترهایی که پنل به آن‌ها داده (بقیه این ردیف را نمی‌بینند)
-        "kping" to listOf("kping"),
-        "mtun" to listOf("mtun"),
         "amnezia" to listOf("amneziawg-direct", "amneziawg"),
         "wireguard" to listOf("wireguard"),
     )
@@ -78,7 +75,7 @@ object Modes {
 
     /**
      * برچسب پایداری برای بازی: ۰ پایدار، ۱ متوسط، ۲ ضعیف (لرزش ۳۰ms مثل هشدار مسیر پنل).
-     * سنجش کوتاه (Hysteria2 و microtun، هر بار یک دست‌دادن کامل): یک بی‌جواب «متوسط»، نصف یا بیشتر «ضعیف».
+     * سنجش کوتاه (Hysteria2، هر بار یک دست‌دادن کامل): یک بی‌جواب «متوسط»، نصف یا بیشتر «ضعیف».
      */
     fun stability(q: GameQ): Int = when {
         q.n < LOSS_MIN_SAMPLES -> when {

@@ -41,7 +41,7 @@ type Server struct {
 	Tunnel  bool    `json:"tunnel"` // goes through a server inside Iran
 	Lat     float64 `json:"lat,omitempty"`
 	Lon     float64 `json:"lon,omitempty"`
-	// URL (config download) or Link (mtun:// and vless:// come inside the page):
+	// URL (config download) or Link (vless:// comes inside the page):
 	// both carry the user's key and are cleared before they go to the UI
 	URL  string `json:"url,omitempty"`
 	Link string `json:"link,omitempty"`
@@ -424,7 +424,6 @@ type pageData struct {
 		ExitCty string   `json:"exit_city"`
 		Lat     *float64 `json:"exit_lat"`
 		Lon     *float64 `json:"exit_lon"`
-		Mtun    *string  `json:"mtun"`
 		// where each main config goes: "tunnel" (an Iran address) or "direct" (panel 3.9.5+)
 		Via    map[string]string `json:"via_proto"`
 		AwgVia string            `json:"awg_via"`
@@ -562,19 +561,6 @@ func Parse(page, base string) (*Account, error) {
 			Tunnel: strings.HasSuffix(node, tunnelSuffix) || via[node][proto] == "tunnel",
 		}
 		s.setExit(exits[strings.TrimSuffix(node, tunnelSuffix)])
-		a.Servers = append(a.Servers, s)
-	}
-	// microtun: its link is inside the page data, one per server (null = not for this user)
-	for _, n := range data.Nodes {
-		if n.Mtun == nil || !strings.HasPrefix(strings.TrimSpace(*n.Mtun), "mtun://") {
-			continue
-		}
-		s := Server{ID: n.ID + "/microtun", Node: n.ID, Name: n.Name, Proto: "microtun", Link: strings.TrimSpace(*n.Mtun),
-			Tunnel: strings.HasSuffix(n.ID, tunnelSuffix)}
-		if s.Name == "" {
-			s.Name = n.ID
-		}
-		s.setExit(exits[strings.TrimSuffix(n.ID, tunnelSuffix)])
 		a.Servers = append(a.Servers, s)
 	}
 	// Xray: only VLESS runs on Windows

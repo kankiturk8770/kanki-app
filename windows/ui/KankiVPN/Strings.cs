@@ -33,7 +33,7 @@ namespace KankiVPN
             ["Anti-filter"] = "ضد فیلتر",
             ["Manual"] = "دستی",
             ["Smart: pings every server and connects to the best"] = "هوشمند : پینگ همه را می‌گیرد و به بهترین وصل می‌شود",
-            ["Gaming: the lowest ping with KANKI MIX and microtun"] = "گیمینگ : کمترین پینگ با KANKI MIX و microtun",
+            ["Gaming: the lowest ping with KANKI MIX"] = "گیمینگ : کمترین پینگ با KANKI MIX",
             ["Gaming: ping, jitter and loss decide the server"] = "گیمینگ : پینگ، لرزش و افت سرور را انتخاب می‌کند",
             ["Anti-filter: the hidden protocols for hard networks"] = "ضد فیلتر : پروتکل‌های مخفی برای شبکه‌های سخت",
             ["Stable connection"] = "اتصال پایدار",

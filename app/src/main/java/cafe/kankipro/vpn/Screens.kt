@@ -482,16 +482,14 @@ private fun ModeSheets(state: AppState) {
     // پینگ همه‌ی کانفیگ‌ها با باز شدن پنل
     LaunchedEffect(state.gameSheet) { if (state.gameSheet) state.pingAll() }
 
-    // only the protocols this subscription really has (microtun and the rest show up when they are in it)
+    // only the protocols this subscription really has
     val families = Modes.GAME_FAMILIES.filter { (key, _) -> state.gameConfigs(key).isNotEmpty() }.map { (key, _) ->
         val list = state.gameConfigs(key).map { (id, p) -> server(id, p, state.cfgTag(id, p)) }
             .sortedBy { it.ping?.takeIf { v -> v > 0 } ?: 99_999L }
         GameFamilyUi(
             key, state.familyTitle(key),
             when (key) {
-                "kankimix" -> tr("پروتکل خود کانکی: بسته‌های بازی بدون صف و دوتایی، کمترین لگ و پکت‌لاس")
-                "mtun" -> tr("microtun: VPN سبک بازی؛ بسته‌های کوچک بازی دو بار می‌روند تا یک بسته‌ی گم‌شده لگ نیاورد، دانلود یک بار")
-                "kping" -> tr("KPING: فقط بازی‌های انتخابی؛ هر بسته از وای‌فای و دیتا با هم، اولی که رسید برنده؛ بقیه‌ی برنامه‌ها تا قطع بی‌اینترنت")
+                "kankimix" -> tr("پروتکل خود کانکی: وای‌فای و دیتا با هم، کمترین لگ و پکت‌لاس")
                 "hysteria2" -> tr("روی UDP (QUIC): پرسرعت و پایدار، حتی روی اینترنت ضعیف و پرپکت‌لاس")
                 "amnezia" -> tr("پایدار روی شبکه‌ی محدود؛ مستقیم یا از تانل ایران")
                 else -> tr("سبک و سریع، روی اینترنت پایدار")
@@ -596,7 +594,7 @@ private fun cellTitle(l: ConfigLink): String = when (l.protocol) {
 @Composable
 private fun ServersTab(state: AppState) {
     val a = state.account
-    // ترتیب ثابت داخل هر کشور (۱.۲۹، خواسته‌ی صاحب اپ): KANKI MIX و microtun اول، بعد Hysteria2، Amnezia، Xray و WireGuard آخر
+    // ترتیب ثابت داخل هر کشور (۱.۲۹، خواسته‌ی صاحب اپ): KANKI MIX اول، بعد Hysteria2، Amnezia، Xray و WireGuard آخر
     val order = PROTO_ORDER
     val usable = a?.configs?.filter { it.protocol in order && state.hasCfg(it.node, it.protocol) } ?: emptyList()
     // کارت‌ها بر اساس کشور (Xray هم زیر کشور خودش می‌رود اگر اسمش کشور را بگوید)
