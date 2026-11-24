@@ -29,6 +29,9 @@ data class KmixUri(
     /** پورت این اتصال: پورت اصلی یا یکی از پورت‌های اضافه */
     fun pickPort(): Int = ports?.let { r -> (r.toList() + port).random() } ?: port
 
+    /** همه‌ی پورت‌های این سرور برای هسته («4000,4001-4010»): اگر پورتی کند یا بسته شد، به بعدی می‌رود */
+    fun portSpec(): String = ports?.let { "$port,${it.first}-${it.last}" } ?: ""
+
     companion object {
         private val HEX64 = Regex("^[0-9a-fA-F]{64}$")
 
@@ -110,7 +113,7 @@ object KmixCore {
      */
     fun start(
         bin: java.io.File, tun: android.os.ParcelFileDescriptor, server: String, key: String,
-        fecData: Int, fecParity: Int, gaming: Boolean, onDied: (String) -> Unit,
+        fecData: Int, fecParity: Int, gaming: Boolean, ports: String = "", onDied: (String) -> Unit,
     ) {
         stop()
         stopping = false
@@ -136,6 +139,7 @@ object KmixCore {
             val msg = org.json.JSONObject()
                 .put("server", server).put("key", key)
                 .put("fec_data", fecData).put("fec_parity", fecParity).put("gaming", gaming)
+                .put("ports", ports)
                 .toString() + "\n"
             s.setFileDescriptorsForSend(arrayOf(tun.fileDescriptor))
             s.outputStream.write(msg.toByteArray())
@@ -206,7 +210,7 @@ object KmixCore {
     @Volatile private var lastStats: Triple<Long, Long, Long>? = null
 
     private fun poll() {
-        val f = cmd("stats")?.split(" ")?.takeIf { it.size == 4 && it[0] == "stats" } ?: return
+        val f = cmd("stats")?.split(" ")?.takeIf { it.size >= 4 && it[0] == "stats" } ?: return
         lastStats = Triple(f[1].toLongOrNull() ?: 0L, f[2].toLongOrNull() ?: 0L, f[3].toLongOrNull() ?: -1L)
     }
 

@@ -1045,7 +1045,7 @@ class KankiHyService : VpnService() {
             gameGate(fd, games).also { gate = it; it.start() }.inner
         } else fd
         // تا ~۲۲ ثانیه: هسته بالا می‌آید و سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
-        KmixCore.start(bin, coreFd, server, u.key, u.fecData, u.fecParity, gaming) { why ->
+        KmixCore.start(bin, coreFd, server, u.key, u.fecData, u.fecParity, gaming, u.portSpec()) { why ->
             // هسته بعد از اتصال خودش از بین رفت (مثلاً اندروید پروسه‌اش را کشت): تونل بسته و وضعیت گزارش می‌شود
             if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
                 HyEngine.crashed = true

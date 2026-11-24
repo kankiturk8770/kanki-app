@@ -96,6 +96,12 @@ func upKmix(t core.Tunnel) (running, winipcfg.LUID, error) {
 		return nil, 0, err
 	}
 	// t.Endpoint is the resolved address (with the chosen port): the core never asks DNS
+	// the other ports of the server: the core moves to the next one when its port is cut or slowed
+	ports := ""
+	if k.PortLo > 0 {
+		ports = fmt.Sprintf("%d,%d-%d", k.Port, k.PortLo, k.PortHi)
+	}
+	mobile.SetPorts(ports)
 	if err := mobile.StartDevice(dev, t.Endpoint.String(), k.Key, k.FecData, k.FecPrty, k.Gaming); err != nil {
 		dev.Close()
 		return nil, 0, fmt.Errorf("KANKI MIX: %w", err)
