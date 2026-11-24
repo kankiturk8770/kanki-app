@@ -30,7 +30,14 @@ const (
 	pingIdle   = time.Second            // پینگ هر مسیر وقتی بازی نیست
 	pingPlay   = 250 * time.Millisecond // وقت بازی (۱۶ بایت؛ چند بایت در ثانیه)
 	pathDead   = 2500 * time.Millisecond
-	switchHold = 3 * time.Second
+	switchHold = 5 * time.Second
+	// stayFor: after a change of the main path, no change for a better score this long (only a path that stops
+	// answering is left at once): a path that is a little better one second and a little worse the next is not
+	// a reason to move the game back and forth
+	stayFor = 15 * time.Second
+	// suspectMin: a path is taken as not answering only after this long without any answer (more than two pings
+	// while playing); one lost ping on a line that loses a few per cent is not a dead path
+	suspectMin = 450 * time.Millisecond
 	mirrorHold = time.Second
 	pingRing   = 16
 	maxSocks   = 3
@@ -71,6 +78,7 @@ var (
 	socks    []*netSock
 	ends     []string // نشانی‌های دیگر سرور («میزبان:پورت»)؛ نشانی اصلی getServer است
 	switchAt atomic.Int64
+	forcedAt atomic.Int64 // the last change of the main path because it stopped answering
 	better   time.Time
 )
 
@@ -361,7 +369,11 @@ func (p *dgramConn) quality(now int64) (score float64, suspect, dead bool) {
 	if wait < 250 {
 		wait = 250
 	}
-	suspect = p.waitFrom != 0 && float64(now-p.waitFrom)/1e6 > wait
+	silence := wait + float64(pingPlay/time.Millisecond)
+	if silence < float64(suspectMin/time.Millisecond) {
+		silence = float64(suspectMin / time.Millisecond)
+	}
+	suspect = p.waitFrom != 0 && float64(now-p.waitFrom)/1e6 > silence
 	dead = now-p.lastPong > int64(pathDead)
 	// افت پینگ‌هایی که دیگر باید جوابشان آمده باشد
 	var n, lost int
@@ -425,17 +437,17 @@ func pickPrimary(t time.Time, force bool) {
 	switch {
 	case cur == nil || curDead || curSus:
 		if best != cur {
-			setPrimary(best, now)
+			setPrimary(best, now, cur != nil)
 		}
 		better = time.Time{}
-	case best != cur && bestS < curS*0.85-3:
+	case best != cur && bestS < curS*0.7-5 && now-switchAt.Load() >= int64(stayFor):
 		if force {
-			setPrimary(best, now)
+			setPrimary(best, now, false)
 			better = time.Time{}
 		} else if better.IsZero() {
 			better = t
 		} else if t.Sub(better) >= switchHold {
-			setPrimary(best, now)
+			setPrimary(best, now, false)
 			better = time.Time{}
 		}
 	default:
@@ -443,9 +455,13 @@ func pickPrimary(t time.Time, force bool) {
 	}
 }
 
-func setPrimary(p *dgramConn, now int64) {
+// setPrimary: forced = the old main path stopped answering (then the game goes on both paths for a moment)
+func setPrimary(p *dgramConn, now int64, forced bool) {
 	dg.Store(p)
 	switchAt.Store(now)
+	if forced {
+		forcedAt.Store(now)
+	}
 	if p.ep == 0 {
 		if a := p.dst(); a != nil {
 			setServerPort(a.Port)
@@ -485,7 +501,7 @@ func mirroring(cur *dgramConn, now int64) bool {
 	if cur == nil {
 		return false
 	}
-	if now-switchAt.Load() < int64(mirrorHold) {
+	if now-forcedAt.Load() < int64(mirrorHold) {
 		return true
 	}
 	_, sus, _ := cur.quality(now)

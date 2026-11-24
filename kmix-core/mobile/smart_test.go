@@ -253,6 +253,7 @@ func TestMultiLab(t *testing.T) {
 		{"دو مسیر، تمیز", clean, clean, true},
 		{"یک مسیر، قطعی", cuts, other, false},
 		{"دو مسیر، قطعی", cuts, other, true},
+		{"دو مسیر، هر دو ۲٪", other, other, true},
 	} {
 		port += 4
 		h := labHarness(t, bin, port, host)
