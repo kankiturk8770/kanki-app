@@ -8,11 +8,13 @@
 // اپ یک سوکت یونیکس انتزاعی باز می‌کند و این برنامه به آن وصل می‌شود. پیام اول اپ یک خط JSON است که
 // fd کارت شبکه‌ی VPN با SCM_RIGHTS همراهش می‌آید:
 //
-//	{"server":"1.2.3.4:4000","key":"<hex 64>","fec_data":10,"fec_parity":3,"gaming":true}
+//	{"server":"1.2.3.4:4000","key":"<hex 64>","fec_data":10,"fec_parity":3,"gaming":true,"ports":"4001-4010"}
+//
+// ports (اختیاری): پورت‌های اضافه‌ی سرور؛ اگر پورت فعلی کند یا بسته شد، هسته بی قطع شدن به پورت دیگری می‌رود.
 //
 // جواب: "ok" یا "err <پیام>". بعد فرمان‌ها، هر کدام یک خط:
 //
-//	stats        → "stats <rx> <tx> <ping>"
+//	stats        → "stats <rx> <tx> <ping> <افت بالا ‰> <افت پایین ‰> <نجات‌یافته‌های پایین>"
 //	gaming 0|1   → "ok"
 //	reconnect    → "ok"   (شبکه‌ی گوشی عوض شد)
 //	stop         → "ok" و خروج
@@ -40,6 +42,7 @@ type startMsg struct {
 	FecData   int    `json:"fec_data"`
 	FecParity int    `json:"fec_parity"`
 	Gaming    bool   `json:"gaming"`
+	Ports     string `json:"ports"`
 }
 
 func main() {
@@ -88,6 +91,7 @@ func run(uc *net.UnixConn) int {
 		reply("err bad start message")
 		return 1
 	}
+	mobile.SetPorts(m.Ports)
 	if err := mobile.Start(fd, m.Server, m.Key, m.FecData, m.FecParity, m.Gaming); err != nil {
 		reply("err " + err.Error())
 		return 1
@@ -107,7 +111,7 @@ func run(uc *net.UnixConn) int {
 		}
 		switch f[0] {
 		case "stats":
-			reply(fmt.Sprintf("stats %d %d %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing()))
+			reply(fmt.Sprintf("stats %d %d %d %d %d %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing(), mobile.LossUp(), mobile.LossDown(), mobile.FixedDown()))
 		case "gaming":
 			mobile.SetGaming(len(f) > 1 && f[1] == "1")
 			reply("ok")

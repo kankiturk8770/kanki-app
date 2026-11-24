@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/xtaci/kcp-go/v5"
 	"github.com/xtaci/smux"
 
+	"kanki-tunnel/internal/game"
 	"kanki-tunnel/internal/obfs"
 	"kanki-tunnel/internal/proto"
 )
@@ -55,10 +57,13 @@ var (
 
 	dg atomic.Pointer[dgramConn] // مسیر سریع UDP
 
-	psk     []byte
-	server  string
-	fecData int
-	fecPty  int
+	psk []byte
+	// server آدرس سرور («میزبان:پورت»)؛ با عوض شدن پورت (smart.go) پورتش عوض می‌شود
+	serverMu sync.Mutex
+	server   string
+	homePort int
+	fecData  int
+	fecPty   int
 	// kcpMode نوع KCP مسیر TCP: ۰ هنوز معلوم نیست، ۱ بی FEC (سرور تازه)، ۲ با FEC (سرور قدیمی)
 	kcpMode   atomic.Int32
 	sessionID uint64
@@ -95,12 +100,29 @@ type udpFlow struct {
 	lastSeen atomic.Int64
 	mu       sync.Mutex
 	win      proto.Window
+	s        smartState
 }
 
 type dgramConn struct {
-	raw net.PacketConn
-	pc  *obfs.PacketConn
-	srv *net.UDPAddr
+	raw  net.PacketConn
+	pc   *obfs.PacketConn
+	srv  atomic.Pointer[net.UDPAddr]
+	home int // پورت اصلی سرور (دور عوض کردن پورت از آن شروع می‌شود)
+}
+
+func getServer() string {
+	serverMu.Lock()
+	defer serverMu.Unlock()
+	return server
+}
+
+// setServerPort پورت تازه برای اتصال‌های بعدی (KCP و اتصال دوباره)
+func setServerPort(p int) {
+	serverMu.Lock()
+	defer serverMu.Unlock()
+	if h, _, err := net.SplitHostPort(server); err == nil {
+		server = net.JoinHostPort(h, strconv.Itoa(p))
+	}
 }
 
 // Start تونل را راه‌اندازی می‌کند. tunFd فایل‌دیسکریپتور TUN ساخته‌شده توسط VpnService است.
@@ -150,6 +172,7 @@ func start(tf io.ReadWriteCloser) error {
 	}
 
 	tunFile = tf
+	later = game.NewLater(4096)
 	stop := make(chan struct{})
 	stopCh = stop
 	lastPong.Store(time.Now().UnixNano())
@@ -172,7 +195,14 @@ func setup(serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool)
 	if fecShards <= 0 || fecParity < 0 {
 		return errors.New("تنظیمات FEC نامعتبر")
 	}
+	serverMu.Lock()
 	psk, server, fecData, fecPty = k, serverAddr, fecShards, fecParity
+	serverMu.Unlock()
+	homePort = 0
+	if _, ps, err := net.SplitHostPort(serverAddr); err == nil {
+		homePort, _ = strconv.Atoi(ps)
+	}
+	smartReset()
 	kcpMode.Store(0)
 	gaming.Store(gamingMode)
 	var sid [8]byte
@@ -193,6 +223,9 @@ func Stop() {
 		closeConn()
 		closeDgram()
 		closeAllFlows()
+		if later != nil {
+			later.Stop()
+		}
 		if tunFile != nil {
 			tunFile.Close()
 		}
@@ -234,7 +267,7 @@ func Reconnect() {
 // ---- مسیر سریع UDP ----
 
 func openDgram(tf io.ReadWriteCloser) error {
-	srv, err := net.ResolveUDPAddr("udp", server)
+	srv, err := net.ResolveUDPAddr("udp", getServer())
 	if err != nil {
 		return fmt.Errorf("آدرس سرور نامعتبر: %w", err)
 	}
@@ -247,7 +280,11 @@ func openDgram(tf io.ReadWriteCloser) error {
 		raw.Close()
 		return err
 	}
-	dc := &dgramConn{raw: raw, pc: pc, srv: srv}
+	dc := &dgramConn{raw: raw, pc: pc, home: homePort}
+	if dc.home == 0 {
+		dc.home = srv.Port
+	}
+	dc.srv.Store(srv)
 	if old := dg.Swap(dc); old != nil {
 		old.raw.Close()
 	}
@@ -263,6 +300,12 @@ func closeDgram() {
 
 func dgramReadLoop(dc *dgramConn, tf io.ReadWriteCloser) {
 	buf := make([]byte, 65535)
+	// خطای نوشتن (مثلاً بسته‌ی بزرگ‌تر از MTU) فقط همین بسته را از دست می‌دهد
+	write := func(f *udpFlow, payload []byte) {
+		if n, err := tf.Write(BuildUDPPacket(f.dstIP, f.srcIP, f.key.dstPort, f.key.srcPort, payload)); err == nil {
+			rxBytes.Add(int64(n))
+		}
+	}
 	for {
 		kind, n, _, err := dc.pc.ReadPacket(buf)
 		if err != nil {
@@ -278,28 +321,26 @@ func dgramReadLoop(dc *dgramConn, tf io.ReadWriteCloser) {
 					lastPong.Store(now)
 				}
 			}
-		case proto.KindUDPDown:
+		case proto.KindUDPDown, proto.KindUDPDownCopy:
 			id, seq, payload, err := proto.ParseUDPDown(buf[:n])
 			if err != nil {
 				continue
 			}
-			flowsMu.Lock()
-			f := flowsByID[id]
-			flowsMu.Unlock()
-			if f == nil {
+			if f := flowByID(id); f != nil {
+				f.lastSeen.Store(time.Now().Unix())
+				// نسخه‌ی دوم یک بسته‌ی تکراری یا بسته‌ی دوباره‌ساخته‌شده‌ای که خودش هم رسید: Window ردش می‌کند
+				gotDown(f, write, kind, seq, payload, time.Now())
+			}
+		case proto.KindRepair:
+			id, rep, err := proto.ParseRepairDown(buf[:n])
+			if err != nil {
 				continue
 			}
-			f.mu.Lock()
-			fresh := f.win.Accept(seq)
-			f.mu.Unlock()
-			if !fresh {
-				continue // نسخه‌ی دوم یک بسته‌ی تکراری (حالت گیمینگ)
+			if f := flowByID(id); f != nil {
+				gotRepair(f, write, rep, time.Now())
 			}
-			f.lastSeen.Store(time.Now().Unix())
-			// خطای نوشتن (مثلاً بسته‌ی بزرگ‌تر از MTU) فقط همین بسته را از دست می‌دهد
-			if n, err := tf.Write(BuildUDPPacket(f.dstIP, f.srcIP, f.key.dstPort, f.key.srcPort, payload)); err == nil {
-				rxBytes.Add(int64(n))
-			}
+		case proto.KindStat:
+			gotStat(buf[:n])
 		}
 	}
 }
@@ -313,25 +354,27 @@ func handleUDPPacket(raw []byte, out []byte) []byte {
 	if f == nil {
 		return out
 	}
-	f.lastSeen.Store(time.Now().Unix())
+	now := time.Now()
+	f.lastSeen.Store(now.Unix())
 	dc := dg.Load()
 	if dc == nil {
 		return out
 	}
+	kind := f.s.cls.Note(len(pkt.Payload), pkt.DstPort, now)
 	h := proto.UDPUp{Session: sessionID, Flow: f.id, Seq: f.upSeq.Add(1), DstPort: pkt.DstPort}
 	copy(h.DstIP[:], pkt.DstIP.To4())
-	dup := gaming.Load()
-	if dup {
-		h.Flags |= proto.FlagDup
+	if kind == game.KindGame {
+		h.Flags |= proto.FlagGame
+		// سرور قدیمی (یا تا جواب اولین گزارش): پایین‌رو را خودش دوتایی می‌فرستد، مثل قبل
+		if gaming.Load() && !smartOn() {
+			h.Flags |= proto.FlagDup
+		}
 	}
 	out = proto.AppendUDPUp(out[:0], &h, pkt.Payload)
 	if len(out) > obfs.MaxPayload {
 		return out
 	}
-	dc.pc.WritePacket(proto.KindUDPUp, out, dc.srv)
-	if dup {
-		dc.pc.WritePacket(proto.KindUDPUp, out, dc.srv)
-	}
+	sendUp(dc, f, &h, pkt.Payload, out, kind, now)
 	return out
 }
 
@@ -356,6 +399,12 @@ func getOrCreateFlow(pkt *UDPPacket) *udpFlow {
 	flows[k] = f
 	flowsByID[f.id] = f
 	return f
+}
+
+func flowByID(id uint32) *udpFlow {
+	flowsMu.Lock()
+	defer flowsMu.Unlock()
+	return flowsByID[id]
 }
 
 func closeAllFlows() {
@@ -398,12 +447,14 @@ func pingLoop(stop chan struct{}) {
 		case <-t.C:
 		}
 		now := time.Now()
-		if dc := dg.Load(); dc != nil {
+		dc := dg.Load()
+		if dc != nil {
 			binary.BigEndian.PutUint64(b[0:8], sessionID)
 			binary.BigEndian.PutUint64(b[8:16], uint64(now.UnixNano()))
-			dc.pc.WritePacket(proto.KindPing, b[:], dc.srv)
+			dc.pc.WritePacket(proto.KindPing, b[:], dc.dst())
 		}
 		silent := now.Sub(time.Unix(0, lastPong.Load()))
+		statTick(dc, now, silent)
 		if silent > deadAfter {
 			lastPing.Store(-1)
 			if now.Sub(time.Unix(0, lastReconnect.Load())) > deadAfter {
@@ -506,7 +557,7 @@ func connectLocked() error {
 
 // dialKCP یک اتصال KCP + smux می‌سازد و احراز هویت می‌کند؛ plain = بی FEC (نوع KindKCPPlain)
 func dialKCP(plain bool, wait time.Duration) error {
-	srv, err := net.ResolveUDPAddr("udp", server)
+	srv, err := net.ResolveUDPAddr("udp", getServer())
 	if err != nil {
 		return fmt.Errorf("آدرس سرور نامعتبر: %w", err)
 	}
@@ -530,7 +581,12 @@ func dialKCP(plain bool, wait time.Duration) error {
 		return err
 	}
 	sess.SetNoDelay(1, 10, 2, 1)
-	sess.SetWindowSize(512, 512)
+	// وقت بازی پنجره کوچک‌تر است (smart.go)
+	w := int(kcpWnd.Load())
+	if w <= 0 {
+		w = kcpWndFree
+	}
+	sess.SetWindowSize(w, w)
 	sess.SetMtu(kcpMTU)
 	sess.SetStreamMode(true)
 	sess.SetWriteDelay(false)
@@ -561,6 +617,7 @@ func dialKCP(plain bool, wait time.Duration) error {
 	}
 	st.Close()
 	mux, rawConn = m, raw
+	kcpSess.Store(sess)
 	return nil
 }
 
