@@ -1369,7 +1369,7 @@ namespace KankiVPN
             foreach (var (k, v) in new Dictionary<string, long>
             {
                 ["de@tunnel/kankimix"] = 81, ["de@tunnel/hysteria2"] = -1, ["de@tunnel/amneziawg"] = 74, ["de@tunnel/wireguard"] = 77,
-                ["de/kankimix"] = 68, ["de/hysteria2"] = 95, ["de/amneziawg"] = 92, ["fr/amneziawg"] = 88 ["tr/vless"] = 61,
+                ["de/kankimix"] = 68, ["de/hysteria2"] = 95, ["de/amneziawg"] = 92, ["fr/amneziawg"] = 88, ["tr/vless"] = 61,
             }) pings[k] = v;
             pingHistory.AddRange(new long[] { 78, 74, 80, 72, 74, 90, 74, 73 });
             settings = new Settings { SplitMode = "exclude", SplitList = new List<string> { "5.0.0.0/8" } };
