@@ -83,6 +83,9 @@ data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = nu
 data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
+    /** «https://میزبان[:پورت]» بی مسیر و بی نام کاربری (پیش از CONFIGURED: ترتیب ساخت شیء) */
+    private val ORIGIN = Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$")
+
     /**
      * آدرس‌های پنل کانکی که این نسخه می‌شناسد: هیچ‌کدام در کد نیست؛ هنگام ساخت از KANKI_PANEL_HOSTS می‌آید
      * (BuildConfig.PANEL_HOSTS). خالی = فقط آدرسی که در لینک خود کاربر است (کد تنها آن‌وقت لینک کامل می‌خواهد).
@@ -93,7 +96,6 @@ object SubscriptionApi {
     fun parseHosts(spec: String): List<String> = spec.split(",").map { it.trim().trimEnd('/') }
         .filter { ORIGIN.matches(it) }.distinct()
 
-    private val ORIGIN = Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$")
 
     /** اگر کاربر فقط کد را وارد کند، این آدرس (null = این نسخه آدرسی نمی‌شناسد؛ لینک کامل لازم است) */
     val DEFAULT_HOST: String? get() = CONFIGURED.firstOrNull()
