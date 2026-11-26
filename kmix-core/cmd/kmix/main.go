@@ -15,7 +15,7 @@
 //
 // جواب: "ok" یا "err <پیام>". بعد فرمان‌ها، هر کدام یک خط:
 //
-//	stats        → "stats <rx> <tx> <ping> <افت بالا ‰> <افت پایین ‰> <نجات‌یافته‌های پایین> <مسیر اصلی> <مسیرهای زنده>"
+//	stats        → "stats <rx> <tx> <ping> <افت بالا ‰> <افت پایین ‰> <نجات‌یافته‌های پایین> <مسیر اصلی> <مسیرهای زنده> <راهنمای مسیر ۰/۱> <ارسال‌های ناموفق>"
 //	gaming 0|1   → "ok"
 //	reconnect    → "ok"   (شبکه‌ی گوشی عوض شد)
 //	path <اسم>   → "ok"   با یک fd (SCM_RIGHTS): سوکت UDP اپ روی یک شبکه‌ی گوشی (wifi، cell)، بیرون از VPN
@@ -46,7 +46,6 @@ type startMsg struct {
 	FecParity int    `json:"fec_parity"`
 	Gaming    bool   `json:"gaming"`
 	Ports     string `json:"ports"`
-	Alt       string `json:"alt"`
 }
 
 func main() {
@@ -96,7 +95,6 @@ func run(uc *net.UnixConn) int {
 		return 1
 	}
 	mobile.SetPorts(m.Ports)
-	mobile.SetAlt(m.Alt)
 	if err := mobile.Start(fd, m.Server, m.Key, m.FecData, m.FecParity, m.Gaming); err != nil {
 		reply("err " + err.Error())
 		return 1
@@ -140,7 +138,12 @@ func run(uc *net.UnixConn) int {
 			if name == "" {
 				name = "-"
 			}
-			reply(fmt.Sprintf("stats %d %d %d %d %d %d %s %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing(), mobile.LossUp(), mobile.LossDown(), mobile.FixedDown(), name, live))
+			hint := 0
+			if mobile.HintActive() {
+				hint = 1
+			}
+			errs, _ := mobile.SendErrors()
+			reply(fmt.Sprintf("stats %d %d %d %d %d %d %s %d %d %d", mobile.RxBytes(), mobile.TxBytes(), mobile.GetPing(), mobile.LossUp(), mobile.LossDown(), mobile.FixedDown(), name, live, hint, errs))
 		case "gaming":
 			mobile.SetGaming(len(f) > 1 && f[1] == "1")
 			reply("ok")

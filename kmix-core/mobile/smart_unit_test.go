@@ -1,7 +1,6 @@
 package mobile
 
 import (
-	"net"
 	"testing"
 	"time"
 
@@ -18,16 +17,15 @@ func TestHopPorts(t *testing.T) {
 	serverMu.Lock()
 	server = "203.0.113.5:4000"
 	serverMu.Unlock()
-	dc := &dgramConn{home: 4000}
-	dc.srv.Store(&net.UDPAddr{IP: net.IPv4(203, 0, 113, 5), Port: 4000})
 	sid := sessionID
 	var seen []int
+	cur := 4000
 	for i := 0; i < 5; i++ {
 		hopMu.Lock()
 		l := hopPorts
 		hopMu.Unlock()
-		dc.hop(l)
-		seen = append(seen, dc.dst().Port)
+		cur = nextPort(4000, cur, l)
+		seen = append(seen, cur)
 	}
 	want := []int{4001, 4002, 4003, 4000, 4001}
 	for i := range want {
@@ -52,39 +50,6 @@ func TestHopPorts(t *testing.T) {
 	hopMu.Unlock()
 	if n != 0 {
 		t.Fatal("bad specs gave ports")
-	}
-}
-
-// silence: statTick moves the port; a server that answers does not
-func TestHopOnSilence(t *testing.T) {
-	smartReset()
-	SetPorts("5001-5002")
-	defer SetPorts("")
-	dc := &dgramConn{home: 5000}
-	dc.srv.Store(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5000})
-	now := time.Now()
-	statTick(nil, now, 10*time.Second) // no socket: nothing
-	if dc.dst().Port != 5000 {
-		t.Fatal("moved without a socket")
-	}
-	pathsMu.Lock()
-	socks = []*netSock{{paths: []*dgramConn{dc}}}
-	pathsMu.Unlock()
-	defer func() { pathsMu.Lock(); socks = nil; pathsMu.Unlock() }()
-	hopMu.Lock()
-	hopAt = time.Time{}
-	hopMu.Unlock()
-	silentHop(now, time.Second)
-	if dc.dst().Port != 5000 {
-		t.Fatal("moved while the server answers")
-	}
-	silentHop(now, 3*time.Second)
-	if dc.dst().Port != 5001 {
-		t.Fatalf("did not move after silence: %d", dc.dst().Port)
-	}
-	silentHop(now.Add(time.Second), 4*time.Second)
-	if dc.dst().Port != 5001 {
-		t.Fatal("moved again at once")
 	}
 }
 

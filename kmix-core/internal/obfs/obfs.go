@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -57,6 +58,8 @@ type PacketConn struct {
 	kcpKind byte
 	// plain شنونده‌ی KCP بی FEC (سمت سرور، plain.go؛ nil = ندارد)
 	plain *plainConn
+	// hint the routing hint the server gave (client side, protocol 3, hint.go; nil = none)
+	hint atomic.Pointer[hintState]
 }
 
 // New یک PacketConn مبهم‌سازی‌شده با کلید ۳۲ بایتی می‌سازد.
@@ -84,8 +87,17 @@ func NewMulti(conn net.PacketConn, ring *Keyring, handler Handler) *PacketConn {
 // Ring کلیدهای کاربران (nil در حالت تک‌کلیدی).
 func (c *PacketConn) Ring() *Keyring { return c.ring }
 
-// WritePacket یک بسته از نوع kind را رمز می‌کند و می‌فرستد.
+// WritePacket یک بسته از نوع kind را رمز می‌کند و می‌فرستد؛ با راهنمای مسیر جلویش اگر سرور داده (hint.go).
 func (c *PacketConn) WritePacket(kind byte, b []byte, addr net.Addr) error {
+	return c.write(kind, b, addr, true)
+}
+
+// WritePacketBare مثل WritePacket ولی هیچ‌وقت با راهنما (hello: باید بی راهنما هم به سروری برسد که راهنما را فراموش کرده)
+func (c *PacketConn) WritePacketBare(kind byte, b []byte, addr net.Addr) error {
+	return c.write(kind, b, addr, false)
+}
+
+func (c *PacketConn) write(kind byte, b []byte, addr net.Addr, hinted bool) error {
 	if len(b) > MaxPayload {
 		return fmt.Errorf("obfs: بسته بزرگ‌تر از %d بایت", MaxPayload)
 	}
@@ -101,20 +113,31 @@ func (c *PacketConn) WritePacket(kind byte, b []byte, addr net.Addr) error {
 	if _, err := rand.Read(rnd[:]); err != nil {
 		return err
 	}
-	padMax := MaxPayload - len(b)
+	var hint *hintState
+	if hinted && kind != KindKCP && kind != KindKCPPlain {
+		hint = c.liveHint(len(b))
+	}
+	hl := 0
+	if hint != nil {
+		hl = HintLen
+	}
+	padMax := MaxPayload - len(b) - hl
 	if padMax > maxPad {
 		padMax = maxPad
 	}
 	padLen := int(rnd[nonceSize]) % (padMax + 1)
 
-	out := make([]byte, nonceSize, nonceSize+hdrSize+len(b)+padLen+chacha20poly1305.Overhead)
-	copy(out, rnd[:nonceSize])
-	plain := out[nonceSize : nonceSize+hdrSize+len(b)+padLen]
+	out := make([]byte, hl+nonceSize, hl+nonceSize+hdrSize+len(b)+padLen+chacha20poly1305.Overhead)
+	if hint != nil {
+		copy(out, hint.h[:])
+	}
+	copy(out[hl:], rnd[:nonceSize])
+	plain := out[hl+nonceSize : hl+nonceSize+hdrSize+len(b)+padLen]
 	plain[0] = kind
 	binary.BigEndian.PutUint16(plain[1:3], uint16(len(b)))
 	copy(plain[hdrSize:], b)
 	clear(plain[hdrSize+len(b):])
-	out = aead.Seal(out[:nonceSize], out[:nonceSize], plain, nil)
+	out = aead.Seal(out[:hl+nonceSize], out[hl:hl+nonceSize], plain, nil)
 
 	_, err := c.conn.WriteTo(out, addr)
 	if err == nil && ctr != nil {

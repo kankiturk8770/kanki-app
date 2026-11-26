@@ -29,8 +29,6 @@ const (
 	// kcpWndPlay / kcpWndFree: پنجره‌ی KCP وقت بازی و بقیه‌ی وقت
 	kcpWndPlay = 128
 	kcpWndFree = 512
-	// hopAfter: این‌قدر بی جواب پینگ = پورت دیگر (خیلی زودتر از deadAfter)
-	hopAfter = 2500 * time.Millisecond
 	// hopLoss: این‌قدر افت پایین‌رو چند ثانیه پشت هم = این پورت کند شده، پورت دیگر
 	hopLoss  = 300
 	hopEvery = 4 * time.Second
@@ -43,6 +41,8 @@ var (
 	upPol    game.Policy
 	later    *game.Later
 	lastGame atomic.Int64 // UnixNano آخرین بسته‌ی بازی
+	// playStart a game began then (after playingFor without one); its first seconds are reported faster
+	playStart atomic.Int64
 	kcpSess  atomic.Pointer[kcp.UDPSession]
 	kcpWnd   atomic.Int32
 	downStep atomic.Int32 // پله‌ی سرور برای پایین‌رو (از گزارش او)
@@ -71,6 +71,7 @@ func smartReset() {
 	srvKnown.Store(false)
 	upPol = game.Policy{}
 	lastGame.Store(0)
+	playStart.Store(0)
 	kcpWnd.Store(kcpWndFree)
 	downStep.Store(0)
 	lossUp.Store(0)
@@ -125,16 +126,18 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 	dst := dc.dst()
 	isGame := kind == game.KindGame && len(payload) <= game.MaxProtect
 	if isGame {
-		lastGame.Store(now.UnixNano())
+		if now.UnixNano()-lastGame.Swap(now.UnixNano()) >= int64(playingFor) {
+			playStart.Store(now.UnixNano())
+		}
 	}
-	dc.pc.WritePacket(proto.KindUDPUp, out, dst)
+	noteSendErr(dc.pc.WritePacket(proto.KindUDPUp, out, dst))
 	if !gaming.Load() || !isGame {
 		return
 	}
 	if !smartOn() {
 		// سرور قدیمی: نسخه‌ی دوم مثل قبل، فقط با فاصله
 		out[16] |= proto.FlagCopy
-		later.Push(game.CopyDelay, out, func(b []byte) { dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst()) })
+		later.Push(game.CopyDelay, out, func(b []byte) { noteSendErr(dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst())) })
 		return
 	}
 	alt := altPath(dc)
@@ -142,7 +145,7 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 	onAlt := func(extra byte) {
 		f0 := out[16]
 		out[16] |= proto.FlagCopy | extra
-		alt.pc.WritePacket(proto.KindUDPUp, out, alt.dst())
+		noteSendErr(alt.pc.WritePacket(proto.KindUDPUp, out, alt.dst()))
 		out[16] = f0
 	}
 	copied := false
@@ -158,7 +161,7 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 			onAlt(0)
 		} else {
 			out[16] |= proto.FlagCopy
-			later.Push(game.CopyDelay, out, func(b []byte) { dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst()) })
+			later.Push(game.CopyDelay, out, func(b []byte) { noteSendErr(dc.pc.WritePacket(proto.KindUDPUp, b, dc.dst())) })
 		}
 	}
 	if srvCaps.Load()&uint32(proto.CapRepair) == 0 {
@@ -189,7 +192,7 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 	}
 	f.mu.Unlock()
 	if rep != nil {
-		later.Push(game.RepairDelay, rep, func(b []byte) { p := repPath(); p.pc.WritePacket(proto.KindRepair, b, p.dst()) })
+		later.Push(game.RepairDelay, rep, func(b []byte) { p := repPath(); noteSendErr(p.pc.WritePacket(proto.KindRepair, b, p.dst())) })
 	}
 	if pl.Every > 0 {
 		// اگر بعد از این بسته‌ای نیامد، یک ترمیم هم برای آخرین‌های این لحظه
@@ -205,7 +208,7 @@ func sendUp(dc *dgramConn, f *udpFlow, h *proto.UDPUp, payload, out []byte, kind
 			f.mu.Unlock()
 			if rep != nil {
 				p := repPath()
-				p.pc.WritePacket(proto.KindRepair, rep, p.dst())
+				noteSendErr(p.pc.WritePacket(proto.KindRepair, rep, p.dst()))
 			}
 		})
 	}
@@ -284,8 +287,29 @@ func gotStat(b []byte) {
 	upPol.Report(uint32(s.Loss), uint32(s.Burst), uint32(s.Count), time.Now())
 }
 
-// statTick هر ثانیه از pingLoop: گزارش افت پایین‌رو به سرور، پنجره‌ی KCP، عوض کردن پورت
-func statTick(dc *dgramConn, now time.Time, silent time.Duration) {
+// statTick هر ثانیه از pingLoop: گزارش افت پایین‌رو به سرور، پنجره‌ی KCP، افت بد پشت هم (برای پورت دیگر، hop.go)
+func statTick(dc *dgramConn, now time.Time) {
+	pm, n := reportDown(dc)
+	kcpTick(now)
+	hopMu.Lock()
+	if n >= 20 && pm >= hopLoss {
+		badLoss++
+	} else {
+		badLoss = 0
+	}
+	hopMu.Unlock()
+}
+
+// fastStart: the first seconds of a game, when the other side has no measure yet and protects by a guess;
+// the loss of the way down is reported every few ticks then instead of every second
+const fastStart = 3 * time.Second
+
+func inFastStart(now time.Time) bool {
+	return gaming.Load() && now.UnixNano()-playStart.Load() < int64(fastStart)
+}
+
+// reportDown the loss measured on the way down since the last report, to the server (KindStat)
+func reportDown(dc *dgramConn) (uint32, uint32) {
 	var sum game.Sum
 	flowsMu.Lock()
 	for _, f := range flowsByID {
@@ -301,17 +325,9 @@ func statTick(dc *dgramConn, now time.Time, silent time.Duration) {
 	if dc != nil {
 		st := proto.Stat{Session: sessionID, Version: proto.StatVersion, Caps: proto.CapRepair | proto.CapCopy | proto.CapMulti,
 			Loss: uint16(pm), Burst: byte(min(burst, 255)), Step: byte(upPol.Step()), Count: uint16(min(n, 65535))}
-		dc.pc.WritePacket(proto.KindStat, proto.AppendStat(nil, &st), dc.dst())
+		noteSendErr(dc.pc.WritePacket(proto.KindStat, proto.AppendStat(nil, &st), dc.dst()))
 	}
-	kcpTick(now)
-	hopMu.Lock()
-	if n >= 20 && pm >= hopLoss {
-		badLoss++
-	} else {
-		badLoss = 0
-	}
-	hopMu.Unlock()
-	silentHop(now, silent)
+	return pm, n
 }
 
 // setWin: for the tests (nil = the KCP session of the app)
@@ -333,75 +349,26 @@ func kcpTick(now time.Time) {
 	}
 }
 
-// silentHop: the port gave no answer for a while, or the line on it is badly cut: the next port, with
-// the same session (much sooner than a reconnect)
-func silentHop(now time.Time, silent time.Duration) {
-	hopMu.Lock()
-	defer hopMu.Unlock()
-	if len(hopPorts) == 0 || now.Sub(hopAt) < hopEvery {
-		return
-	}
-	if silent >= hopAfter || badLoss >= 3 {
-		hopAt, badLoss = now, 0
-		// the port is the server's: every path to the server itself moves (the tunnel entries keep theirs)
-		var next int
-		for _, p := range allPaths() {
-			if p.ep == 0 {
-				p.hop(hopPorts)
-				next = p.dst().Port
-			}
-		}
-		if next > 0 {
-			setServerPort(next)
-		}
-	}
-}
-
-// homeSilent: how long no path to the server itself (not a tunnel entry) answered
-func homeSilent(now time.Time) time.Duration {
-	var last int64
-	for _, p := range allPaths() {
-		if p.ep != 0 {
-			continue
-		}
-		p.mu.Lock()
-		if p.lastPong > last {
-			last = p.lastPong
-		}
-		if last == 0 && p.born > last {
-			last = p.born
-		}
-		p.mu.Unlock()
-	}
-	if last == 0 {
-		return 0
-	}
-	return now.Sub(time.Unix(0, last))
-}
-
 // dst آدرس فعلی سرور مسیر بازی
 func (dc *dgramConn) dst() *net.UDPAddr { return dc.srv.Load() }
 
-// hop پورت بعدی (پورت اصلی هم جزو دور است)؛ جلسه، جریان‌ها و کلید همان می‌مانند
-func (dc *dgramConn) hop(ports []int) {
-	cur := dc.dst()
-	all := []int{dc.home}
+// nextPort the port after `from` in the round of the server's ports (its main port first); 0 = no other port
+func nextPort(home, from int, ports []int) int {
+	all := []int{home}
 	for _, p := range ports {
-		if p != dc.home {
+		if p != home {
 			all = append(all, p)
 		}
 	}
 	next := all[0]
 	for i, p := range all {
-		if p == cur.Port {
+		if p == from {
 			next = all[(i+1)%len(all)]
 			break
 		}
 	}
-	if next == cur.Port {
-		return
+	if next == from {
+		return 0
 	}
-	a := *cur
-	a.Port = next
-	dc.srv.Store(&a)
+	return next
 }

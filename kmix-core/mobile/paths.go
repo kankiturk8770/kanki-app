@@ -1,23 +1,21 @@
 package mobile
 
-// چند مسیر (اپ ۱.۴۴، سرور پنل 3.60): هر شبکه‌ی گوشی (وای‌فای، دیتا) سوکت UDP خودش را دارد و هر نشانی سرور (خود سرور،
-// ورودی تانل ایران) یک مقصد است؛ هر جفت «شبکه × نشانی» یک مسیر. هر مسیر پینگ خودش را دارد (رفت‌وبرگشت، لرزش، افت).
+// شبکه‌ها و مسیر (اپ ۱.۴۵، سرور پنل 3.67):
 //
-//   - بسته‌ی اصلی فقط روی بهترین مسیر می‌رود (امتیاز = پینگ + ۳×لرزش + ۲۰×درصد افت)؛ هیچ بسته‌ای بی‌دلیل دو بار نمی‌رود.
-//   - مسیر بهتر فقط وقتی جای قبلی را می‌گیرد که ۳ ثانیه پشت هم دست‌کم ۱۵٪ بهتر باشد (برای یک لحظه‌ی بد عوض نمی‌شود)؛
-//     ولی مسیری که جواب نمی‌دهد فوراً کنار می‌رود.
-//   - همان نسخه‌ی دوم و ترمیمی که خط با افتش لازم دارد (smart.go) روی مسیر دیگر می‌رود، بی صبر: افت یک مسیر به مسیر
-//     دیگر نمی‌رسد، پس همان مقدار بسته بیشتر نجات می‌دهد.
-//   - وقتی مسیر اصلی همین الان جواب نمی‌دهد (چند برابر پینگش گذشته)، بسته‌ی بازی تا معلوم شدن روی مسیر دیگر هم می‌رود
-//     (FlagMirror) و سرور هم جواب‌ها را همان‌جا می‌فرستد؛ بعد یکی می‌ماند.
+//   - یک نشانی، همیشه: هر کانفیگ یا مستقیم به خود سرور است یا از ورودی تانل؛ هیچ‌وقت هر دو، و نشانی دیگری هم امتحان
+//     نمی‌شود. (نشانی‌های دیگر لینک، «alt»، کانفیگ‌های جدای اپ‌اند.)
+//   - هر شبکه‌ی گوشی (وای‌فای، دیتا) سوکت UDP خودش را دارد ولی فقط شبکه‌ی اصلی کار می‌کند و پینگ می‌شود. شبکه‌ی دوم
+//     ساکت می‌ماند و فقط وقتی به کار می‌آید که مسیر اصلی خراب شود (dual.go): افت گزارش‌شده بیش از ۰٫۴٪، یک جهش
+//     لرزش، یا جواب ندادن. همین که مسیر اصلی آرام شد، شبکه‌ی دوم دوباره ساکت می‌شود.
+//   - پورت دیگر سرور فقط «اول بساز، بعد بشکن» (hop.go): پورت تازه با پینگ رمزشده امتحان می‌شود و فقط بعد از جوابش
+//     جای قبلی را می‌گیرد.
 //
-// سرور قدیمی (بی CapMulti): فقط بهترین مسیر، بی نسخه یا ترمیم روی مسیر دیگر (مثل عوض شدن شبکه).
+// سرور قدیمی (بی CapMulti): نسخه‌ی دوم روی شبکه‌ی دیگر نمی‌رود (مثل عوض شدن شبکه).
 
 import (
 	"errors"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,7 +39,6 @@ const (
 	mirrorHold = time.Second
 	pingRing   = 16
 	maxSocks   = 3
-	maxEnds    = 3
 )
 
 // netSock یک سوکت روی یک شبکه‌ی گوشی ("" = شبکه‌ی پیش‌فرض، وقتی اپ سوکت شبکه‌ها را نداده)
@@ -56,9 +53,10 @@ type dgramConn struct {
 	raw  net.PacketConn
 	pc   *obfs.PacketConn
 	ns   *netSock
-	ep   int // ۰ = خود سرور (با عوض کردن پورت)، بقیه = نشانی‌های دیگر (تانل ایران)
 	srv  atomic.Pointer[net.UDPAddr]
 	home int // پورت اصلی سرور (دور عوض کردن پورت از آن شروع می‌شود)
+	// probe the other port of the server being tried (hop.go; nil = none): it becomes srv only once it answers
+	probe atomic.Pointer[net.UDPAddr]
 
 	mu       sync.Mutex
 	srtt     float64 // ms
@@ -71,33 +69,20 @@ type dgramConn struct {
 	waitFrom int64 // اولین پینگی که بعد از آخرین جواب رفت (۰ = منتظر چیزی نیست)
 	lastSent int64
 	born     int64
+	lastRTT  float64 // ms, the last answer
+	// the port try (hop.go, under mu): when it went, and whether for silence (then an answer of the old port
+	// drops it)
+	probeAt    int64
+	probeStall bool
 }
 
 var (
 	pathsMu  sync.Mutex
 	socks    []*netSock
-	ends     []string // نشانی‌های دیگر سرور («میزبان:پورت»)؛ نشانی اصلی getServer است
 	switchAt atomic.Int64
 	forcedAt atomic.Int64 // the last change of the main path because it stopped answering
 	better   time.Time
 )
-
-// SetAlt نشانی‌های دیگر همین سرور («میزبان:پورت»، با ویرگول؛ مثلاً ورودی تانل ایران). قبل از Start صدا بزن.
-func SetAlt(spec string) {
-	var l []string
-	for _, it := range strings.Split(spec, ",") {
-		it = strings.TrimSpace(it)
-		if it == "" || len(l) >= maxEnds-1 {
-			continue
-		}
-		if _, err := net.ResolveUDPAddr("udp", it); err == nil {
-			l = append(l, it)
-		}
-	}
-	pathsMu.Lock()
-	ends = l
-	pathsMu.Unlock()
-}
 
 // AddSocket یک سوکت UDP که اپ روی یک شبکه‌ی گوشی ساخته (بیرون از VPN، بسته به همان شبکه) با اسم آن شبکه
 // («wifi»، «cell»). سوکت قبلی همان اسم بسته می‌شود. تا وقتی دست‌کم یک سوکت شبکه هست، سوکت پیش‌فرض کنار می‌رود.
@@ -142,6 +127,7 @@ func AddSocket(name string, fd int) error {
 		s.raw.Close()
 	}
 	pickPrimary(time.Now(), true)
+	helloSoon()
 	return nil
 }
 
@@ -165,13 +151,16 @@ func DropSocket(name string) {
 	}
 	gone.raw.Close()
 	if empty && atomic.LoadInt32(&running) == 1 {
-		openDgram()
+		if err := openDgram(); err != nil {
+			logf("kmix: default socket: %v", err)
+		}
 	} else {
 		pickPrimary(time.Now(), true)
 	}
+	helloSoon()
 }
 
-// newSock یک سوکت و مسیرهایش (یکی برای هر نشانی سرور)
+// newSock یک سوکت و تنها مسیرش: همان یک نشانی سرور (پورتش همانی است که الان کار می‌کند)
 func newSock(name string, raw net.PacketConn) (*netSock, error) {
 	srv, err := net.ResolveUDPAddr("udp", getServer())
 	if err != nil {
@@ -187,20 +176,12 @@ func newSock(name string, raw net.PacketConn) (*netSock, error) {
 	if home == 0 {
 		home = srv.Port
 	}
-	mk := func(ep int, a *net.UDPAddr) {
-		p := &dgramConn{raw: raw, pc: pc, ns: ns, ep: ep, home: home, born: now}
-		p.srv.Store(a)
-		ns.paths = append(ns.paths, p)
+	if hs := curHint(); hs != nil {
+		pc.SetHint(hs.h, hs.until)
 	}
-	mk(0, srv)
-	pathsMu.Lock()
-	alt := append([]string(nil), ends...)
-	pathsMu.Unlock()
-	for i, e := range alt {
-		if a, err := net.ResolveUDPAddr("udp", e); err == nil {
-			mk(i+1, a)
-		}
-	}
+	p := &dgramConn{raw: raw, pc: pc, ns: ns, home: home, born: now}
+	p.srv.Store(srv)
+	ns.paths = []*dgramConn{p}
 	return ns, nil
 }
 
@@ -284,6 +265,10 @@ func sockReadLoop(ns *netSock) {
 			}
 			continue
 		}
+		if kind == proto.KindHelloAck {
+			gotHelloAck(buf[:n], time.Now())
+			continue
+		}
 		handleDown(tunFile, kind, buf[:n])
 	}
 }
@@ -296,6 +281,9 @@ func gotPong(ns *netSock, from net.Addr, b []byte) {
 	sent := int64(beUint64(b[8:16]))
 	now := time.Now().UnixNano()
 	for _, p := range ns.paths {
+		if p.probed(ua, now) {
+			return
+		}
 		if a := p.srv.Load(); ua != nil && a != nil && a.Port == ua.Port && a.IP.Equal(ua.IP) {
 			if rtt := p.pong(sent, now); rtt >= 0 {
 				lastPong.Store(now)
@@ -325,7 +313,9 @@ func (p *dgramConn) ping(now time.Time, b []byte) {
 		p.waitFrom = t
 	}
 	p.mu.Unlock()
-	p.pc.WritePacket(proto.KindPing, b, p.dst())
+	if err := p.pc.WritePacket(proto.KindPing, b, p.dst()); err != nil {
+		noteSendErr(err)
+	}
 }
 
 // pong: جواب پینگی که at رفته بود؛ رفت‌وبرگشت (ms) یا -1 اگر مال این مسیر نبود
@@ -350,8 +340,13 @@ func (p *dgramConn) pong(at, now int64) int64 {
 				p.srtt += (rtt - p.srtt) / 8
 			}
 			p.samples++
+			p.lastRTT = rtt
 			p.lastPong = now
 			p.waitFrom = 0
+			if p.probeStall {
+				p.probe.Store(nil)
+				p.probeStall = false
+			}
 			return int64(rtt)
 		}
 	}
@@ -462,32 +457,27 @@ func setPrimary(p *dgramConn, now int64, forced bool) {
 	if forced {
 		forcedAt.Store(now)
 	}
-	if p.ep == 0 {
-		if a := p.dst(); a != nil {
-			setServerPort(a.Port)
-		}
+	if a := p.dst(); a != nil {
+		setServerPort(a.Port)
 	}
 }
 
-// altPath: بهترین مسیر زنده‌ی دیگر (nil = نیست، یا سرور چند مسیر را نمی‌شناسد)
+// altPath: مسیر زنده‌ی شبکه‌ی دیگر گوشی، فقط وقتی مسیر اصلی خراب است (dual.go؛ nil = نیست، لازم نیست، یا سرور
+// چند مسیر را نمی‌شناسد). نشانی همان است؛ فقط شبکه فرق دارد.
 func altPath(cur *dgramConn) *dgramConn {
-	if cur == nil || !multiOK() {
+	if cur == nil || !multiOK() || !dualOn.Load() {
 		return nil
 	}
 	now := time.Now().UnixNano()
 	var best *dgramConn
 	bestS := 0.0
 	for _, p := range allPaths() {
-		if p == cur {
+		if p == cur || p.ns == cur.ns {
 			continue
 		}
 		s, sus, dead := p.quality(now)
 		if dead || sus {
 			continue
-		}
-		// مسیر روی شبکه‌ی دیگر بهتر است (افت یک شبکه به دیگری نمی‌رسد)
-		if p.ns != cur.ns {
-			s -= 50
 		}
 		if best == nil || s < bestS {
 			best, bestS = p, s
@@ -508,11 +498,16 @@ func mirroring(cur *dgramConn, now int64) bool {
 	return sus
 }
 
-// pingAll پینگ هر مسیری که وقتش رسیده؛ وقت بازی یا وقتی مسیر جواب نمی‌دهد تندتر
+// pingAll پینگ مسیر اصلی، و شبکه‌ی دوم فقط وقتی به کار آمده (dual.go)؛ وقت بازی یا وقتی مسیر جواب نمی‌دهد تندتر
 func pingAll(now time.Time, b []byte) {
 	t := now.UnixNano()
 	fast := gaming.Load() && t-lastGame.Load() < int64(playingFor)
+	cur := dg.Load()
+	dual := dualOn.Load()
 	for _, p := range allPaths() {
+		if p != cur && !dual {
+			continue // شبکه‌ی دوم ساکت است
+		}
 		p.mu.Lock()
 		every := pingIdle
 		if fast || p.waitFrom != 0 || p.samples == 0 {
@@ -526,7 +521,8 @@ func pingAll(now time.Time, b []byte) {
 	}
 }
 
-// PathInfo برای اپ: اسم مسیر اصلی («wifi»، «cell» یا «» برای پیش‌فرض، با «+tunnel» اگر از تانل است) و تعداد مسیرهای زنده
+// PathInfo برای اپ: اسم شبکه‌ی اصلی («wifi»، «cell»، «net» برای پیش‌فرض، با «+dual» وقتی شبکه‌ی دوم هم کار می‌کند) و
+// تعداد مسیرهای زنده
 func PathInfo() (string, int) {
 	cur := dg.Load()
 	name := ""
@@ -535,8 +531,8 @@ func PathInfo() (string, int) {
 		if name == "" {
 			name = "net"
 		}
-		if cur.ep > 0 {
-			name += "+tunnel"
+		if dualOn.Load() {
+			name += "+dual"
 		}
 	}
 	n := 0

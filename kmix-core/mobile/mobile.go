@@ -44,6 +44,8 @@ const (
 	udpIdle      = 90 * time.Second
 	pingInterval = time.Second
 	deadAfter    = 6 * time.Second // این‌قدر پینگ جواب ندهد = قطع → اتصال مجدد
+	// tickEvery pingLoop's beat: a stalled port is seen within stallAfter (hop.go) of the last answer
+	tickEvery = 100 * time.Millisecond
 )
 
 var (
@@ -197,6 +199,8 @@ func setup(serverAddr, keyHex string, fecShards, fecParity int, gamingMode bool)
 		homePort, _ = strconv.Atoi(ps)
 	}
 	smartReset()
+	helloReset()
+	dualOn.Store(false)
 	kcpMode.Store(0)
 	gaming.Store(gamingMode)
 	var sid [8]byte
@@ -239,7 +243,11 @@ func RxBytes() int64 { return rxBytes.Load() }
 func IsRunning() bool { return atomic.LoadInt32(&running) == 1 }
 
 // SetGaming حالت گیمینگ (ارسال دوتایی) را بدون قطع اتصال عوض می‌کند.
-func SetGaming(on bool) { gaming.Store(on) }
+func SetGaming(on bool) {
+	if gaming.Swap(on) != on {
+		helloSoon()
+	}
+}
 
 // Reconnect سوکت‌ها را از نو می‌سازد؛ وقتی شبکه‌ی گوشی عوض می‌شود صدا بزن.
 // جریان‌های UDP بازی حفظ می‌شوند (سرور آدرس جدید را از بسته‌ی بعدی یاد می‌گیرد).
@@ -248,7 +256,10 @@ func Reconnect() {
 		return
 	}
 	lastReconnect.Store(time.Now().UnixNano())
-	openDgram()
+	if err := openDgram(); err != nil {
+		logf("kmix: reconnect: %v", err)
+	}
+	helloSoon()
 	// closeConn ممکن است پشت یک اتصال در حال انجام منتظر بماند؛ نباید pingLoop را نگه دارد
 	go func() {
 		closeConn()
@@ -384,7 +395,7 @@ func cleanerLoop(stop chan struct{}) {
 // pingLoop: پینگ هر مسیر (paths.go)، انتخاب بهترین مسیر، و هر ثانیه گزارش افت، پنجره‌ی KCP و عوض کردن پورت؛ اگر هیچ
 // مسیری جواب ندهد، خودکار دوباره وصل می‌شود.
 func pingLoop(stop chan struct{}) {
-	t := time.NewTicker(pingPlay)
+	t := time.NewTicker(tickEvery)
 	defer t.Stop()
 	var b [proto.PingLen]byte
 	tick := 0
@@ -399,12 +410,18 @@ func pingLoop(stop chan struct{}) {
 		binary.BigEndian.PutUint64(b[8:16], uint64(now.UnixNano()))
 		pingAll(now, b[:])
 		pickPrimary(now, false)
-		if tick++; tick%4 != 0 {
+		dualTick(now)
+		hopTick(now, b[:])
+		helloTick(now)
+		if tick++; tick%int(time.Second/tickEvery) != 0 {
+			if tick%3 == 0 && inFastStart(now) {
+				reportDown(dg.Load())
+			}
 			continue
 		}
 		dc := dg.Load()
 		silent := now.Sub(time.Unix(0, lastPong.Load()))
-		statTick(dc, now, homeSilent(now))
+		statTick(dc, now)
 		if silent > deadAfter {
 			lastPing.Store(-1)
 			if now.Sub(time.Unix(0, lastReconnect.Load())) > deadAfter {
