@@ -16,6 +16,18 @@ val releaseKeystore = file("kanki-release.jks")
 val releaseKeyPass: String? = System.getenv("KANKI_KEY_PASS")
 val canSignRelease = releaseKeystore.exists() && !releaseKeyPass.isNullOrEmpty()
 
+// The panel's addresses are never in the source: the build takes them from KANKI_PANEL_HOSTS (CI secret) or the
+// Gradle property kankiPanelHosts (local.properties is not read for it), comma separated https:// origins. Without
+// them the app still works with a full subscription link; a bare code then asks for the link.
+val panelHosts: String = (System.getenv("KANKI_PANEL_HOSTS") ?: (project.findProperty("kankiPanelHosts") as String?) ?: "")
+    .split(",").map { it.trim().trimEnd('/') }
+    .filter { Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$").matches(it) }
+    .joinToString(",")
+// Optional SPKI pins of the panel's certificates (KANKI_PANEL_PINS: comma separated base64 SHA-256 of the public key;
+// list the backup key too, so a renewed certificate keeps working). Empty = the system's CAs and the hostname only.
+val panelPins: String = (System.getenv("KANKI_PANEL_PINS") ?: (project.findProperty("kankiPanelPins") as String?) ?: "")
+    .split(",").map { it.trim() }.filter { Regex("^[A-Za-z0-9+/]{43}=$").matches(it) }.joinToString(",")
+
 android {
     namespace = "cafe.kankipro.vpn"
     compileSdk = 36
@@ -24,8 +36,10 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 118
-        versionName = "1.44.1"
+        versionCode = 119
+        versionName = "1.45.0"
+        buildConfigField("String", "PANEL_HOSTS", "\"$panelHosts\"")
+        buildConfigField("String", "PANEL_PINS", "\"$panelPins\"")
     }
     // یک APK جدا برای هر پردازنده (arm64 و armv7)، تا هر گوشی فقط هسته‌های خودش را بگیرد (حدود ۳۰ مگ).
     // نسخه‌ی شبیه‌ساز ساخته نمی‌شود؛ فقط همین دو پردازنده‌ی گوشی‌های واقعی.
@@ -50,9 +64,10 @@ android {
     buildTypes {
         release {
             // R8: کد کاتلین/کامپوز نسخه‌ی نهایی بهینه و کوچک می‌شود (اجرای روان‌تر و فایل کوچک‌تر).
-            // کد خود برنامه و موتورهای اتصال دست نمی‌خورند (proguard-rules.pro). منابع حذف نمی‌شوند:
-            // صدای ربات با اسم پیدا می‌شود (getIdentifier).
+            // کد خود برنامه و موتورهای اتصال (JNI و هسته‌های Go) دست نمی‌خورند (proguard-rules.pro). منابع
+            // بی‌استفاده هم حذف می‌شوند؛ فونت‌ها (با اسم پیدا می‌شوند) و صدای ربات در res/raw/keep.xml نگه داشته شده‌اند.
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isDebuggable = false
             signingConfig = if (canSignRelease) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
@@ -63,7 +78,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     // عکس صفحه‌ها بدون گوشی (Shots.kt، Robolectric): منابع و فونت‌ها در تست هم باشند و RenderNodeها
     // (لایه‌های Compose) واقعاً کشیده شوند
     testOptions {

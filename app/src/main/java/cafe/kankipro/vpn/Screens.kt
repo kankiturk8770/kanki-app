@@ -325,15 +325,12 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             if (tick % 3 == 0) launch { state.samplePing() }   // نمودار زنده‌ی پینگ (هر ۳ ثانیه یک نمونه‌ی سبک)
             if (state.mode == KMode.DNS) state.syncDnsActive()
             tick++
-            if (tick % 30 == 0) launch { state.refreshUsage(5 * 60_000L) }   // حجم مصرفی وقتی وصل است: هر ۵ دقیقه یک درخواست
             delay(1000)
         }
         rx = 0; tx = 0; session = 0
     }
     // هشدارهای زمانی (مثل روزهای باقی‌مانده) هر دقیقه دوباره بررسی شوند
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
-    // پیام ادمین وقتی VPN خاموش است هر ۵ دقیقه هم چک می‌شود (وقتی وصل است، بروزرسانی ۵ دقیقه‌ای بالا آن را می‌آورد)
-    LaunchedEffect(Unit) { while (true) { delay(5 * 60_000L); if (state.vstate == VState.OFF) state.refreshUsage(5 * 60_000L) } }
     // اسم شبکه (وای‌فای / موبایل) فقط بار اول خوانده می‌شود، نه هر بار که به خانه برمی‌گردی
     LaunchedEffect(Unit) {
         if (state.netName.isBlank()) state.netName = withContext(Dispatchers.IO) { Modes.networkName(ctx) }
@@ -449,6 +446,15 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
     )
 }
 
+/** «VLESS · اسم اینباند» برای ردیف Xray (اسم از خود لینک یا پنل، کوتاه) */
+private fun xrayLabel(l: ConfigLink): String {
+    val link = l.url.removePrefix("xray:")
+    val remark = runCatching { java.net.URLDecoder.decode(link.substringAfter("#", ""), "UTF-8") }.getOrDefault("")
+        .ifBlank { l.nodeName }.replace(Regex("[\\p{So}\\p{Cn}]"), "").trim()
+    val proto = XrayCfg.protoName(link)
+    return if (remark.isBlank() || remark.equals(proto, ignoreCase = true)) proto else proto + " · " + remark.take(24)
+}
+
 /** گیگ و روز باقی‌مانده (فقط عدد) */
 private fun subUi(a: Account, now: Long): SubUi {
     val gb = if (a.limitGb != null && a.usedGb != null && a.limitGb > 0) {
@@ -459,7 +465,8 @@ private fun subUi(a: Account, now: Long): SubUi {
     }
     val days = a.expiresAt?.let { e -> ((e - now).coerceAtLeast(0) / 86_400_000L).toString() } ?: "∞"
     val frac = if (a.limitGb != null && a.usedGb != null && a.limitGb > 0) (a.usedGb / a.limitGb).toFloat() else null
-    return SubUi(gb, days, a.status, frac)
+    val used = a.usedGb?.let { u -> if (u >= 10) String.format(java.util.Locale.US, "%.0f", u) else String.format(java.util.Locale.US, "%.1f", u) }
+    return SubUi(gb, days, a.status, frac, used)
 }
 
 /** پنل‌های گیمینگ و ضد فیلتر */
@@ -625,7 +632,9 @@ private fun ServersTab(state: AppState) {
             val side = { l: ConfigLink -> state.cfgSide(l.node, l.protocol) }
             val t = g.filter { side(it) == "tunnel" }
             val d = g.filter { side(it) != "tunnel" }
-            (0 until maxOf(t.size, d.size)).map { i -> CfgLineUi(key.first.ifBlank { null }, t.getOrNull(i)?.let { row(it) }, d.getOrNull(i)?.let { row(it) }) }
+            // ۱.۴۵: ردیف Xray نوع و اسم همان اینباند را می‌گوید (VLESS · …)، نه دوباره اسم شهر
+            fun place(i: Int): String? = if (key.second == "xray") (t.getOrNull(i) ?: d.getOrNull(i))?.let { xrayLabel(it) } else key.first.ifBlank { null }
+            (0 until maxOf(t.size, d.size)).map { i -> CfgLineUi(place(i), t.getOrNull(i)?.let { row(it) }, d.getOrNull(i)?.let { row(it) }) }
         }
         CountryCardUi(
             id = key,

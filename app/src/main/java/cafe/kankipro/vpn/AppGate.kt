@@ -40,6 +40,11 @@ class AppGate(
     private val reject: Boolean = false,
     /** سرورهای DNS همین VPN (IPv4)؛ فقط DNS به این‌ها بی‌پرسیدن صاحب رد می‌شود */
     dnsServers: Collection<String> = emptyList(),
+    /**
+     * گیمینگ (۱.۴۵): سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰) هم فقط DNS (پورت ۵۳) دارند؛ جز بازی‌ها و سرویس‌های گوگل
+     * که ورود بازی لازمشان دارد، هیچ ترافیکی از تونل بازی رد نمی‌شود
+     */
+    private val strict: Boolean = false,
 ) {
     /**
      * ۱.۳۷ (بررسی امنیتی): قبلاً هر بسته به پورت ۵۳ یا ۸۵۳ به هر مقصدی رد می‌شد، پس برنامه‌ی بسته‌شده با سرور خودش روی همین پورت‌ها
@@ -163,8 +168,9 @@ class AppGate(
                 }
             }
         }
-        // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) همیشه رد می‌شوند
-        val ok = uid in allowed || (uid in 0 until android.os.Process.FIRST_APPLICATION_UID) || (uid < 0 && dnsPort)
+        // سرویس‌های خود اندروید (uid زیر ۱۰۰۰۰: شبکه، زمان، دانلود سیستم) رد می‌شوند؛ در گیمینگ فقط DNS آن‌ها
+        val system = uid in 0 until android.os.Process.FIRST_APPLICATION_UID
+        val ok = uid in allowed || (system && (!strict || dport == 53)) || (uid < 0 && dnsPort)
         refusable = !ok && uid >= 0
         return ok
     }

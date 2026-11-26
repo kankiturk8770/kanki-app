@@ -190,7 +190,14 @@ jobs:
       - name: ساخت فایل نصبی
         env:
           KANKI_KEY_PASS: ${{ secrets.KANKI_KEY_PASS }}
-        run: gradle assembleRelease --stacktrace
+          # the panel's addresses (comma separated https:// origins): only from the secret, never in the source
+          KANKI_PANEL_HOSTS: ${{ secrets.KANKI_PANEL_HOSTS }}
+          # optional SPKI pins of the panel's certificates (base64 SHA-256, the backup key too)
+          KANKI_PANEL_PINS: ${{ secrets.KANKI_PANEL_PINS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KANKI_PANEL_HOSTS:-}" ]; then echo "::warning::KANKI_PANEL_HOSTS is not set: a bare subscription code will ask for the full link"; fi
+          gradle assembleRelease --stacktrace
 
       - name: حجم فایل‌ها
         run: ls -la app/build/outputs/apk/release/

@@ -31,7 +31,8 @@ import java.util.concurrent.TimeUnit
  */
 object Probe {
     /** یک بار انتظار برای جواب؛ سرور سالم در کمتر از این جواب می‌دهد */
-    private const val WAIT_MS = 1500
+    /** ۱.۴۵: دو تلاش × ۱۲۵۰ = حداکثر ۲٫۵ ثانیه برای هر سرور */
+    private const val WAIT_MS = 1250
     private const val TRIES = 2
 
     /** شبکه‌ی واقعی گوشی وقتی یک VPN بالاست؛ null یعنی VPN نیست و مسیر عادی همان شبکه‌ی واقعی است */
@@ -51,7 +52,9 @@ object Probe {
         list.firstOrNull { it is Inet4Address } ?: list.first()
     }.getOrNull()
 
+    /** سوکت سنجش: بیرون از VPN خود برنامه (protect) و بسته به شبکه‌ی واقعی گوشی */
     private fun udp(net: Network?): DatagramSocket = DatagramSocket().also { s ->
+        KankiHyService.protectSocket(s)
         if (net != null) runCatching { net.bindSocket(s) }
     }
 
@@ -152,6 +155,7 @@ object Probe {
         return (1..TRIES).mapNotNull {
             runCatching {
                 Socket().use { s ->
+                    KankiHyService.protectSocket(s)
                     if (net != null) runCatching { net.bindSocket(s) }
                     val t0 = System.nanoTime()
                     s.connect(InetSocketAddress(ip, port), WAIT_MS)

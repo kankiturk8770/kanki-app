@@ -96,12 +96,15 @@ jobs:
         working-directory: windows/service
         env:
           CGO_ENABLED: "0"
+          # the panel's addresses (comma separated https:// origins): only from the secret, never in the source
+          KANKI_PANEL_HOSTS: ${{ secrets.KANKI_PANEL_HOSTS }}
         run: |
+          if (-not $env:KANKI_PANEL_HOSTS) { Write-Output "::warning::KANKI_PANEL_HOSTS is not set: a bare subscription code will ask for the full link" }
           go install mvdan.cc/garble@${{ env.GARBLE_VERSION }}
           # فقط کد خود ما مبهم می‌شود: gVisor (tun2socks، KANKI MIX) با reflect ساختارهایش را می‌خواند و با garble کامل
           # سرویس موقع اتصال Hysteria2/VLESS/KANKI MIX می‌خوابید (panic در tcpip.Stats.FillIn؛ تست زنده‌ی 2026-11-20)
           $env:GOGARBLE = "kankivpn"
-          garble -literals -tiny build -tags tcp -trimpath -ldflags "-X main.Version=${{ env.VERSION }}" -o ..\..\dist\kanki-svc.exe .\cmd\kanki-svc
+          garble -literals -tiny build -tags tcp -trimpath -ldflags "-X main.Version=${{ env.VERSION }} -X kankivpn/internal/sub.PanelHosts=$env:KANKI_PANEL_HOSTS" -o ..\..\dist\kanki-svc.exe .\cmd\kanki-svc
           ..\..\dist\kanki-svc.exe version
 
       # روی خود ویندوز: ساختارهای WFP، و با دسترسی ادمین کارت شبکه، مسیرها، DNS و قوانین فایروال واقعی

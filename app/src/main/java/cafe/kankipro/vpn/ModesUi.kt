@@ -921,7 +921,7 @@ fun FilterSheet(
                         fastest = {
                             FastestRow(
                                 auto, mc, pool.mapNotNull { it.ping }.filter { it > 0 }.minOrNull(), !busy && pool.isNotEmpty(),
-                                title = "اتصال خودکار ضد فیلتر", sub = "کم‌پینگ‌ترین و پایدارترین راه را پیدا و وصل می‌کند", steady = false, onClick = onAuto,
+                                title = "اتصال خودکار ضد فیلتر", sub = "بهترین راه را خودش وصل می‌کند", steady = false, onClick = onAuto,
                             )
                         },
                         onConnect = onConnect,

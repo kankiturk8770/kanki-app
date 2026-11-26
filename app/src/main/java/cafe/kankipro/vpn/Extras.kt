@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 // ------------------------------------------------------------------ آخرین کانفیگ وصل‌شده (برای دکمه‌ی منوی کشویی)
 
 object LastConfig {
-    private fun prefs(ctx: Context) = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE)
+    private fun prefs(ctx: Context) = SecurePrefs.get(ctx)
     fun save(ctx: Context, cfg: String, title: String) {
         prefs(ctx).edit().putString("lastcfg", cfg).putString("lasttitle", title).apply()
     }
@@ -84,7 +84,7 @@ class KankiActionReceiver : BroadcastReceiver() {
         if (intent.action == STOP) {
             val r = goAsync()
             Thread {
-                VpnEngine.down(ctx)
+                VpnEngine.downBlocking(ctx)
                 KankiNotif.hide(ctx)
                 TileService.requestListeningState(ctx, android.content.ComponentName(ctx, KankiTileService::class.java))
                 r.finish()
@@ -119,7 +119,7 @@ class KankiTileService : TileService() {
             kotlinx.coroutines.MainScope().launch {
                 if (st.account == null) runCatching { st.startupLoad() }
                 if (st.account != null) st.tapMode(KMode.SMART)
-                else runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { VpnEngine.up(ctx, cfg!!) } }
+                else if (cfg != null) runCatching { VpnEngine.up(ctx, cfg) }
                 refresh()
             }
             return
@@ -127,8 +127,8 @@ class KankiTileService : TileService() {
         if (up && st.vstate != VState.OFF) { st.userDisconnect(); refresh(); return }
         Thread {
             runCatching {
-                if (up) { VpnEngine.down(ctx); KankiNotif.hide(ctx) }
-                else { VpnEngine.up(ctx, cfg!!); KankiNotif.show(ctx, LastConfig.title(ctx), tr("متصل")) }
+                if (up) { VpnEngine.downBlocking(ctx); KankiNotif.hide(ctx) }
+                else if (cfg != null) { VpnEngine.upBlocking(ctx, cfg); KankiNotif.show(ctx, LastConfig.title(ctx), tr("متصل")) }
             }
             refresh()
         }.start()
@@ -173,12 +173,23 @@ object AppsRepo {
 
 /** بازی‌های نصب‌شده‌ی گوشی: دسته‌ی «بازی» خود اندروید، یا بازی‌های آنلاین معروف که این دسته را نگذاشته‌اند */
 object GameApps {
-    private val KNOWN = setOf(
-        "com.tencent.ig", "com.pubg.imobile", "com.pubg.krmobile", "com.vng.pubgmobile", "com.rekoo.pubgm", "com.pubg.newstate",
-        "com.activision.callofduty.shooter", "com.garena.game.codm", "com.dts.freefireth", "com.dts.freefiremax",
-        "com.supercell.clashofclans", "com.supercell.clashroyale", "com.supercell.brawlstars", "com.mobile.legends",
-        "com.miHoYo.GenshinImpact", "com.riotgames.league.wildrift", "com.ea.gp.fifamobile", "com.netease.newspike",
-    )
+    /** بازی‌های معروف با اسم دقیق */
+    private val KNOWN = setOf("com.tencent.ig", "com.mobile.legends", "com.garena.game.codm", "com.vng.pubgmobile", "com.rekoo.pubgm",
+        "com.miHoYo.GenshinImpact", "com.ea.gp.fifamobile", "com.netease.newspike")
+
+    /** خانواده‌های بازی (همه‌ی بسته‌هایی که با این‌ها شروع می‌شوند) */
+    private val PREFIXES = listOf("com.pubg.", "com.activision.callofduty.", "com.dts.freefire", "com.supercell.", "com.riotgames.")
+
+    /** سرویس‌های گوگل که ورود و خرید بازی به آن‌هاست؛ همیشه با بازی‌ها رد می‌شوند */
+    val GOOGLE = listOf("com.google.android.gms", "com.google.android.gsf")
+
+    /** هرگز در تونل بازی (حتی اگر کاربر انتخاب کرده باشد): به‌روزرسانی و مرور سنگین جای بازی را می‌گیرد */
+    val NEVER = setOf("com.android.vending", "com.android.chrome")
+
+    fun isKnownGame(pkg: String) = pkg in KNOWN || PREFIXES.any { pkg.startsWith(it) }
+
+    /** بسته‌هایی که دروازه‌ی گیمینگ باز می‌گذارد */
+    fun gatePackages(games: Collection<String>): List<String> = (games.filter { it !in NEVER } + GOOGLE).distinct()
 
     @Suppress("DEPRECATION")
     private fun isGameFlag(ai: android.content.pm.ApplicationInfo) = ai.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME != 0
@@ -188,8 +199,11 @@ object GameApps {
         val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         pm.queryIntentActivities(main, 0).map { it.activityInfo.applicationInfo }.distinctBy { it.packageName }
             .filter { ai ->
-                ai.packageName in KNOWN || ai.category == android.content.pm.ApplicationInfo.CATEGORY_GAME || isGameFlag(ai)
+                ai.packageName !in NEVER && (isKnownGame(ai.packageName) || ai.category == android.content.pm.ApplicationInfo.CATEGORY_GAME || isGameFlag(ai))
             }
             .map { it.packageName }
-    }.getOrDefault(emptyList())
+    }.getOrElse { e ->
+        android.util.Log.w("KankiVPN", "game detection: ${e.javaClass.simpleName}")
+        emptyList()
+    }
 }

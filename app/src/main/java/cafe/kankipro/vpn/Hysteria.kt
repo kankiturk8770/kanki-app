@@ -191,6 +191,18 @@ class KankiHyService : VpnService() {
         const val TUN_MTU = 8500
         /** MTU کارت شبکه‌ی KANKI MIX؛ باید با tunMTU در kmix-core/mobile/mobile.go یکی باشد */
         const val KMIX_MTU = 1280
+
+        /** the running service (for protect() of probe sockets); null when no VPN of ours runs */
+        @Volatile private var running: java.lang.ref.WeakReference<KankiHyService>? = null
+
+        /** a socket of the app that must not go into our own VPN (pings of the servers): protected while it runs */
+        fun protectSocket(s: java.net.DatagramSocket): Boolean = running?.get()?.protect(s) ?: false
+        fun protectSocket(s: java.net.Socket): Boolean = running?.get()?.protect(s) ?: false
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        running = java.lang.ref.WeakReference(this)
     }
 
     @Volatile private var tun: ParcelFileDescriptor? = null
@@ -324,8 +336,12 @@ class KankiHyService : VpnService() {
             .split(",").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() && AppGate.supported }
 
     /** دروازه‌ی «فقط بازی» روی کارت شبکه‌ی fd: بقیه‌ی برنامه‌ها بسته، با جواب فوری «اینترنت نیست» */
+    /**
+     * دروازه‌ی گیمینگ (۱.۴۵): فقط بازی‌ها، سرویس‌های گوگل که ورود بازی به آن‌هاست (gms، gsf) و DNS سیستم؛ پلی‌استور، کروم و
+     * هر برنامه‌ی دیگر بسته‌اند و TCP آن‌ها RST و UDP آن‌ها «پورت در دسترس نیست» می‌گیرد (تا فوری بفهمند و دوباره نفرستند).
+     */
     private fun gameGate(fd: ParcelFileDescriptor, apps: List<String>): AppGate =
-        AppGate(this, fd, AppGate.uidsOf(this, apps) + android.os.Process.myUid(), reject = true, dnsServers = tunDns)
+        AppGate(this, fd, AppGate.uidsOf(this, GameApps.gatePackages(apps)) + android.os.Process.myUid(), reject = true, dnsServers = tunDns, strict = true)
 
     /** برنامه‌هایی که فقط آن‌ها از VPN رد می‌شوند (حالت «فقط بازی‌ها»)؛ خالی = همه */
     private fun included(lines: List<String>): List<String> =
@@ -710,20 +726,12 @@ class KankiHyService : VpnService() {
         val addrs = InetAddress.getAllByName(u.host)
         val ip = addrs.firstOrNull { it is Inet4Address } ?: addrs.first()
         val server = if (ip is Inet4Address) "${ip.hostAddress}:${u.pickPort()}" else "[${ip.hostAddress}]:${u.pickPort()}"
-        // مسیرهای دیگر همین سرور (ورودی تانل ایران): آی‌پی‌شان هم بیرون از VPN، تا سوکت پیش‌فرض هسته دور خودش نچرخد
-        val alt = u.alt.mapNotNull { a ->
-            runCatching {
-                val h = a.substringBeforeLast(":").removePrefix("[").removeSuffix("]")
-                val x = InetAddress.getAllByName(h).firstOrNull { it is Inet4Address } ?: return@runCatching null
-                x to a.substringAfterLast(":").toInt()
-            }.getOrNull()
-        }.filter { it.first != ip }
 
         val b = Builder()
             .setSession("Kanki · KANKI MIX")
             .setMtu(KMIX_MTU)
             .addAddress("10.77.0.2", 32)
-        serverRoutes(b, ip, alt.map { it.first })
+        serverRoutes(b, ip)
         tunDns = dns
         dns.forEach { d -> runCatching { b.addDnsServer(d) } }
         // «فقط بازی»: همه‌ی برنامه‌ها (حتی مستثنی‌ها) داخل VPN می‌مانند تا دروازه بقیه را ببندد
@@ -731,7 +739,9 @@ class KankiHyService : VpnService() {
             if (included.isNotEmpty()) included.forEach { pkg -> runCatching { b.addAllowedApplication(pkg) } }
             else excluded.forEach { pkg -> runCatching { b.addDisallowedApplication(pkg) } }
         }
-        if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        // گیمینگ: کارت شبکه «حجمی» است تا اندروید و برنامه‌ها به‌روزرسانی و دانلود سنگین را روی آن نگذارند؛ IPv4 و IPv6
+        // هر دو گرفته می‌شوند (serverRoutes) و هیچ برنامه‌ای اجازه‌ی دور زدن ندارد (allowBypass صدا زده نمی‌شود)
+        if (Build.VERSION.SDK_INT >= 29) b.setMetered(true)
 
         val bin = KmixCore.binary(this)
         if (!bin.exists()) error("kanki mix: core is missing in this build")
@@ -746,8 +756,7 @@ class KankiHyService : VpnService() {
             gameGate(fd, games).also { gate = it; it.start() }.inner
         } else fd
         // تا ~۲۲ ثانیه: هسته بالا می‌آید و سرور کلید این کاربر را می‌سنجد (کلید اشتباه یا سرور خاموش = خطای روشن)
-        val altSpec = alt.joinToString(",") { "${it.first.hostAddress}:${it.second}" }
-        KmixCore.start(bin, coreFd, server, u.key, u.fecData, u.fecParity, gaming, u.portSpec(), altSpec) { why ->
+        KmixCore.start(bin, coreFd, server, u.key, u.fecData, u.fecParity, gaming, u.portSpec()) { why ->
             // هسته بعد از اتصال خودش از بین رفت (مثلاً اندروید پروسه‌اش را کشت): تونل بسته و وضعیت گزارش می‌شود
             if (!cancelled(my) && HyEngine.state == HyEngine.UP) {
                 HyEngine.crashed = true
@@ -841,6 +850,7 @@ class KankiHyService : VpnService() {
     }
 
     override fun onDestroy() {
+        if (running?.get() === this) running = null
         shutdown()
         super.onDestroy()
     }
@@ -857,7 +867,7 @@ internal fun routesExcludingAll(ips: List<ByteArray>): List<Pair<String, Int>> {
         val inside = xs.filter { it >= net && it < net + size }
         if (inside.isEmpty()) {
             val raw = ByteArray(4) { i -> (net shr (24 - 8 * i)).toByte() }
-            out += InetAddress.getByAddress(raw).hostAddress!! to len
+            out += (InetAddress.getByAddress(raw).hostAddress ?: error("bad address")) to len
             return
         }
         if (len == 32) return
@@ -876,6 +886,6 @@ internal fun routesExcluding(ip: ByteArray): List<Pair<String, Int>> {
         val mask = all.shiftRight(bits - len).shiftLeft(bits - len)
         val net = x.xor(java.math.BigInteger.ONE.shiftLeft(bits - len)).and(mask)
         val raw = net.toByteArray().let { a -> ByteArray(ip.size) { i -> a.getOrElse(a.size - ip.size + i) { 0 } } }
-        InetAddress.getByAddress(raw).hostAddress!! to len
+        (InetAddress.getByAddress(raw).hostAddress ?: error("bad address")) to len
     }
 }

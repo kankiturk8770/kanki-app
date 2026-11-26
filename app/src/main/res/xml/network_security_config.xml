@@ -2,7 +2,12 @@
 <!-- Panel, subscription and config traffic must be HTTPS (it carries the sub code and tunnel keys).
      Cleartext is allowed only for the connectivity probes and the geo-IP fallback, which carry no secrets. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- only the system's CAs: a CA a user (or an app) installed never sees the panel's traffic -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">www.gstatic.com</domain>
         <domain includeSubdomains="false">cp.cloudflare.com</domain>

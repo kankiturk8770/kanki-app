@@ -36,7 +36,7 @@ object AlwaysOn {
                 val cfg = LastConfig.cfg(app)
                 if (cfg != null && !VpnEngine.isUp(app)) {
                     runCatching {
-                        VpnEngine.up(app, cfg)
+                        VpnEngine.upBlocking(app, cfg)
                         KankiNotif.show(app, LastConfig.title(app), tr("متصل"))
                     }
                     runCatching { TileService.requestListeningState(app, ComponentName(app, KankiTileService::class.java)) }

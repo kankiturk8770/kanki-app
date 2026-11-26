@@ -49,15 +49,6 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
-        <provider
-            android:name="cafe.kankipro.vpn.KankiFileProvider"
-            android:authorities="${applicationId}.files"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
         <service
             android:name="cafe.kankipro.vpn.KankiTileService"
             android:exported="true"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resource shrinking (R8): the fonts are found by name through reflection (Fonts.kt), so the shrinker cannot see
+     them used; the robot's sound is kept too. Everything else nobody references is removed from the release. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:shrinkMode="strict"
+    tools:keep="@font/*,@raw/kanki_switch" />

@@ -263,14 +263,13 @@ private fun SpeedSection(ui: SpeedUi, history: List<SpeedRecord>, act: SpeedActi
         Verdict("استریم", if (ui.running) null else Qoe.stream(ui.down, ui.loss), Modifier.weight(1f))
     }
     Spacer(Modifier.height(D.S3))
-    // انتخاب فشرده‌ی سرور و مدت تست
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-        Box(Modifier.weight(1.15f)) {
-            Segmented(listOf(SegItem("auto", "نزدیک‌ترین"), SegItem("cf", "Cloudflare")), ui.pick, enabled = !ui.running, onSelect = act.pick)
-        }
-        Box(Modifier.weight(1f)) {
-            Segmented(listOf(SegItem("quick", "سریع"), SegItem("full", "کامل")), ui.mode, enabled = !ui.running, onSelect = act.mode)
-        }
+    // ۱.۴۵: دو ردیف با اسم: سرور تست، بعد مدت تست
+    SpeedOptionRow("سرور تست") {
+        Segmented(listOf(SegItem("auto", "نزدیک‌ترین"), SegItem("cf", "Cloudflare")), ui.pick, enabled = !ui.running, onSelect = act.pick)
+    }
+    Spacer(Modifier.height(D.S2))
+    SpeedOptionRow("حالت تست") {
+        Segmented(listOf(SegItem("quick", "سریع"), SegItem("full", "کامل")), ui.mode, enabled = !ui.running, onSelect = act.mode)
     }
     ui.error?.let { Spacer(Modifier.height(D.S2)); T(it, size = 12.sp, color = K.Red) }
     Spacer(Modifier.height(D.S3))
@@ -840,5 +839,14 @@ private fun Tag(text: String, c: Color) {
     val sh = RoundedCornerShape(50)
     Box(Modifier.clip(sh).background(c.copy(alpha = .12f)).border(1.dp, c.copy(alpha = .4f), sh).padding(horizontal = 6.dp, vertical = 1.dp)) {
         T(text, size = 9.sp, color = c)
+    }
+}
+
+/** یک ردیف تنظیم تست سرعت: اسم با پهنای ثابت، گزینه‌ها بقیه‌ی ردیف */
+@Composable
+private fun SpeedOptionRow(label: String, content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        T(label, size = 12.sp, color = K.Sub, weight = FontWeight.Bold, maxLines = 1, modifier = Modifier.width(72.dp))
+        Box(Modifier.weight(1f)) { content() }
     }
 }

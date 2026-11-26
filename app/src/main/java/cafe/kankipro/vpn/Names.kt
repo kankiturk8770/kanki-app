@@ -114,11 +114,7 @@ fun protoTitle(p: String) = when (p) {
     "wireguard" -> "WireGuard"
     "hysteria2" -> "Hysteria2"
     "xray" -> "Xray"
-    "ikev2" -> "IKEv2"
-    "ikev2-direct" -> "IKEv2 Direct"
-    "openvpn/udp" -> "OpenVPN UDP"
-    "openvpn/tcp" -> "OpenVPN TCP"
-    else -> "OpenVPN"
+    else -> p
 }
 
 fun pingColor(ms: Long) = when {

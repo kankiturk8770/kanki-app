@@ -38,6 +38,10 @@ import java.io.File
  * کد برنامه دست نمی‌زند.
  */
 abstract class ShotsBase {
+    init {
+        useSoftKeys()
+    }
+
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 

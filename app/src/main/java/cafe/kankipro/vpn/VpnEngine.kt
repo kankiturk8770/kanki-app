@@ -64,7 +64,31 @@ object VpnEngine {
             backend ?: create(ctx.applicationContext).also { backend = it }
         }
 
-    fun up(ctx: Context, configText: String, resetTimer: Boolean = true) {
+    /**
+     * ۱.۴۵: روشن، خاموش و عوض کردن موتور فقط یکی‌یکی (یک Mutex کوروتین)؛ دو دکمه یا دکمه و نوتیفیکیشن با هم
+     * دیگر دو کارت شبکه یا موتور نیمه‌خاموش نمی‌سازند. پیش از هر روشن شدن، موتور و کارت شبکه‌ی قبلی کاملاً آزاد
+     * می‌شوند. همیشه روی Dispatchers.IO (هرگز رشته‌ی اصلی).
+     */
+    private val lock = kotlinx.coroutines.sync.Mutex()
+
+    suspend fun up(ctx: Context, configText: String, resetTimer: Boolean = true) =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { lock.withLock { upNow(ctx, configText, resetTimer) } }
+
+    suspend fun down(ctx: Context) =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { lock.withLock { downNow(ctx) } }
+
+    /** for plain threads (receivers, the tile): the same lock */
+    fun upBlocking(ctx: Context, configText: String) = kotlinx.coroutines.runBlocking { up(ctx, configText) }
+    fun downBlocking(ctx: Context) = kotlinx.coroutines.runBlocking { down(ctx) }
+
+    private suspend fun <T> kotlinx.coroutines.sync.Mutex.withLock(f: () -> T): T {
+        lock()
+        try { return f() } finally { unlock() }
+    }
+
+    private fun upNow(ctx: Context, configText: String, resetTimer: Boolean) {
+        // the tun of the engine before is released first (an engine switch never holds two)
+        if (isUp(ctx)) downNow(ctx, keepTimer = true)
         if (HyEngine.isHy(configText)) {
             // Hysteria2 موتور جدا دارد؛ اول اتصال وایرگارد/امنزیا (اگر بالاست) پایین می‌آید
             runCatching { if (awgUp(ctx)) backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
@@ -111,10 +135,10 @@ object VpnEngine {
     /** برای اتصال‌هایی که با موتور دیگر (IKEv2) برقرار می‌شوند */
     fun markConnected() { connectedAt = System.currentTimeMillis() }
 
-    fun down(ctx: Context) {
-        runCatching { HyEngine.down(ctx) }
-        runCatching { backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }
-        connectedAt = 0L
+    private fun downNow(ctx: Context, keepTimer: Boolean = false) {
+        runCatching { HyEngine.down(ctx) }.onFailure { android.util.Log.w("KankiVPN", "engine down: ${it.javaClass.simpleName}") }
+        runCatching { backend(ctx).setState(tunnel, Tunnel.State.DOWN, null) }.onFailure { android.util.Log.w("KankiVPN", "awg down: ${it.javaClass.simpleName}") }
+        if (!keepTimer) connectedAt = 0L
     }
 
     private fun awgUp(ctx: Context): Boolean =

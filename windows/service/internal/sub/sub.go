@@ -21,14 +21,35 @@ import (
 	"time"
 )
 
-// Kanki panel hosts; each one serves the same page and config links. Only
-// these two serve the subscription (plus the panel's own sub_base, if the
-// admin sets one); the old sub.kanki.pro is filtered in Iran and not used.
-const (
-	FallbackHost = "https://fi.kankipro.cafe:2053"
-	IranHost     = "https://s1s.polimax.shop:2053"
-	oldHost      = "https://sub.kanki.pro:2053"
-)
+// PanelHosts are the Kanki panel's addresses (comma separated https:// origins). None is in the source: the
+// release build sets it from the KANKI_PANEL_HOSTS secret with -ldflags "-X .../sub.PanelHosts=...". Each one
+// serves the same page and config links (plus the panel's own sub_base, if the admin sets one). Empty = only the
+// panel of the user's own link.
+var PanelHosts = ""
+
+var originRe = regexp.MustCompile(`^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$`)
+
+// configured the valid origins of PanelHosts, in order
+func configured() []string {
+	var out []string
+	for _, h := range strings.Split(PanelHosts, ",") {
+		h = strings.TrimRight(strings.TrimSpace(h), "/")
+		if originRe.MatchString(h) {
+			out = append(out, h)
+		}
+	}
+	return dedupe(out)
+}
+
+// isConfigured: host is one of this build's panel addresses
+func isConfigured(host string) bool {
+	for _, h := range configured() {
+		if h == host {
+			return true
+		}
+	}
+	return false
+}
 
 // Server is one config the Windows client can run.
 type Server struct {
@@ -76,7 +97,11 @@ func Normalize(input string) (string, string, error) {
 		return m[1], m[2], nil
 	}
 	if c := codeRe.FindString(s); c != "" {
-		return FallbackHost, c, nil
+		hs := configured()
+		if len(hs) == 0 {
+			return "", "", errors.New("enter the full subscription link (this build knows no panel address)")
+		}
+		return hs[0], c, nil
 	}
 	return "", "", errors.New("not a subscription link or code")
 }
@@ -174,7 +199,7 @@ func dial(ctx context.Context, network, addr string) (net.Conn, error) {
 func (c *Client) kankiHosts() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	hs := []string{FallbackHost, IranHost}
+	hs := configured()
 	if c.subBase != "" {
 		hs = append(hs, c.subBase)
 	}
@@ -207,9 +232,6 @@ func (c *Client) isKanki(base string) bool {
 
 // alternates gives the same path on every Kanki host (only for Kanki hosts).
 func (c *Client) alternates(base, path string) []string {
-	if base == oldHost {
-		base = FallbackHost // a link or a saved account from before
-	}
 	if !c.isKanki(base) {
 		return []string{base + path}
 	}
@@ -355,7 +377,7 @@ func (c *Client) learn(a *Account, host string) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if host == FallbackHost || host == IranHost || (c.subBase != "" && host == c.subBase) {
+	if isConfigured(host) || (c.subBase != "" && host == c.subBase) {
 		c.subBase = a.SubBase
 		return
 	}

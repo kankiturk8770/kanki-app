@@ -229,26 +229,45 @@ fun ThemePicker(onSet: (String) -> Unit) {
                 rowItems.forEach { p ->
                     val sel = ThemeState.targetId == p.id
                     val shape = RoundedCornerShape(D.RM)
-                    Column(
-                        Modifier.weight(1f).height(64.dp).goldGlass(shape, selected = sel).clickable { onSet(p.id) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        // زمینه‌ی تم دور، رنگ نئونی وسط (مثل نمونه‌ی طرح)
-                        Box(
-                            Modifier.size(26.dp).drawBehind {
-                                drawCircle(p.gold.copy(alpha = .35f), size.minDimension * .75f)
-                                drawCircle(p.bgMid, size.minDimension / 2)
-                                drawCircle(p.gold, size.minDimension * .27f)
-                                drawCircle(Color.White.copy(alpha = .25f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                            },
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        T(ThemeNames[p.id] ?: p.id, size = 10.5.sp, color = if (sel) K.Text else K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1)
-                    }
+                    ThemePreview(p, sel, Modifier.weight(1f)) { onSet(p.id) }
                 }
             }
         }
+    }
+}
+
+/**
+ * ۱.۴۵: هر تم یک پیش‌نمایش کوچک از صفحه‌ی خودش: زمینه‌ی گرادیان همان تم، نور رنگ اصلی، یک دکمه‌ی پاور کوچک و
+ * تیک وقتی انتخاب شده است؛ اسم تم زیرش.
+ */
+@Composable
+private fun ThemePreview(p: Palette, sel: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(D.RM)
+    Column(modifier.clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.fillMaxWidth().height(76.dp).clip(shape)
+                .background(Brush.verticalGradient(listOf(p.bgTop, p.bgMid, p.bgBottom)))
+                .border(if (sel) 2.dp else 1.dp, if (sel) p.gold else Color.White.copy(alpha = .14f), shape)
+                .drawBehind {
+                    // نور رنگ اصلی تم پشت دکمه
+                    drawCircle(Brush.radialGradient(listOf(p.gold.copy(alpha = .45f), Color.Transparent), center = center, radius = size.minDimension * .55f), size.minDimension * .55f)
+                    // دکمه‌ی پاور کوچک: حلقه‌ی رنگ تم و نشان پاور
+                    val r = size.minDimension * .22f
+                    drawCircle(p.bgMid, r)
+                    drawCircle(p.gold, r, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                    val ir = r * .5f
+                    drawArc(p.power, -60f, 300f, false, topLeft = center - androidx.compose.ui.geometry.Offset(ir, ir),
+                        size = androidx.compose.ui.geometry.Size(ir * 2, ir * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    drawLine(p.power, center - androidx.compose.ui.geometry.Offset(0f, ir * 1.15f), center - androidx.compose.ui.geometry.Offset(0f, ir * .2f), 1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    // نوار پایین (مثل نوار تب‌ها)
+                    drawRoundRect(Brush.verticalGradient(listOf(p.navTop, p.navBottom)), topLeft = androidx.compose.ui.geometry.Offset(size.width * .2f, size.height * .84f),
+                        size = androidx.compose.ui.geometry.Size(size.width * .6f, size.height * .07f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f))
+                },
+        ) {
+            if (sel) Box(Modifier.align(Alignment.TopEnd).padding(5.dp)) { CheckMark(true, 16.dp, p.gold) }
+        }
+        Spacer(Modifier.height(5.dp))
+        T(ThemeNames[p.id] ?: p.id, size = 10.5.sp, color = if (sel) K.Text else K.Sub, font = Poppins, weight = FontWeight.SemiBold, ltr = true, maxLines = 1)
     }
 }
 
@@ -300,7 +319,8 @@ fun AccountSheet(visible: Boolean, a: Account?, act: AccountActions) {
                         }
                         InfoRow("مصرف‌شده", a.used)
                         InfoRow("زمان باقی‌مانده", a.timeRemaining)
-                        InfoRow("تاریخ انقضا", if (a.expiry == "—") "بدون محدودیت" else a.expiry)
+                        // زمانِ نامحدود: «تاریخ انقضا: بدون محدودیت» تکرار همان خط بالاست و نشان داده نمی‌شود
+                        if (a.timeRemaining != "نامحدود" && a.expiry != "—") InfoRow("تاریخ انقضا", a.expiry)
                         InfoRow("اتصال همزمان", a.connections)
                     }
                     Spacer(Modifier.height(D.S4))

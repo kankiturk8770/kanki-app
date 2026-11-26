@@ -92,7 +92,7 @@ object Sfx {
         }
     }
 
-    fun soundOn(ctx: Context) = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE).getBoolean("sound", true)
+    fun soundOn(ctx: Context) = SecurePrefs.get(ctx).getBoolean("sound", true)
 }
 
 /**

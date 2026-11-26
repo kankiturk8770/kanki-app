@@ -107,8 +107,15 @@ func TestNormalize(t *testing.T) {
 	if err != nil || b != "https://p.example.com:2053" || c != "kanki-12-abcd1234" {
 		t.Fatal(b, c, err)
 	}
+	// a bare code: only with a panel address in the build, else the full link is asked for
+	restore := withHosts("")
+	if _, _, err = Normalize("code: kanki-12-abcd1234"); err == nil {
+		t.Fatal("a bare code without any known panel was accepted")
+	}
+	restore()
+	defer withHosts("https://p1.example:2053")()
 	b, c, err = Normalize("code: kanki-12-abcd1234")
-	if err != nil || b != FallbackHost || c != "kanki-12-abcd1234" {
+	if err != nil || b != "https://p1.example:2053" || c != "kanki-12-abcd1234" {
 		t.Fatal(b, c, err)
 	}
 	if _, _, err = Normalize("hello"); err == nil {
@@ -233,6 +240,7 @@ func TestParseRealPanelPage(t *testing.T) {
 // A sub_base from a page that did not come from a Kanki host must never join the Kanki hosts
 // (it would receive the next account's code); Reset forgets learned hosts (1.3.2 security review).
 func TestSubBaseOnlyFromKankiHosts(t *testing.T) {
+	defer withHosts("https://p1.example:2053,https://p2.example:2053")()
 	c := NewClient()
 	a := &Account{SubBase: "https://collector.example:8443"}
 	c.learn(a, "https://other-panel.example")
@@ -245,7 +253,7 @@ func TestSubBaseOnlyFromKankiHosts(t *testing.T) {
 		}
 	}
 	b := &Account{SubBase: "https://s9.example.com:2053"}
-	c.learn(b, FallbackHost)
+	c.learn(b, "https://p1.example:2053")
 	if hs := c.kankiHosts(); len(hs) != 3 || hs[2] != "https://s9.example.com:2053" {
 		t.Fatalf("sub_base from the Kanki panel not learned: %v", hs)
 	}

@@ -19,6 +19,14 @@ const val SUPPORT_URL = "https://t.me/KANKI_VPN_ADMIN"
 /** پسوند شناسه‌ی کانفیگ دوم KANKI MIX (از راه تانل) در اشتراک؛ همان TUNNEL_SUFFIX پنل */
 const val TUNNEL_TWIN = "@tunnel"
 
+/** ۱.۴۵: سنجش سرورها پله‌پله (برگه‌های حالت و «دوباره» سرورها) */
+const val PING_BATCH = 3
+const val PING_GAP_MS = 200L
+
+/** سرور یک کانفیگ: «n2@tunnel» و ورودی‌های دیگر تانل «n2~3@tunnel» (پنل ۳.۶۷) هر دو مال «n2»‌اند */
+fun nodeParent(id: String): String =
+    if (id.endsWith(TUNNEL_TWIN)) id.removeSuffix(TUNNEL_TWIN).let { b -> if (Regex("~[2-9]$").containsMatchIn(b)) b.substringBeforeLast('~') else b } else id
+
 /**
  * همه‌ی وضعیت اپ در یک جا.
  * فقط یک نمونه از آن برای کل برنامه ساخته می‌شود (AppState.from)؛ پس با چرخش صفحه
@@ -37,7 +45,7 @@ class AppState private constructor(context: Context) {
     }
 
     private val ctx = context.applicationContext
-    private val prefs = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE)
+    private val prefs = SecurePrefs.get(ctx)
 
     var base by mutableStateOf(prefs.getString("base", null))
     var code by mutableStateOf(prefs.getString("code", null))
@@ -87,9 +95,16 @@ class AppState private constructor(context: Context) {
      */
     /** بار اول (هنوز چیزی انتخاب نشده): بازی‌های نصب‌شده‌ی گوشی، خودکار */
     fun seedGameApps() {
-        if (!prefs.contains("gameApps")) bg.launch {
+        bg.launch {
             val found = withContext(Dispatchers.IO) { GameApps.detect(ctx) }
-            if (!prefs.contains("gameApps")) { gameApps.clear(); gameApps.addAll(found); saveGameApps() }
+            // ۱.۴۵: بازی تازه‌ای که بعداً نصب شد هم خودکار روشن می‌شود؛ بازی‌ای که کاربر خودش برداشت، دیگر برنمی‌گردد
+            val seen = prefs.getStringSet("gamesSeen", null)
+            val fresh = if (!prefs.contains("gameApps")) found else found.filter { seen != null && it !in seen }
+            if (fresh.isNotEmpty() || !prefs.contains("gameApps")) {
+                gameApps.addAll(fresh.filter { it !in gameApps })
+                saveGameApps()
+            }
+            prefs.edit().putStringSet("gamesSeen", ((seen ?: emptySet()) + found).toSet()).apply()
         }
     }
     /** بازی‌های مجاز «فقط بازی» (بار اول: بازی‌های نصب‌شده‌ی گوشی، خودکار) */
@@ -308,7 +323,8 @@ class AppState private constructor(context: Context) {
     // (وقتی ادمین تیک «این سرور تانل دارد» را بزند) از همه‌ی پروتکل‌ها: وایرگارد، امنزیا، هیستریا و KANKI MIX.
     // همه به شکل یک سرور جدا با شناسه‌ی «<شناسه‌ی سرور>@tunnel». کشور و شهرش همان سرور اصلی است؛ فقط برچسبش فرق دارد.
     /** شناسه‌ی سرور اصلیِ کانفیگ تانل (برای بقیه همان شناسه) */
-    fun parentOf(id: String) = id.removeSuffix(TUNNEL_TWIN)
+    /** سرور یک کانفیگ: «n2@tunnel» و ورودی‌های دیگر تانل «n2~3@tunnel» (پنل ۳.۶۷) هر دو مال «n2»‌اند */
+    fun parentOf(id: String) = nodeParent(id)
     fun isTunnelTwin(id: String?) = id?.endsWith(TUNNEL_TWIN) == true
     private fun hasTwin(id: String) = account?.configs?.any { it.node == id + TUNNEL_TWIN } == true
     /**
@@ -371,14 +387,26 @@ class AppState private constructor(context: Context) {
         }
     }
 
+    /** سنجش‌ها پله‌پله: هر PING_GAP_MS یکی شروع می‌شود و حداکثر PING_BATCH با هم */
+    private suspend fun <T, R> staggered(list: List<T>, f: suspend (T) -> R): List<R> {
+        val gate = kotlinx.coroutines.sync.Semaphore(PING_BATCH)
+        return kotlinx.coroutines.coroutineScope {
+            list.mapIndexed { i, c ->
+                async {
+                    kotlinx.coroutines.delay(i * PING_GAP_MS)
+                    gate.acquire()
+                    try { f(c) } finally { gate.release() }
+                }
+            }.awaitAll()
+        }
+    }
+
     /** شهر خروجی سرور (کانفیگ تانل: شهر سرور اصلی) */
     fun cityOf(id: String): String? = nodeCity[id] ?: nodeCity[parentOf(id)]
 
     /** پینگ واقعی چند کانفیگ با هم (Probe)؛ نتیجه در pings هم ذخیره می‌شود */
     private suspend fun pingMany(list: List<Pair<String, String>>): Map<Pair<String, String>, Long?> {
-        val res = kotlinx.coroutines.coroutineScope {
-            list.map { c -> async { c to probe(c.first, c.second) } }.awaitAll()
-        }
+        val res = staggered(list) { c -> c to probe(c.first, c.second) }
         res.forEach { (c, v) -> pings["${c.first}/${c.second}"] = v ?: -1L }
         return res.toMap()
     }
@@ -450,8 +478,10 @@ class AppState private constructor(context: Context) {
         kotlinx.coroutines.coroutineScope {
             // ۱.۴۲: کانفیگ‌های یک کلید (مستقیم و تانل همان سرور) پشت هم سنجیده می‌شوند، نه هم‌زمان: دست‌دادن‌های هم‌زمان یک کلید از دو
             // راه، سرور WireGuard را به «تکرار» و «سیل» می‌انداخت (جواب نمی‌داد یا دیر می‌داد) و پایداری و پینگ غلط درمی‌آمد
-            list.groupBy { peerOf(it.first, it.second) }.values.map { group ->
-                async { group.map { c ->
+            // ۱.۴۵: پله‌پله، هر ۲۰۰ میلی‌ثانیه یک گروه و حداکثر ۳ گروه با هم
+            val gate = kotlinx.coroutines.sync.Semaphore(PING_BATCH)
+            list.groupBy { peerOf(it.first, it.second) }.values.toList().mapIndexed { gi, group ->
+                async { kotlinx.coroutines.delay(gi * PING_GAP_MS); gate.acquire(); try { group.map { c ->
                     c to runCatching {
                         val l = account?.configs?.firstOrNull { it.node == c.first && it.protocol == c.second } ?: return@runCatching null
                         // کانفیگی که همین الان وصل است دوباره دست نمی‌دهد (سرور اتصال زنده را به سوکت آزمایش می‌برد)
@@ -470,7 +500,7 @@ class AppState private constructor(context: Context) {
                         if (q != null) gameQ["${c.first}/${c.second}"] = q
                         q?.score ?: pings["${c.first}/${c.second}"]?.takeIf { it > 0 }?.toDouble()
                     }.getOrNull()
-                } }
+                } } finally { gate.release() } }
             }.awaitAll().flatten().toMap()
         }
     }
@@ -559,7 +589,9 @@ class AppState private constructor(context: Context) {
             p == "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
             // در حالت ضد فیلتر، AmneziaWG (مستقیم/تانل) هم انتخاب دستی همین حالت است
             mode == KMode.FILTER && p in FILTER_PICK -> setFilter(false, p, id)
-            // هر پروتکل دیگر (KANKI MIX، WireGuard، Hysteria2، …) انتخاب دستی همان در گیمینگ است
+            // Hysteria2 فقط در ضد فیلتر است (گیمینگ: KANKI MIX، WireGuard، AmneziaWG)
+            p == "hysteria2" -> { setFilter(false, p, id); changeMode(KMode.FILTER) }
+            // KANKI MIX فقط گیمینگ است؛ WireGuard و AmneziaWG بیرون از ضد فیلتر هم انتخاب دستی گیمینگ‌اند
             else -> { setGame(false, p, id); changeMode(KMode.GAME) }
         }
     }
@@ -647,7 +679,8 @@ class AppState private constructor(context: Context) {
     private var autoRetries = 0
     /** آخرین خواندن صفحه‌ی اشتراک از شبکه بود یا از نسخه‌ی ذخیره‌شده */
     @Volatile private var lastFromCache = false
-    private val syncIntervalMs = 3L * 60 * 60 * 1000
+    /** ۱.۴۵: اشتراک و کانفیگ‌ها تا ۴ ساعت از حافظه‌ی گوشی (رمزشده) خوانده می‌شوند؛ پنل فقط بعد از آن، با «بروزرسانی» دستی یا با کد تازه */
+    private val syncIntervalMs = 4L * 60 * 60 * 1000
 
     // ---------------- ربات راهنما
     /** آموزش قدم‌به‌قدم یک بار دیده شده؟ (بار اول خودکار نشان داده می‌شود) */
@@ -965,14 +998,19 @@ class AppState private constructor(context: Context) {
         }
     }.getOrDefault(true)
 
-    /** هر ۳ ساعت یک بار، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند */
+    /**
+     * وقتی ۴ ساعت از آخرین بروزرسانی گذشت (نه زودتر)، بی‌صدا اشتراک و کانفیگ‌ها را از پنل تازه می‌کند. هیچ درخواستی
+     * پیش از آن نمی‌رود: تا همان لحظه صبر می‌کند (اگر پنل جواب نداد، ۱۰ دقیقه بعد دوباره).
+     */
     private fun watchSync() {
         bg.launch {
             while (true) {
-                kotlinx.coroutines.delay(30 * 60 * 1000L)
+                val left = syncIntervalMs - (System.currentTimeMillis() - prefs.getLong("last_sync", 0L))
+                kotlinx.coroutines.delay(left.coerceIn(60_000L, syncIntervalMs))
                 if (!loggedIn || loading || vstate == VState.CONNECTING || realTesting) continue
                 if (System.currentTimeMillis() - prefs.getLong("last_sync", 0L) < syncIntervalMs) continue
                 silentSync()
+                if (System.currentTimeMillis() - prefs.getLong("last_sync", 0L) >= syncIntervalMs) kotlinx.coroutines.delay(10 * 60_000L)
             }
         }
     }
@@ -993,30 +1031,6 @@ class AppState private constructor(context: Context) {
             pruneOld(a)
             locate()
         } } finally { syncLock.unlock() }
-    }
-
-    private var usageBusy = false
-
-    /**
-     * فقط حجم مصرفی، زمان باقی‌مانده و وضعیت حساب را از صفحه‌ی اشتراک می‌گیرد (یک درخواست کوچک).
-     * کانفیگ‌ها و فهرست سرورها دست نمی‌خورد؛ آن‌ها هر ۳ ساعت یا با بروزرسانی دستی بروز می‌شوند.
-     */
-    suspend fun refreshUsage(minAgeMs: Long = 30 * 60 * 1000L) {
-        val b = base ?: return
-        val c = code ?: return
-        if (usageBusy || loading) return
-        // با هر بار باز کردن برنامه درخواست نمی‌رود: حجم و زمان حداکثر هر ۳۰ دقیقه یک بار
-        if (System.currentTimeMillis() - prefs.getLong("last_usage", 0L) < minAgeMs) return
-        usageBusy = true
-        try {
-            val fresh = runCatching { augment(withContext(Dispatchers.IO) { loadAccount(b, c) }) }.getOrNull()
-            if (fresh == null || lastFromCache) return
-            prefs.edit().putLong("last_usage", System.currentTimeMillis()).apply()
-            val cur = account
-            account = if (cur != null) fresh.copy(configs = cur.configs) else fresh
-        } finally {
-            usageBusy = false
-        }
     }
 
     /**
@@ -1049,11 +1063,9 @@ class AppState private constructor(context: Context) {
         locateNodes()
         bg.launch { runCatching { locate() } }   // مکان خود کاربر از شبکه؛ اتصال خودکار منتظرش نمی‌ماند
         if (!fresh) {
-            // بیش از ۳ ساعت گذشته: بروزرسانی پشت صحنه (اتصال خودکار منتظرش نمی‌ماند)؛ تا جواب پنل نیامده همین کانفیگ‌ها
+            // بیش از ۴ ساعت گذشته: بروزرسانی پشت صحنه (اتصال خودکار منتظرش نمی‌ماند)؛ تا جواب پنل نیامده همین کانفیگ‌ها
             // نشان داده می‌شوند و اگر پنل جواب نداد یا جواب ناقص داد، همین‌ها می‌مانند
             bg.launch { runCatching { silentSync() } }
-        } else {
-            runCatching { refreshUsage() }   // حجم مصرفی همیشه تازه است، حتی وقتی کانفیگ‌ها از حافظه خوانده شده‌اند
         }
         if (pingAfterLoad && account != null) { pingAfterLoad = false; startPingAll() }
     }
@@ -1083,8 +1095,6 @@ class AppState private constructor(context: Context) {
 
     /** سروری که در تب سرورها باز است (بین تب‌ها حفظ می‌شود) */
     var openNode by mutableStateOf<String?>(null)
-    /** نوع اتصال OpenVPN: udp یا tcp */
-    var ovpnTransport by mutableStateOf(prefs.getString("ovpn", "udp") ?: "udp")
     /** نتایج تست پینگ: کلید «node/protocol» ؛ مقدار -1 یعنی ناموفق */
     val pings = mutableStateMapOf<String, Long>()
     val pinging = mutableStateMapOf<String, Boolean>()
@@ -1120,7 +1130,7 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * OpenVPN و IKEv2 حذف می‌شوند. کانفیگ‌های بخش «تانل» همان‌هایی‌اند که از پنل می‌آیند
+     * پروتکل‌های قدیمی (OpenVPN، IKEv2) که پنل‌های قدیمی هنوز می‌فرستند کنار گذاشته می‌شوند. کانفیگ‌های بخش «تانل» همان‌هایی‌اند که از پنل می‌آیند
      * (Endpoint آن‌ها دامنه‌ی ایرانی است).
      *
      * بخش «مستقیم»: فقط AmneziaWG (وایرگارد ساده‌ی مستقیم در ایران وصل نمی‌شود، پس برایش
@@ -1135,7 +1145,8 @@ class AppState private constructor(context: Context) {
         val base = all.map { l -> if (l.protocol == "amneziawg" && a.awg[l.node]?.via == "direct") l.copy(protocol = "amneziawg-direct") else l }
         val direct = base.filter { it.protocol == "amneziawg" }.mapNotNull { l ->
             val r = a.awg[l.node]
-            val h = if (r != null) r.direct.takeIf { it.isNotBlank() } else directHost(l)
+            // پنل‌های پیش از ۳.۹.۱ آدرس مستقیم نمی‌دهند: برایشان نسخه‌ی مستقیم ساخته نمی‌شود (هیچ دامنه‌ای حدس زده نمی‌شود)
+            val h = r?.direct?.takeIf { it.isNotBlank() }
             h?.let { l.copy(protocol = l.protocol + "-direct", url = l.url + "#direct=" + it) }
         }
         // هر لینک Xray یک «سرور» جدا با پروتکل xray؛ مکانش (اگر پنل داده) کنار خروجی‌های بقیه‌ی سرورها
@@ -1148,21 +1159,6 @@ class AppState private constructor(context: Context) {
             ConfigLink(protocol = "xray", node = id, nodeName = x.name.ifBlank { XrayCfg.protoName(x.link) + " " + (i + 1) }, url = "xray:" + x.link)
         }
         return a.copy(configs = base + direct + xray, exits = a.exits + xrayExits, xrayById = xrayById)
-    }
-
-    /** کد دوحرفی کشور یک سرور: اول از اسم سرور، اگر نشد از شناسه‌ی نود (مثلاً tr یا fr) */
-    private fun isoOfConfig(l: ConfigLink): String? =
-        isoOfFlag(flagOf(l.nodeName)) ?: isoOfFlag(flagOf(l.node))
-
-    /**
-     * فقط برای پنل‌های قدیمی (بدون awg_via): دامنه‌ی مستقیم از روی کشور اسم سرور حدس زده می‌شود:
-     *   ترکیه → tr.kankipro.cafe    آلمان → g.kankipro.cafe   فرانسه → fr.kankipro.cafe …
-     * پنل جدید آدرس درست را خودش می‌دهد (دو سرور یک کشور: fr و fr2) و فقط وقتی که به همان سرور اشاره کند.
-     */
-    private fun directHost(l: ConfigLink): String? = when (val iso = isoOfConfig(l)) {
-        null -> null
-        "DE" -> "g.kankipro.cafe"
-        else -> "${iso.lowercase()}.kankipro.cafe"
     }
 
     /** دریافت متن کانفیگ؛ برای نسخه‌ی مستقیم، آدرس Endpoint عوض می‌شود */
@@ -1193,7 +1189,7 @@ class AppState private constructor(context: Context) {
     }
 
     /**
-     * صفحه‌ی اشتراک. اول آدرس اصلی (sub.kanki.pro، سرور ایران)، اگر جواب نداد آدرس قدیمی؛
+     * صفحه‌ی اشتراک: همه‌ی آدرس‌های پنل با هم (کد فقط در سرآیند X-Kanki-Sub)، اولین جواب سالم؛
      * اگر هیچ‌کدام در دسترس نبود از نسخه‌ی ذخیره‌شده خوانده می‌شود. لینک کانفیگ‌ها با همان آدرسی
      * که جواب داده سنجیده می‌شوند (و آن آدرس برای خواندن نسخه‌ی ذخیره‌شده نگه داشته می‌شود).
      */
@@ -1242,7 +1238,7 @@ class AppState private constructor(context: Context) {
         node = n
         fixProto()
         save()
-        if (wasOn && proto != "openvpn") connect()
+        if (wasOn) connect()
     }
 
     fun fixProto() {
@@ -1252,11 +1248,6 @@ class AppState private constructor(context: Context) {
         }
         val av = available()
         if (av.isNotEmpty() && proto !in av) { proto = av.first(); save() }
-        val a = account ?: return
-        if (proto == "openvpn" && !hasCfg(node, "openvpn/$ovpnTransport")) {
-            a.configs.firstOrNull { it.node == node && it.protocol.startsWith("openvpn") && hasCfg(node, it.protocol) }
-                ?.let { ovpnTransport = it.protocol.substringAfter("/"); save() }
-        }
     }
 
     /**
@@ -1367,8 +1358,8 @@ class AppState private constructor(context: Context) {
     fun panelMtu(node: String, p: String): String? = infos["$node/$p"]?.mtu?.takeIf { it.toIntOrNull() != null }
     fun setMtu(p: String, v: String) { prefs.edit().putString("mtu_$p", v.trim()).apply() }
 
-    /** کلید کانفیگ فعال (برای OpenVPN نوع اتصال هم لحاظ می‌شود) */
-    fun protoKey(p: String = proto) = if (p == "openvpn") "openvpn/$ovpnTransport" else p
+    /** کلید کانفیگ فعال */
+    fun protoKey(p: String = proto) = p
 
     val loggedIn get() = base != null && code != null
     val subLink get() = if (loggedIn) "$base/sub/$code" else ""
@@ -1378,7 +1369,7 @@ class AppState private constructor(context: Context) {
             .putString("proto", proto).putString("node", node)
             .putString("dns", dns).putBoolean("auto", autoConnect)
             .putBoolean("robotHome", robotOnHome).putBoolean("sound", sounds)
-            .putString("ovpn", ovpnTransport)
+            .remove("ovpn")
             .apply()
     }
 
@@ -1389,12 +1380,13 @@ class AppState private constructor(context: Context) {
     suspend fun login(input: String, baseHint: String? = null): Boolean {
         val n = SubscriptionApi.normalize(input)
         if (n == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
-        val r = if (baseHint != null && n.first == SubscriptionApi.DEFAULT_HOST) baseHint to n.second else n
+        val host = (if (baseHint != null && (n.first == null || n.first == SubscriptionApi.DEFAULT_HOST)) baseHint else n.first)
+            ?: run { error = "لینک کامل اشتراک را وارد کنید (کد تنها کافی نیست)"; return false }
         loading = true; error = null
         return try {
-            val a = augment(withContext(Dispatchers.IO) { loadAccount(r.first, r.second) })
+            val a = augment(withContext(Dispatchers.IO) { loadAccount(host, n.second) })
             unlocking = true
-            base = r.first; code = r.second
+            base = host; code = n.second
             prefs.edit().putString("base", base).putString("code", code).putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
             account = a
             pruneOld(a)   // کانفیگ‌های ذخیره‌شده‌ی اشتراک قبلی جای این یکی را نمی‌گیرند
@@ -1463,7 +1455,6 @@ class AppState private constructor(context: Context) {
 
     /** متن کانفیگ برای این پروتکل سالم است (نیمه‌کاره یا صفحه‌ی خطای یک واسطه نیست) */
     private fun validCfg(protocol: String, txt: String): Boolean = when {
-        protocol.startsWith("openvpn") -> txt.contains("remote ")
         protocol == "hysteria2" -> txt.contains("hysteria2://")
         protocol == "kankimix" -> KmixUri.isKmix(txt)
         protocol == "xray" -> XrayCfg.isXray(txt)
@@ -1478,7 +1469,7 @@ class AppState private constructor(context: Context) {
             val txt = runCatching { withContext(Dispatchers.IO) { fetchConfig(l, forceNet = force) } }.getOrNull()
             val ok = txt != null && validCfg(l.protocol, txt)
             // متن خراب (مثلاً نیمه‌کاره رسیده) برنامه را نمی‌بندد؛ آن کانفیگ فقط «خراب» علامت می‌خورد
-            val info = if (ok) runCatching { ConfigInfo.parse(txt!!) }.getOrNull() else null
+            val info = if (ok && txt != null) runCatching { ConfigInfo.parse(txt) }.getOrNull() else null
             if (info != null) { infos[key] = info; badCfg.remove(key) }
             else if (!infos.containsKey(key)) badCfg[key] = true   // اگر قبلاً سالم خوانده شده بود، همان می‌ماند
         }
@@ -1496,17 +1487,6 @@ class AppState private constructor(context: Context) {
         val link = a.configs.firstOrNull { it.protocol == key && it.node == node }
         if (link == null) { error = "این پروتکل برای اشتراک شما فعال نیست."; return }
         error = null
-
-        if (proto == "openvpn") {
-            try {
-                val text = withContext(Dispatchers.IO) { fetchConfig(link) }
-                val opened = OpenVpnHandoff.open(ctx, text, "Kanki-${link.nodeName}-${ovpnTransport.uppercase()}")
-                error = if (opened) null else "برای OpenVPN ابتدا اپ «OpenVPN Connect» را نصب کنید، سپس دوباره بزنید."
-            } catch (e: Exception) {
-                error = "دریافت پروفایل OpenVPN ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
-            }
-            return
-        }
 
         vstate = VState.CONNECTING
         activeKey = link.node + "|" + link.protocol
@@ -1601,7 +1581,7 @@ class AppState private constructor(context: Context) {
         val wasOn = vstate == VState.ON
         if (wasOn) disconnect()
         selectProto(p)
-        if (wasOn || p == "openvpn") connect()
+        if (wasOn) connect()
     }
 
     /** بهترین پینگ اندازه‌گیری‌شده‌ی یک کانفیگ (UDP واقعی، بعد TCP، بعد پینگ ساده) */
@@ -1853,14 +1833,16 @@ class AppState private constructor(context: Context) {
             .sortedBy { (k, _) -> PROTO_ORDER.indexOf(k.substringAfterLast("/")).let { if (it < 0) 99 else it } }
         val udp = targets.count { it.second.transport != "TCP" }
         pingAllUi = PingAllUi(running = true, done = 0, total = targets.size, udp = udp, tcp = targets.size - udp)
-        val gate = kotlinx.coroutines.sync.Semaphore(6)
+        val gate = kotlinx.coroutines.sync.Semaphore(PING_BATCH)
         // کانفیگ‌های یک کلید (مستقیم و تانل همان سرور) پشت هم، نه هم‌زمان (دست‌دادن هم‌زمان یک کلید از دو راه را سرور رد می‌کرد)
         val locks = HashMap<String, kotlinx.coroutines.sync.Mutex>()
         targets.forEach { (k, _) -> locks.getOrPut(peerOf(k.substringBeforeLast("/"), k.substringAfterLast("/"))) { kotlinx.coroutines.sync.Mutex() } }
         try {
             kotlinx.coroutines.coroutineScope {
-                targets.map { (k, info) ->
+                targets.mapIndexed { i, (k, _) ->
                     async {
+                        // ۱.۴۵: پله‌پله، هر ۲۰۰ میلی‌ثانیه یکی و حداکثر ۳ با هم (سیل بسته‌ی هم‌زمان خط موبایل را پر می‌کرد)
+                        kotlinx.coroutines.delay(i * PING_GAP_MS)
                         val (nd, pr) = k.substringBeforeLast("/") to k.substringAfterLast("/")
                         locks.getValue(peerOf(nd, pr)).lock()
                         gate.acquire()

@@ -63,7 +63,18 @@ import kotlin.math.sin
 enum class KTab(val title: String) { HOME("خانه"), SERVERS("سرورها"), TEST("تست سرعت"), SETTINGS("تنظیمات") }
 
 /** اطلاعات خلاصه‌ی اشتراک برای نوار پایین صفحه‌ی اتصال (فقط عدد)؛ usedFrac: سهم مصرف‌شده از حجم (null = نامحدود) */
-data class SubUi(val gbLeft: String, val daysLeft: String, val status: String, val usedFrac: Float? = null)
+data class SubUi(val gbLeft: String, val daysLeft: String, val status: String, val usedFrac: Float? = null, val usedGb: String? = null) {
+    /** حجم نامحدود (نه حجمی که پنل نگفته) */
+    val unlimited: Boolean get() = gbLeft == "∞"
+
+    /** ۱.۴۵: یک خط خلاصه‌ی حجم: «نامحدود · ۱۲ GB مصرف» یا «۸ گیگ مانده · ۲۳ روز» (اعداد فارسی) */
+    fun quotaLine(en: Boolean = LangState.lang == "en"): String = when {
+        en && unlimited -> "Unlimited" + (usedGb?.let { " · $it GB used" } ?: "")
+        en -> "$gbLeft GB left" + (if (daysLeft == "∞") "" else " · $daysLeft days")
+        unlimited -> "نامحدود" + (usedGb?.let { " · " + faDigits(it) + " GB مصرف" } ?: "")
+        else -> faDigits(gbLeft) + " گیگ مانده" + (if (daysLeft == "∞") "" else " · " + faDigits(daysLeft) + " روز")
+    }
+}
 
 /** سروری که الان به آن وصل است (کارت زیر دکمه‌ی اتصال) */
 data class ServerChipUi(val flag: String, val country: String, val city: String?, val proto: String)
@@ -374,6 +385,8 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
+                    // ۱.۴۵: «اشتراک شما DNS ندارد» یک نوار باریک درست زیر دکمه‌ی اتصال است (نه یک کارت در حالت DNS)
+                    if (ui.hasAccount && !ui.dns.hasDns && ui.mode == KMode.DNS) DnsMissingBanner()
                     // کارت سرور: وصل = سرور واقعی با «اتصال پایدار»؛ قطع = سرور انتخابی روی نقشه با «آماده»
                     val pick = ui.pins.firstOrNull { it.selected }
                     if (on && ui.server != null) ConnectedCard(ui.server, mc)
@@ -385,12 +398,29 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                         if (ui.loading) Spinner(28.dp) else GoldButton("تلاش دوباره", Modifier.fillMaxWidth(), onClick = act.retry)
                     } else {
                         ModeHint(ui.mode)
-                        if (ui.mode == KMode.DNS) DnsCard(ui.dns, ui.vstate, act.dns)
+                        if (ui.mode == KMode.DNS && ui.dns.hasDns) DnsCard(ui.dns, ui.vstate, act.dns)
                     }
                     if (ui.hasAccount || ui.sub != null) StatsCard(ui, act.openAccount)
                 }
             }
         }
+    }
+}
+
+/** نوار باریک «• اشتراک شما DNS ندارد» زیر دکمه‌ی اتصال */
+@Composable
+private fun DnsMissingBanner() {
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.fillMaxWidth().height(28.dp).clip(shape)
+            .background(K.Warn.copy(alpha = .10f)).border(1.dp, K.Warn.copy(alpha = .35f), shape)
+            .padding(horizontal = D.S3),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Dot(K.Warn, 6.dp)
+        Spacer(Modifier.width(6.dp))
+        T("اشتراک شما DNS ندارد", size = 11.sp, color = K.Warn, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -737,9 +767,7 @@ private fun StatsCard(ui: HomeUi, onAccount: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    UsageCell(s.gbLeft, "گیگ مانده")
-                    Spacer(Modifier.width(D.S3))
-                    UsageCell(s.daysLeft, "روز")
+                    T(s.quotaLine(), size = 13.sp, color = K.Text, weight = FontWeight.Black, maxLines = 1)
                     Spacer(Modifier.weight(1f))
                     val c = if (active) K.Good else K.Red
                     Dot(c, 7.dp)
@@ -1007,17 +1035,6 @@ private fun ecgAt(u: Float): Float {
         }
     }
     return 0f
-}
-
-@Composable
-private fun UsageCell(value: String, unit: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val v = faDigits(value)
-        val latin = isLatin(v) || v.none { it in '\u0600'..'\u06FF' }
-        T(v, size = 14.sp, color = K.Text, font = if (latin) Poppins else Vazir, weight = FontWeight.Black, ltr = latin)
-        Spacer(Modifier.width(6.dp))
-        T(unit, size = 11.sp, color = K.Sub, weight = FontWeight.Normal)
-    }
 }
 
 /** تیک انتخاب (دایره به رنگ «وصل» تم) */

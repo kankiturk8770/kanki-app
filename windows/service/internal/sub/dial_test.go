@@ -38,17 +38,32 @@ func TestDialByNameAndEveryHostInTheError(t *testing.T) {
 	t.Log(err)
 }
 
-func TestOnlyTheTwoSubHosts(t *testing.T) {
+func TestOnlyTheConfiguredSubHosts(t *testing.T) {
+	defer withHosts("https://a.example:2053, https://b.example:2053/ ,http://plain.example,https://u@c.example")()
+	if got := configured(); len(got) != 2 || got[0] != "https://a.example:2053" || got[1] != "https://b.example:2053" {
+		t.Fatalf("configured: %v", got)
+	}
 	c := NewClient()
-	for _, base := range []string{FallbackHost, IranHost, oldHost} {
+	for _, base := range []string{"https://a.example:2053", "https://b.example:2053"} {
 		got := c.alternates(base, "/sub/kanki-1-abcd")
 		if len(got) != 2 {
 			t.Fatalf("%s: %v", base, got)
 		}
 		for _, u := range got {
-			if !strings.HasPrefix(u, FallbackHost) && !strings.HasPrefix(u, IranHost) {
+			if !strings.HasPrefix(u, "https://a.example:2053/") && !strings.HasPrefix(u, "https://b.example:2053/") {
 				t.Fatalf("%s: unexpected host in %v", base, got)
 			}
 		}
 	}
+	// another panel: only itself, the code never goes to the configured hosts
+	if got := c.alternates("https://other.example", "/sub/kanki-1-abcd"); len(got) != 1 || got[0] != "https://other.example/sub/kanki-1-abcd" {
+		t.Fatalf("other panel: %v", got)
+	}
+}
+
+// withHosts sets the build's panel addresses for one test
+func withHosts(spec string) func() {
+	was := PanelHosts
+	PanelHosts = spec
+	return func() { PanelHosts = was }
 }

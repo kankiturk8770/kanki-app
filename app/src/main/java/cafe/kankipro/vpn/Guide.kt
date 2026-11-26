@@ -101,17 +101,17 @@ val guideSteps = listOf(
     GuideStep("game_fams", "پروتکل‌های گیمینگ", "همه روی UDP‌ان، مثل خود بازی. فقط اونایی که توی اشتراکت هست دیده می‌شن:",
         "Gaming protocols", "All run on UDP, like the game itself. Only the ones in your subscription are shown:",
         points = listOf(
-            "KANKI MIX" to "پروتکل خود کانکی؛ کمترین لگ و پکت‌لاس.",
-            "Hysteria2" to "پرسرعت و روی اینترنت ضعیف هم پایدار.",
-            "Amnezia / WireGuard" to "Amnezia روی شبکه‌ی محدود هم وصل می‌مونه؛ WireGuard سبک و سریعه.",
+            "KANKI MIX" to "پروتکل خود کانکی؛ کمترین لگ و پکت‌لاس. اگه وای‌فای افت کنه، دیتای گوشی هم کمک می‌کنه و پورت رو بی‌قطعی عوض می‌کنه.",
+            "WireGuard" to "سبک و سریع، با کمترین پینگ وقتی مسیر باز باشه.",
+            "AmneziaWG" to "مثل WireGuard، ولی روی شبکه‌ی محدود هم وصل می‌مونه.",
         ),
         pointsEn = listOf(
-            "KANKI MIX" to "Kanki's own protocol, the lowest lag and packet loss.",
-            "Hysteria2" to "Fast, and steady even on weak internet.",
-            "Amnezia / WireGuard" to "Amnezia stays connected on restricted networks; WireGuard is light and fast.",
+            "KANKI MIX" to "Kanki's own protocol, the lowest lag and packet loss. If Wi-Fi drops packets, mobile data helps and the port changes without a cut.",
+            "WireGuard" to "Light and fast, the lowest ping when the route is open.",
+            "AmneziaWG" to "Like WireGuard, but it stays connected on restricted networks too.",
         ), sheet = "game"),
-    GuideStep("game_only", "بازی‌ها و تنظیمات", "چرخ‌دنده ← «انتخاب بازی‌ها» و تنظیمات هر هسته. در گیمینگ با هر پروتکلی که وصل شوی فقط بازی‌های این فهرست اینترنت دارن و بقیه‌ی برنامه‌ها تا قطع بسته‌اند، پس پینگ پایدارتر می‌مونه. سرویس‌های گوگل (برای ورود به بازی) باز می‌مونن. بازی‌های نصب‌شده خودشون میان؛ با «افزودن بازی» هر برنامه‌ی دیگه رو هم اضافه کن. اندروید ۱۰ به بالا.",
-        "Games and settings", "Gear → Choose games, plus each core's settings. In gaming, whatever protocol you connect with, only the games on this list get internet and other apps are closed until you disconnect, so your ping stays steadier. Google services stay open for game login. Installed games come by themselves; add any other app with Add a game. Android 10 and later.", sheet = "game"),
+    GuideStep("game_only", "بازی‌ها و تنظیمات", "چرخ‌دنده ← «انتخاب بازی‌ها» و تنظیمات هر هسته. در گیمینگ با هر پروتکلی که وصل شوی فقط بازی‌های این فهرست اینترنت دارن و بقیه‌ی برنامه‌ها تا قطع بسته‌اند، پس پینگ پایدارتر می‌مونه. سرویس‌های گوگل (برای ورود به بازی) باز می‌مونن؛ پلی‌استور و کروم بسته‌ان تا دانلودشون جای بازی رو نگیره. بازی‌های نصب‌شده خودشون میان؛ با «افزودن بازی» هر برنامه‌ی دیگه رو هم اضافه کن. اندروید ۱۰ به بالا.",
+        "Games and settings", "Gear → Choose games, plus each core's settings. In gaming, whatever protocol you connect with, only the games on this list get internet and other apps are closed until you disconnect, so your ping stays steadier. Google services stay open for game login; Play Store and Chrome stay closed so their downloads never take the game's line. Installed games come by themselves; add any other app with Add a game. Android 10 and later.", sheet = "game"),
     GuideStep("game_list", "تانل یا مستقیم", "هر کانفیگ یه کارته با برچسب «مستقیم» یا «تانل»؛ با «همه / مستقیم / تانل» بالای فهرست فقط همون‌ها رو ببین. «تانل» از سرور ایران رد می‌شه و وقتی محدودیت زیاده بهتره؛ «مستقیم» معمولاً پینگ کمتری داره. «بهترین سرور» خودش پایدارترین رو وصل می‌کنه.",
         "Tunnel or direct", "Each config is a card tagged Direct or Tunnel; use All / Direct / Tunnel above the list to see just those. Tunnel goes through the Iran server and is better when restrictions are heavy; Direct usually has a lower ping. Best server connects the steadiest by itself.", sheet = "game"),
     GuideStep(null, "اگه پینگ بالا رفت", "گاهی توی ایران UDP محدود می‌شه و پینگ یه کم بالا می‌ره. اون موقع تانل یا یه پروتکل دیگه رو امتحان کن.",
@@ -272,7 +272,9 @@ private fun GuideBubble(
             Spacer(Modifier.width(D.S2))
             T(if (en) step.titleEn else step.title, size = 16.sp, color = K.Gold, weight = FontWeight.Black, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(D.S2))
-            T(trf("%d از %d", idx + 1, guideSteps.size).let { if (en) it else faDigits(it) }, size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1)
+            // ۱.۴۵: شمارنده با پهنای ثابت («۱ از ۱۷» تا «۱۷ از ۱۷») تا عنوان با هر قدم جابه‌جا نشود
+            T(guideCounter(idx, guideSteps.size, en), size = 11.sp, color = K.Sub, weight = FontWeight.Normal, maxLines = 1,
+                modifier = Modifier.widthIn(min = 52.dp))
         }
         Spacer(Modifier.height(D.S2))
         // متن اگر جا نشد خودش اسکرول می‌خورد؛ دکمه‌ها همیشه کامل دیده می‌شوند
@@ -429,4 +431,11 @@ fun RobotBanner(alert: RobotAlert, modifier: Modifier = Modifier, onAction: (Str
             contentAlignment = Alignment.Center,
         ) { T("✕", size = 12.sp, color = K.Sub, font = Poppins, ltr = true) }
     }
+}
+
+/** «۵ از ۱۷» (فارسی) یا «5 of 17»؛ قدم بیرون از بازه به نزدیک‌ترین قدم می‌چسبد */
+fun guideCounter(idx: Int, total: Int, en: Boolean): String {
+    val n = total.coerceAtLeast(1)
+    val i = idx.coerceIn(0, n - 1) + 1
+    return if (en) "$i of $n" else faDigits("$i") + " از " + faDigits("$n")
 }

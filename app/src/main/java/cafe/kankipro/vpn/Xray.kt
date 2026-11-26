@@ -37,7 +37,7 @@ object XrayCfg {
         val st = o.optJSONObject("streamSettings")
         val net = st?.optString("network")?.ifBlank { "tcp" } ?: "tcp"
         val sec = st?.optString("security")?.takeIf { it.isNotBlank() && it != "none" }
-        listOfNotNull(sec?.uppercase(), net.uppercase()).joinToString(" · ")
+        listOfNotNull(sec?.uppercase(), net.uppercase(), fragment(link)?.let { "Fragment" }).joinToString(" · ")
     }.getOrDefault("")
 
     private fun b64(s: String): ByteArray? {
@@ -200,16 +200,41 @@ object XrayCfg {
         }
     }
 
-    /** کل کانفیگ Xray: یک ورودی SOCKS محلی و یک خروجی به سرور */
+    /** fragment لینک (پنل ۳.۶۵): (packets, length, interval)؛ null اگر نیست یا شکلی که Xray قبول می‌کند ندارد */
+    fun fragment(link: String): Triple<String, String, String>? {
+        val l = link.trim()
+        if (l.substringBefore("://").lowercase() == "vmess") return null
+        val q = query(l.substringAfter("://").substringBefore("#").substringAfterLast("@").substringAfter("?", ""))
+        val v = q["fragment"]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val p = v.split(",")
+        if (p.size != 3) return null
+        fun range(x: String): Boolean {
+            val a = x.substringBefore("-")
+            val b = x.substringAfter("-", a)
+            return a.isNotEmpty() && b.isNotEmpty() && a.length <= 5 && b.length <= 5 && (a + b).all { it.isDigit() } && a.toInt() <= b.toInt()
+        }
+        val packets = p[0].trim()
+        if (!(packets == "tlshello" || range(packets)) || !range(p[1].trim()) || !range(p[2].trim())) return null
+        return Triple(packets, p[1].trim(), p[2].trim())
+    }
+
+    /** کل کانفیگ Xray: یک ورودی SOCKS محلی و یک خروجی به سرور (با fragment لینک: از راه یک freedom که تکه می‌کند) */
     fun config(link: String, serverIp: String, socksPort: Int, auth: SocksAuth): String {
         val out = outbound(link, serverIp).put("tag", "proxy")
+        val frag = fragment(link)?.let { (p, l, i) ->
+            val st = out.optJSONObject("streamSettings") ?: JSONObject().also { out.put("streamSettings", it) }
+            val so = st.optJSONObject("sockopt") ?: JSONObject().also { st.put("sockopt", it) }
+            so.put("dialerProxy", "fragment")
+            JSONObject().put("tag", "fragment").put("protocol", "freedom")
+                .put("settings", JSONObject().put("fragment", JSONObject().put("packets", p).put("length", l).put("interval", i)))
+        }
         val socks = JSONObject().put("tag", "socks").put("listen", auth.host).put("port", socksPort).put("protocol", "socks")
             .put("settings", auth.xraySettings())
             .put("sniffing", JSONObject().put("enabled", false))
         return JSONObject()
             .put("log", JSONObject().put("loglevel", "warning"))
             .put("inbounds", JSONArray().put(socks))
-            .put("outbounds", JSONArray().put(out).put(JSONObject().put("protocol", "blackhole").put("tag", "block")))
+            .put("outbounds", JSONArray().put(out).apply { if (frag != null) put(frag) }.put(JSONObject().put("protocol", "blackhole").put("tag", "block")))
             .toString()
     }
 

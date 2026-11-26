@@ -1,8 +1,6 @@
 package cafe.kankipro.vpn
 
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** یک کانفیگ قابل دانلود از صفحه‌ی اشتراک */
 data class ConfigLink(
@@ -29,10 +27,6 @@ data class Account(
     val usedGb: Double? = null,
     /** پیامی که ادمین در پنل (ربات فروش › پیام اپ) نوشته؛ ربات صفحه‌ی اول نشانش می‌دهد */
     val notice: AppNotice? = null,
-    /** آدرس دامنه‌ی اضطراری که ادمین در پنل گذاشته (https://…)؛ null یعنی پنل قدیمی است */
-    val emergency: String? = null,
-    /** کلید عمومی امضای پیام‌های ادمین در چت اضطراری (base64) */
-    val emergencyKey: String? = null,
     /** DNS کانکی (رفع تحریم)؛ null یعنی این کاربر DNS ندارد */
     val dns: DnsInfo? = null,
     /** لینک‌های Xray این کاربر (vless:// vmess:// trojan:// ss://) */
@@ -89,29 +83,28 @@ data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = nu
 data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
-    /** آدرس اصلی پنل (خارج) */
-    const val FALLBACK_HOST = "https://fi.kankipro.cafe:2053"
-
-    /** اگر کاربر فقط کد را وارد کند، از این آدرس استفاده می‌شود */
-    const val DEFAULT_HOST = FALLBACK_HOST
-
     /**
-     * آدرس قدیمی (sub.kanki.pro، در ایران فیلتر و دیگر استفاده نمی‌شود؛ مثل نسخه‌ی ویندوز). ۱.۳۷ (بررسی امنیتی): کد اشتراک دیگر به آن
-     * فرستاده نمی‌شود؛ حساب‌هایی که با آن ذخیره شده‌اند همان آدرس اصلی را می‌گیرند.
+     * آدرس‌های پنل کانکی که این نسخه می‌شناسد: هیچ‌کدام در کد نیست؛ هنگام ساخت از KANKI_PANEL_HOSTS می‌آید
+     * (BuildConfig.PANEL_HOSTS). خالی = فقط آدرسی که در لینک خود کاربر است (کد تنها آن‌وقت لینک کامل می‌خواهد).
      */
-    const val OLD_HOST = "https://sub.kanki.pro:2053"
+    @Volatile internal var CONFIGURED: List<String> = parseHosts(BuildConfig.PANEL_HOSTS)
 
-    /** آدرس قدیمی ← آدرس اصلی؛ بقیه همان */
-    fun canon(base: String): String = base.trimEnd('/').let { if (it == OLD_HOST) FALLBACK_HOST else it }
+    /** «https://میزبان[:پورت]» های معتبر یک فهرست با ویرگول (بی مسیر، بی نام کاربری) */
+    fun parseHosts(spec: String): List<String> = spec.split(",").map { it.trim().trimEnd('/') }
+        .filter { ORIGIN.matches(it) }.distinct()
 
-    /** لینک ساب روی سرور ایران (پنل › تنظیمات › لینک ساب روی سرور ایران): وقتی دامنه‌های خارج فیلترند */
-    const val IRAN_HOST = "https://s1s.polimax.shop:2053"
+    private val ORIGIN = Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$")
+
+    /** اگر کاربر فقط کد را وارد کند، این آدرس (null = این نسخه آدرسی نمی‌شناسد؛ لینک کامل لازم است) */
+    val DEFAULT_HOST: String? get() = CONFIGURED.firstOrNull()
+
+    fun canon(base: String): String = base.trimEnd('/')
 
     /** آدرس لینک ساب سرور ایران که خود پنل در صفحه‌ی اشتراک داده (sub_base)؛ اگر ادمین دامنه را عوض کند، برنامه هم */
     @Volatile var panelSubBase: String? = null
 
     /** همه‌ی آدرس‌های اشتراک کانکی؛ هر کدام همان صفحه‌ی اشتراک و همان لینک کانفیگ‌ها را می‌دهد */
-    val KANKI_HOSTS: List<String> get() = (listOf(FALLBACK_HOST, IRAN_HOST) + listOfNotNull(panelSubBase)).distinct()
+    val KANKI_HOSTS: List<String> get() = (CONFIGURED + listOfNotNull(panelSubBase)).distinct()
 
     /** آدرسی که آخرین بار زودتر از همه جواب داد (اول همان امتحان می‌شود) */
     @Volatile var preferred: String? = null
@@ -128,8 +121,7 @@ object SubscriptionApi {
     }
 
     /** همان آدرس روی میزبان‌های جایگزین (برای لینک کانفیگ‌ها وقتی میزبان اصلی در دسترس نیست) */
-    fun alternates(url0: String): List<String> {
-        val url = if (url0.startsWith("$OLD_HOST/")) FALLBACK_HOST + url0.removePrefix(OLD_HOST) else url0
+    fun alternates(url: String): List<String> {
         val h = KANKI_HOSTS.firstOrNull { url.startsWith("$it/") } ?: return listOf(url)
         val path = url.removePrefix(h)
         return (listOf(url) + hosts(h).map { it + path }).distinct()
@@ -143,8 +135,8 @@ object SubscriptionApi {
      * رها می‌شوند. آدرس ترجیحی ۳۰۰ میلی‌ثانیه زودتر شروع می‌کند تا اگر سالم است، همیشه همان بماند
      * (یک آدرس ثابت، بدون پریدن بین سرورها). (آدرس برنده، متن)
      */
-    fun race(urls: List<String>): Pair<String, String> {
-        if (urls.size == 1) return urls[0] to fetch(urls[0])
+    fun race(urls: List<String>, code: String? = null): Pair<String, String> {
+        if (urls.size == 1) return urls[0] to fetch(urls[0], code)
         val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
         // ۱.۳۷: وقتی یکی جواب داد، آدرس‌هایی که هنوز شروع نکرده‌اند دیگر کد اشتراک را نمی‌گیرند
         val over = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -156,7 +148,7 @@ object SubscriptionApi {
                 runCatching {
                     if (i > 0) runCatching { Thread.sleep(300) }
                     // interrupt داخل sleep بالا گرفته می‌شود، پس پرچم over را همین‌جا دوباره ببین
-                    if (!over.get() && !Thread.currentThread().isInterrupted) done.offer(runCatching { u to fetch(u) })
+                    if (!over.get() && !Thread.currentThread().isInterrupted) done.offer(runCatching { u to fetch(u, code) })
                 }
             }.apply { isDaemon = true; start() }
         }
@@ -176,21 +168,61 @@ object SubscriptionApi {
     /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */
     private val codeRegex = Regex("""\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}""")
 
-    /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند */
-    fun normalize(input: String): Pair<String, String>? {
+    /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند؛ آدرس null = کد تنها در نسخه‌ای که آدرسی نمی‌شناسد */
+    fun normalize(input: String): Pair<String?, String>? {
         val s = input.trim()
-        // ۱.۳۷: «@» جزو اسم میزبان نیست؛ لینکی مثل https://fi.kankipro.cafe:2053@دیگری/... کد را به همان آدرس کانکیِ دیده‌شده می‌برد
+        // ۱.۳۷: «@» جزو اسم میزبان نیست؛ لینکی مثل https://پنل:پورت@دیگری/... کد را به همان آدرسِ دیده‌شده می‌برد
         val full = Regex("""(https://[^/\s@]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
         if (full != null) return full.groupValues[1] to full.groupValues[2]
         val code = codeRegex.find(s) ?: return null
         return DEFAULT_HOST to code.value
     }
 
-    fun fetch(url: String): String {
-        val c = URL(url).openConnection() as HttpURLConnection
+    /** سرآیند کد اشتراک (پنل ۳.۶۷.۱ به بعد)؛ کد دیگر در هیچ آدرسی نیست */
+    const val CODE_HEADER = "X-Kanki-Sub"
+
+    /**
+     * آدرسی که کد اشتراک در خودش دارد (`?sub=`) ← (همان آدرس بی کد، کد). کد بی آدرس (صفحه‌ی اشتراک) ← خودش.
+     */
+    fun splitCode(url: String, code: String? = null): Pair<String, String?> {
+        val q = url.indexOf('?')
+        if (q < 0) return url to code
+        val end = url.indexOf('#', q).let { if (it < 0) url.length else it }
+        val parts = url.substring(q + 1, end).split('&').filter { it.isNotEmpty() }
+        val sub = parts.firstOrNull { it.startsWith("sub=") } ?: return url to code
+        val c = runCatching { java.net.URLDecoder.decode(sub.removePrefix("sub="), "UTF-8") }.getOrNull()
+            ?.takeIf { it.isNotEmpty() } ?: return url to code
+        val rest = parts.filterNot { it.startsWith("sub=") }
+        return (url.substring(0, q) + (if (rest.isEmpty()) "" else "?" + rest.joinToString("&")) + url.substring(end)) to c
+    }
+
+    /**
+     * یک درخواست به پنل. کد اشتراک فقط در سرآیند X-Kanki-Sub می‌رود (نه در آدرس، که در لاگ‌ها می‌ماند)؛ پنل قدیمی
+     * (پیش از ۳.۶۷.۱) آن را نمی‌شناسد و «پیدا نشد» می‌دهد: آن‌وقت یک بار همان آدرس قدیمی (کد در آدرس).
+     * code: کد صفحه‌ی اشتراک (برای /sub/me)؛ برای لینک کانفیگ از خود آدرس برداشته می‌شود.
+     */
+    fun fetch(url: String, code: String? = null): String {
+        val (bare, c) = splitCode(url, code)
+        if (c == null) return fetchOnce(url, null, null)
+        val headerUrl = if (url.endsWith("/sub/$c")) url.removeSuffix("/sub/$c") + "/sub/me" else bare
+        return try {
+            fetchOnce(headerUrl, c, c)
+        } catch (e: HttpStatus) {
+            if (e.code != 404 && e.code != 401 && e.code != 403) throw e
+            fetchOnce(if (headerUrl.endsWith("/sub/me")) headerUrl.removeSuffix("/sub/me") + "/sub/$c" else url, null, c)
+        }
+    }
+
+    /** جواب غیر ۲۰۰ پنل */
+    class HttpStatus(val code: Int) : IOException("HTTP $code")
+
+    private fun fetchOnce(url: String, header: String?, code: String?): String {
+        val c = PanelTls.open(url)
         c.connectTimeout = 15000
         c.readTimeout = 20000
+        c.instanceFollowRedirects = false
         c.setRequestProperty("User-Agent", "KankiVPN-Android")
+        if (header != null) c.setRequestProperty(CODE_HEADER, header)
         // شناسه‌ی گوشی (لیست دستگاه‌های پنل) و کانفیگ رمزشده (Seal.kt)
         val dev = Seal.device
         if (dev != null) {
@@ -198,10 +230,10 @@ object SubscriptionApi {
             c.setRequestProperty("X-Kanki-Seal", Seal.VERSION)
         }
         try {
-            val code = c.responseCode
-            if (code != 200) throw IOException("HTTP $code")
+            val status = c.responseCode
+            if (status != 200) throw HttpStatus(status)
             val body = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val sub = Seal.codeOf(url)
+            val sub = code ?: Seal.codeOf(url)
             if (dev != null && sub != null && Seal.isSealed(body)) return Seal.open(body, sub, dev)
             return body
         } finally {
@@ -295,8 +327,6 @@ object SubscriptionApi {
             limitGb = limitGb,
             usedGb = usedGb,
             notice = notice(html),
-            emergency = dataJson(html)?.optString("emergency")?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
-            emergencyKey = dataJson(html)?.optString("emergency_key")?.takeIf { it.isNotBlank() },
             dns = dataJson(html)?.optJSONObject("dns")?.let { parseDns(it) },
             xray = dataJson(html)?.optJSONArray("xray")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }
@@ -384,12 +414,11 @@ data class ConfigInfo(
 
     companion object {
         fun parse(text: String): ConfigInfo {
-            if (text.lines().any { it.trim().startsWith("remote ") }) return parseOvpn(text)
             if (KmixUri.isKmix(text)) {
                 val u = runCatching { KmixUri.parse(text) }.getOrNull()
                 return ConfigInfo(
                     endpoint = u?.let { "${it.host}:${it.port}" } ?: "—", address = "—", dns = "—", mtu = "1280",
-                    obfuscation = u?.let { "ChaCha20 · KCP + FEC ${it.fecData}+${it.fecParity}" + if (it.ports != null) " · ${it.ports.first}-${it.ports.last}" else "" },
+                    obfuscation = u?.let { "ChaCha20 · KCP" + (if (it.fecParity > 0) " + FEC ${it.fecData}+${it.fecParity}" else "") + if (it.ports != null) " · ${it.ports.first}-${it.ports.last}" else "" },
                     transport = "UDP", cipher = "KANKI MIX",
                 )
             }
@@ -412,27 +441,6 @@ data class ConfigInfo(
                 dns = m["dns"] ?: "—",
                 mtu = m["mtu"] ?: "خودکار",
                 obfuscation = if (jc != null) "فعال · Jc $jc" else null,
-            )
-        }
-
-        /** خواندن اطلاعات فایل OpenVPN */
-        fun parseOvpn(text: String): ConfigInfo {
-            fun first(key: String) = text.lines().map { it.trim() }.firstOrNull { it.startsWith("$key ") }
-                ?.split(Regex("\\s+"))?.drop(1)
-            val remote = first("remote")
-            val proto = first("proto")?.firstOrNull() ?: "udp"
-            val host = remote?.getOrNull(0) ?: "—"
-            val port = remote?.getOrNull(1) ?: "1194"
-            val tcp = proto.startsWith("tcp") || remote?.getOrNull(2)?.startsWith("tcp") == true
-            val cipher = first("data-ciphers")?.firstOrNull() ?: first("cipher")?.firstOrNull()
-            return ConfigInfo(
-                endpoint = "$host:$port",
-                address = "خودکار (از سرور)",
-                dns = "از سرور",
-                mtu = first("tun-mtu")?.firstOrNull() ?: "خودکار",
-                obfuscation = null,
-                transport = if (tcp) "TCP" else "UDP",
-                cipher = cipher,
             )
         }
     }

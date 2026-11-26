@@ -9,10 +9,11 @@ import java.net.URLDecoder
  * کارت شبکه‌ی VPN را می‌گیرد و خودش بسته‌های IP را می‌خواند:
  *   UDP بازی ← مسیر سریع دیتاگرام (بدون صف و ارسال مجدد؛ ترمیم و نسخه‌ی دوم فقط به اندازه‌ی افت خط)
  *   TCP     ← KCP
- * پنل لینک kanki://کلید@سرور:پورت?fec=10-3&ports=4001-4010&gaming=1&alt=ایران:پورت#اسم را در اشتراک می‌گذارد؛
+ * پنل لینک kanki://کلید@سرور:پورت?fec=10-0&ports=4001-4010&gaming=1#اسم را در اشتراک می‌گذارد؛
  * کلید مال همین کاربر است و کاربر آن را نمی‌بیند.
- * چند مسیر (۱.۴۴): وای‌فای و دیتای گوشی هر کدام سوکت خودشان را به هسته می‌دهند (KmixCore.addPath) و alt (ورودی
- * تانل ایران همین سرور) مقصد دیگر است؛ هسته بسته را روی بهترین مسیر و فقط ترمیم لازم را روی مسیر دیگر می‌فرستد.
+ * یک نشانی (۱.۴۵): هر کانفیگ یا مستقیم است یا از تانل، هیچ‌وقت هر دو؛ «alt» لینک نادیده گرفته می‌شود (ورودی‌های
+ * دیگر تانل در اشتراک کانفیگ‌های جدای «<سرور>~k@tunnel» هستند). وای‌فای و دیتای گوشی هر کدام سوکت خودشان را به
+ * هسته می‌دهند (KmixCore.addPath)، ولی شبکه‌ی دوم فقط وقتی به کار می‌آید که شبکه‌ی اصلی افت یا لرزش پیدا کند.
  */
 
 /** لینک kanki:// */
@@ -27,8 +28,6 @@ data class KmixUri(
     /** پیشنهاد پنل برای حالت گیمینگ (ارسال دوتایی) */
     val gaming: Boolean,
     val name: String,
-    /** نشانی‌های دیگر همین سرور («میزبان:پورت»، مثلاً ورودی تانل ایران): هر کدام یک مسیر دیگر برای هسته */
-    val alt: List<String> = emptyList(),
 ) {
     /** پورت این اتصال: پورت اصلی یا یکی از پورت‌های اضافه */
     fun pickPort(): Int = ports?.let { r -> (r.toList() + port).random() } ?: port
@@ -65,10 +64,6 @@ data class KmixUri(
                 fecParity = fec?.getOrNull(1)?.takeIf { it in 0..64 } ?: 3,
                 gaming = q["gaming"] == "1",
                 name = u.rawFragment?.let { URLDecoder.decode(it, "UTF-8") }.orEmpty(),
-                alt = (q["alt"] ?: "").split(",").map { it.trim() }.filter { a ->
-                    val p = a.substringAfterLast(":", "").toIntOrNull()
-                    a.contains(":") && p != null && p in 1..65535 && a.substringBeforeLast(":").removePrefix("[").removeSuffix("]").isNotBlank()
-                }.take(2),
             )
         }
 
@@ -121,7 +116,7 @@ object KmixCore {
      */
     fun start(
         bin: java.io.File, tun: android.os.ParcelFileDescriptor, server: String, key: String,
-        fecData: Int, fecParity: Int, gaming: Boolean, ports: String = "", alt: String = "", onDied: (String) -> Unit,
+        fecData: Int, fecParity: Int, gaming: Boolean, ports: String = "", onDied: (String) -> Unit,
     ) {
         stop()
         stopping = false
@@ -147,7 +142,7 @@ object KmixCore {
             val msg = org.json.JSONObject()
                 .put("server", server).put("key", key)
                 .put("fec_data", fecData).put("fec_parity", fecParity).put("gaming", gaming)
-                .put("ports", ports).put("alt", alt)
+                .put("ports", ports)
                 .toString() + "\n"
             s.setFileDescriptorsForSend(arrayOf(tun.fileDescriptor))
             s.outputStream.write(msg.toByteArray())
@@ -239,10 +234,16 @@ object KmixCore {
     private fun poll() {
         val f = cmd("stats")?.split(" ")?.takeIf { it.size >= 4 && it[0] == "stats" } ?: return
         lastStats = Triple(f[1].toLongOrNull() ?: 0L, f[2].toLongOrNull() ?: 0L, f[3].toLongOrNull() ?: -1L)
-        // ۱.۴۴: مسیر اصلی («wifi»، «cell»، «net»، با «+tunnel») و تعداد مسیرهای زنده
+        // ۱.۴۴: شبکه‌ی اصلی («wifi»، «cell»، «net»، با «+dual» وقتی شبکه‌ی دوم هم کمک می‌کند) و تعداد مسیرهای زنده
         lastPath = f.getOrNull(7)?.takeIf { it != "-" }
         livePaths = f.getOrNull(8)?.toIntOrNull() ?: 0
+        // ۱.۴۵: راهنمای مسیر سرور (پروتکل ۳) فعال است
+        hinted = f.getOrNull(9) == "1"
     }
+
+    /** سرور (۳.۶۷ به بعد) راهنمای مسیر داده: جابه‌جایی وای‌فای ⇄ دیتا بی معطلی */
+    @Volatile var hinted: Boolean = false
+        private set
 
     /** مسیر اصلی الان و تعداد مسیرهای زنده (برای صفحه) */
     @Volatile var lastPath: String? = null

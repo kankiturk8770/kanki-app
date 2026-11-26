@@ -144,7 +144,7 @@ object SpeedEngine {
             }.apply { isDaemon = true; start() }
         }
         threads.forEach { it.join(9000) }
-        return list.indices.filter { best[it] != null }.minByOrNull { best[it]!! }?.let { list[it] }
+        return list.indices.mapNotNull { i -> best[i]?.let { i to it } }.minByOrNull { it.second }?.let { list[it.first] }
     }
 
     /** پینگ بی‌بار (میانه) و جیتر؛ اولی (DNS و TLS) حساب نمی‌شود */
@@ -389,7 +389,7 @@ object Aim {
         for ((k, d) in defs) {
             val (input, th) = d
             if (!input.all { pts.containsKey(it) }) continue
-            val sum = maxOf(0, input.sumOf { pts[it]!! })
+            val sum = maxOf(0, input.sumOf { pts[it] ?: 0 })
             out[k] = scale(th, intArrayOf(0, 1, 2, 3, 4), sum.toDouble())
         }
         return out

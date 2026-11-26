@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -82,13 +83,12 @@ class ServersActions(
 
 /** توضیح کوتاه هر پروتکل */
 fun protoDesc(p: String) = when (p) {
-    "kankimix" -> "مخصوص بازی · پینگ کم، ضد لگ"
+    "kankimix" -> "مخصوص بازی · ضد لگ"
     "amneziawg" -> "پایدار روی شبکه‌ی محدود"
     "amneziawg-direct" -> "اتصال مستقیم · بدون تونل"
     "wireguard" -> "سریع · مناسب گیم"
     "hysteria2" -> "پرسرعت · مناسب اینترنت ضعیف"
-    "xray" -> "محدودیت شدید شبکه · سخت برای مسدود شدن"
-    "openvpn/tcp" -> "پایدار"
+    "xray" -> "سخت برای مسدود شدن"
     else -> "سازگاری بالا"
 }
 
@@ -215,7 +215,8 @@ private fun ProtoChips(fams: List<String>, sel: String, onPick: (String) -> Unit
             val shape = RoundedCornerShape(D.RS)
             Box(
                 Modifier.height(32.dp).widthIn(min = 58.dp)
-                    .then(if (on) Modifier.goldGlass(shape, selected = true) else Modifier.goldGlass(shape))
+                    // ۱.۴۵: تب فعال نور رنگ تم دورش دارد
+                    .then(if (on) Modifier.shadow(10.dp, shape, ambientColor = K.Gold, spotColor = K.Gold).goldGlass(shape, selected = true) else Modifier.goldGlass(shape))
                     .clickable { onPick(f) }.padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -239,15 +240,21 @@ private fun HeroChip(text: String) {
 @Composable
 private fun PingStartButton(text: String, again: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    // ۱.۴۵: «دوباره» یک قرص شیشه‌ای تیره با لبه‌ی فلزی است (دکمه‌ی طلایی پررنگ فقط برای بار اول)
+    val ink = if (again) K.Text else K.OnGold
+    val fill = if (again) Modifier.clip(shape)
+        .background(Brush.verticalGradient(listOf(Color(0xFF2A2D33), Color(0xFF15171B))))
+        .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = .55f), Color.White.copy(alpha = .10f), Color.White.copy(alpha = .30f))), shape)
+    else Modifier.goldFill(shape)
     Row(
-        Modifier.height(D.BtnS + 4.dp).widthIn(min = 104.dp).goldFill(shape).pressable(onClick = onClick).padding(horizontal = D.S4),
+        Modifier.height(D.BtnS + 4.dp).widthIn(min = 104.dp).then(fill).pressable(onClick = onClick).padding(horizontal = D.S4),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(K.OnGold.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(ink.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(12.dp)) {
                 val w = size.width
-                val c = K.OnGold
+                val c = ink
                 if (again) {
                     drawArc(c, -60f, 290f, false, style = Stroke(w * .18f, cap = StrokeCap.Round))
                     drawPath(Path().apply { moveTo(w * .78f, -w * .05f); lineTo(w * 1.02f, w * .30f); lineTo(w * .62f, w * .34f); close() }, c)
@@ -258,7 +265,7 @@ private fun PingStartButton(text: String, again: Boolean, onClick: () -> Unit) {
             }
         }
         Spacer(Modifier.width(D.S2))
-        T(text, size = 14.sp, color = K.OnGold, weight = FontWeight.Black)
+        T(text, size = 14.sp, color = ink, weight = FontWeight.Black)
     }
 }
 

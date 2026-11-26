@@ -24,7 +24,7 @@ object Seal {
     @Volatile var device: String? = null
 
     fun init(ctx: Context) {
-        val p = ctx.getSharedPreferences("kanki", Context.MODE_PRIVATE)
+        val p = SecurePrefs.get(ctx)
         device = p.getString("device_id", null) ?: ByteArray(16).also { SecureRandom().nextBytes(it) }
             .joinToString("") { "%02x".format(it) }
             .also { p.edit().putString("device_id", it).apply() }
