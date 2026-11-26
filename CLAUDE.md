@@ -1,252 +1,38 @@
-# Kanki VPN (اپ اندروید) — راهنمای Claude
+# MASTER PROTOCOL: GO, RUST, KOTLIN, SHELL & INFRASTRUCTURE
 
-اپ اندروید کانکی: Kotlin + Jetpack Compose، پکیج `cafe.kankipro.vpn`. همه‌ی کانفیگ‌ها را از اشتراک پنل کانکی
-(ریپوی `kanki-panel`، تابع `sub_data` در `src/panel/api.rs`) می‌گیرد. هر فیلد تازه‌ی اشتراک باید هر دو طرف
-هماهنگ باشد. **قرارداد کامل اشتراک (چه فیلدی، کجا، تانل یا مستقیم): `docs/SUB-CONTRACT.md`.** اپ کانفیگ‌ها را دقیقاً همان‌طور که پنل
-می‌فرستد می‌چیند و هیچ کپی تانلی خودش نمی‌سازد (نبود تانل = «—»).
+## 1. TOKEN EFFICIENCY & SILENT EXECUTION (HIGHEST PRIORITY)
+- **Silent Mode:** NEVER narrate your steps, thoughts, or tool calls. Execute all reads, edits, builds, and tests silently.
+- **Minimal Output:** Respond ONLY after all tasks compile and pass tests. Keep final reports under 10 bullet lines.
+- **Context Hygiene:** Never read full large files, lockfiles, binaries, or build artifacts. Read targeted line ranges or use `rg`/`grep`. Never re-read unchanged files.
+- **Subagent Offloading:** Run heavy codebase searches, log analysis, and test suites in isolated background subagents so raw logs do not pollute the main context.
+- **Surgical Edits:** Modify only exact target blocks; never rewrite whole files for small changes.
 
-## Execution & Output Rules (MANDATORY)
-- Perform all file analysis, coding, refactoring, and build tasks silently in the background.
-- DO NOT output explanations, step-by-step commentary, summaries, or extra text in the chat.
-- Only respond with a single-line completion confirmation once all tasks are finished.
+## 2. ZERO DUMMY CODE & 100% IMPLEMENTATION
+- **Strictly Banned:** `TODO`, `FIXME`, `todo!()`, `unimplemented!()`, `pass`, `...`, stub functions, hardcoded mocks, or placeholder logic in production paths.
+- **No Swallowed Errors:** Ignoring errors (`_ = err`, empty `catch {}`, or suppressed exit codes) is strictly forbidden.
+- If a critical spec, secret, or protocol detail is missing, STOP and ask in 1–2 short sentences before writing partial code.
 
-## قانون‌های قفل‌شده (دستور قطعی صاحب اپ، 2026-11-22)
-1. **سکوت کامل:** بین ابزارها هیچ متن، گزارش پیشرفت یا «حالا X را می‌کنم» ننویس. همه‌ی کارها در پس‌زمینه و بی‌صدا؛ فقط یک پیام آخر وقتی کار ۱۰۰٪ تمام شد.
-2. **امنیت برنچ:** کار روی برنچ جدا؛ هیچ‌وقت بدون تأیید صریح صاحب اپ بعد از تست، push یا merge مستقیم به `main` نه.
-3. **اسم و همه‌ی بازی‌ها:** اسم رسمی اپ **Kanki VPN (کانکی وی‌پی‌ان)** است؛ در اسپلش، سربرگ و صفحه‌ی ورود هم «KANKI VPN» (`BrandTitle`؛ صاحب اپ «KANKI PING» را نخواست). هیچ قفل بسته‌ای فقط روی پابجی (`com.tencent.ig`) در کد ثابت نگذار؛ بازی‌ها را کاربر انتخاب می‌کند.
+## 3. LANGUAGE-SPECIFIC HARDENING
+- **Go:** Enforce `context.Context` timeouts on all network/DB/exec calls. Close all resources via `defer`. Prevent goroutine leaks (use `errgroup` or bounded worker pools). Protect shared maps/state with mutexes or atomics (`go test -race` clean).
+- **Rust:** Zero `.unwrap()` or `.expect()` in production paths (propagate errors via `?` and typed `Result`). Minimize `unsafe` blocks (document invariants if unavoidable). Use bounded channels/buffers to prevent OOM under traffic spikes.
+- **Kotlin (Android/Backend):** Zero `GlobalScope` or non-null assertions (`!!`) in production. Explicitly close all sockets, streams, and `ParcelFileDescriptor`s (`VpnService`). Never block the Main thread; manage coroutine lifecycles cleanly.
+- **Shell:** Start every script with `set -euo pipefail`. Double-quote every variable (`"$VAR"`). Register `trap` handlers for temp-file/process cleanup. Never pass unvalidated input to `eval` or subshells.
 
-## نقشه‌ی کد (`app/src/main/java/cafe/kankipro/vpn/`)
-| کار | فایل |
-|---|---|
-| همه‌ی وضعیت برنامه، انتخاب سرور/کانفیگ، اتصال | `AppState.kt` (بزرگ‌ترین فایل) |
-| خواندن اشتراک از پنل (سرورها، لینک‌ها، `@tunnel`، Xray با `via`/`group`)؛ قرارداد: `docs/SUB-CONTRACT.md` | `SubscriptionApi.kt`؛ تانل یا مستقیم: `AppState.cfgSide`، ردیف Xray: `AppState.xrayGroup` |
-| شناسه‌ی گوشی و کانفیگ رمزشده‌ی `kseal1` (هدرهای `X-Kanki-Device`/`X-Kanki-Seal`) | `Seal.kt` (تست: `SealTest.kt`) |
-| اتصال صفحه‌ها به `AppState` | `Screens.kt` |
-| صفحه‌ی اتصال (خانه): نقشه، دکمه‌ی اتصال شیشه‌ای (`OrbButton`: حلقه‌ی ۴۴ تکه؛ وصل: سه کمان دورنگ، گیمینگ: سه نقطه‌ی نور و ضربان تند، با گذار نرم `gameA`؛ لمس: لرزش، تکان و موج شیشه‌ای؛ گنبد مشکی بی سایه؛ `PowerEmblem` پاور یا دسته‌ی بازی)، حالت‌ها روی مدار دورش (`ModeOrbit`/`ModeOrb` در `ModesUi.kt`، جای آن‌ها `ORBIT_*`)، کارت سرور (`StripCard`)، کارت حجم و آمار (`StatsCard`، `NeonBar`)، سربرگ (`HeaderIcon`)، نوار پایین (`BottomBar`؛ ۱.۳۴.۴ شیشه‌ی مات و لنز تب انتخاب‌شده، لمس با `selectable`/`Role.Tab`) | `HomeUi.kt` |
-| پاپ‌آپ شناور گیمینگ و ضد فیلتر (۱.۴۱: `ModeSheet` ارتفاع ثابت ۶۴٪، `ProtoBar`، `SideSwitch` همه/مستقیم/تانل، `ServerCard`، تنظیمات پشت چرخ‌دنده `GameSettings`)؛ پیام شناور ۳ ثانیه‌ای `GlassToast` (`AppState.toast`) | `ModesUi.kt`، `Kit.kt` |
-| حالت‌ها (هوشمند، گیمینگ، ضد فیلتر، DNS) | `Modes.kt` (منطق، امتیاز گیمینگ `gameScore`/`gameQ`/`stability`)، `ModesUi.kt` (ظاهر، `StabilityLine`)؛ سنجش هر پروتکل `AppState.measureFamily` |
-| تب سرورها | `ServersUi.kt` |
-| تنظیمات و تم‌ها | `SettingsUi.kt` (`ThemePicker`)، رنگ‌ها و تم در `Ui.kt` (`Themes` از ۱.۳۲: kanki، cyber، tiffany، vulcan، malt، cyprus؛ هر تم با `glassTheme(id, زمینه, رنگ نئونی, رنگ دوم)` ساخته می‌شود (رنگ دوم `K.Gold2` از ۱.۳۴ برای گرادیان نورها و لبه‌ها)، اسم‌ها در `ThemeNames`)، اجزای مشترک در `Kit.kt` |
-| موتور WireGuard/AmneziaWG | `VpnEngine.kt`، `Tunnel.kt` |
-| Hysteria2 / Xray / KANKI MIX | `Hysteria.kt` / `Xray.kt` / `Kmix.kt` |
-| KANKI MIX دو مسیر (۱.۴۴): وای‌فای و دیتا با هم (`kmixPaths`: requestNetwork + bindSocket + protect، فقط در گیمینگ)، نشانی دوم سرور `alt=` لینک (ورودی تانل ایران)، آمار مسیر اصلی `KmixCore.lastPath`/`livePaths` | `Hysteria.kt` (`startKmix`، `kmixPaths`)، `Kmix.kt` (`addPath`/`dropPath`)، هسته: `kmix-core/mobile/paths.go` |
-| پینگ واقعی هر کانفیگ | `Probe.kt`، `WgHello.kt`، `KmixHello.kt`، `Tools.kt` |
-| پینگ زنده‌ی صفحه‌ی اول وقتی وصلی (هر پروتکل روش خودش: KMIX پینگ هسته، Xray/Hy2 `RealPing.proxied`، WG/AWG `RealPing.l3`) | `AppState.livePing` |
-| DNS کانکی (رفع تحریم) | `DnsMode.kt` |
-| دروازه‌ی برنامه‌ها: گیمینگ با هر پروتکل (یک فهرست «بازی‌ها»، `GAME_GATED`)، DNS با بستن بقیه | `AppGate.kt`، `applyGameOnly` در `Tunnel.kt`، `GameApps` در `Extras.kt`؛ WireGuard/AmneziaWG گیمینگ: `startAwg` در `Hysteria.kt` + هسته‌ی `awg-core/` (`libawg.so`) |
-| سقف فریم انیمیشن‌ها (گوشی ضعیف ۳۰، بقیه ۶۰) | `Motion` و `motionTime()` در `Kit.kt` |
-| ترجمه (فارسی → انگلیسی) | `I18n.kt` |
-| اسم کشور، پرچم، برچسب تانل/مستقیم | `Names.kt` |
-| نقشه | `MapView.kt`، `WorldMap.kt` |
-| لوگوی داخل برنامه (`Logo3D`، ۱.۳۲.۸: حلقه‌ی شیشه‌ای با لبه‌ی نئونی و K هندسی با مسیر، به رنگ تم؛ هم‌طرح آیکون) و آیکون برنامه (`ic_launcher` با عکس `ic_launcher_fg`: K با درخشش سبز نئونی؛ یک آیکون ثابت برای همه‌ی تم‌ها) | `Ui.kt`، `res/mipmap-*` |
-| رنگ «وصل» (`power` در `Palette`، همان رنگ نئونی تم)؛ رنگ وضعیت ثابت در همه‌ی تم‌ها: `K.Good` سبز، `K.Warn` زرد، `K.Red` قرمز (پینگ، سیگنال، پایداری؛ هرگز رنگ تم) | `Ui.kt`، `pingColor` در `Names.kt` |
-| شیشه‌ی کریستالی مشترک (۱.۳۲): `goldGlass` (کارت: برق لبه‌ی بالا، سایه‌ی عمیق، لبه‌ی گرادیانی، `selected` = نئون)، `goldFill` (دکمه‌ی پر براق)، `liftShadow`، `bevel` در `Ui.kt`؛ `raisedCircle` (دکمه‌ی گرد) در `Kit.kt`؛ آیکون SVG با `iconPath` | `Ui.kt`، `Kit.kt` |
-| ترتیب ثابت پروتکل‌ها (تب سرورها، گیمینگ، «تست پینگ همه») | `PROTO_ORDER`/`FAMILY_ORDER` ته `AppState.kt` |
-| ربات راهنما (فقط متن) | `Guide.kt` (`guideSteps`، `GuideOverlay`، `robotAlertFor`) |
-| تست سرعت (۱.۳۵): موتور (`SpeedEngine`: پینگ بی‌بار و زیر بار، دانلود/آپلود چنداتصاله، `meta` کلادفلر، هر کار با `net` = بیرون از VPN)، امتیاز کیفیت `Aim` (همان AIM کلادفلر)، `UdpSeries`؛ صفحه و دو بخش «تست سرعت» و «اینترنت من» (`SpeedContent`، `NetSection`، `netVerdict`، تاریخچه `SpeedRecord`)؛ اجرا `AppState.speedRound`/`runSpeedTest`/`runNetCheck` | `Speed.kt`، `SpeedUi.kt` |
-| «اینترنت من»: اطلاعات شبکه، زمان‌بندی DNS/TCP/TLS، پینگ TCP مقصدها، باز شدن سایت‌ها با بررسی گواهی (`NetCheck`) | `NetCheck.kt` |
-| رمز و آدرس تصادفی (`127.x.y.z`) پراکسی SOCKS محلی هر اتصال (Hysteria2، Xray، DNS؛ ویندوز `cores.NewSocksAuth`) | `SocksAuth` در `Xray.kt`، `writeHev`/`tunUp`/`launchCore` در `Hysteria.kt` |
-| بررسی امنیتی خودکار (govulncheck، OSV کتابخانه‌ها با `tools/osv_gradle.py`، mobsfscan با `.mobsf`، gitleaks با `.gitleaks.toml`) | `.github/workflows/security.yml` |
+## 4. API, VPN, PANEL & BOT SECURITY (ZERO-TRUST)
+- **Boundary Validation:** Validate and sanitize 100% of inputs (API payloads, packets, headers, Telegram updates, webhooks) with strict schemas and size limits.
+- **Zero-Trust Auth & Ownership:** Never trust client-provided user IDs, peer keys, or roles. Enforce server-side ownership checks on every query/mutation (prevent IDOR and privilege escalation).
+- **Zero Injection:** Use parameterized SQL queries exclusively. When panels/bots execute system or tunnel commands (e.g., `ip`, `iptables`, `wg`, `sysctl`), pass arguments as strict arrays—NEVER concatenate user strings into shell commands.
+- **Secrets & Privacy:** Never hardcode tokens, private keys, or credentials. Never log sensitive user data, private keys, or raw stack traces.
+- **Resilience:** Enforce rate limits on auth/bot/mutation endpoints, strict timeouts on upstream calls, and atomic DB transactions with rollback on multi-step failures.
 
-## هسته‌های Go
-- `kmix-core/` هسته‌ی KANKI MIX (`libkmix.so`)، تست: `cd kmix-core && go test ./...`. بازی هوشمند (۱.۴۳): `mobile/smart.go` + `internal/game` (سنجش افت، ترمیم RLC به اندازه‌ی افت، پنجره‌ی KCP وقت بازی، عوض کردن پورت؛ پیام شروع `ports`، جواب `stats` شش عدد). سرور آن داخل ریپوی پنل است
-  (`kanki-panel/src/vpn/kmix-server`)؛ پوشه‌ی `internal/` دو طرف باید **یکی** بماند (`MaxWire` = ۱۳۳۲: سقف ۱۳۸۰ پنل).
-  تست سرتاسری با سرور واقعی: `SRVBIN=<kanki-mix-server> HOSTIP=<IP غیر loopback> go test ./...`
-- هسته‌ی Hysteria و فونت‌ها و نقشه موقع ساخت در CI دانلود می‌شوند (`.github/workflows/build.yml`).
+## 5. REAL TESTS ONLY (SILENT VERIFICATION)
+- **Banned:** Tautological tests (`assert true`), trivial getter/setter tests, or mocking the exact logic under test to fake coverage.
+- **Required:** Write focused integration/edge-case tests ONLY for high-risk paths:
+  1. Unauthorized access, invalid tokens, and cross-user IDOR attempts (401/403).
+  2. Concurrent mutations / race conditions and transaction rollbacks.
+  3. Malformed inputs/packets, buffer limits, and upstream timeouts.
 
-## نسخه‌ی ویندوز (`windows/`)
-- سرویس Go (`windows/service`، اجرا به‌عنوان SYSTEM: Wintun + amneziawg-go، مسیرها، WFP) و برنامه‌ی WPF
-  (`windows/ui/KankiVPN`، کاربر عادی) که با JSON خط‌به‌خط روی `\\.\pipe\KankiVPN` حرف می‌زنند. نقشه‌ی کامل در `windows/README.md`.
-- اشتراک را `windows/service/internal/sub` می‌خواند (مثل `SubscriptionApi.kt`): هر تغییر شکل صفحه‌ی اشتراک پنل هر دو را
-  عوض می‌کند. پروتکل‌ها: WireGuard، AmneziaWG، KANKI MIX، VLESS، Hysteria2 (OpenVPN نه).
-- ظاهر ویندوز کپی اندروید است (تم زرد و زرشکی، `Theme.cs`؛ شش تم شیشه‌ای اندروید آماده در کامیت `9f94ecf`، منتظر تصمیم صاحب اپ)؛ هر تغییر ظاهر اندروید باید در `windows/ui` هم بیاید.
-  کد کشیدن اندروید خط به خط به C# آمده: `Gfx.cs` (رنگ با Oklab، گرادیان، ساعت ۶۰ فریم)، `Draw.cs` (`goldGlass`، آیکن‌ها،
-  `Logo3D`، `SpeedGauge`، `PingPulse`، `KankiBackground`)، `Orb.cs` (`OrbButton` و تعقیب گیمینگ)، `WorldMap.cs`. هر تابع
-  کشیدن اندروید که عوض شد، همان تابع در این فایل‌ها هم عوض شود. عکس‌های ویندوز در شاخه‌ی `shots-windows`.
-- تست: `cd windows/service && go test -race ./...` و `GOOS=windows go vet ./...`. ساخت C# و تست‌های ادمین (کارت شبکه، WFP)
-  فقط در CI (`.github/workflows/windows.yml`). متن UI در `Strings.cs` (انگلیسی ← فارسی). نسخه: `VERSION` در همان workflow،
-  `Version` در `KankiVPN.csproj` و `windows/CHANGES.md`.
-
-## ساخت و تست
-- **امضا:** همه‌ی APKها با یک کلید release (اثر انگشت SHA-256 `d2f8b9c44c65…4df8`، V2)؛ CI (`build.yml`، «بررسی امضا و تراز») با کلید دیگر قرمز می‌شود.
-- **Play Protect (۱.۳۲.۷، با تست روی گوشی صاحب اپ):** ۱.۳۲.۰ تا ۱.۳۲.۶ «برنامه مضر مسدود شد» گرفتند؛ مقصر اصلی کلید روشن/خاموش دست‌ساز
-  (`GlassSwitch` با `clickable` بی‌نقش و `indication = null`، کنار فهرست برنامه‌های نصب‌شده) بود. `GlassSwitch` حالا خود `material3.Switch` است؛
-  کلید یا دکمه‌ی دست‌ساز بی‌نقش (به‌جای Switch/Checkbox/دکمه‌ی استاندارد) نساز. احتیاطاً مانیفست، آیکون‌ها، `proguard-rules.pro`، `gradle.properties`،
-  امضا (V2) و متن‌های صفحه‌ی ورود همان ۱.۳۱ مانده‌اند. هر تغییر از این جنس اول با یک فایل تست روی گوشی صاحب اپ امتحان شود و بعد main
-  (برای تست: در `build.yml` قدم «فرستادن فایل نصبی به تلگرام» را موقتاً برای برنچ کار هم روشن کن؛ فقط به تلگرام خود صاحب اپ می‌رود).
-- CI (`build.yml`) روی هر push فایل APK می‌سازد؛ `shots.yml` عکس صفحه‌ها (`app/src/test/.../Shots.kt`).
-- ساخت و تست محلی روی ماشین ابری شدنی است: `ANDROID_HOME=/opt/android-sdk gradle --offline :app:compileDebugKotlin :app:testDebugUnitTest`
-  (Maven Central این ماشین را محدود می‌کند؛ آینه‌ی گوگل در `~/.gradle/init.d`، بیرون از مخزن). بعد از push نتیجه‌ی CI را هم چک کن.
-
-## قوانین هر تغییر
-1. نسخه در `app/build.gradle.kts` بالا برود: `versionCode` یکی بیشتر و `versionName`. **قبل از انتخاب عدد،** Releases و فایل‌های تستی که به تلگرام رفته را
-   ببین، نه فقط main (درس ۱.۳۶.۰: نسخه‌ی پایین‌تر روی بالاتر نصب نمی‌شود). تغییر ویندوز: `VERSION` در `windows.yml`، `KankiVPN.csproj`، `windows/CHANGES.md`.
-2. یک بخش تازه‌ی فارسی بالای `CHANGES.md` (`# تغییرات نسخه‌ی X.Y.Z`) و «تازه‌های نسخه» کوتاه در `README.md`.
-3. متن‌های UI فارسی‌اند؛ ترجمه‌ی انگلیسی هر متن تازه در `I18n.kt`.
-4. کامنت‌ها مثل کد اطراف (فارسی). بدون اسم مدل در کامنت یا کامیت.
-5. کار که تمام شد: commit، push به برنچ کار و Pull Request بساز. **قبل از مرج به main یک بار از صاحب ریپو بپرس**
-   (main مستقیم روی کاربران می‌رود) مگر خودش گفته «سبز شد مرج کن». اگر CI قرمز است، اول درستش کن.
-6. اگر ساختار پروژه عوض شد (فایل تازه، فیلد تازه‌ی اشتراک)، همین `CLAUDE.md` را هم به‌روز کن.
-7. **هر تغییر تا ته مسیرش، مثل ریشه‌ی درخت (دستور قطعی صاحب اپ، 2026-11-20):** هیچ چیزی بدون این ساخته یا درست نمی‌شود. چیزی که دیده می‌شود (دکمه، صفحه،
-   هسته، تنظیم) فقط بالای درخت است؛ قبل از دست زدن، ریشه‌هایش را از اول تا آخر دنبال کن:
-   - **از کجا شروع می‌شود و به کجا می‌رود:** مثلاً دکمه‌ی اتصال ← `AppState.connect`/`launchConnect` ← انتخاب کانفیگ ← `VpnEngine`/`HyEngine` ← سرویس
-     (`KankiHyService`) ← هسته (Go یا libxray/libhysteria) ← کارت VPN و مسیرها ← دروازه (`AppGate`) ← سرور ← و برگشت وضعیت به صفحه.
-   - **چه می‌برد و چه برمی‌گرداند:** کد اشتراک، کلیدها، پورت‌ها، کانفیگ، وضعیت؛ جواب هر قدم و خطاهایش.
-   - **هدف آخرش چیست و آیا واقعاً به آن می‌رسد:** درست کار می‌کند؟ مسیر را درست می‌رود؟ وقتی رسید چه می‌کند و با چه جوابی برمی‌گردد؟
-   - **همه‌ی شاخه‌ها:** هر هسته‌ای که از این مسیر رد می‌شود (WireGuard، AmneziaWG، Hysteria2، Xray، KANKI MIX، microtun، KPING، DNS کانکی)، همه‌ی حالت‌ها
-     (هوشمند، گیمینگ و «فقط بازی»، ضد فیلتر، DNS)، اشتراک و پنل (`kanki-panel`)، ویندوز (`windows/service` و `windows/ui`)، وصل دوباره و عوض شدن شبکه، خروج.
-   - **تست کارایی و تست امنیت، هر دو:** کارایی = واقعاً کار می‌کند (تست واحد، ساخت، CI، و اگر شد روی گوشی). امنیت = چه کسی به آن می‌رسد (برنامه‌ی دیگر روی
-     گوشی، کاربر دیگر ویندوز، پنل یا سرور، کسی وسط شبکه)، ورودی‌اش از کجاست، آیا نشت IP/DNS/IPv6 یا کد اشتراک دارد، آیا کسی با دسترسی کمتر سوءاستفاده می‌کند.
-   - **در گزارش:** بنویس مسیر تا کجا دنبال شد، کدام ایستگاه تست شد و کدام نه (و چرا). «فقط اولش را درست کردن» ممنوع.
-8. **امنیت و تست قبل از هر مرج:** بی تست (قانون ۷) و بی بررسی امنیتی همان تغییر به main نرود. بررسی کامل دوباره با اسکیل `security-audit` (ریپوی پنل،
-   `.claude/skills/security-audit/`)؛ گزارش کامل بیرون از ریپو بماند (ریپو عمومی است).
-
-## زبان
-صاحب پروژه فارسی‌زبان است و دارد برنامه‌نویسی یاد می‌گیرد: جواب‌ها فارسی، کوتاه و ساده. کار در پس‌زمینه، وسط کار گزارش نده، آخر یک گزارش کوتاه.
-
-## طراحی
-اسکیل `frontend-design` (رسمی Anthropic) در `.claude/skills/frontend-design/`؛ برای هر کار UI اول آن را بخوان.
-عکس صفحه‌ها بعد از push در شاخه‌ی `shots` (کار `shots.yml`).
-
-## گزارش کارها
-ترتیب: «کارهای باز» (فقط کارهای انجام‌نشده)، «دانستنی‌های ثابت» (قانون‌ها و درس‌هایی که هر جلسه باید بداند)، «فهرست نسخه‌ها» (یک خط هر نسخه) و «آخرین کارها»
-(فقط چند کار تازه با جزئیات). کار تازه = یک بخش بالای «آخرین کارها» + یک خط در فهرست + به‌روز کردن «کارهای باز». کار تمام‌شده از «کارهای باز» می‌رود؛ جزئیات
-قدیمی در `CHANGES.md` و تاریخچه‌ی git است.
-
-### کارهای باز
-- [ ] **بعد از ۱.۴۱.۰ روی گوشی:** اسپلش و ورود با تم Vulcanico (بی سبز)، پاپ‌آپ‌ها، هوشمند فقط ضد فیلتر، تست سرعت با VPN خاموش (مسیر «اینترنت آزاد گوشی»).
-- [ ] **بعد از ۱.۴۰.۰ روی گوشی:** گیمینگ با WireGuard/AmneziaWG/KANKI MIX/microtun/KPING فقط بازی‌ها اینترنت دارند؛ WireGuard مستقیم وصل شود (اگر موتور کتابخانه رد کرد، جزئیات خطا دلیلش را دارد). **بعد از ۱.۳۹.۰ روی گوشی:** KPING با یک بازی غیر از پابجی (و «افزودن بازی»)، KANKI MIX دانلود با سرور 3.57.1 (بی FEC)، WireGuard مستقیم «مستقیم» و وصل، هوشمند. 
-- [ ] **ویندوز ۱.۴.۰ (منتظر تصمیم صاحب اپ):** شش تم شیشه‌ای اندروید و ترتیب پروتکل‌های گیمینگ/ضد فیلتر/هوشمند مثل اندروید در کامیت `9f94ecf` آماده است؛ به main نرفت (صاحب اپ: «ویندوز را نمی‌دانم»). اگر برگشت، اسم عکس‌های CI (`yellow`/`crimson` در `windows.yml`) هم باید با اسم تم‌های تازه عوض شود (CI همین را قرمز کرد). سرویس ویندوز با main همان KANKI MIX تازه (`kmix-core`) را می‌گیرد و CI ویندوز ۱.۳.۴ را با آن دوباره می‌سازد.
-- [ ] **KPING و «فقط بازی» روی ویندوز:** ساخته نشده (هسته، دو شبکه، WFP هر برنامه، تشخیص exe بازی‌ها)؛ منتظر «بساز».
-آخرین به‌روزرسانی: 2026-11-20، بعد از ۱.۳۸.۰ و ویندوز ۱.۳.۴ (تست زنده).
-**وضعیت کلی (2026-11-20، گفته‌شده به صاحب اپ):** همه‌چیز در کل درست کار می‌کند. اندروید ۱.۳۸.۰ روی گوشی صاحب اپ و شبیه‌ساز سالم (نصب، ورود، اتصال، پابجی/KPING،
-بی نشت IP/DNS، وصل دوباره). ویندوز فقط از ۱.۳.۴ همه‌ی پروتکل‌ها را وصل می‌کند (نسخه‌های قبل فقط WG/AWG)؛ صاحب اپ باید ۱.۳.۴ نصب کند. مانده‌ها فقط همین فهرست
-پایین؛ صاحب اپ گفت بعداً برمی‌گردد و ادامه می‌دهیم.
-- [ ] **نشت چندثانیه‌ای موقع وصل دوباره (اندروید، همه‌ی پروتکل‌ها جز KPING):** `revive` و مرگ هسته اول کارت VPN را می‌بندند و بعد تازه می‌سازند؛ در این چند ثانیه
-      ترافیک بیرون از تونل است (در استفاده‌ی عادی نه؛ فقط وقتی شبکه قطع و وصل می‌شود). رفع: کارت قبلی تا ساخته شدن تازه بماند یا کارت سیاه موقت؛ با فایل تست روی
-      گوشی صاحب اپ. تا آن موقع: «VPN همیشه روشن» + «مسدود کردن اتصال‌های بدون VPN». صاحب اپ گفته اگر خواست می‌گوید «بساز».
-- [ ] **ویندوز ۱.۳.۴ روی لپ‌تاپ:** سرویس و همه‌ی پروتکل‌ها در تست زنده سالم بودند؛ مانده خود برنامه‌ی ویندوز (صفحه‌ها، دکمه‌ی اتصال) روی لپ‌تاپ.
-      اگر خطا آمد: `%APPDATA%\KankiVPN\crash.log` یا `C:\ProgramData\KankiVPN\service.log`.
-- [ ] **اکانت تست را پاک کن (کار صاحب اپ):** اکانت تستی که برای تست زنده ساخته شد (و Secret `LIVE_SUB` گیت‌هاب، اگر دیگر تست زنده نمی‌خواهی).
-- [ ] **ویندوز چندکاربره (فقط اگر یک کامپیوتر چند کاربر دارد):** پایپ سرویس هر کاربر واردشده را قبول می‌کند، و کاربر دیگر با `netstat` آدرس پراکسی محلی را
-      می‌بیند و UDP خودش را از VPN رد می‌کند. رفع: حساب به SID همان کاربر + فیلتر WFP روی loopback؛ با تست ویندوز.
-- [ ] **اندروید، امتحان‌نشده روی گوشی:** تست سرعت و «اینترنت من»، حالت DNS کانکی، «فقط بازی» (برنامه‌های دیگر بی‌اینترنت)، IPv6 روی شبکه‌ی دارای IPv6.
-- [ ] **سخت‌سازی‌های ثبت‌شده (کوچک، انجام نشده):** حذف خط‌های IncludedApplications/ExcludedApplications از کانفیگ پنل، TTL کش دروازه، سقف بدنه‌ی ip-api/ookla،
-      پاک کردن xray.json/hev.yaml با خروج، X25519 ثابت‌زمان، recover در خواننده‌ی KPING، Xray با TUN خودش به‌جای SOCKS (روی اندروید ۸ و ۹ آدرس تصادفی
-      پراکسی از `/proc/net` دیده می‌شود)، هش فونت‌ها و نقشه در CI.
-- [ ] **StrandHogg (فقط اندروید ۹ و پایین‌تر):** `android:taskAffinity=""` روی `MainActivity`؛ تغییر مانیفست است، پس اول با فایل تست روی گوشی (قانون Play Protect).
-- [ ] **ثبت DNS کانکی روی http (کار پنل):** آدرس ثبت IP بی‌رمز است؛ رفع با توکن یک‌بارمصرف یا HTTPS در پنل.
-- [ ] با پنل 3.22.4: حساب تک‌کاربره روی دو دستگاه (اندروید و ویندوز) فقط اولی وصل شود؛ دوکاربره دو تا.
-- [ ] **پیشنهاد، صاحب اپ نخواسته (اول بپرس):** سه بهبود کوچک از ضبط پابجی (جریان‌های کم‌تکرار کنار سرور مسابقه از هر دو مسیر، صدا از بسته‌ی اول، کف ترمیم
-      پایین از نرخ بازی در پنل)؛ افکت‌های مانده‌ی دکمه‌ی اتصال (یکی‌یکی با فایل تست)؛ طرح شیشه‌ای ویندوز (صاحب اپ: «ویندوز را نگه دار»، به `windows/ui` دست نزن)؛
-      مبهم‌سازی کامل کد اندروید؛ تقسیم ترافیک بر اساس برنامه در ویندوز؛ امضای فایل نصبی ویندوز اگر انتشار عمومی شد.
-- **صاحب اپ فعلاً نمی‌خواهد (2026-11-20، «به گیت‌هاب و تلگرام گیر نده»):** کلید امضای قدیمی در تاریخچه‌ی git، Environment گیت‌هاب برای کلیدها، توکن تلگرام.
-  جزئیات فقط در چت گفته شد؛ اینجا نیامده (ریپو عمومی است). دوباره پیشنهادش نده مگر خودش بپرسد.
-
-### دانستنی‌های ثابت
-- **کانفیگ‌ها همان‌طور که پنل می‌فرستد** (قرارداد `docs/SUB-CONTRACT.md`): اپ هیچ کپی تانلی نمی‌سازد؛ نبود تانل = «—»؛ Xray با `via`/`group`.
-- **کد اشتراک فقط به آدرس‌های کانکی** (۱.۳۷): `sub_base` فقط از صفحه‌ی آدرس‌های خود کانکی (`KANKI_HOSTS`)، با خروج پاک؛ `sub.kanki.pro` دیگر درخواست نمی‌گیرد؛
-  `race` بعد از برنده کد را به بقیه نمی‌فرستد. ویندوز همین (`Client.Reset`).
-- **پراکسی محلی SOCKS** (Hysteria2، Xray، DNS؛ اندروید و ویندوز): آدرس تصادفی `127.x.y.z` + پورت + نام و رمز تصادفی. UDP آن را Xray فقط با IP مبدأ قبول می‌کند،
-  پس پنهان بودن آدرس تنها مانع است.
-- **دروازه‌ی برنامه‌ها (`AppGate`):** پورت ۵۳/۸۵۳ فقط به سرور DNS خود VPN آزاد است (۱.۳۷).
-- **IPv6** (۱.۳۸): همیشه به تونل می‌رود (`serverRoutes`، `routesExcluding` برای IPv4 و IPv6)؛ WireGuard/AmneziaWG `::/0` را بی آدرس IPv6 نگه می‌دارند؛ نتیجه:
-  نه نشت، نه معطلی (برنامه‌ها فوری IPv4 می‌گیرند).
-- **ویندوز:** کیل‌سوییچ fail-closed (قفل تازه خطا داد، قانون‌های قبلی می‌ماند)؛ اجازه‌ی `xray.exe`/`hysteria.exe` به شناسه‌ی سرویس بسته است؛ پوشه‌ی
-  `ProgramData\KankiVPN` اگر مال SYSTEM/Administrators نبود یا میانبر بود کنار گذاشته و از نو ساخته می‌شود؛ نصب فقط در Program Files.
-- **ساخت (CI):** فقط برنچ‌ها (برچسب نه)؛ شرط انتشار `github.ref == 'refs/heads/main'`؛ checkout بی توکن ماندگار؛ اکشن‌ها با SHA کامیت؛ hev-socks5-tunnel با کامیت
-  بررسی‌شده‌ی 2.17.1؛ Hysteria و Xray با هش. ریپوی Hysteria `HyNetworks/hysteria` است (اگر «curl 504» دیدی اول آدرس را چک کن).
-- **متن‌ها برای کاربر عادی (۱.۴۲، صاحب اپ):** جزئیات داخلی هسته‌ها (کپی، ترمیم، کلاس بسته، FEC، …) در رابط نیاید؛ فقط کارکرد ساده («حالت پایدار»، «محافظت»).
-- **Play Protect:** کلید یا دکمه‌ی دست‌ساز بی‌نقش (به‌جای Switch/Checkbox/دکمه‌ی استاندارد) نساز؛ هر تغییر مانیفست، آیکون، لرزش یا کلیک خاص اول با فایل تست روی
-  گوشی صاحب اپ. تغییر کوچک و یکی‌یکی؛ وقتی گیر کرد زود نصف کن.
-- **درس‌ها:** انتخابی که رفتار برای کاربر را عوض می‌کند (هسته‌ی پایه، بسته یا آزاد بودن بقیه‌ی برنامه‌ها) اول پرسیده شود؛ نظر خواستن صاحب اپ = اول جواب، بعد
-  پرسیدن، نه ساختن؛ صاحب اپ رابط خود اپ را می‌خواهد و فقط تغییر رنگ و جابه‌جایی، نه طرح از صفر؛ ویندوز: هر جواب لیستی Go ممکن است `null` باشد، هر چیزی که
-  فقط در نسخه‌ی Release (Obfuscar) است در CI از راه فایل نصبی تست شود، هر کار برنامه با سرویس با کاربر عادی هم تست شود، هندلر رویداد کنترل‌های خودمان در کد.
-- **تست زنده (2026-11-20):** `.github/workflows/live.yml` + `.github/live/windows.ps1` روی ویندوز گیت‌هاب: نصب فایل نصبی منتشرشده، ورود با اشتراک تست از Secret
-  `LIVE_SUB` (هرگز داخل ریپو؛ ریپو عمومی است)، اتصال یک سرور از هر پروتکل، IP خروجی، DNS، کیل‌سوییچ. فقط روی برنچ کار و وقتی همان فایل‌ها عوض شوند اجرا
-  می‌شود. ماتریس `build` می‌تواند ساخت plain یا garble را جای سرویس بگذارد (برای پیدا کردن خطا). **اندروید:** فایل اصلی فقط ARM است و زیر ترجمه‌ی ARM شبیه‌ساز
-  x86 همان اول SIGILL می‌گیرد؛ پس `.github/live/android-x86.sh` همان کد و همان هسته‌ها را برای x86_64 (فقط تست، منتشر نمی‌شود) می‌سازد و `.github/live/android.sh`
-  روی شبیه‌ساز API 30 نصب، ورود با کد، رد کردن راهنما، دکمه‌ی اتصال، IP خروجی (Chrome) و قطع و وصل شبکه را امتحان می‌کند.
-- **garble ویندوز فقط کد خود ما (`GOGARBLE=kankivpn`):** با garble کامل، gVisor (tun2socks، KANKI MIX، microtun) با reflect می‌خوابید و فایل نصبی فقط WG/AWG
-  را وصل می‌کرد (تا ۱.۳.۳). هر تغییر ساخت ویندوز با تست زنده چک شود.
-- **صاحب اپ در ترکیه است:** پینگ تا ایران ~۱۲۵-۱۴۰ms ذاتی همین مسیر است؛ عدد پینگ خود پابجی با مسیر واقعی نمی‌خواند.
-- **پشتیبان:** برنچ `backup-1.34.4` (پیش از KPING v3)؛ اگر لازم شد، همان کد با نسخه‌ی بالاتر.
-
-### فهرست نسخه‌ها
-| نسخه | تاریخ | خلاصه |
-|---|---|---|
-| ۱.۴۴.۱ / ویندوز ۱.۳.۷ | 2026-11-24 | KANKI MIX بی بسته‌ی اضافه: یک پینگ گم‌شده دیگر کپی روی دو مسیر نمی‌سازد، مسیر اصلی آرام عوض می‌شود، پله‌ها فقط از افت واقعی (همراه پنل ۳.۶۰.۱) |
-| ۱.۴۴.۰ / ویندوز ۱.۳.۶ | 2026-11-24 | KANKI MIX دو مسیر (وای‌فای + دیتا، مستقیم + تانل ایران) هوشمند، همراه پنل ۳.۶۰؛ microtun و KPING از ریشه حذف (اپ و ویندوز)؛ فایل نصبی کوچک‌تر |
-| ۱.۴۳.۰ / ویندوز ۱.۳.۵ | 2026-11-24 | KANKI MIX بازی هوشمند (همراه پنل ۳.۵۹): افت خط سنجیده می‌شود، فقط بازی و به اندازه‌ی افت ترمیم می‌شود، دانلود وقت بازی کوچک، پورت کند عوض می‌شود |
-| ۱.۴۲.۱ | 2026-11-23 | سنجش گیمینگ دقیق: یک کلید هیچ‌وقت هم‌زمان از دو راه سنجیده نمی‌شود (`peerOf`)، سری ۲۰تایی microtun و KPING از خود هسته |
-| ۱.۴۲.۰ | 2026-11-23 | پینگ microtun و KPING وقتی VPN بالاست (`--fd` + `FdGate`)، تنظیمات گیمینگ بی microtun و بی جزئیات داخلی، تست زنده‌ی پینگ همه و Xray/Hysteria2 |
-| ۱.۴۱.۰ | 2026-11-22 | اسپلش و ورود با تم کاربر و برند KANKI VPN، پاپ‌آپ شناور گیمینگ/ضد فیلتر (همه/مستقیم/تانل، کارت هر کانفیگ، تنظیمات پشت چرخ‌دنده)، هوشمند فقط ضد فیلتر، ضد فیلتر با لمس اول پاپ‌آپ، پیام DNS شناور، تست سرعت بی آمپر و مستقیم وقتی VPN خاموش، «اینترنت من» دوستونه |
-| ۱.۴۰.۰ | 2026-11-22 | گیمینگ با هر پروتکل فقط بازی‌های یک فهرست (WireGuard/AmneziaWG با هسته‌ی `libawg.so` پشت دروازه)، رفع BackendException وایرگارد مستقیم (برگشت به هسته‌ی کانکی)، KPING مستقیم/تانل مثل هر هسته (پنل ۳.۵۸)، تست زنده‌ی شبیه‌ساز هر پروتکل |
-| ۱.۳۹.۰ | 2026-11-22 | KPING برای هر بازی، TCP در KANKI MIX بی FEC (با برگشت به FEC برای سرور قدیمی)، WireGuard مستقیم با Jc، گیمینگ بی Hysteria2، هوشمند Xray اول + سنجش داده (ویندوز ۱.۴.۰ کنار گذاشته شد) |
-| ویندوز ۱.۳.۴ | 2026-11-20 | تست زنده با اشتراک واقعی: رفع خوابیدن سرویس با Hysteria2/VLESS/KANKI MIX/microtun (garble)، مسیرهای microtun |
-| ۱.۳۸.۰ / ویندوز ۱.۳.۳ | 2026-11-20 | دور دوم بررسی امنیتی: IPv6 همیشه در تونل، وصل خودکار بی گیر، کیل‌سوییچ ویندوز fail-closed، نصب در Program Files، اکشن‌ها با SHA |
-| ۱.۳۷.۰ / ویندوز ۱.۳.۲ | 2026-11-19 | بررسی امنیتی کامل: کد اشتراک فقط به کانکی، دروازه‌ی DNS، پراکسی محلی با آدرس تصادفی، کرش KPING، DNS محدود، CI امن‌تر |
-| ۱.۳۶.۰ / ویندوز ۱.۳.۱ | 2026-11-19 | تست سرعت مثل Cloudflare، «اینترنت من»، رمز پراکسی محلی، اسکن امنیتی خودکار؛ KPING v3 داخلش (نصب روی ۱.۳۵.۲) |
-| ۱.۳۵.۰ تا ۱.۳۵.۲ | 2026-11-12 | KPING v3: ترمیم پنجره‌ای، تشخیص نوع بسته، پنل روی بازی، دو تانل؛ سبک‌تر و افت تانل |
-| ۱.۳۲ تا ۱.۳۴ | 2026-11-10 تا 11 | طرح شیشه‌ای Kanki Glass، شش تم، رفع Play Protect، آیکون سبز، حذف چت اضطراری، `via`/`group` |
-| ۱.۳۰ تا ۱.۳۱ | 2026-11-09 تا 10 | KPING با هسته‌ی خودش (وای‌فای + دیتا، فقط پابجی) |
-| ۱.۲۶ تا ۱.۲۹ | 2026-11-07 تا 09 | گیمینگ با امتیاز، پینگ درست وقتی وصلی، چیدمان و تم‌ها، رفع اتصال ضد فیلتر |
-| ۱.۲۲ تا ۱.۲۵ | 2026-10-29 تا 11-06 | فایروال «فقط بازی»، کانفیگ رمزشده `kseal1`، بازبینی کامل؛ ویندوز ۱.۰ تا ۱.۲.۹ (سرویس، WFP، ظاهر اندروید) |
-
-### آخرین کارها
-#### 2026-11-24 — ۱.۴۴.۱ (همراه پنل ۳.۶۰.۱)
-**علت (ضبط بازی صاحب اپ):** بالارو ۳۰ هزار بسته برای ۱۹ هزار بسته‌ی بازی (۱۲ هزار کپی) + ۱۸ هزار ترمیم. یک پینگ گم‌شده = مسیر «بی‌جواب» (`quality`)، عوض شدن مسیر برای بهتر بودن کم با یک ثانیه کپی (`setPrimary`)، قطعی کوتاه = پله‌ی ۴ (`stepFor`)، سه ثانیه‌ی اول کپی (`Plan`). **رفع:** `paths.go` (`suspectMin`، `stayFor`، `forcedAt`)، `internal/game/policy.go` (پله‌ها و آستانه‌ها، دو طرف یکی). **تست:** `go test -race`، `TestOneLostPingIsNotSilence`، `TestLoneBurst`، آزمایشگاه با سرور واقعی (عددها در `CHANGES.md`). **امنیت:** فقط زمان‌بندی و آستانه، هیچ ورودی یا مسیر تازه. **دیده نشده:** گوشی.
-**DNS برنامه‌های دیگر در ضبط:** فقط اسم پرسیده شده، دیتا نه؛ اندروید DNS همه‌ی برنامه‌ها را از یک پروسه‌ی سیستم می‌فرستد و صاحبش معلوم نیست.
-
-#### 2026-11-24 — ۱.۴۴.۰ و ویندوز ۱.۳.۶ (برنچ `ccr-f970ec4f-jrr11c`، همراه پنل ۳.۶۰.۰)
-**خواسته:** KANKI MIX با وای‌فای و دیتای گوشی و دو تانل/نشانی، هوشمند و بی بسته‌ی اضافه؛ microtun و KPING بی بکاپ و بی اثر از اپ و ویندوز (و پنل)؛ حجم اپ کمتر اگر شد.
-**مسیر:** `startKmix` ← نشانی `alt` (آی‌پی‌اش هم بیرون از مسیرهای VPN، `routesExcludingAll`) ← `KmixCore.start` ← `kmixPaths` ← `addPath` (fd با SCM_RIGHTS) ← هسته `AddSocket` ← `paths.go` (پینگ هر مسیر، بهترین مسیر با صبر ۳ ثانیه، مسیر بی‌جواب فوراً کنار، نسخه‌ی دوم و ترمیم روی مسیر دیگر، `FlagMirror`) ← سرور پنل ۳.۶۰ ← برگشت از هر مسیر ← `handleDown` ← TUN.
-**تست:** `go test -race` (kmix-core، ویندوز)؛ `TestMultiLab` با سرور واقعی: قطعی‌های ۳۰۰ms خط اصلی، یک مسیر ۸۷.۳٪ به‌موقع، دو مسیر ۹۹.۷۹٪؛ `RoutesTest.twoServers`. **ساخت اندروید این‌جا نشد** (محیط SDK ندارد): CI.
-**امنیت:** سوکت شبکه فقط از خود برنامه (همان سوکت یونیکس با بررسی uid)، اسم مسیر فقط حروف کوچک؛ اجازه‌ی SYSTEM_ALERT_WINDOW (فقط مال پنل KPING) برداشته شد.
-**حجم:** دو هسته‌ی جدا (`libmtun.so`، `libkping.so`) از هر APK رفت؛ نصب‌کننده‌ی ویندوز با lzma2/ultra64. بقیه از قبل فشرده بود (APK هر پردازنده، R8، `-s -w`).
-
-#### 2026-11-22 — ۱.۴۱.۰ (برنچ `ccr-93b13567-5n0xqx`)
-**خواسته:** دستورالعمل بازطراحی صاحب اپ (اسپلش با تم، هوشمند فقط ضد فیلتر، ضد فیلتر مثل گیمینگ، پیام DNS، پاپ‌آپ شناور، تست سرعت و «اینترنت من»).
-**ریشه‌ها:** اسپلش سبز بود چون `ThemeState.set` فقط هدف را عوض می‌کرد و رنگ تا `animate` در خانه سبز می‌ماند (`snap`)؛ تست سرعت بی VPN پکت‌لاس را با سرور KANKI MIX
-برنامه می‌سنجید (`udpSeries`) و `net=null` بود (حالا شبکه‌ی واقعی گوشی)؛ «اینترنت من» هم ردیف KANKI MIX داشت (برداشته شد).
-**مسیر:** هوشمند ← `smartMeasure` (`SMART_PROTOS`) ← `runSmart`؛ ضد فیلتر ← `tapMode` ← پاپ‌آپ ← `setFilter(false, p, n)` ← `connectFilter` (`FILTER_PICK` برای WireGuard/Hysteria2)؛ گیمینگ مثل قبل.
-**تست:** ساخت، تست‌های واحد، عکس Robolectric با تم Vulcanico (`Shots.v*`: ورود، اسپلش، گیمینگ و تنظیماتش، ضد فیلتر و تنظیماتش، تست سرعت، «اینترنت من»). **دیده نشده:** گوشی.
-**امنیت:** تغییر فقط ظاهر و انتخاب کانفیگ از همان اشتراک؛ تست سرعت بی VPN حالا هیچ کانفیگ و کلیدی از برنامه به سرور تست نمی‌برد.
-
-#### 2026-11-22 — ۱.۴۰.۰ (برنچ `ccr-93b13567-5n0xqx`، همراه پنل 3.58.0)
-**خواسته (صاحب اپ، عصبانی، به‌حق):** ۱) گیمینگ با هر پروتکل فقط بازی‌ها، یک تنظیم برای همه؛ ۲) WireGuard مستقیم روی گوشی وصل نمی‌شد (`wireguard: BackendException`) و قبل از main تست اتصال نکرده بودم؛ ۳) KPING مثل بقیه‌ی هسته‌ها روی سرورها.
-**مسیر دنبال‌شده (قانون ۷):** گیمینگ › «بازی‌ها» ← `gameApps` ← `connect` (`GAME_GATED`، `applyGameOnly`) ← KMIX/microtun: دروازه‌ی قبلی؛ WireGuard/AmneziaWG: `HyEngine.isAwgGated` ← `startAwg` (کارت VPN خود سرویس، `AppGate`، UAPI از خود کتابخانه‌ی امنزیا) ← `libawg.so` ← سرور. WireGuard بی دروازه: `VpnEngine.up` ← موتور کتابخانه ← اگر `BackendException` ← همان کانفیگ با `KankiCore = 1` ← `libawg.so`.
-**تست:** آزمایشگاه محلی: `amneziawg-go` همان نسخه‌ی کتابخانه (v0.2.16) با UAPI ساخته‌ی خود کتابخانه + سرور WireGuard ساده (namespace): دست دادن و پینگ؛ `libawg` پشت جفت سوکت SEQPACKET (مثل دروازه): پینگ ۳ از ۳. **شبیه‌ساز با اشتراک واقعی (`live.yml`):** WireGuard مستقیم گیمینگ (libawg) ON و IP سرور؛ WireGuard مستقیم با موتور کتابخانه **همان BackendException گوشی صاحب اپ** (پیدا شد)؛ WireGuard تانل، AmneziaWG مستقیم و تانل، KANKI MIX، microtun همه ON و IP سرور؛ Chrome وقتی بازی نیست: بی‌اینترنت (دروازه کار می‌کند)؛ KPING روی main پنل (۳.۵۷، مسیر) وصل نشد. `go test` awg-core؛ ساخت و تست‌های واحد Kotlin.
-**امنیت:** فایل UAPI (کلید خصوصی) فقط در `filesDir` با دسترسی فقط خود اپ و همان لحظه پاک می‌شود؛ سوکت یونیکس `0600`؛ قلاب تست فقط در نسخه‌ی debuggable.
-**مانده:** علت دقیق رد شدن موتور کتابخانه (حالا در جزئیات خطا می‌آید)؛ گوشی واقعی.
-
-#### 2026-11-22 — ۱.۳۹.۰ (برنچ `ccr-93b13567-5n0xqx`، همراه پنل 3.57.1)
-**خواسته:** پرامپت اپ صاحب اپ: قانون‌های قفل‌شده؛ KPING برای هر بازی؛ FEC KANKI MIX فقط برای بازی؛ ایراد ترمیم دیررس `rlc.go`؛ WireGuard مستقیم با Jc؛ پروتکل‌های گیمینگ و ضد فیلتر، هوشمند با Xray اول؛ ظاهر ویندوز مثل اندروید.
-**مسیر دنبال‌شده (قانون ۷):** KPING: گیمینگ › تنظیمات › «بازی‌های مجاز» ← prefs `gameApps` ← `connect` (`KpingCfg.installed`) ← سرویس `startKping` (`KpingCfg.games`) ← `gameGate` ← بازی‌ها + گوگل. KANKI MIX: `connectLocked` ← `dialKCP` (اول بی FEC، ۳ ثانیه؛ بعد با FEC) ← `obfs` نوع 0x05 ← سرور پنل (شنونده‌ی دوم `oc.Plain()`) ← `handleSession`؛ ویندوز همان `kmix-core`. WireGuard مستقیم: اشتراک رمزشده ← `viaProto` direct ← `cfgTag` «مستقیم» ← موتور AmneziaWG (Jc). هوشمند: `smartTier` ← `connect` ← `quickThroughput`.
-**تست:** `go test` kmix-core با سرور تازه (بی FEC) و سرور قدیمی 3.57.0 (با FEC، `SRVKCP=fec`) و سرور پنل؛ `go test` kping-core؛ `compileDebugKotlin` و تست‌های واحد (به‌جز `Shots` که Robolectric آن از این ماشین دانلود نمی‌شود؛ CI می‌سازد)؛ تست تازه `gamingFamiliesHaveNoHysteria`؛ ویندوز `go test -race`، `GOOS=windows go vet`، `dotnet build -c Release` برنامه‌ی WPF روی لینوکس.
-**امنیت:** نوع تازه‌ی KCP داخل همان رمز و احراز هویت obfs (بسته‌ی بی کلید دور ریخته می‌شود)، صف شنونده‌ی دوم سقف ۴۰۹۶ (پر = دور ریختن)؛ فهرست بازی‌ها فقط از گوشی خود کاربر و فقط نصب‌شده‌ها، دروازه مثل قبل؛ `quickThroughput` فقط یک GET به Cloudflare از داخل تونل، بی داده‌ی کاربر.
-**نشد / دیده نشده:** گوشی و لپ‌تاپ واقعی؛ ظاهر ویندوز فقط رنگ و تم‌ها مثل اندروید شد (طرح صفحه‌ها همان؛ عکس‌ها را CI در `shots-windows` می‌سازد)؛ **KPING و دروازه‌ی برنامه‌ها روی ویندوز اصلاً نیست** (کار بزرگ جدا: هسته‌ی KPING ویندوز، دو شبکه، فیلتر WFP هر برنامه)؛ سنجش داده‌ی هوشمند در ویندوز نه.
-
-#### 2026-11-20 — ویندوز ۱.۳.۴: تست زنده با اشتراک واقعی روی گیت‌هاب
-**خواسته:** صاحب اپ یک اکانت تست داد: «ویندوز را روی گیت‌هاب بالا بیاور و وصل شو، اندروید هم اگر شد». **مسیر دنبال‌شده (قانون ۷):** فایل نصبی منتشرشده ←
-سرویس ← پایپ (`set_sub`، `ping`، `connect`، `status`) ← هسته (amneziawg-go، hysteria.exe، xray.exe، KANKI MIX، microtun) ← کارت شبکه و مسیرها ← WFP ← IP خروجی،
-DNS، کیل‌سوییچ. **پیدا شد:** در فایل نصبی (۱.۳.۱ و ۱.۳.۳ هر دو) فقط WG/AWG وصل می‌شد؛ با Hysteria2/VLESS/KANKI MIX/microtun سرویس می‌خوابید. با ساخت
-بی‌garble پیدا شد که مقصر garble است (panic در gVisor `tcpip.Stats.FillIn`)؛ microtun جدا «routes: Element not found» داشت. **رفع:** `GOGARBLE=kankivpn`،
-آدرس `/32` برای microtun. **نتیجه‌ی تست زنده روی فایل نصبی منتشرشده‌ی ۱.۳.۴:** ۵ از ۵ پروتکل وصل، IP خروجی سرور، DNS از تونل، کیل‌سوییچ نگه داشت.
-**اندروید (شبیه‌ساز، ساخت تست x86_64 همان کد ۱.۳۸.۰):** نصب، ورود با کد (۶ گیگ، ۲۹ روز، همه‌ی سرورها)، اتصال هوشمند ← سوئد Xray، پینگ ۱۲۲، IP خروجی همان
-سرور (نه IP شبیه‌ساز)، بعد از خاموش و روشن کردن شبکه هنوز همان IP سرور. **امنیت:** اشتراک فقط در Secret گیت‌هاب (سیستم نگذاشت داخل ریپوی عمومی برود)، در
-گزارش‌ها پوشیده. **نشد:** خود برنامه‌ی WPF ویندوز، و در اندروید هر پروتکل جدا (فقط حالت هوشمند).
-#### 2026-11-20 — ۱.۳۸.۰ و ویندوز ۱.۳.۳: دور دوم بررسی امنیتی + امتحان روی گوشی
-**خواسته:** هر چه در دور اول چک نشد، همه را بگرد. **چه شد:** ۶ شکارچی (کیل‌سوییچ WFP، پراکسی محلی ویندوز، UDP پراکسی Hysteria2 با برنامه‌ی واقعی، مسیرها و
-وصل دوباره‌ی اندروید، برنامه و نصب ویندوز) و ۴ تأییدکننده. رفع: IPv6، کیل‌سوییچ، اجازه‌ی هسته‌ها، نصب، گیر وصل خودکار، SHA اکشن‌ها. **تست:** `RoutesTest`، همه‌ی
-تست‌های Kotlin، `go test -race`، `GOOS=windows go vet`، CI. **روی گوشی صاحب اپ (اندروید ۱۰، ترکیه، فقط وای‌فای) تأیید شد:** آپدیت روی نسخه‌ی قبل و نصب
-تازه، Play Protect سالم، خروج و ورود با کد، همه‌ی سرورها، اتصال و پینگ، پابجی با KPING، `ipleak.net` با KPING و Xray (IP سرور، DNS کلودفلر، IPv6 بسته، WebRTC
-فقط آدرس تونل)، قطع و وصل وای‌فای: KPING وصل ماند، Xray خودش دوباره وصل شد. **دیده نشده:** ویندوز، و چیزهای «اندروید، امتحان‌نشده» در کارهای باز.
-
-#### 2026-11-19 — ۱.۳۷.۰ و ویندوز ۱.۳.۲: بررسی امنیتی کامل
-اسکیل `security-audit`: شناسایی، دفتر پوشش، ۱۱ شکارچی، منتقد، ۱۳ تأییدکننده؛ هر اجرای کد در جعبه‌ی بی‌شبکه. ۵ ایراد تأییدشده (کد اشتراک بعد از خروج به پنل دیگر،
-همان در ویندوز، پورت ۵۳ در دروازه، UDP پراکسی Xray، کرش ترمیم KPING) همه رفع یا محدود شد؛ چند مورد سخت‌سازی (صف DNS، آدرس قدیمی، CI، پوشه‌ی ProgramData).
-
-#### 2026-11-19 — ۱.۳۶.۰: تست سرعت، «اینترنت من»، و نصب نشدن
-تست سرعت مثل speed.cloudflare.com (پینگ زیر بار، امتیاز AIM، تاریخچه) و بخش «اینترنت من». فایل اول نصب نمی‌شد چون versionCode از ۱.۳۵.۲ تست تلگرام پایین‌تر بود
-(اشتباه من؛ درس در قانون ۱)؛ PR #60 مرج و ۱.۳۶.۰.
+## 6. FINAL REPORT FORMAT (POST-COMPLETION ONLY)
+- **Files Changed:** (paths)
+- **Built & Hardened:** (3–5 short bullets)
+- **Verification:** (build, linter & test status)
