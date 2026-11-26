@@ -11,8 +11,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Block Placeholders & Dummy Code
+        # Vendored upstream WireGuard for Windows files (MIT, see windows/LICENSES.txt) are kept
+        # byte-for-byte so they can be diffed against upstream; their upstream notes are not ours.
+        env:
+          UPSTREAM_WG_WINDOWS: |
+            ./windows/service/internal/firewall/rules.go
+            ./windows/service/internal/firewall/zsyscall_windows.go
         run: |
-          if grep -rnE '\b(TODO|FIXME|PLACEHOLDER)\b|todo!\(\)|unimplemented!\(\)' --include='*.go' --include='*.rs' --include='*.kt' --include='*.sh' . ; then
+          hits=$(grep -rnE '\b(TODO|FIXME|PLACEHOLDER)\b|todo!\(\)|unimplemented!\(\)' --include='*.go' --include='*.rs' --include='*.kt' --include='*.sh' . \
+            | grep -vF -f <(printf '%s\n' "$UPSTREAM_WG_WINDOWS" | sed '/^$/d; s/$/:/') || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
             echo "ERROR: Found banned placeholder or incomplete code."
             exit 1
           fi

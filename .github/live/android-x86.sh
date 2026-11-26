@@ -3,7 +3,7 @@
 # crashes it at start. Same app code, same cores, built for x86_64. Nothing here is published.
 set -e
 NDK="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-$ANDROID_NDK}}"
-if [ ! -d "$NDK" ]; then NDK=$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1); fi
+if [ ! -d "$NDK" ]; then NDK=$(printf '%s\n' "$ANDROID_HOME"/ndk/*/ | sed 's:/$::' | sort -V | tail -1); fi
 TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 A=x86_64; d=$PWD/app/src/main/jniLibs/$A; mkdir -p "$d"
 
@@ -33,8 +33,9 @@ cd "$GITHUB_WORKSPACE"
 
 # Go cores
 gob() { # dir pkg out tags
+  local -a tags; read -ra tags <<< "$4"
   (cd "$1" && CGO_ENABLED=1 GOOS=android GOARCH=amd64 CC="$TC/x86_64-linux-android26-clang" \
-    go build $4 -trimpath -ldflags "-s -w" -o "$d/$3" "$2")
+    go build "${tags[@]}" -trimpath -ldflags "-s -w" -o "$d/$3" "$2")
   chmod +x "$d/$3"
 }
 gob kmix-core ./cmd/kmix libkmix.so "-tags tcp"

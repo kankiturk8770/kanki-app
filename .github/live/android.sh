@@ -7,11 +7,11 @@ out=live-out; mkdir -p $out
 code=${LIVE_SUB##*/}
 shot() { adb exec-out screencap -p > "$out/$1.png" 2>/dev/null; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
-texts() { dump | grep -o 'text="[^"]*"' | sed 's/text=//' | grep -v '^""$' | grep -v -F "$code" | head -${1:-40} | tr '\n' ' '; echo; }
+texts() { dump | grep -o 'text="[^"]*"' | sed 's/text=//' | grep -v '^""$' | grep -v -F "$code" | head -"${1:-40}" | tr '\n' ' '; echo; }
 front() { adb shell am start -n $P/.MainActivity >/dev/null 2>&1; sleep 3; }
 # tap: exact text ($1) or, with "orb", the biggest square clickable node (the connect button)
 tap() {
-  local b; b=$(dump | python3 -c '
+  local b bx by; b=$(dump | python3 -c '
 import sys,re
 x=sys.stdin.read(); w=sys.argv[1]; best=None
 for m in re.finditer(r"<node [^>]*>",x):
@@ -24,10 +24,12 @@ for m in re.finditer(r"<node [^>]*>",x):
         if "EditText" in n: best=(0,a); break
     elif ("text=\""+w+"\"") in n: best=(0,a); break
 if best: a=best[1]; print((a[0]+a[2])//2,(a[1]+a[3])//2)' "$1")
-  [ -n "$b" ] && adb shell input tap $b && echo "tapped $1 at $b" && return 0
+  if [ -n "$b" ]; then
+    read -r bx by <<< "$b"
+    adb shell input tap "$bx" "$by" && echo "tapped $1 at $b" && return 0
+  fi
   echo "not found: $1"; return 1
 }
-vpn() { adb shell dumpsys connectivity | grep -c "Transports: VPN"; }
 myip() {
   adb shell am start -a android.intent.action.VIEW -d "https://api.ipify.org/?format=text" >/dev/null 2>&1; sleep 15
   local t; t=$(dump | grep -o 'text="[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}"' | head -1 | sed 's/text=//; s/"//g')
@@ -40,7 +42,7 @@ myip() {
   echo "$t"
 }
 
-adb install -r app.apk && echo "install ok" || { echo "install FAILED"; exit 1; }
+if adb install -r app.apk; then echo "install ok"; else echo "install FAILED"; exit 1; fi
 adb shell appops set $P ACTIVATE_VPN allow
 adb shell pm grant $P android.permission.POST_NOTIFICATIONS 2>/dev/null
 real=$(myip); echo "IP without VPN: $real"
@@ -88,7 +90,8 @@ run() { # label pick nogate games mode
   local sh; sh=$(adb shell 'toybox nc -w 5 1.1.1.1 80 </dev/null >/dev/null 2>&1 && echo open || echo closed')
   echo "== $1 [$2] gate=$([ "${3:-0}" = 1 ] && echo off || echo on) games=${4:-$GAME}"
   echo "   state: $s"
-  echo "   chrome IP: ${ip:-no answer} (without VPN: $real) -> $([ -z "$ip" ] && echo 'no answer' || { [ "$ip" = "$real" ] && echo LEAK || echo 'through VPN'; })"
+  local via; if [ -z "$ip" ]; then via='no answer'; elif [ "$ip" = "$real" ]; then via=LEAK; else via='through VPN'; fi
+  echo "   chrome IP: ${ip:-no answer} (without VPN: $real) -> $via"
   echo "   shell (not a game) TCP 1.1.1.1:80: $sh"
   adb logcat -d | grep -i -E "AmneziaWG|GoBackend|BackendException|KankiAwg|KankiVPN|KankiKp|wireguard" | grep -v -E "KankiLive: (cfg|ping) " | grep -v -F "$code" | tail -10 | sed 's/^/   log: /'
 }
