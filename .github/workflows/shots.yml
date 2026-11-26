@@ -49,7 +49,7 @@ jobs:
           gradle-version: "8.13"
 
       - name: کشیدن صفحه‌ها
-        run: gradle :app:testDebugUnitTest --tests "cafe.kankipro.vpn.Shots*" --tests "cafe.kankipro.vpn.SealTest" --tests "cafe.kankipro.vpn.SubParseTest" --stacktrace
+        run: gradle :app:testDebugUnitTest --tests "cafe.kankipro.vpn.Shots*" --tests "cafe.kankipro.vpn.SealTest" --tests "cafe.kankipro.vpn.SubParseTest" --tests "cafe.kankipro.vpn.AppHardeningTest" --stacktrace
 
       - name: گذاشتن عکس‌ها در شاخه‌ی shots
         env:

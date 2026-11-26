@@ -160,7 +160,7 @@ fun WorldMap(
         // لایه‌ی ثابت فقط وقتی کلید عوض شود از نو روی بیت‌مپ تازه (شفاف) کشیده می‌شود؛ پاک‌کردن با Clear لازم نیست
         val redraw = cache.key != key || old == null ||
             old.width != w.toInt().coerceAtLeast(1) || old.height != h.toInt().coerceAtLeast(1)
-        val bmp = if (redraw || old == null) ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)) else old
+        val bmp = old?.takeIf { !redraw } ?: ImageBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
         if (redraw) {
         cache.key = key
         cache.bmp = bmp
