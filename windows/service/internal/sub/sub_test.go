@@ -36,7 +36,7 @@ const page = `<!doctype html><html><head><style>h3{}</style></head><body>
 <script id="data" type="application/json">{"sub_base":"https://s9.example.com:2053/","app_msg":{"id":"1","text":" hello "},
 "support":"https://t.me/kanki","max_conn":2,
 "nodes":[{"id":"local","name":"GERMANY-GAMING","exit_cc":"de","exit_city":"Frankfurt","exit_lat":50.1,"exit_lon":8.7,"mtun":"mtun://K@1.2.3.4:5000?ip=10.79.0.2/16"},{"id":"n3","exit_cc":"FI","mtun":null}],
-"xray":[{"name":"KANKI-XRAY Reality","link":"vless://id@de1.kanki.pro:443?security=reality","exit_cc":"DE"},{"name":"vm","link":"vmess://abc"}]}</script>
+"xray":[{"name":"KANKI-XRAY Reality","link":"vless://id@de1.example.net:443?security=reality","exit_cc":"DE"},{"name":"vm","link":"vmess://abc"}]}</script>
 </body></html>`
 
 func TestParse(t *testing.T) {
@@ -122,8 +122,9 @@ func TestNormalize(t *testing.T) {
 		t.Fatal("accepted junk")
 	}
 	// a user part is never taken as the host: the code goes to the host the user sees
-	b, _, _ = Normalize("https://fi.kankipro.cafe:2053@evil.example/sub/kanki-12-abcd1234")
-	if b != "https://fi.kankipro.cafe:2053" {
+	// a user part is never taken as a host: the code then goes to this build's own panel
+	b, _, _ = Normalize("https://fi.example:2053@evil.example/sub/kanki-12-abcd1234")
+	if b != "https://p1.example:2053" {
 		t.Fatal("host with @:", b)
 	}
 }

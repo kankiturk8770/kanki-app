@@ -68,7 +68,25 @@ class AppState private constructor(context: Context) {
     // ---------------- حالت‌های اتصال (هوشمند، گیمینگ، ضد فیلتر، DNS)
     var mode by mutableStateOf(KMode.of(prefs.getString("mode", "smart")))
         private set
-    fun changeMode(m: KMode) { mode = m; prefs.edit().putString("mode", m.key).apply() }
+    fun changeMode(m: KMode) {
+        // ۱.۴۵.۱: تا کاربر خودش حالت دیگری انتخاب نکرده، اتصالی که «هوشمند» ساخته روی هوشمند می‌ماند (حلقه و رنگ
+        // هیچ‌وقت به ضد فیلتر نمی‌پرد، حتی وقتی برنده Xray است)
+        if (smartLock && m != KMode.SMART && !userPick) return
+        if (m != KMode.SMART) smartLock = false
+        mode = m; prefs.edit().putString("mode", m.key).apply()
+    }
+
+    /** اتصال فعلی را «هوشمند» ساخته است */
+    var smartLock by mutableStateOf(false)
+        private set
+    /** changeMode از یک انتخاب خود کاربر می‌آید (کاشی، پنل، تب سرورها) */
+    @Volatile private var userPick = false
+
+    /** انتخاب حالت با دست کاربر: قفل هوشمند را باز می‌کند */
+    fun pickMode(m: KMode) {
+        userPick = true
+        try { changeMode(m) } finally { userPick = false }
+    }
 
     /** تب فعلی (برنامه هم می‌تواند تب را عوض کند، مثلاً لمس دوباره‌ی «ضد فیلتر» تب سرورها را باز می‌کند) */
     var tab by mutableStateOf(KTab.HOME)
@@ -112,6 +130,8 @@ class AppState private constructor(context: Context) {
         addAll(prefs.getStringSet("gameApps", emptySet()) ?: emptySet())
     }
     fun toggleGameApp(pkg: String) {
+        // Play Store و Chrome هرگز در تونل بازی نیستند (دروازه‌ی گیمینگ آن‌ها را می‌بندد): انتخابشان معنا ندارد
+        if (pkg in GameApps.NEVER && pkg !in gameApps) { toast = tr("Play Store و Chrome در گیمینگ همیشه بسته‌اند"); return }
         if (pkg in gameApps) gameApps.remove(pkg) else gameApps.add(pkg)
         saveGameApps()
     }
@@ -190,6 +210,8 @@ class AppState private constructor(context: Context) {
 
     private fun memKey(m: KMode) = "op_" + Modes.networkKey(ctx) + "_" + m.key
 
+    private val FILTER_PROTOS = setOf("xray", "hysteria2", "amneziawg", "amneziawg-direct", "wireguard")
+
     /** کاربر وسط کار قطع کرد؟ (false یعنی تلاش‌های بعدی انجام نشوند) */
     @Volatile private var wantTry = true
 
@@ -217,29 +239,45 @@ class AppState private constructor(context: Context) {
      *             لمس دوباره (وقتی همین حالت انتخاب است): تب سرورها برای انتخاب دستی
      *   DNS      انتخاب می‌شود؛ اگر VPN دیگری وصل است، به DNS سوییچ می‌کند
      */
+    /**
+     * ۱.۴۵.۱ (سه پلن): حالتی که اشتراک واقعاً پروتکلی برایش دارد. gaming: KANKI MIX، AmneziaWG، WireGuard و DNS؛
+     * v2ray: Xray و Hysteria2 (ضد فیلتر)؛ vip همه. پنل خالی هرگز باز نمی‌شود.
+     */
+    fun modeAvailable(m: KMode): Boolean {
+        val a = account ?: return true
+        val ps = a.configs.map { it.protocol }.toSet()
+        return when (m) {
+            KMode.SMART -> ps.isNotEmpty()
+            KMode.GAME -> Modes.GAME_FAMILIES.any { (key, _) -> gameConfigs(key).isNotEmpty() }
+            KMode.FILTER -> ps.any { it in FILTER_PROTOS }
+            KMode.DNS -> a.dns != null
+        }
+    }
+
     fun tapMode(m: KMode) {
         if (vstate == VState.CONNECTING && m != KMode.GAME) return
+        if (m != KMode.DNS && !modeAvailable(m)) { toast = tr("این حالت در پلن اشتراک شما نیست"); return }
         when (m) {
             KMode.SMART -> {
                 val already = mode == KMode.SMART && vstate == VState.ON
-                changeMode(m)
+                pickMode(m)
                 if (!already) smartConnect()
             }
             KMode.GAME -> {
                 // DNS وصل است و کاربر گیمینگ را می‌زند: DNS قطع می‌شود تا صفحه چیزی جز واقعیت نشان ندهد
                 if (mode == KMode.DNS && vstate != VState.OFF) userDisconnect()
-                changeMode(m); gameSheet = true
+                pickMode(m); gameSheet = true
             }
             KMode.FILTER -> {
                 // ۱.۴۱: مثل گیمینگ، همان لمس اول پاپ‌آپ ضد فیلتر باز می‌شود (Xray، Amnezia، WireGuard، Hysteria2؛ «اتصال خودکار» بالای فهرست)
                 if (mode == KMode.DNS && vstate != VState.OFF) userDisconnect()
-                changeMode(m); filterSheet = true
+                pickMode(m); filterSheet = true
             }
             KMode.DNS -> {
                 // دکمه‌ی DNS همیشه دیده می‌شود (۱.۳۲)؛ اشتراکی که DNS ندارد همان لحظه پیامش را می‌گیرد و حالت عوض نمی‌شود
                 if (account != null && account?.dns == null) { toast = tr("اشتراک شما DNS ندارد"); return }
                 val wasOther = mode != KMode.DNS && vstate == VState.ON
-                changeMode(m)
+                pickMode(m)
                 if (wasOther) launchConnect(reconnect = true) { connectDns() }
             }
         }
@@ -586,13 +624,13 @@ class AppState private constructor(context: Context) {
         node = id
         selectProto(p)
         when {
-            p == "xray" -> { setFilter(false, id, null); changeMode(KMode.FILTER) }
+            p == "xray" -> { setFilter(false, id, null); pickMode(KMode.FILTER) }
             // در حالت ضد فیلتر، AmneziaWG (مستقیم/تانل) هم انتخاب دستی همین حالت است
             mode == KMode.FILTER && p in FILTER_PICK -> setFilter(false, p, id)
             // Hysteria2 فقط در ضد فیلتر است (گیمینگ: KANKI MIX، WireGuard، AmneziaWG)
-            p == "hysteria2" -> { setFilter(false, p, id); changeMode(KMode.FILTER) }
+            p == "hysteria2" -> { setFilter(false, p, id); pickMode(KMode.FILTER) }
             // KANKI MIX فقط گیمینگ است؛ WireGuard و AmneziaWG بیرون از ضد فیلتر هم انتخاب دستی گیمینگ‌اند
-            else -> { setGame(false, p, id); changeMode(KMode.GAME) }
+            else -> { setGame(false, p, id); pickMode(KMode.GAME) }
         }
     }
 
@@ -679,6 +717,8 @@ class AppState private constructor(context: Context) {
     private var autoRetries = 0
     /** آخرین خواندن صفحه‌ی اشتراک از شبکه بود یا از نسخه‌ی ذخیره‌شده */
     @Volatile private var lastFromCache = false
+    /** چرا آخرین خواندن صفحه‌ی اشتراک از پنل ناموفق بود (null = موفق) */
+    @Volatile private var lastError: PanelError? = null
     /** ۱.۴۵: اشتراک و کانفیگ‌ها تا ۴ ساعت از حافظه‌ی گوشی (رمزشده) خوانده می‌شوند؛ پنل فقط بعد از آن، با «بروزرسانی» دستی یا با کد تازه */
     private val syncIntervalMs = 4L * 60 * 60 * 1000
 
@@ -802,6 +842,8 @@ class AppState private constructor(context: Context) {
     }
 
     private suspend fun runSmart() {
+        pickMode(KMode.SMART)
+        smartLock = true
         try {
             if (vstate != VState.OFF) disconnect()
             wantTry = true
@@ -1195,12 +1237,13 @@ class AppState private constructor(context: Context) {
      */
     private fun loadAccount(b: String, c: String): Account {
         lastFromCache = false
-        var err: Exception? = null
+        lastError = null
+        var err: Exception = PanelError(PanelError.Kind.NETWORK)
         if (SubscriptionApi.preferred == null) SubscriptionApi.preferred = prefs.getString("subhost_$c", null)
         if (SubscriptionApi.panelSubBase == null) SubscriptionApi.panelSubBase = prefs.getString("sub_base", null)
         try {
-            val (url, html) = SubscriptionApi.race(SubscriptionApi.hosts(b).map { "$it/sub/$c" })
-            val h = url.removeSuffix("/sub/$c")
+            val (h, html) = SubscriptionApi.raceWith(SubscriptionApi.hosts(b)) { SubscriptionApi.page(it, c) }
+            if (!SubscriptionApi.looksLikePage(html)) throw PanelError(PanelError.Kind.PARSE)
             val acc = SubscriptionApi.parse(html, h)
             // جواب ناقص (لگ، صفحه‌ی خطای یک واسطه) جای اشتراک سالم ذخیره‌شده نمی‌نشیند: اگر حساب تمام یا بسته نشده ولی هیچ
             // کانفیگی نیامد و نسخه‌ی قبلی کانفیگ داشت، همان نسخه‌ی قبلی خوانده می‌شود
@@ -1215,7 +1258,10 @@ class AppState private constructor(context: Context) {
             err = e
         }
         lastFromCache = true
-        val html = prefs.getString("subhtml_$c", null) ?: throw (err ?: java.io.IOException("subscription not reachable"))
+        lastError = PanelError.of(err)
+        // «کد نامعتبر» از خود پنل: نسخه‌ی ذخیره‌شده جای جواب پنل را نمی‌گیرد (کد عوض یا حذف شده)
+        val html = prefs.getString("subhtml_$c", null)?.takeIf { lastError?.kind != PanelError.Kind.INVALID_CODE }
+            ?: throw (lastError ?: PanelError(PanelError.Kind.NETWORK))
         return SubscriptionApi.parse(html, prefs.getString("subhost_$c", null) ?: b)
     }
 
@@ -1378,26 +1424,44 @@ class AppState private constructor(context: Context) {
      * (در کادر فقط کد نشان داده می‌شود)؛ وگرنه برنامه آدرس را خودش پیدا می‌کند.
      */
     suspend fun login(input: String, baseHint: String? = null): Boolean {
-        val n = SubscriptionApi.normalize(input)
-        if (n == null) { error = "لینک یا کد اشتراک معتبر نیست"; return false }
-        val host = (if (baseHint != null && (n.first == null || n.first == SubscriptionApi.DEFAULT_HOST)) baseHint else n.first)
-            ?: run { error = "لینک کامل اشتراک را وارد کنید (کد تنها کافی نیست)"; return false }
+        val n = PanelLink.parse(input)
+        if (n == null) { error = PanelError(PanelError.Kind.BAD_INPUT).persian; return false }
+        val given = when (n) {
+            is PanelLink.Input.Code -> n.origin
+            is PanelLink.Input.Bare -> n.origin
+            is PanelLink.Input.Hash -> n.origin
+        }
+        // آدرس: آنچه در لینک خود کاربر بود (یا لینکی که پیش‌تر در کادر جای‌گذاری شد)، وگرنه آدرس‌های این نسخه
+        val host = given ?: baseHint ?: SubscriptionApi.DEFAULT_HOST
+        if (host == null) { error = PanelError(PanelError.Kind.NO_HOSTS).persian; return false }
         loading = true; error = null
         return try {
-            val a = augment(withContext(Dispatchers.IO) { loadAccount(host, n.second) })
+            val (h, c, a) = withContext(Dispatchers.IO) {
+                // کد کوتاه یا لینک هش‌شده: کد کامل از صفحه‌ی خود حساب (روی همه‌ی میزبان‌ها)، بعد ورود عادی و رمزشده
+                val (h0, c) = if (n is PanelLink.Input.Code) host to n.code
+                    else SubscriptionApi.raceWith(SubscriptionApi.hosts(host)) { SubscriptionApi.discover(it, n) }
+                val h = if (n is PanelLink.Input.Hash) h0 else host
+                Triple(h, c, loadAccount(h, c))
+            }
+            val aug = augment(a)
             unlocking = true
-            base = host; code = n.second
+            base = h; code = c
             prefs.edit().putString("base", base).putString("code", code).putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
-            account = a
-            pruneOld(a)   // کانفیگ‌های ذخیره‌شده‌ی اشتراک قبلی جای این یکی را نمی‌گیرند
-            node = a.configs.firstOrNull()?.node
+            account = aug
+            pruneOld(aug)   // کانفیگ‌های ذخیره‌شده‌ی اشتراک قبلی جای این یکی را نمی‌گیرند
+            node = aug.configs.firstOrNull()?.node
             loading = false
             // بعد از ورود (startupLoad) پینگ همه‌ی کانفیگ‌ها هم گرفته می‌شود؛ موقعیت خروجی‌ها از داده‌ی پنل می‌آید
             pingAfterLoad = true
             true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            loading = false
+            throw e
         } catch (e: Exception) {
             loading = false
-            error = "این اشتراک پیدا نشد یا اینترنت در دسترس نیست"
+            val pe = PanelError.of(e)
+            android.util.Log.w("Kanki", "login failed: ${pe.kind}")
+            error = pe.persian
             false
         }
     }
@@ -1441,14 +1505,19 @@ class AppState private constructor(context: Context) {
             if (node == null || aug.configs.none { it.node == node }) node = aug.configs.firstOrNull()?.node
             // بروزرسانی کامل: همه‌ی کانفیگ‌ها دوباره از پنل خوانده می‌شود، تا عوض‌شدن دامنه‌ی تانل جا نماند
             loadInfos(aug, force = true)
+            // پنل جواب نداد و نسخه‌ی ذخیره‌شده نشان داده می‌شود: دلیلش هم گفته شود (هیچ‌وقت بی‌صدا)
+            if (lastFromCache) lastError?.let { error = it.persian + " (اطلاعات ذخیره‌شده نمایش داده می‌شود)" }
             if (!lastFromCache) {
                 prefs.edit().putLong("last_sync", System.currentTimeMillis()).putLong("last_usage", System.currentTimeMillis()).apply()
                 pruneOld(aug)
             }
             if (vstate == VState.OFF) fixProto()
             locate()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            loading = false
+            throw e
         } catch (e: Exception) {
-            error = "دریافت اطلاعات اشتراک ناموفق بود. اینترنت را بررسی کنید."
+            error = PanelError.of(e).persian
         }
         loading = false
     }

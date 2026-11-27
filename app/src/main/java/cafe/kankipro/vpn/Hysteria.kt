@@ -198,6 +198,8 @@ class KankiHyService : VpnService() {
         /** a socket of the app that must not go into our own VPN (pings of the servers): protected while it runs */
         fun protectSocket(s: java.net.DatagramSocket): Boolean = running?.get()?.protect(s) ?: false
         fun protectSocket(s: java.net.Socket): Boolean = running?.get()?.protect(s) ?: false
+        /** our VPN has a tun up: an unprotected socket would go through it */
+        fun tunUp(): Boolean = running?.get()?.tun != null
     }
 
     override fun onCreate() {

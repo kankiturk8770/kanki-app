@@ -204,13 +204,14 @@ func public(a *sub.Account) *sub.Account {
 
 // SetSubscription takes a link or code, loads it and keeps it.
 func (m *Manager) SetSubscription(input string) (*sub.Account, error) {
-	base, code, err := sub.Normalize(input)
-	if err != nil {
-		return nil, err
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
 	m.sub.Reset() // hosts learned from an earlier account never receive this code
+	base, code, err := m.sub.Resolve(ctx, input)
+	if err != nil {
+		m.log.Printf("subscription: %v", err)
+		return nil, err
+	}
 	a, err := m.sub.Load(ctx, base, code)
 	if err != nil {
 		m.log.Printf("subscription: %v", err)

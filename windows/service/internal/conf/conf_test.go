@@ -29,7 +29,7 @@ I1 = <b 0xc2000000011a><r 16>
 PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
 PresharedKey = FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=
 AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = de1.kanki.pro:51820
+Endpoint = de1.example.net:51820
 PersistentKeepalive = 25
 `
 
@@ -41,7 +41,7 @@ func TestParseAWG(t *testing.T) {
 	if !c.IsAWG() || len(c.AWG) != 12 {
 		t.Fatalf("awg params: %v", c.AWG)
 	}
-	if c.Peer.Host != "de1.kanki.pro" || c.Peer.Port != 51820 || c.MTU != 1280 {
+	if c.Peer.Host != "de1.example.net" || c.Peer.Port != 51820 || c.MTU != 1280 {
 		t.Fatalf("peer: %+v", c.Peer)
 	}
 	if len(c.DNS) != 2 || c.HasIPv6() || len(c.Peer.AllowedIPs) != 2 {
@@ -85,7 +85,7 @@ func TestRefusesScripts(t *testing.T) {
 func TestRefusesBroken(t *testing.T) {
 	cases := map[string]string{
 		"bad key":     strings.Replace(awgText, "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=", "abc", 1),
-		"no endpoint": strings.Replace(awgText, "Endpoint = de1.kanki.pro:51820", "", 1),
+		"no endpoint": strings.Replace(awgText, "Endpoint = de1.example.net:51820", "", 1),
 		"two peers":   awgText + "[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n",
 		"unknown key": strings.Replace(awgText, "MTU = 1280", "Foo = 1", 1),
 		"html":        "<html>not found</html>",

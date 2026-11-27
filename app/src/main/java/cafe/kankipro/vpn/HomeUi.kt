@@ -103,6 +103,8 @@ data class HomeUi(
     val locationIsExit: Boolean = false,
     /** یک پنل (گیمینگ/برنامه‌ها) باز است؛ دکمه‌ی اصلی کاری نمی‌کند */
     val sheetOpen: Boolean,
+    /** حالت‌هایی که پلن این اشتراک ندارد (کم‌رنگ؛ لمسشان فقط پیام می‌دهد) */
+    val modesOff: Set<KMode> = emptySet(),
     val smart: SmartPanelUi,
     val dns: DnsCardUi,
     /** رنگ اتصال: پروتکل وصل‌شده (یا DNS)، وقتی قطع است رنگ حالت */
@@ -374,9 +376,9 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     }
                     if (ui.hasAccount) {
                         ModeOrbit(
-                            ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME,
+                            ui.mode, d, enabled = ui.vstate != VState.CONNECTING || ui.mode == KMode.GAME || ui.mode == KMode.SMART,
                             modifier = Modifier.fillMaxSize().guideTarget("protocols"),
-                            showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, onTap = act.tapMode, onLong = act.longMode,
+                            showDns = ui.dns.hasDns, live = ui.vstate == VState.ON, off = ui.modesOff, onTap = act.tapMode, onLong = act.longMode,
                         )
                     }
                 }
@@ -385,8 +387,10 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
-                    // ۱.۴۵: «اشتراک شما DNS ندارد» یک نوار باریک درست زیر دکمه‌ی اتصال است (نه یک کارت در حالت DNS)
-                    if (ui.hasAccount && !ui.dns.hasDns && ui.mode == KMode.DNS) DnsMissingBanner()
+                    // ۱.۴۵.۱: نوار DNS کانکی درست زیر دکمه‌ی اتصال، با فاصله و جای لمس کامل؛ روشن/خاموش بودنش پیداست.
+                    // اشتراکی که DNS ندارد همان نوار باریک «اشتراک شما DNS ندارد» را می‌بیند
+                    if (ui.hasAccount && ui.dns.hasDns) DnsBar(ui.mode == KMode.DNS, ui.mode == KMode.DNS && on, ui.vstate != VState.CONNECTING) { act.tapMode(KMode.DNS) }
+                    else if (ui.hasAccount && ui.mode == KMode.DNS) DnsMissingBanner()
                     // کارت سرور: وصل = سرور واقعی با «اتصال پایدار»؛ قطع = سرور انتخابی روی نقشه با «آماده»
                     val pick = ui.pins.firstOrNull { it.selected }
                     if (on && ui.server != null) ConnectedCard(ui.server, mc)
@@ -404,6 +408,32 @@ fun HomeContent(ui: HomeUi, act: HomeActions, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+/**
+ * دکمه‌ی DNS زیر دکمه‌ی اتصال: کل نوار (۴۸dp) لمس می‌شود و حالت DNS را انتخاب می‌کند (مثل کاشی DNS)؛ نقطه‌ی سبز = DNS
+ * وصل است، طلایی = انتخاب شده و آماده، خاکستری = خاموش.
+ */
+@Composable
+private fun DnsBar(selected: Boolean, active: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    val c = when { active -> K.Green; selected -> K.Gold; else -> K.Sub }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape)
+            .background(c.copy(alpha = if (selected) .14f else .06f))
+            .border(1.dp, c.copy(alpha = if (selected) .55f else .25f), shape)
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onClickLabel = tr("DNS کانکی"), onClick = onClick)
+            .padding(horizontal = D.S3, vertical = D.S2)
+            .guideTarget("dns_bar"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Dot(c, 8.dp)
+        Spacer(Modifier.width(D.S2))
+        T("DNS کانکی", size = 13.sp, color = if (selected) c else K.Text, weight = FontWeight.Black, maxLines = 1)
+        Spacer(Modifier.width(D.S2))
+        T(when { active -> "فعال"; selected -> "انتخاب شده"; else -> "خاموش" }, size = 11.sp, color = c, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

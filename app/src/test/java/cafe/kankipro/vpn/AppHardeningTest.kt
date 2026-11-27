@@ -35,23 +35,6 @@ class AppHardeningTest {
     }
 
     @Test
-    fun a_bare_code_needs_a_known_panel() {
-        val was = SubscriptionApi.CONFIGURED
-        try {
-            SubscriptionApi.CONFIGURED = emptyList()
-            assertEquals(null to code, SubscriptionApi.normalize(code))
-            SubscriptionApi.CONFIGURED = SubscriptionApi.parseHosts("https://a.example:2053/, http://plain.example, https://u@b.example, https://c.example/path,https://d.example")
-            assertEquals(listOf("https://a.example:2053", "https://d.example"), SubscriptionApi.CONFIGURED)
-            assertEquals("https://a.example:2053" to code, SubscriptionApi.normalize(code))
-            // a full link names its own panel; a user part never moves the code to another host
-            assertEquals("https://x.example:8443" to code, SubscriptionApi.normalize("https://x.example:8443/sub/$code"))
-            assertEquals(null, SubscriptionApi.normalize("https://x.example@evil.example/sub/nope"))
-        } finally {
-            SubscriptionApi.CONFIGURED = was
-        }
-    }
-
-    @Test
     fun panel_requests_are_https_only() {
         for (bad in listOf("http://p.example/sub/me", "https://user@p.example/sub/me", "ftp://p.example/x")) {
             try {

@@ -39,7 +39,7 @@ func TestDialByNameAndEveryHostInTheError(t *testing.T) {
 }
 
 func TestOnlyTheConfiguredSubHosts(t *testing.T) {
-	defer withHosts("https://a.example:2053, https://b.example:2053/ ,http://plain.example,https://u@c.example")()
+	defer withHosts("https://a.example:2053/admin, https://b.example:2053/sub/ ,ftp://plain.example,https://u@c.example")()
 	if got := configured(); len(got) != 2 || got[0] != "https://a.example:2053" || got[1] != "https://b.example:2053" {
 		t.Fatalf("configured: %v", got)
 	}

@@ -240,7 +240,7 @@ func TestResolvePrefersIPv4(t *testing.T) {
 	lookupIP = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("198.51.100.4")}, nil
 	}
-	ep, err := resolve(context.Background(), "de1.kanki.pro", 443)
+	ep, err := resolve(context.Background(), "de1.example.net", 443)
 	if err != nil || ep.String() != "198.51.100.4:443" {
 		t.Fatal(ep, err)
 	}

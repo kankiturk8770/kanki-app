@@ -16,11 +16,11 @@ import (
 )
 
 func TestParseKmix(t *testing.T) {
-	k, err := ParseKmix("kanki://" + strings.Repeat("ab", 32) + "@de1.kanki.pro:4000?fec=8-2&ports=4001-4010&gaming=1#GERMANY")
+	k, err := ParseKmix("kanki://" + strings.Repeat("ab", 32) + "@de1.example.net:4000?fec=8-2&ports=4001-4010&gaming=1#GERMANY")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Host != "de1.kanki.pro" || k.Port != 4000 || k.FecData != 8 || k.FecPrty != 2 || !k.Gaming || k.PortLo != 4001 {
+	if k.Host != "de1.example.net" || k.Port != 4000 || k.FecData != 8 || k.FecPrty != 2 || !k.Gaming || k.PortLo != 4001 {
 		t.Fatalf("%+v", k)
 	}
 	for i := 0; i < 50; i++ {
@@ -48,7 +48,7 @@ func TestParseHy2(t *testing.T) {
 }
 
 func TestVlessRealityConfig(t *testing.T) {
-	v, err := ParseVless("vless://11111111-2222-3333-4444-555555555555@de1.kanki.pro:443?type=tcp&security=reality&sni=www.google.com&pbk=PUB&sid=ab&fp=chrome&flow=xtls-rprx-vision#DE")
+	v, err := ParseVless("vless://11111111-2222-3333-4444-555555555555@de1.example.net:443?type=tcp&security=reality&sni=www.google.com&pbk=PUB&sid=ab&fp=chrome&flow=xtls-rprx-vision#DE")
 	if err != nil {
 		t.Fatal(err)
 	}

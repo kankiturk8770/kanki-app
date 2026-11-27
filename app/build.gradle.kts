@@ -17,12 +17,37 @@ val releaseKeyPass: String? = System.getenv("KANKI_KEY_PASS")
 val canSignRelease = releaseKeystore.exists() && !releaseKeyPass.isNullOrEmpty()
 
 // The panel's addresses are never in the source: the build takes them from KANKI_PANEL_HOSTS (CI secret) or the
-// Gradle property kankiPanelHosts (local.properties is not read for it), comma separated https:// origins. Without
-// them the app still works with a full subscription link; a bare code then asks for the link.
-val panelHosts: String = (System.getenv("KANKI_PANEL_HOSTS") ?: (project.findProperty("kankiPanelHosts") as String?) ?: "")
-    .split(",").map { it.trim().trimEnd('/') }
-    .filter { Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$").matches(it) }
-    .joinToString(",")
+// Gradle property kankiPanelHosts (local.properties is not read for it). Entries may be split by commas, semicolons,
+// spaces or new lines; each one becomes its origin "https://host[:port]" (the same rules as PanelLink.origin in the
+// app: a missing scheme or http:// becomes https://, any path such as /admin, /panel, /sub, /sub/me and a trailing /
+// is dropped, a user part or a bad host is refused). Without them the app still works with a full subscription link.
+fun panelOrigin(entry: String): String? {
+    var s = entry.filterNot { it.isISOControl() || it in '\u200b'..'\u200f' || it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' || it == '\ufeff' }
+        .trim().trim('"', '\'', '<', '>', ' ')
+    if (s.isEmpty()) return null
+    val scheme = s.indexOf("://")
+    if (scheme >= 0) {
+        val p = s.substring(0, scheme).lowercase()
+        if (p != "https" && p != "http") return null
+        s = s.substring(scheme + 3)
+    }
+    val end = s.indexOfFirst { it == '/' || it == '?' || it == '#' || it == '\\' }
+    val auth = if (end >= 0) s.substring(0, end) else s
+    if (auth.isEmpty() || '@' in auth || ' ' in auth) return null
+    val colon = auth.lastIndexOf(':')
+    val host = (if (colon >= 0) auth.substring(0, colon) else auth).lowercase().trimEnd('.')
+    val port = if (colon >= 0) auth.substring(colon + 1).toIntOrNull() ?: return null else 443
+    val hostRe = Regex("^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)*$")
+    if (port !in 1..65535 || host.length > 253 || !hostRe.matches(host)) return null
+    return if (port == 443) "https://$host" else "https://$host:$port"
+}
+val panelHostsRaw: String = System.getenv("KANKI_PANEL_HOSTS") ?: (project.findProperty("kankiPanelHosts") as String?) ?: ""
+val panelHosts: String = panelHostsRaw.split(',', ';', ' ', '\n', '\r', '\t').mapNotNull { panelOrigin(it) }.distinct().joinToString(",")
+// a secret that is set but gives no address would make a build that cannot log in with a code: stop the build
+if (panelHostsRaw.isNotBlank() && panelHosts.isEmpty()) {
+    throw GradleException("KANKI_PANEL_HOSTS is set but has no valid https://host[:port] entry")
+}
+logger.lifecycle("Kanki panel hosts in this build: ${panelHosts.split(',').count { it.isNotEmpty() }}")
 // Optional SPKI pins of the panel's certificates (KANKI_PANEL_PINS: comma separated base64 SHA-256 of the public key;
 // list the backup key too, so a renewed certificate keeps working). Empty = the system's CAs and the hostname only.
 val panelPins: String = (System.getenv("KANKI_PANEL_PINS") ?: (project.findProperty("kankiPanelPins") as String?) ?: "")
@@ -36,8 +61,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 119
-        versionName = "1.45.0"
+        versionCode = 120
+        versionName = "1.45.1"
         buildConfigField("String", "PANEL_HOSTS", "\"$panelHosts\"")
         buildConfigField("String", "PANEL_PINS", "\"$panelPins\"")
     }

@@ -52,10 +52,34 @@ object Probe {
         list.firstOrNull { it is Inet4Address } ?: list.first()
     }.getOrNull()
 
+    /**
+     * ۱.۴۵.۱: سوکت سنجش فقط وقتی به کار می‌رود که واقعاً بیرون از تونل باشد: protect شده، یا به شبکه‌ی واقعی گوشی
+     * بسته شده. وقتی VPN بالاست و هیچ‌کدام نشد، سنجش انجام نمی‌شود (قبلاً بسته از داخل تونل می‌رفت و ۴ تا ۵ ثانیه‌ی
+     * غلط نشان داده می‌شد) و آخرین پینگ درست همان کانفیگ می‌ماند.
+     */
+    private fun outside(protected: Boolean, net: Network?, bind: (Network) -> Unit) {
+        val bound = net != null && try {
+            bind(net); true
+        } catch (e: java.io.IOException) {
+            if (!protected) throw java.io.IOException("probe socket could not leave the tunnel", e)
+            false
+        } catch (e: SecurityException) {
+            if (!protected) throw java.io.IOException("probe socket could not leave the tunnel", e)
+            false
+        }
+        if (!protected && !bound && (net != null || KankiHyService.tunUp())) throw java.io.IOException("probe socket would go through the tunnel")
+    }
+
     /** سوکت سنجش: بیرون از VPN خود برنامه (protect) و بسته به شبکه‌ی واقعی گوشی */
-    private fun udp(net: Network?): DatagramSocket = DatagramSocket().also { s ->
-        KankiHyService.protectSocket(s)
-        if (net != null) runCatching { net.bindSocket(s) }
+    private fun udp(net: Network?): DatagramSocket {
+        val s = DatagramSocket()
+        try {
+            outside(KankiHyService.protectSocket(s), net) { it.bindSocket(s) }
+        } catch (e: java.io.IOException) {
+            s.close()
+            throw e
+        }
+        return s
     }
 
     /**
@@ -155,8 +179,7 @@ object Probe {
         return (1..TRIES).mapNotNull {
             runCatching {
                 Socket().use { s ->
-                    KankiHyService.protectSocket(s)
-                    if (net != null) runCatching { net.bindSocket(s) }
+                    outside(KankiHyService.protectSocket(s), net) { it.bindSocket(s) }
                     val t0 = System.nanoTime()
                     s.connect(InetSocketAddress(ip, port), WAIT_MS)
                     ((System.nanoTime() - t0) / 1_000_000L).coerceAtLeast(1)

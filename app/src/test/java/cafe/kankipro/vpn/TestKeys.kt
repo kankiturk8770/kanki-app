@@ -18,6 +18,7 @@ class SoftKeyWrap(seed: Byte = 7) : SecurePrefs.KeyWrap {
         c.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, sealed, 0, 12))
         return c.doFinal(sealed, 12, sealed.size - 12)
     }
+    override fun reset() = Unit
 }
 
 fun useSoftKeys(seed: Byte = 7) {

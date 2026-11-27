@@ -83,18 +83,10 @@ data class XrayLink(val name: String, val link: String, val exit: ExitInfo? = nu
 data class AppNotice(val id: String, val text: String, val until: Long)
 
 object SubscriptionApi {
-    /** «https://میزبان[:پورت]» بی مسیر و بی نام کاربری (پیش از CONFIGURED: ترتیب ساخت شیء) */
-    private val ORIGIN = Regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$")
-
-    /**
-     * آدرس‌های پنل کانکی که این نسخه می‌شناسد: هیچ‌کدام در کد نیست؛ هنگام ساخت از KANKI_PANEL_HOSTS می‌آید
-     * (BuildConfig.PANEL_HOSTS). خالی = فقط آدرسی که در لینک خود کاربر است (کد تنها آن‌وقت لینک کامل می‌خواهد).
-     */
     @Volatile internal var CONFIGURED: List<String> = parseHosts(BuildConfig.PANEL_HOSTS)
 
-    /** «https://میزبان[:پورت]» های معتبر یک فهرست با ویرگول (بی مسیر، بی نام کاربری) */
-    fun parseHosts(spec: String): List<String> = spec.split(",").map { it.trim().trimEnd('/') }
-        .filter { ORIGIN.matches(it) }.distinct()
+    /** «https://میزبان[:پورت]» های یک فهرست (ویرگول، فاصله یا خط تازه)؛ مسیر (/admin، /sub/…) و / آخر حذف می‌شود */
+    fun parseHosts(spec: String): List<String> = PanelLink.hosts(spec)
 
 
     /** اگر کاربر فقط کد را وارد کند، این آدرس (null = این نسخه آدرسی نمی‌شناسد؛ لینک کامل لازم است) */
@@ -137,47 +129,37 @@ object SubscriptionApi {
      * رها می‌شوند. آدرس ترجیحی ۳۰۰ میلی‌ثانیه زودتر شروع می‌کند تا اگر سالم است، همیشه همان بماند
      * (یک آدرس ثابت، بدون پریدن بین سرورها). (آدرس برنده، متن)
      */
-    fun race(urls: List<String>, code: String? = null): Pair<String, String> {
-        if (urls.size == 1) return urls[0] to fetch(urls[0], code)
+    fun race(urls: List<String>, code: String? = null): Pair<String, String> = raceWith(urls) { fetch(it, code) }
+
+    /**
+     * همان race برای هر کاری روی هر آدرس (block)؛ اگر همه شکست خوردند، مفیدترین دلیل (PanelError) برمی‌گردد: «کد
+     * ناشناخته»ی یک پنل واقعی مهم‌تر از قطع بودن یک واسطه است.
+     */
+    fun raceWith(items: List<String>, block: (String) -> String): Pair<String, String> {
+        if (items.isEmpty()) throw PanelError(PanelError.Kind.NO_HOSTS)
+        if (items.size == 1) return try { items[0] to block(items[0]) } catch (e: Exception) { throw PanelError.of(e) }
         val done = java.util.concurrent.LinkedBlockingQueue<Result<Pair<String, String>>>()
         // ۱.۳۷: وقتی یکی جواب داد، آدرس‌هایی که هنوز شروع نکرده‌اند دیگر کد اشتراک را نمی‌گیرند
         val over = java.util.concurrent.atomic.AtomicBoolean(false)
-        val threads = urls.mapIndexed { i, u ->
+        val threads = items.mapIndexed { i, u ->
             Thread {
-                // آدرس‌هایی که دیر رسیدند بعد از برنده interrupt می‌شوند: put در رشته‌ی interrupt‌شده
-                // InterruptedException می‌داد و چون کسی آن را نمی‌گرفت، کل برنامه می‌بست (کرش «لینک ساب»).
-                // offer هیچ‌وقت منتظر نمی‌ماند و خطا نمی‌دهد؛ هر خطای دیگری هم همین‌جا تمام می‌شود.
-                runCatching {
-                    if (i > 0) runCatching { Thread.sleep(300) }
-                    // interrupt داخل sleep بالا گرفته می‌شود، پس پرچم over را همین‌جا دوباره ببین
-                    if (!over.get() && !Thread.currentThread().isInterrupted) done.offer(runCatching { u to fetch(u, code) })
-                }
+                // آدرس‌هایی که دیر رسیدند بعد از برنده interrupt می‌شوند: offer هیچ‌وقت منتظر نمی‌ماند و خطا نمی‌دهد
+                val slept = i == 0 || runCatching { Thread.sleep(300) }.isSuccess
+                if (slept && !over.get() && !Thread.currentThread().isInterrupted) done.offer(runCatching { u to block(u) })
+                else done.offer(Result.failure(PanelError(PanelError.Kind.NETWORK)))
             }.apply { isDaemon = true; start() }
         }
-        var last: Throwable? = null
-        repeat(urls.size) {
-            val r = done.poll(40, java.util.concurrent.TimeUnit.SECONDS) ?: return@repeat
+        var best: PanelError? = null
+        repeat(items.size) {
+            val r = done.poll(45, java.util.concurrent.TimeUnit.SECONDS) ?: return@repeat
             r.onSuccess { ok ->
                 over.set(true)
                 threads.forEach { it.interrupt() }
-                KANKI_HOSTS.firstOrNull { ok.first.startsWith("$it/") }?.let { preferred = it }
+                KANKI_HOSTS.firstOrNull { ok.first == it || ok.first.startsWith("$it/") }?.let { preferred = it }
                 return ok
-            }.onFailure { last = it }
+            }.onFailure { best = PanelError.better(best, PanelError.of(it)) }
         }
-        throw (last as? Exception) ?: IOException("no host answered")
-    }
-
-    /** کد اشتراک: kanki-<شماره>-<رمز> (کدهای قدیمی با پیشوند دیگر هم قبول می‌شوند) */
-    private val codeRegex = Regex("""\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}""")
-
-    /** لینک کامل یا کد خالی را می‌گیرد و (آدرس پنل، کد) برمی‌گرداند؛ آدرس null = کد تنها در نسخه‌ای که آدرسی نمی‌شناسد */
-    fun normalize(input: String): Pair<String?, String>? {
-        val s = input.trim()
-        // ۱.۳۷: «@» جزو اسم میزبان نیست؛ لینکی مثل https://پنل:پورت@دیگری/... کد را به همان آدرسِ دیده‌شده می‌برد
-        val full = Regex("""(https://[^/\s@]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})""").find(s)
-        if (full != null) return full.groupValues[1] to full.groupValues[2]
-        val code = codeRegex.find(s) ?: return null
-        return DEFAULT_HOST to code.value
+        throw best ?: PanelError(PanelError.Kind.NETWORK)
     }
 
     /** سرآیند کد اشتراک (پنل ۳.۶۷.۱ به بعد)؛ کد دیگر در هیچ آدرسی نیست */
@@ -199,8 +181,8 @@ object SubscriptionApi {
     }
 
     /**
-     * یک درخواست به پنل. کد اشتراک فقط در سرآیند X-Kanki-Sub می‌رود (نه در آدرس، که در لاگ‌ها می‌ماند)؛ پنل قدیمی
-     * (پیش از ۳.۶۷.۱) آن را نمی‌شناسد و «پیدا نشد» می‌دهد: آن‌وقت یک بار همان آدرس قدیمی (کد در آدرس).
+     * یک درخواست به پنل. کد اشتراک فقط در سرآیند X-Kanki-Sub می‌رود (نه در آدرس، که در لاگ‌ها می‌ماند)؛ پنل یا
+     * واسطه‌ی قدیمی آن را نمی‌شناسد و «پیدا نشد» / «روش مجاز نیست» می‌دهد: آن‌وقت یک بار همان آدرس قدیمی (کد در آدرس).
      * code: کد صفحه‌ی اشتراک (برای /sub/me)؛ برای لینک کانفیگ از خود آدرس برداشته می‌شود.
      */
     fun fetch(url: String, code: String? = null): String {
@@ -210,40 +192,111 @@ object SubscriptionApi {
         return try {
             fetchOnce(headerUrl, c, c)
         } catch (e: HttpStatus) {
-            if (e.code != 404 && e.code != 401 && e.code != 403) throw e
+            if (e.code !in FALLBACK) throw e
             fetchOnce(if (headerUrl.endsWith("/sub/me")) headerUrl.removeSuffix("/sub/me") + "/sub/$c" else url, null, c)
         }
     }
 
+    /** جواب‌هایی که یعنی «این میزبان /sub/me یا سرآیند را نمی‌شناسد»: همان کد با آدرس قدیمی امتحان می‌شود */
+    private val FALLBACK = setOf(400, 401, 403, 404, 405)
+
+    /**
+     * صفحه‌ی اشتراک یک حساب روی یک میزبان (origin): اول /sub/me با سرآیند، بعد (فقط اگر میزبان آن را رد کرد) /sub/<کد>.
+     */
+    fun page(origin: String, code: String): String = fetch("$origin/sub/$code", code)
+
+    /**
+     * کد کامل حسابی که کاربر فقط با رمز کوتاه (ارقام کد) یا لینک هش‌شده (/sub/h/<hash>) آمده: صفحه بی رمزگذاری
+     * (پنل جواب رمزشده را با کد کامل می‌بندد که این‌جا هنوز معلوم نیست) خوانده و کد از خود صفحه برداشته می‌شود.
+     */
+    fun discover(origin: String, input: PanelLink.Input): String {
+        val html = when (input) {
+            is PanelLink.Input.Bare -> try {
+                fetchOnce("$origin/sub/me", input.digits, null, seal = false)
+            } catch (e: HttpStatus) {
+                if (e.code in FALLBACK) throw PanelError(PanelError.Kind.BARE_UNSUPPORTED, e) else throw e
+            }
+            is PanelLink.Input.Hash -> fetchOnce("$origin/sub/h/${input.hash}", null, null, seal = false)
+            is PanelLink.Input.Code -> return input.code
+        }
+        if (!looksLikePage(html)) throw PanelError(PanelError.Kind.PARSE)
+        return PanelLink.codeInPage(html, (input as? PanelLink.Input.Bare)?.digits) ?: throw PanelError(PanelError.Kind.PARSE)
+    }
+
+    /** صفحه‌ی اشتراک کانکی است (نه صفحه‌ی خطای یک واسطه یا CDN با کد ۲۰۰) */
+    fun looksLikePage(html: String): Boolean =
+        html.contains("/api/config/") || Regex("""(?is)<script[^>]*id="data"""").containsMatchIn(html) || Regex("(?is)<h1[^>]*>").containsMatchIn(html)
+
+    /** حجم بی‌سقف (limit_gb == 0) */
+    const val UNLIMITED = "∞ / نامحدود"
+
     /** جواب غیر ۲۰۰ پنل */
     class HttpStatus(val code: Int) : IOException("HTTP $code")
 
-    private fun fetchOnce(url: String, header: String?, code: String?): String {
-        val c = PanelTls.open(url)
-        c.connectTimeout = 15000
-        c.readTimeout = 20000
-        c.instanceFollowRedirects = false
-        c.setRequestProperty("User-Agent", "KankiVPN-Android")
-        if (header != null) c.setRequestProperty(CODE_HEADER, header)
-        // شناسه‌ی گوشی (لیست دستگاه‌های پنل) و کانفیگ رمزشده (Seal.kt)
-        val dev = Seal.device
-        if (dev != null) {
-            c.setRequestProperty("X-Kanki-Device", dev)
-            c.setRequestProperty("X-Kanki-Seal", Seal.VERSION)
+    private const val MAX_BODY = 8 shl 20
+    private const val MAX_REDIRECTS = 3
+
+    /**
+     * یک درخواست. تغییر مسیر فقط روی همان https://میزبان:پورت دنبال می‌شود (مثلاً / آخر یا مسیر اصلی)؛ میزبان دیگر یا
+     * http هرگز (کد اشتراک در سرآیند است و نباید به جای دیگری برود). seal=false: جواب رمزشده خواسته نمی‌شود.
+     */
+    private fun fetchOnce(url: String, header: String?, code: String?, seal: Boolean = true): String {
+        var at = url
+        repeat(MAX_REDIRECTS + 1) {
+            val c = PanelTls.open(at)
+            c.connectTimeout = 15000
+            c.readTimeout = 20000
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("User-Agent", "KankiVPN-Android")
+            c.setRequestProperty("Accept", "text/html, application/json, text/plain")
+            if (header != null) c.setRequestProperty(CODE_HEADER, header)
+            // شناسه‌ی گوشی (لیست دستگاه‌های پنل) و کانفیگ رمزشده (Seal.kt)
+            val dev = Seal.device
+            if (dev != null) c.setRequestProperty("X-Kanki-Device", dev)
+            if (dev != null && seal) c.setRequestProperty("X-Kanki-Seal", Seal.VERSION)
+            try {
+                val status = c.responseCode
+                if (status in 300..399 && status != 304) {
+                    at = sameOrigin(at, c.getHeaderField("Location")) ?: throw HttpStatus(status)
+                    return@repeat
+                }
+                if (status != 200) throw HttpStatus(status)
+                val body = readBody(c.inputStream)
+                if (!Seal.isSealed(body)) return body
+                val sub = code ?: Seal.codeOf(url)?.takeIf { it != "me" && it != "h" }
+                if (dev == null || sub == null) throw PanelError(PanelError.Kind.SEAL)
+                return try { Seal.open(body, sub, dev) } catch (e: IOException) { throw PanelError(PanelError.Kind.SEAL, e) }
+            } finally {
+                c.disconnect()
+            }
         }
-        try {
-            val status = c.responseCode
-            if (status != 200) throw HttpStatus(status)
-            val body = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val sub = code ?: Seal.codeOf(url)
-            if (dev != null && sub != null && Seal.isSealed(body)) return Seal.open(body, sub, dev)
-            return body
-        } finally {
-            c.disconnect()
-        }
+        throw HttpStatus(310)
     }
 
-    fun load(base: String, code: String): Account = parse(fetch("$base/sub/$code"), base)
+    private fun readBody(input: java.io.InputStream): String = input.use { s ->
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(16 shl 10)
+        while (true) {
+            val n = s.read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            if (out.size() > MAX_BODY) throw PanelError(PanelError.Kind.PARSE)
+        }
+        out.toString(Charsets.UTF_8.name())
+    }
+
+    /** the target of a redirect when it stays on the same https origin (scheme, host and port); null otherwise */
+    fun sameOrigin(from: String, location: String?): String? {
+        if (location.isNullOrBlank() || location.length > 2048) return null
+        val base = runCatching { java.net.URI(from) }.getOrNull() ?: return null
+        val to = runCatching { base.resolve(location.trim()) }.getOrNull() ?: return null
+        if (!to.scheme.equals("https", ignoreCase = true) || to.rawUserInfo != null) return null
+        val port = { u: java.net.URI -> if (u.port == -1) 443 else u.port }
+        if (!to.host.equals(base.host, ignoreCase = true) || port(to) != port(base)) return null
+        return to.toString()
+    }
+
+    fun load(base: String, code: String): Account = parse(page(base, code), base)
 
     private fun decode(s: String) = s
         .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
@@ -316,8 +369,12 @@ object SubscriptionApi {
         return Account(
             username = username,
             status = status,
-            dataRemaining = if (limitGb != null && usedGb != null && limitGb > 0)
-                String.format(java.util.Locale.US, "%.2f GB", (limitGb - usedGb).coerceAtLeast(0.0)) else after("Data remaining"),
+            dataRemaining = when {
+                // limit_gb == 0 یعنی بی‌سقف (متن ثابت صفحه «0 GB» می‌نویسد)
+                limitGb != null && limitGb <= 0.0 -> UNLIMITED
+                limitGb != null && usedGb != null -> String.format(java.util.Locale.US, "%.2f GB", (limitGb - usedGb).coerceAtLeast(0.0))
+                else -> after("Data remaining")
+            },
             used = if (usedGb != null) String.format(java.util.Locale.US, "%.2f GB", usedGb) else after("Used traffic"),
             // پنل عدد اتصال را با جاوااسکریپت صفحه می‌نویسد (در متن ثابت فقط «—» است)؛ از داده‌ی صفحه: وصل الان / سقف حساب (۰ = بی‌سقف)
             connections = d0?.takeIf { it.has("max_conn") }?.let { "${it.optInt("online", 0)} / ${it.optInt("max_conn", 0).let { m -> if (m > 0) "$m" else "∞" }}" }

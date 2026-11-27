@@ -23,7 +23,7 @@ class SealTest {
 
     @Test
     fun finds_the_code_in_both_link_shapes() {
-        assertEquals("kanki-12-abcd1234", Seal.codeOf("https://sub.kanki.pro/sub/kanki-12-abcd1234"))
+        assertEquals("kanki-12-abcd1234", Seal.codeOf("https://sub.example/sub/kanki-12-abcd1234"))
         assertEquals("kanki-12-abcd1234", Seal.codeOf("https://x/api/config/3/wg?sub=kanki-12-abcd1234&t=1"))
         assertEquals(null, Seal.codeOf("https://x/other"))
     }

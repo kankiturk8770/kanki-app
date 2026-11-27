@@ -52,7 +52,7 @@ data class CfgRowUi(
 )
 
 /** یک ردیف داخل کارت کشور: یک پروتکل یک سرور، کانفیگ تانل (راست) و مستقیم (چپ) کنار هم؛ place: شهر وقتی کشور چند سرور دارد */
-data class CfgLineUi(val place: String?, val tunnel: CfgRowUi?, val direct: CfgRowUi?)
+data class CfgLineUi(val place: String?, val tunnel: CfgRowUi?, val direct: CfgRowUi?, val split: Boolean = true)
 
 /** کارت یک کشور */
 data class CountryCardUi(
@@ -64,7 +64,7 @@ data class CountryCardUi(
     val expanded: Boolean,
     val selected: Boolean,
     val rows: List<CfgRowUi>,
-    val lines: List<CfgLineUi> = rows.map { CfgLineUi(null, null, it) },
+    val lines: List<CfgLineUi> = rows.map { CfgLineUi(null, null, it, split = false) },
 )
 
 /** وضعیت «تست پینگ همه» */
@@ -409,8 +409,8 @@ private fun CfgLine(l: CfgLineUi, act: ServersActions) {
     var details by remember { mutableStateOf<CfgRowUi?>(null) }
     Column(Modifier.fillMaxWidth().padding(bottom = D.S1)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(D.S2)) {
-            CfgCell(l.tunnel, Modifier.weight(1f), act) { details = if (details == it) null else it }
-            CfgCell(l.direct, Modifier.weight(1f), act) { details = if (details == it) null else it }
+            CfgCell(l.tunnel, Modifier.weight(1f), act, route = if (l.split) "تانل" else null) { details = if (details == it) null else it }
+            CfgCell(l.direct, Modifier.weight(1f), act, route = if (l.split) "مستقیم" else null) { details = if (details == it) null else it }
         }
         AnimatedVisibility(visible = details != null, enter = fadeIn(tween(200)) + expandVertically(tween(240)), exit = fadeOut(tween(150)) + shrinkVertically(tween(180))) {
             val r = details ?: return@AnimatedVisibility
@@ -429,13 +429,13 @@ private fun CfgLine(l: CfgLineUi, act: ServersActions) {
  * لمس = انتخاب و اتصال؛ نگه‌داشتن = جزئیات. خالی وقتی این سرور این راه را ندارد.
  */
 @Composable
-private fun CfgCell(r: CfgRowUi?, modifier: Modifier, act: ServersActions, onLong: (CfgRowUi) -> Unit) {
+private fun CfgCell(r: CfgRowUi?, modifier: Modifier, act: ServersActions, route: String? = null, onLong: (CfgRowUi) -> Unit) {
     val shape = RoundedCornerShape(D.RS)
     val pick by rememberUpdatedState(act.pick)
     val long by rememberUpdatedState(onLong)
     val sel = r?.selected == true
     Row(
-        modifier.height(44.dp).clip(shape)
+        modifier.heightIn(min = 48.dp).clip(shape)
             .background(
                 if (sel) Brush.horizontalGradient(listOf(K.Gold.copy(alpha = .26f), K.Gold.copy(alpha = .07f)))
                 else Brush.horizontalGradient(listOf(Color(0x12FFFFFF), Color(0x05FFFFFF))),
@@ -454,8 +454,10 @@ private fun CfgCell(r: CfgRowUi?, modifier: Modifier, act: ServersActions, onLon
         }
         Box(Modifier.size(width = 3.dp, height = 20.dp).clip(CircleShape).background(protoColor(r.proto)))
         Spacer(Modifier.width(D.S2))
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
             AutoText(r.title, size = 12.sp, color = if (sel) K.GoldLight else K.Text, weight = FontWeight.Bold)
+            // نشان راه (تانل / مستقیم) به رنگ پروتکل، تا دو خانه‌ی یک ردیف با هم اشتباه نشوند
+            if (route != null) T(tr(route), size = 9.sp, color = protoColor(r.proto).copy(alpha = .9f), weight = FontWeight.Bold, maxLines = 1)
         }
         Spacer(Modifier.width(D.S1))
         if (r.busy) Spinner(12.dp)

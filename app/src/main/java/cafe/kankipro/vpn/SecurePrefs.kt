@@ -36,6 +36,8 @@ object SecurePrefs {
     interface KeyWrap {
         fun wrap(plain: ByteArray): ByteArray
         fun unwrap(sealed: ByteArray): ByteArray
+        /** drops the wrapping key (a damaged or unusable one); the next wrap makes a new key */
+        fun reset()
     }
 
     @Volatile var keyWrap: () -> KeyWrap = { KeystoreWrap() }
@@ -70,6 +72,11 @@ object SecurePrefs {
             return c.iv + c.doFinal(plain)
         }
 
+        override fun reset() {
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            if (ks.containsAlias(ALIAS)) ks.deleteEntry(ALIAS)
+        }
+
         override fun unwrap(sealed: ByteArray): ByteArray {
             if (sealed.size < 12 + 16) throw GeneralSecurityException("short key blob")
             val c = Cipher.getInstance("AES/GCM/NoPadding")
@@ -91,22 +98,7 @@ object SecurePrefs {
 
         init {
             val kp = ctx.getSharedPreferences(KEYS, Context.MODE_PRIVATE)
-            val w = keyWrap()
-            val blob = kp.getString("dk", null)?.let { Base64.getDecoder().decode(it) }
-            val raw = blob?.let {
-                try {
-                    w.unwrap(it)
-                } catch (e: GeneralSecurityException) {
-                    // the Keystore key is gone (the phone's lock screen was reset, a restore): what was sealed with it
-                    // can never be read again, so the app starts clean (the user logs in once more)
-                    android.util.Log.w("Kanki", "stored settings could not be opened (${e.javaClass.simpleName}); starting clean")
-                    null
-                }
-            } ?: run {
-                // a new data key: whatever was sealed with an older one (none on a first start) cannot be read
-                disk.edit().clear().commit()
-                ByteArray(64).also { rnd.nextBytes(it) }.also { kp.edit().putString("dk", Base64.getEncoder().encodeToString(w.wrap(it))).commit() }
-            }
+            val raw = dataKey(kp, keyWrap())
             data = SecretKeySpec(raw, 0, 32, "AES")
             mac = SecretKeySpec(raw, 32, 32, "HmacSHA256")
             for ((k, v) in disk.all) {
@@ -115,6 +107,58 @@ object SecurePrefs {
                 mem[name] = value
             }
             migrate(ctx)
+        }
+
+        /**
+         * The data key, unwrapped with the Keystore key. When it cannot be (an upgrade over an older APK, a reset lock
+         * screen, a restore: AEADBadTagException, KeyStoreException, a damaged blob, a Keystore that throws a
+         * ProviderException), only the key blob, the Keystore entry and the sealed values (unreadable without that
+         * key) are dropped and a new key is made, so the app opens and the user logs in again instead of being stuck.
+         */
+        private fun dataKey(kp: SharedPreferences, w: KeyWrap): ByteArray {
+            val stored = kp.getString("dk", null)
+            if (stored != null) {
+                try {
+                    val raw = w.unwrap(Base64.getDecoder().decode(stored))
+                    if (raw.size == 64) return raw
+                    android.util.Log.w("Kanki", "stored settings key has a wrong size; starting clean")
+                } catch (e: GeneralSecurityException) {
+                    android.util.Log.w("Kanki", "stored settings could not be opened (${e.javaClass.simpleName}); starting clean")
+                } catch (e: IllegalArgumentException) {
+                    android.util.Log.w("Kanki", "stored settings key is damaged (${e.javaClass.simpleName}); starting clean")
+                } catch (e: java.security.ProviderException) {
+                    android.util.Log.w("Kanki", "the Keystore refused the settings key (${e.javaClass.simpleName}); starting clean")
+                } catch (e: IllegalStateException) {
+                    android.util.Log.w("Kanki", "the Keystore is not usable (${e.javaClass.simpleName}); starting clean")
+                }
+                recover(kp, w)
+            }
+            // a new data key: whatever was sealed with an older one (none on a first start) cannot be read
+            disk.edit().clear().commit()
+            val fresh = ByteArray(64).also { rnd.nextBytes(it) }
+            val blob = try {
+                w.wrap(fresh)
+            } catch (e: Exception) {
+                // a key left by an older version that cannot encrypt any more: drop it and make one again
+                android.util.Log.w("Kanki", "settings key could not be made (${e.javaClass.simpleName}); retrying with a new Keystore key")
+                recover(kp, w)
+                w.wrap(fresh)
+            }
+            kp.edit().putString("dk", Base64.getEncoder().encodeToString(blob)).commit()
+            return fresh
+        }
+
+        /** only the key material and the values sealed with it go; the old plain file (migrate) is not touched */
+        private fun recover(kp: SharedPreferences, w: KeyWrap) {
+            kp.edit().remove("dk").commit()
+            disk.edit().clear().commit()
+            try {
+                w.reset()
+            } catch (e: GeneralSecurityException) {
+                android.util.Log.w("Kanki", "old settings key could not be removed (${e.javaClass.simpleName})")
+            } catch (e: java.io.IOException) {
+                android.util.Log.w("Kanki", "old settings key could not be removed (${e.javaClass.simpleName})")
+            }
         }
 
         /** the plain file of the versions before: moved in, then emptied */

@@ -27,18 +27,9 @@ import (
 // panel of the user's own link.
 var PanelHosts = ""
 
-var originRe = regexp.MustCompile(`^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$`)
-
-// configured the valid origins of PanelHosts, in order
+// configured the valid origins of PanelHosts, in order (each cut to https://host[:port]: see Origin)
 func configured() []string {
-	var out []string
-	for _, h := range strings.Split(PanelHosts, ",") {
-		h = strings.TrimRight(strings.TrimSpace(h), "/")
-		if originRe.MatchString(h) {
-			out = append(out, h)
-		}
-	}
-	return dedupe(out)
+	return Hosts(PanelHosts)
 }
 
 // isConfigured: host is one of this build's panel addresses
@@ -85,25 +76,24 @@ type Account struct {
 	Fetched  int64    `json:"fetched"`
 }
 
-var (
-	fullRe = regexp.MustCompile(`(https://[^/\s@]+)\S*?/sub/([A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,})`)
-	codeRe = regexp.MustCompile(`\b[A-Za-z]{2,12}-\d+-[A-Za-z0-9]{4,}`)
-)
-
-// Normalize takes a full link or just the code and gives (panel address, code).
+// Normalize takes a full link or just the code and gives (panel address, code). A bare code or a hashed
+// link needs the panel to name the full code: Client.Resolve does that.
 func Normalize(input string) (string, string, error) {
-	s := strings.TrimSpace(input)
-	if m := fullRe.FindStringSubmatch(s); m != nil {
-		return m[1], m[2], nil
+	in, ok := ParseInput(input)
+	if !ok {
+		return "", "", errors.New("not a subscription link or code")
 	}
-	if c := codeRe.FindString(s); c != "" {
-		hs := configured()
-		if len(hs) == 0 {
-			return "", "", errors.New("enter the full subscription link (this build knows no panel address)")
-		}
-		return hs[0], c, nil
+	if in.Kind != KindCode {
+		return "", "", errors.New("this link needs the panel to name its code")
 	}
-	return "", "", errors.New("not a subscription link or code")
+	if in.Origin != "" {
+		return in.Origin, in.Value, nil
+	}
+	hs := configured()
+	if len(hs) == 0 {
+		return "", "", errors.New("enter the full subscription link (this build knows no panel address: KANKI_PANEL_HOSTS)")
+	}
+	return hs[0], in.Value, nil
 }
 
 // Client fetches pages; it races every Kanki host and remembers the winner.
@@ -242,7 +232,57 @@ func (c *Client) alternates(base, path string) []string {
 	return dedupe(out)
 }
 
+// HTTPError is a panel answer that is not 200.
+type HTTPError struct{ Code int }
+
+func (e *HTTPError) Error() string {
+	switch {
+	case e.Code == 401 || e.Code == 403 || e.Code == 404 || e.Code == 410:
+		return fmt.Sprintf("HTTP %d: the panel does not know this subscription code", e.Code)
+	case e.Code == 405 || e.Code >= 502 && e.Code <= 504:
+		return fmt.Sprintf("HTTP %d: the subscription relay did not pass the request on", e.Code)
+	}
+	return fmt.Sprintf("HTTP %d", e.Code)
+}
+
+// fallback: the host does not know /sub/me or the header (an older panel or relay): the code goes in the path
+func fallback(err error) bool {
+	var he *HTTPError
+	return errors.As(err, &he) && (he.Code == 400 || he.Code == 401 || he.Code == 403 || he.Code == 404 || he.Code == 405)
+}
+
+const maxRedirects = 3
+
+// sameOrigin lets a redirect through only on the same scheme, host and port, and never from https to http
+// (the code is in a header and must not reach another host).
+func sameOrigin(req *http.Request, via []*http.Request) error {
+	if len(via) > maxRedirects {
+		return errors.New("too many redirects")
+	}
+	first := via[0].URL
+	if req.URL.User != nil || !strings.EqualFold(req.URL.Scheme, first.Scheme) || !strings.EqualFold(req.URL.Hostname(), first.Hostname()) || portOf(req.URL.Scheme, req.URL.Port()) != portOf(first.Scheme, first.Port()) {
+		return fmt.Errorf("redirect to another origin refused")
+	}
+	return nil
+}
+
+func portOf(scheme, port string) string {
+	if port != "" {
+		return port
+	}
+	if strings.EqualFold(scheme, "http") {
+		return "80"
+	}
+	return "443"
+}
+
 func (c *Client) get(ctx context.Context, url string) (string, error) {
+	return c.fetch(ctx, url, codeOf(url), "", true)
+}
+
+// fetch is one request: header = the code for X-Kanki-Sub ("" none), code = the code that opens a sealed answer,
+// seal = ask for a sealed answer.
+func (c *Client) fetch(ctx context.Context, url, code, header string, seal bool) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -251,37 +291,133 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 	if c.DeviceID != "" {
 		req.Header.Set("X-Kanki-Device", c.DeviceID)
 	}
+	if header != "" {
+		req.Header.Set("X-Kanki-Sub", header)
+	}
 	// a panel that knows sealed configs answers with one (see seal.go)
-	req.Header.Set("X-Kanki-Seal", sealVersion)
-	resp, err := c.HTTP.Do(req)
+	if seal {
+		req.Header.Set("X-Kanki-Seal", sealVersion)
+	}
+	hc := *c.HTTP
+	hc.CheckRedirect = sameOrigin
+	resp, err := hc.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return "", &HTTPError{Code: resp.StatusCode}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return "", err
 	}
-	if code := codeOf(url); code != "" && isSealed(b) {
+	if isSealed(b) {
+		if code == "" || code == "me" || code == "h" {
+			return "", errors.New("sealed answer without a code to open it")
+		}
 		return open(b, code, c.DeviceID)
 	}
 	return string(b), nil
 }
 
+// page is the subscription page of one account on one host: /sub/me with the code in X-Kanki-Sub, then (only when
+// the host refuses that) /sub/<code>.
+func (c *Client) page(ctx context.Context, origin, code string) (string, error) {
+	b, err := c.fetch(ctx, origin+"/sub/me", code, code, true)
+	if err != nil && fallback(err) {
+		b, err = c.fetch(ctx, origin+"/sub/"+code, code, "", true)
+	}
+	return b, err
+}
+
+// discover is the full code of a bare code or a hashed link, read from the account's own page (not sealed:
+// the panel seals with the full code, which is not known yet).
+func (c *Client) discover(ctx context.Context, origin string, in Input) (string, error) {
+	var b string
+	var err error
+	switch in.Kind {
+	case KindCode:
+		return in.Value, nil
+	case KindBare:
+		b, err = c.fetch(ctx, origin+"/sub/me", "", in.Value, false)
+		if err != nil && fallback(err) {
+			return "", fmt.Errorf("this panel does not know a short code; enter the full kanki-… code: %w", err)
+		}
+	case KindHash:
+		b, err = c.fetch(ctx, origin+"/sub/h/"+in.Value, "", "", false)
+	}
+	if err != nil {
+		return "", err
+	}
+	if !looksLikePage(b) {
+		return "", errors.New("the answer is not a subscription page")
+	}
+	end := ""
+	if in.Kind == KindBare {
+		end = in.Value
+	}
+	code := codeInPage(b, end)
+	if code == "" {
+		return "", errors.New("the page does not name the subscription code")
+	}
+	return code, nil
+}
+
+// Resolve reads any input shape and gives (panel address, full code), asking the panel when needed.
+func (c *Client) Resolve(ctx context.Context, input string) (string, string, error) {
+	in, ok := ParseInput(input)
+	if !ok {
+		return "", "", errors.New("not a subscription link or code")
+	}
+	base := in.Origin
+	if base == "" {
+		hs := configured()
+		if len(hs) == 0 {
+			return "", "", errors.New("enter the full subscription link (this build knows no panel address: KANKI_PANEL_HOSTS)")
+		}
+		base = hs[0]
+	}
+	if in.Kind == KindCode {
+		return base, in.Value, nil
+	}
+	host, code, err := c.raceWith(ctx, c.hostsFor(base), func(ctx context.Context, h string) (string, error) { return c.discover(ctx, h, in) })
+	if err != nil {
+		return "", "", err
+	}
+	if in.Kind == KindHash {
+		base = host
+	}
+	return base, code, nil
+}
+
+// hostsFor is every host to try for an account on base: all Kanki hosts when base is one, else base alone
+func (c *Client) hostsFor(base string) []string {
+	if !c.isKanki(base) {
+		return []string{base}
+	}
+	return dedupe(append([]string{base}, c.kankiHosts()...))
+}
+
 // race asks all urls; the first good answer wins. The first url starts 300ms
 // early so a healthy preferred host always stays the one in use.
 func (c *Client) race(ctx context.Context, urls []string) (string, string, error) {
+	return c.raceWith(ctx, urls, func(ctx context.Context, u string) (string, error) { return c.get(ctx, u) })
+}
+
+// raceWith runs fn on every item at once (the first 300ms early) and gives the first good answer.
+func (c *Client) raceWith(ctx context.Context, items []string, fn func(context.Context, string) (string, error)) (string, string, error) {
+	if len(items) == 0 {
+		return "", "", errors.New("no panel address to try")
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	type res struct {
-		url, body string
-		err       error
+		item, body string
+		err        error
 	}
-	ch := make(chan res, len(urls))
-	for i, u := range urls {
+	ch := make(chan res, len(items))
+	for i, u := range items {
 		go func(i int, u string) {
 			if i > 0 {
 				select {
@@ -291,24 +427,24 @@ func (c *Client) race(ctx context.Context, urls []string) (string, string, error
 					return
 				}
 			}
-			b, err := c.get(ctx, u)
+			b, err := fn(ctx, u)
 			ch <- res{u, b, err}
 		}(i, u)
 	}
 	var errs []string
-	for range urls {
+	for range items {
 		r := <-ch
 		if r.err == nil {
 			for _, h := range c.kankiHosts() {
-				if strings.HasPrefix(r.url, h+"/") {
+				if r.item == h || strings.HasPrefix(r.item, h+"/") {
 					c.mu.Lock()
 					c.preferred = h
 					c.mu.Unlock()
 				}
 			}
-			return r.url, r.body, nil
+			return r.item, r.body, nil
 		}
-		errs = append(errs, hostOf(r.url)+": "+short(r.err))
+		errs = append(errs, hostOf(r.item)+": "+short(r.err))
 	}
 	// every host's reason, not only the last one (that is all the user can send us)
 	return "", "", errors.New(strings.Join(errs, " | "))
@@ -355,11 +491,10 @@ func certDates(c *x509.Certificate, now time.Time) string {
 
 // Load fetches and reads the subscription page.
 func (c *Client) Load(ctx context.Context, base, code string) (*Account, error) {
-	url, body, err := c.race(ctx, c.alternates(base, "/sub/"+code))
+	host, body, err := c.raceWith(ctx, c.hostsFor(base), func(ctx context.Context, h string) (string, error) { return c.page(ctx, h, code) })
 	if err != nil {
 		return nil, err
 	}
-	host := url[:strings.Index(url, "/sub/")]
 	a, err := Parse(body, host)
 	if err != nil {
 		return nil, err

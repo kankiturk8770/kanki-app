@@ -26,12 +26,10 @@ fun applyGameOnly(cfg: String, games: Set<String>): String {
     if (games.isEmpty()) return cfg
     val lines = cfg.lines().filterNot { it.trim().startsWith("GameOnly", ignoreCase = true) }.toMutableList()
     val i = lines.indexOfFirst { it.trim().equals("[Interface]", ignoreCase = true) }
-    if (i >= 0) lines.add(i + 1, "GameOnly = " + (games + GAME_NEEDS).sorted().joinToString(", "))
+    // ۱.۴۵.۱: همان فهرست دروازه‌ی گیمینگ (AppGate): بازی‌ها + سرویس‌های گوگل؛ Play Store و Chrome هرگز (حتی اگر انتخاب شده‌اند)
+    if (i >= 0) lines.add(i + 1, "GameOnly = " + GameApps.gatePackages(games).sorted().joinToString(", "))
     return lines.joinToString("\n")
 }
-
-/** بدون این‌ها ورود به بازی (حساب گوگل / پلی) و خرید داخل بازی کار نمی‌کند */
-val GAME_NEEDS = setOf("com.google.android.gms", "com.google.android.gsf", "com.android.vending")
 
 /**
  * بستن کامل IPv6 در کانفیگ وایرگارد/امنزیا: آدرس، مسیر (AllowedIPs) و DNS ای‌پی‌وی‌شش حذف می‌شوند.

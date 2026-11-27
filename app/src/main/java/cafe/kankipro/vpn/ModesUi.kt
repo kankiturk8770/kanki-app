@@ -153,7 +153,7 @@ fun DrawScope.modeLogo(m: KMode, c: Color) {
  * محو؛ بعد DNS ← ضد فیلتر، محو؛ و دوباره از هوشمند. dial: قطر دکمه‌ی اتصال (جا و اندازه‌ی حالت‌ها با آن مقیاس می‌شود).
  */
 @Composable
-fun ModeOrbit(selected: KMode, dial: Dp, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
+fun ModeOrbit(selected: KMode, dial: Dp, enabled: Boolean, modifier: Modifier = Modifier, showDns: Boolean = true, live: Boolean = false, off: Set<KMode> = emptySet(), onTap: (KMode) -> Unit, onLong: (KMode) -> Unit) {
     val tap by rememberUpdatedState(onTap)
     val long by rememberUpdatedState(onLong)
     @Suppress("UNUSED_VARIABLE") val hasDns = showDns // DNS همیشه سر جایش می‌ماند (خواسته‌ی صاحب اپ)
@@ -170,7 +170,7 @@ fun ModeOrbit(selected: KMode, dial: Dp, enabled: Boolean, modifier: Modifier = 
         slots.forEach { (m, xy) ->
             // مرکز دایره درست روی جای حالت، اسم زیرش
             Box(Modifier.offset(x = xy.first, y = xy.second)) {
-                ModeOrb(m, m == selected, enabled, d, tap, long)
+                Box(Modifier.alpha(if (m in off) .4f else 1f)) { ModeOrb(m, m == selected, enabled, d, tap, long) }
             }
             // اسم کمی رو به بیرون، تا روی قاب دکمه‌ی اتصال نیفتد
             Box(Modifier.offset(x = xy.first + (if (xy.first < 0.dp) (-6).dp else 6.dp), y = xy.second + d / 2 + labelGap + labelH / 2 - 2.dp)) {

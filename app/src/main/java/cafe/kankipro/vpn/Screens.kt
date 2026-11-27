@@ -60,9 +60,8 @@ fun LoginScreen(state: AppState) {
     // اگر لینک کامل جای‌گذاری شود، در کادر فقط کد دیده می‌شود و آدرس پنل همین‌جا نگه داشته می‌شود
     var baseHint by remember { mutableStateOf<String?>(null) }
     fun accept(raw: String) {
-        val t = raw.trim()
-        val n = if (t.contains("/sub/")) SubscriptionApi.normalize(t) else null
-        if (n != null) { text = n.second; baseHint = n.first } else { text = raw; if (raw.isBlank()) baseHint = null }
+        val n = PanelLink.parse(raw) as? PanelLink.Input.Code
+        if (n?.origin != null) { text = n.code; baseHint = n.origin } else { text = raw; if (raw.isBlank()) baseHint = null }
         state.error = null
     }
     LaunchedEffect(Unit) { Sfx.preload(ctx, R.raw.kanki_switch) }
@@ -357,6 +356,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
         hasAccount = a != null,
         loading = state.loading,
         mode = state.mode,
+        modesOff = KMode.values().filterNot { state.modeAvailable(it) }.toSet(),
         livePing = state.ping,
         pingHist = state.pingHist.toList(),
         rx = rx, tx = tx,
@@ -417,10 +417,10 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
             toggle = onToggle,
             tapMode = { m -> state.tapMode(m) },
             longMode = { m ->
-                when (m) {
-                    KMode.GAME -> { state.changeMode(m); state.gameSheet = true }
+                if (!state.modeAvailable(m)) state.tapMode(m) else when (m) {
+                    KMode.GAME -> { state.pickMode(m); state.gameSheet = true }
                     // نگه‌داشتن ضد فیلتر: فقط سرورهای Xray و Amnezia (نه همه‌ی سرورها)
-                    KMode.FILTER -> { state.changeMode(m); state.filterSheet = true }
+                    KMode.FILTER -> { state.pickMode(m); state.filterSheet = true }
                     else -> state.tapMode(m)
                 }
             },
@@ -430,7 +430,7 @@ private fun HomeTab(state: AppState, countries: List<Country>?, onToggle: () -> 
                 when (id) {
                     "renew" -> openBot(ctx)
                     "support" -> openSupport(ctx)
-                    "smart" -> { state.error = null; state.errorDetail = null; state.changeMode(KMode.SMART); state.smartConnect() }
+                    "smart" -> { state.error = null; state.errorDetail = null; state.pickMode(KMode.SMART); state.smartConnect() }
                 }
             },
             dismissAlert = {
@@ -457,7 +457,8 @@ private fun xrayLabel(l: ConfigLink): String {
 
 /** گیگ و روز باقی‌مانده (فقط عدد) */
 private fun subUi(a: Account, now: Long): SubUi {
-    val gb = if (a.limitGb != null && a.usedGb != null && a.limitGb > 0) {
+    // limit_gb == 0 در پنل یعنی بی‌سقف: «∞ / نامحدود» (هرگز «۰ GB» یا نوار پر)
+    val gb = if (a.limitGb != null && a.limitGb <= 0.0) "∞" else if (a.limitGb != null && a.usedGb != null && a.limitGb > 0) {
         val left = (a.limitGb - a.usedGb).coerceAtLeast(0.0)
         if (left >= 10) String.format(java.util.Locale.US, "%.0f", left) else String.format(java.util.Locale.US, "%.1f", left)
     } else {
@@ -554,12 +555,13 @@ private fun ModeSheets(state: AppState) {
     FilterSheet(
         visible = state.filterSheet,
         families = filterFams,
+        // پلن هر کاربر (v2ray، gaming، vip) پروتکل‌های خودش را دارد: تب اول همیشه یکی از تب‌های واقعاً موجود است
         initFamily = when {
             state.filterProto.startsWith("xray-") -> "xray"
             state.filterProto.startsWith("amneziawg") -> "amnezia"
             state.filterProto == "wireguard" || state.filterProto == "hysteria2" -> state.filterProto
             else -> "xray"
-        },
+        }.takeIf { k -> filterFams.any { it.key == k } } ?: filterFams.firstOrNull()?.key.orEmpty(),
         useX = state.filterUseX,
         useAwg = !state.filterXray,
         auto = state.filterAuto,
@@ -573,14 +575,14 @@ private fun ModeSheets(state: AppState) {
         onShown = { state.startPingAll() },
         onAuto = {
             state.filterSheet = false
-            state.changeMode(KMode.FILTER)
+            state.pickMode(KMode.FILTER)
             state.setFilter(true, "", null)
             state.error = null; state.errorDetail = null
             state.launchConnect(reconnect = true) { state.connectFilter() }
         },
         onConnect = { n, p ->
             state.filterSheet = false
-            state.changeMode(KMode.FILTER)
+            state.pickMode(KMode.FILTER)
             if (p == "xray") state.setFilter(false, n, null) else state.setFilter(false, p, n)
             state.error = null; state.errorDetail = null
             state.launchConnect(reconnect = true) { state.connectFilter() }
@@ -730,12 +732,15 @@ private fun AppPickerPanel(title: String, sub: String, selected: List<String>, o
             if (list == null) {
                 Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = K.Gold) }
             } else {
-                val shown = list.filter { all || it.pkg in games || it.pkg in selected }
+                // گیمینگ: سرویس‌های گوگل همیشه باز و Play Store / Chrome همیشه بسته‌اند، پس کلیدی برایشان نیست
+                val fixed = if (gamesOnly) GameApps.NEVER + GameApps.GOOGLE else emptySet()
+                val shown = list.filter { it.pkg !in fixed }.filter { all || it.pkg in games || it.pkg in selected }
                     .filter { q.isBlank() || it.label.contains(q, true) || it.pkg.contains(q, true) }
                     .sortedByDescending { it.pkg in selected }
                 if (gamesOnly) {
                     SmallLine(if (all) "فقط بازی‌ها" else "افزودن بازی", Modifier.padding(bottom = D.S2), onClick = { all = !all })
                     if (!all && shown.isEmpty()) T("بازی‌ای روی گوشی پیدا نشد؛ با «افزودن بازی» خودت انتخاب کن.", size = 12.sp, color = K.Sub, weight = FontWeight.Normal)
+                    T("سرویس‌های گوگل و DNS همیشه باز؛ Play Store و Chrome در گیمینگ همیشه بسته‌اند.", size = 11.sp, color = K.Sub, weight = FontWeight.Normal, modifier = Modifier.padding(bottom = D.S1))
                 }
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
                     items(shown.size) { idx ->
