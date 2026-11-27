@@ -420,7 +420,7 @@ class KankiHyService : VpnService() {
         val included = included(lines)
         val targets = lines.filter { it.startsWith("Server", ignoreCase = true) && it.contains("=") }.mapNotNull {
             val p = it.substringAfter("=").trim().split(Regex("\\s+"))
-            runCatching { KankiDns.Target(InetAddress.getByName(p[0]), p.getOrElse(1) { "-" }) }.getOrNull()
+            runCatching { KankiDns.Target(InetAddress.getByName(p[0]), p.drop(1).ifEmpty { listOf("-") }) }.getOrNull()
         }
         if (targets.isEmpty()) error("dns: no DNS server in the subscription")
         val bin = File(applicationInfo.nativeLibraryDir, "libxray.so")

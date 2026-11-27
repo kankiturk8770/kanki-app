@@ -676,7 +676,7 @@ class AppState private constructor(context: Context) {
             val order = KankiDns.ordered(info, dnsPick.ifBlank { null })
             // همه همزمان ثبت می‌شوند (آدرس ثبت HTTP روی خود IP هر سرور)
             val reg = withContext(Dispatchers.IO) {
-                kotlinx.coroutines.coroutineScope { order.map { s -> async { s to KankiDns.register(s.registerHttp) } }.awaitAll() }
+                kotlinx.coroutines.coroutineScope { order.map { s -> async { s to KankiDns.register(s) } }.awaitAll() }
             }
             val ok = reg.filter { it.second != null }
             fun fastest(l: List<Pair<DnsServer, Long?>>) = l.sortedBy { it.second ?: Long.MAX_VALUE }.map { it.first }

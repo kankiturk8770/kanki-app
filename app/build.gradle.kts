@@ -61,8 +61,8 @@ android {
         applicationId = "cafe.kankipro.vpn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 120
-        versionName = "1.45.1"
+        versionCode = 121
+        versionName = "1.45.2"
         buildConfigField("String", "PANEL_HOSTS", "\"$panelHosts\"")
         buildConfigField("String", "PANEL_PINS", "\"$panelPins\"")
     }

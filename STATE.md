@@ -1,5 +1,15 @@
 # Kanki VPN app — state
 
+## 1.45.2 — Kanki DNS registers over HTTPS (branch `ccr-94a1e97e-wsl617`, with panel 3.72)
+- `KankiDns.register(DnsServer)`: `register` (https://<dns host>/r/<token>) first, `register_http` (http://<ip>/kdns/r/<token>)
+  only when there is no HTTPS address or it did not answer. The engine's text is `Server = <ip> <https|-> <http|->`;
+  `reregister` tries them in that order. `PlainHttp` speaks HTTPS too: TLS on the protected raw socket (SNI = host,
+  system trust, `HttpsURLConnection`'s hostname check), so registration still goes around the VPN.
+- Panel 3.72 can close plain HTTP (`allow_plain_http_kdns`): it then sends no `register_http` and the DNS servers answer
+  410; 1.45.2 keeps working, 1.45.1 and older cannot register until they update.
+- Test: `DnsRegisterTest` (engine text, plain HTTP fallback against a local server, only http/https). Not run here: no
+  Android SDK in this container (CI builds it).
+
 ## Panel 3.69 codes (branch `ccr-94a1e97e-wsl617`)
 - `PanelLink.BARE_ONLY`: 10–40 digits (panel 3.69 makes 39-digit codes, > 128 bits; older accounts keep 19). The full
   `kanki-<id>-<code>` form already took up to 64. Test: `SubLinkTest.every_input_shape_is_read`.

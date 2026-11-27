@@ -7,20 +7,26 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 
-/** HTTP/1.1 بی‌رمز روی سوکت خام (ثبت DNS کانکی روی آدرس http) */
+/**
+ * HTTP/1.1 روی سوکت خام (ثبت DNS کانکی). ۱.۴۵.۲: https هم: TLS با SNI و بررسی نام گواهی روی همان سوکت خام،
+ * تا protect (بیرون از VPN) پیش از اتصال اجرا شود.
+ */
 object PlainHttp {
     /** prepare: پیش از اتصال روی سوکت اجرا می‌شود (مثلاً protect تا از VPN بیرون برود) */
     fun request(method: String, url: String, headers: Map<String, String>, body: ByteArray?, prepare: ((Socket) -> Unit)? = null, timeoutMs: Int = 15000): Pair<Int, ByteArray> {
         val u = URL(url)
-        val port = if (u.port > 0) u.port else 80
+        val tls = u.protocol == "https"
+        if (!tls && u.protocol != "http") throw IOException("only http and https")
+        val port = if (u.port > 0) u.port else if (tls) 443 else 80
         val path = (u.path.ifEmpty { "/" }) + (u.query?.let { "?$it" } ?: "")
-        Socket().use { s ->
-            prepare?.invoke(s)
-            s.connect(InetSocketAddress(u.host, port), timeoutMs)
-            s.soTimeout = maxOf(timeoutMs, 25000)
+        Socket().use { raw ->
+            prepare?.invoke(raw)
+            raw.connect(InetSocketAddress(u.host, port), timeoutMs)
+            raw.soTimeout = maxOf(timeoutMs, 25000)
+            val s: Socket = if (tls) secure(raw, u.host, port) else raw
             val head = StringBuilder()
             head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
-            head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != 80) ":${u.port}" else "").append("\r\n")
+            head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != (if (tls) 443 else 80)) ":${u.port}" else "").append("\r\n")
             headers.forEach { (k, v) -> head.append(k).append(": ").append(v).append("\r\n") }
             if (body != null) head.append("Content-Length: ").append(body.size).append("\r\n")
             head.append("Connection: close\r\n\r\n")
@@ -54,6 +60,19 @@ object PlainHttp {
             }
             return status to data
         }
+    }
+
+    /** TLS over the connected socket: SNI = the host, the certificate checked by the system's trust and hostname rules */
+    private fun secure(raw: Socket, host: String, port: Int): Socket {
+        val f = javax.net.ssl.SSLSocketFactory.getDefault() as javax.net.ssl.SSLSocketFactory
+        val t = f.createSocket(raw, host, port, true) as javax.net.ssl.SSLSocket
+        t.useClientMode = true
+        t.startHandshake()
+        if (!javax.net.ssl.HttpsURLConnection.getDefaultHostnameVerifier().verify(host, t.session)) {
+            runCatching { t.close() }
+            throw IOException("certificate does not match $host")
+        }
+        return t
     }
 
     private fun line(i: InputStream): String {

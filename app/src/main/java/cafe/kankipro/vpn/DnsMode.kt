@@ -49,7 +49,11 @@ object KankiDns {
             // بستن بقیه‌ی برنامه‌ها ترافیک برنامه‌های انتخابی را هم از tun2socks داخل گوشی رد می‌کند (پینگ بالاتر)
             if (block) append("BlockOthers = 1\n")
         }
-        list.filter { it.ip.isNotBlank() }.forEach { append("Server = ").append(it.ip).append(' ').append(it.registerHttp.ifBlank { "-" }).append('\n') }
+        // ۱.۴۵.۲: Server = <ip> <ثبت https یا -> <ثبت http یا -> (https اول؛ http فقط اگر https نشد)
+        list.filter { it.ip.isNotBlank() }.forEach {
+            append("Server = ").append(it.ip).append(' ').append(it.register.takeIf { r -> r.startsWith("https://") } ?: "-")
+                .append(' ').append(it.registerHttp.takeIf { r -> r.startsWith("http://") } ?: "-").append('\n')
+        }
     }
 
     /**
@@ -57,7 +61,7 @@ object KankiDns {
      * protect: وقتی VPN بالاست، سوکت باید بیرون از VPN برود.
      */
     fun register(registerHttp: String, protect: ((Socket) -> Unit)? = null): Long? {
-        if (!registerHttp.startsWith("http://")) return null
+        if (!registerHttp.startsWith("http://") && !registerHttp.startsWith("https://")) return null
         val t0 = System.currentTimeMillis()
         return runCatching {
             val (st, _) = PlainHttp.request("GET", registerHttp, mapOf("User-Agent" to "KankiVPN-Android"), null, prepare = protect, timeoutMs = 6000)
@@ -65,9 +69,23 @@ object KankiDns {
         }.getOrNull()
     }
 
+    /**
+     * ۱.۴۵.۲: ثبت روی https (نام سرور DNS، توکن رمزشده در راه)؛ http روی IP فقط وقتی سرور https ندارد یا جواب نداد
+     * (پنلی که http را بسته، آدرس http را دیگر نمی‌فرستد).
+     */
+    fun register(s: DnsServer, protect: ((Socket) -> Unit)? = null): Long? {
+        val https = s.register.takeIf { it.startsWith("https://") }
+        if (https != null) register(https, protect)?.let { return it }
+        return if (s.registerHttp.startsWith("http://")) register(s.registerHttp, protect) else null
+    }
+
+
     // ------------------------------------------------------------------ the DNS-only VPN
 
-    class Target(val ip: InetAddress, val register: String)
+    /** urls: where to register on this server, https first ("-" = nothing to register: an open server) */
+    class Target(val ip: InetAddress, val urls: List<String>) {
+        val open get() = urls.all { it == "-" }
+    }
 
     /** شمارنده‌ها برای نمایش (دریافت، ارسال) */
     val rx = AtomicLong()
@@ -138,7 +156,8 @@ object KankiDns {
         fun reregister() {
             for (k in targets.indices) {
                 val i = (cur.get() + k) % targets.size
-                if (register(targets[i].register) { svc.protect(it) } != null || targets[i].register == "-") {
+                val t = targets[i]
+                if (t.open || t.urls.any { u -> u != "-" && register(u) { svc.protect(it) } != null }) {
                     cur.set(i)
                     activeIp = targets[i].ip.hostAddress
                     fails.set(0)
