@@ -61,6 +61,11 @@ class SubLinkTest {
         assertNull(PanelLink.parse("https://p.example/sub/me"))
         assertNull(PanelLink.parse("hello"))
         assertNull(PanelLink.parse("12345"))
+        // panel 3.69: new codes have 39 digits, bare and in the full form; more than 40 is not a code
+        val long = "482193001234567890123456789012345678901"
+        assertEquals(PanelLink.Input.Bare(null, long), PanelLink.parse(long))
+        assertEquals(PanelLink.Input.Code(null, "kanki-7-$long"), PanelLink.parse("kanki-7-$long"))
+        assertNull(PanelLink.parse(long + "12"))
         // a user part never moves the code to another host
         assertNull(PanelLink.parse("https://p.example@evil.example/sub/x"))
         assertEquals(PanelLink.Input.Code(null, code), PanelLink.parse("https://p.example@evil.example/sub/$code"))

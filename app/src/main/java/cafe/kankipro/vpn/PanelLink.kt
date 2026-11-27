@@ -17,8 +17,8 @@ object PanelLink {
     /** the bot's activation code (older prefixes too) */
     val FULL_CODE = Regex("""[A-Za-z]{2,12}-\d{1,12}-[A-Za-z0-9]{4,64}""")
     private val FULL_CODE_ONLY = Regex("""^[A-Za-z]{2,12}-\d{1,12}-[A-Za-z0-9]{4,64}$""")
-    /** the code part alone (the panel makes 19 digits; older accounts may have other lengths) */
-    private val BARE_ONLY = Regex("""^[0-9]{10,32}$""")
+    /** the code part alone (panel 3.69 makes 39 digits, 128 bits and more; older accounts have 19 or other lengths) */
+    private val BARE_ONLY = Regex("""^[0-9]{10,40}$""")
     private val HASH_ONLY = Regex("""^[0-9a-f]{40}$""")
     private val HOST = Regex("""^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)*$""")
     /** a link anywhere in the text, with or without the scheme */

@@ -1,5 +1,10 @@
 # Kanki VPN app — state
 
+## Panel 3.69 codes (branch `ccr-94a1e97e-wsl617`)
+- `PanelLink.BARE_ONLY`: 10–40 digits (panel 3.69 makes 39-digit codes, > 128 bits; older accounts keep 19). The full
+  `kanki-<id>-<code>` form already took up to 64. Test: `SubLinkTest.every_input_shape_is_read`.
+- Not run here: no Android SDK in this container (Go cores: vet + `-race` tests pass).
+
 ## 1.45.1 (branch `ccr-94a1e97e-wsl617`, with panel 3.67.2)
 
 Root cause of «the app fetches nothing» (1.45.0)
