@@ -4,7 +4,7 @@ package mobile
 // اجرا (از پوشه‌ی kanki-tunnel):
 //
 //	go build -o /tmp/ks ../server/cmd/kanki-server   # از پوشه‌ی server
-//	SRVBIN=/tmp/ks HOSTIP=<IP غیر loopback این سیستم> go test ./mobile
+//	SRVBIN=/tmp/ks HOSTIP=<IP غیر loopback این سیستم> KMIX_LAB_ALLOW_PRIVATE=1 go test ./mobile
 //
 // بدون SRVBIN تست‌ها رد (skip) می‌شوند.
 
